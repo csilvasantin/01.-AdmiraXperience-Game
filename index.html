@@ -1291,9 +1291,10 @@ function drawShop(){
   entities.push({type:'vending',col:10,row:1,depth:isoDepth(10,2)});  // right wall
   entities.push({type:'magazines',col:9,row:3,depth:isoDepth(9,4)});  // right wall
   entities.push({type:'manager',col:9,row:5,depth:isoDepth(9,6)});    // right wall, near door
-  entities.push({type:'plant',col:1,row:0,depth:isoDepth(1,1)});      // back wall corner
-  entities.push({type:'plant',col:0,row:5,depth:isoDepth(0,6)});      // left wall bottom
-  entities.push({type:'plant',col:5,row:5,depth:isoDepth(5,6)});      // floor, front
+  entities.push({type:'plant',col:0,row:0,depth:isoDepth(0,1)});      // corner: back-left
+  entities.push({type:'plant',col:11,row:0,depth:isoDepth(11,1)});    // corner: back-right
+  entities.push({type:'plant',col:0,row:5,depth:isoDepth(0,6)});      // corner: front-left
+  entities.push({type:'plant',col:7,row:5,depth:isoDepth(7,6)});      // corner: front-right
 
   // Staff — use their actual screen Y position for depth
   for(const s of G.staff){
