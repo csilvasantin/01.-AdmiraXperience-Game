@@ -1380,7 +1380,7 @@ function drawShop(){
   cx.stroke();
 
   // ── WINDOWS on back wall (half size, centered in wall) ──
-  const winCols=[1.5,4,6.5,9];
+  const winCols=[2,5.5,9];
   for(const wc of winCols){
     const wp1=toIso(wc,0), wp2=toIso(wc+1.2,0);
     const whei=Math.floor((ISO.wallH-50)*0.55);
@@ -2083,33 +2083,21 @@ function drawEvent(){
 
 // ── ELGATO LIGHT NOTIFICATION ─────────────────────────────────
 function drawElgatoNotify(){
+  // Shown INSIDE the top HUD bar (compact badge, no floating overlay)
   if(elgatoState.notify<=0) return;
   elgatoState.notify--;
-  const alpha=Math.min(1,elgatoState.notify/30);
+  const alpha=Math.min(1,elgatoState.notify/25);
   cx.globalAlpha=alpha;
+  const bx=180,by=2,bw=140,bh=24;
   if(elgatoState.error){
-    // Error: red banner across top
-    const nw=260,nh=36,nx=W/2-nw/2,ny=32;
-    r(nx,ny,nw,nh,'#4a0a0aee');rx(nx,ny,nw,nh,'#ee3333',2);
-    tx('⚠ LÁMPARA NO DISPONIBLE',W/2,ny+14,'#ff6666',11,'center');
-    tx('Ejecuta: node elgato-proxy.js',W/2,ny+28,'#cc8888',8,'center');
+    r(bx,by,bw,bh,'#4a0a0a');rx(bx,by,bw,bh,'#cc3333',1.5);
+    tx('⚠ Lámpara offline',bx+bw/2,by+16,'#ff6666',9,'center');
   } else if(elgatoState.on){
-    // ON: big yellow glow + icon
-    const nw=240,nh=44,nx=W/2-nw/2,ny=34;
-    // Glow pulse
-    const pulse=Math.sin(elgatoState.notify*0.15)*0.3+0.7;
-    r(nx-4,ny-4,nw+8,nh+8,`rgba(255,220,60,${0.1*pulse})`);
-    r(nx,ny,nw,nh,'#2a3a10ee');rx(nx,ny,nw,nh,'#ddcc22',2);
-    tx('💡',nx+20,ny+30,'#ffee44',22);
-    tx('ELGATO KEY LIGHT — ON',nx+44,ny+18,'#ffee66',12);
-    tx('Cielo rojo activado · Pulsa L para apagar',nx+44,ny+34,'#ccbb66',7);
+    r(bx,by,bw,bh,'#2a3a10');rx(bx,by,bw,bh,'#ccaa22',1.5);
+    tx('💡 Luz ON',bx+bw/2,by+16,'#ffee66',10,'center');
   } else {
-    // OFF: dark blue
-    const nw=240,nh=44,nx=W/2-nw/2,ny=34;
-    r(nx,ny,nw,nh,'#0a0a2aee');rx(nx,ny,nw,nh,'#4466aa',2);
-    tx('🌙',nx+20,ny+30,'#6688cc',22);
-    tx('ELGATO KEY LIGHT — OFF',nx+44,ny+18,'#8899cc',12);
-    tx('Cielo normal · Pulsa L para encender',nx+44,ny+34,'#667799',7);
+    r(bx,by,bw,bh,'#0a0a2a');rx(bx,by,bw,bh,'#4466aa',1.5);
+    tx('🌙 Luz OFF',bx+bw/2,by+16,'#8899cc',10,'center');
   }
   cx.globalAlpha=1;
 }
@@ -2637,7 +2625,7 @@ function loop(){
   // GAME
   updateGame();
   r(0,0,W,H,P.bg);
-  drawCityBg();drawShop();drawShopChars();drawFloats();drawEvent();drawElgatoNotify();drawHUD();drawBottomBar();drawUI();
+  drawCityBg();drawShop();drawShopChars();drawFloats();drawEvent();drawHUD();drawElgatoNotify();drawBottomBar();drawUI();
 }
 loop();
 </script>
