@@ -1380,7 +1380,7 @@ function drawShop(){
   cx.stroke();
 
   // ── WINDOWS on back wall (half size, centered in wall) ──
-  const winCols=[2,5.5,9];
+  const winCols=[1,4.5,8];
   for(const wc of winCols){
     const wp1=toIso(wc,0), wp2=toIso(wc+1.2,0);
     const whei=Math.floor((ISO.wallH-50)*0.55);
@@ -1461,6 +1461,52 @@ function drawShop(){
     rx(wp1.x-3,wy-3,wwid+6,whei+6,'#9a8a68',1.5);
     // Window sill
     r(wp1.x-5,wy+whei+3,wwid+10,5,'#c8c0a8');
+  }
+
+  // ── BIRD flying past windows ──
+  // Bird position: flies across the back wall, only visible through windows
+  // Full cycle: crosses entire back wall then loops
+  const birdCycleLen=900; // frames for full crossing
+  const birdPhase=(tt%birdCycleLen)/birdCycleLen; // 0→1
+  // Bird travels from left window to right window (col 0.5→10.5 on back wall)
+  const birdCol=0.5+birdPhase*10;
+  const birdIso=toIso(birdCol,0);
+  // Bird Y: mid-upper area of windows, slight sine wave for bobbing
+  const birdBaseY=toIso(birdCol,0).y-ISO.wallH+Math.floor((ISO.wallH)*0.35);
+  const birdBob=Math.sin(tt*0.12)*3;
+  const birdX=birdIso.x;
+  const birdY=birdBaseY+birdBob;
+  // Wing flap frame
+  const wingFrame=Math.floor(tt/6)%3;
+  // Only draw bird clipped to each window (so it hides behind walls)
+  for(const wc of winCols){
+    const wp1=toIso(wc,0), wp2=toIso(wc+1.2,0);
+    const wwy=wp1.y-ISO.wallH+Math.floor((ISO.wallH-Math.floor((ISO.wallH-50)*0.55))/2);
+    const wwid2=wp2.x-wp1.x;
+    const whei2=Math.floor((ISO.wallH-50)*0.55);
+    // Check if bird is roughly in this window's X range
+    if(birdX>wp1.x-10&&birdX<wp1.x+wwid2+10){
+      cx.save();
+      cx.beginPath();cx.rect(wp1.x,wwy,wwid2,whei2);cx.clip();
+      // Draw bird silhouette
+      cx.fillStyle='#2a2a2a';
+      // Body
+      cx.beginPath();cx.ellipse(birdX,birdY,4,2,0,0,Math.PI*2);cx.fill();
+      // Wings (flapping)
+      const wy1=wingFrame===0?-4:wingFrame===1?-2:-5;
+      const wy2=wingFrame===0?-3:wingFrame===1?-5:-2;
+      cx.beginPath();
+      cx.moveTo(birdX-2,birdY);cx.lineTo(birdX-7,birdY+wy1);cx.lineTo(birdX-4,birdY-1);
+      cx.fill();
+      cx.beginPath();
+      cx.moveTo(birdX+2,birdY);cx.lineTo(birdX+7,birdY+wy2);cx.lineTo(birdX+4,birdY-1);
+      cx.fill();
+      // Tail
+      cx.beginPath();
+      cx.moveTo(birdX-4,birdY);cx.lineTo(birdX-8,birdY+1);cx.lineTo(birdX-4,birdY+1);
+      cx.fill();
+      cx.restore();
+    }
   }
 
   // ── LEFT WALL (slightly darker, Kairosoft style) ──
