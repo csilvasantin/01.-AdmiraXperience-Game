@@ -1283,16 +1283,17 @@ function drawShop(){
   entities.push({type:'rug',col:3,row:2,depth:-999});
 
   // Furniture positions in grid
-  entities.push({type:'counter',col:0,row:2,depth:isoDepth(0,3)});    // in front of TFT screen
-  entities.push({type:'shelves',col:5,row:0,depth:isoDepth(5,2)});    // bottom edge of shelves
-  entities.push({type:'lottery',col:8,row:1,depth:isoDepth(8,2)});
-  entities.push({type:'manager',col:8,row:4,depth:isoDepth(8,5)});
-  entities.push({type:'plant',col:0,row:0,depth:isoDepth(0,1)});
-  entities.push({type:'plant',col:0,row:5,depth:isoDepth(0,6)});
-  entities.push({type:'plant',col:4,row:5,depth:isoDepth(4,6)});
-  entities.push({type:'vending',col:10,row:0,depth:isoDepth(10,1)});
-  entities.push({type:'wineRack',col:2,row:0,depth:isoDepth(2,1)});
-  entities.push({type:'magazines',col:6,row:4,depth:isoDepth(6,5)});
+  // Furniture against walls
+  entities.push({type:'counter',col:0,row:2,depth:isoDepth(0,3)});    // left wall, in front of TFT
+  entities.push({type:'shelves',col:3,row:0,depth:isoDepth(3,2)});    // back wall
+  entities.push({type:'wineRack',col:6,row:0,depth:isoDepth(6,1)});   // back wall
+  entities.push({type:'lottery',col:9,row:0,depth:isoDepth(9,1)});    // back wall, right corner
+  entities.push({type:'vending',col:10,row:1,depth:isoDepth(10,2)});  // right wall
+  entities.push({type:'magazines',col:9,row:3,depth:isoDepth(9,4)});  // right wall
+  entities.push({type:'manager',col:9,row:5,depth:isoDepth(9,6)});    // right wall, near door
+  entities.push({type:'plant',col:1,row:0,depth:isoDepth(1,1)});      // back wall corner
+  entities.push({type:'plant',col:0,row:5,depth:isoDepth(0,6)});      // left wall bottom
+  entities.push({type:'plant',col:5,row:5,depth:isoDepth(5,6)});      // floor, front
 
   // Staff — use their actual screen Y position for depth
   for(const s of G.staff){
@@ -1332,8 +1333,8 @@ function drawShop(){
 function drawLED(){
   // LED on LEFT WALL — text reads from bottom-left to top-right (readable)
   // We go from lp2 (bottom) to lp1 (top) so text direction is correct
-  const lp1=toIso(0,5);   // bottom of wall (start of text)
-  const lp2=toIso(0,1);   // top of wall (end of text)
+  const lp1=toIso(0,5.5); // bottom of wall (start of text) — longer
+  const lp2=toIso(0,0.5); // top of wall (end of text) — longer
   const ledYoff=30; // below ceiling
   const ledY1=lp1.y-ISO.wallH+ledYoff;
   const ledY2=lp2.y-ISO.wallH+ledYoff;
@@ -1382,9 +1383,9 @@ function drawLED(){
 
 // ── TFT SCREEN 42" on left wall (Altadis digital signage) ────
 function drawTFTScreen(){
-  // Position: below LED, touching the floor
-  const tp1=toIso(0,1.5);
-  const tp2=toIso(0,4.5);
+  // Position: centered under LED banner, touching the floor
+  const tp1=toIso(0,1.2);
+  const tp2=toIso(0,4.8);
   // Calculate Y so screen bottom touches the wall base
   const wallBaseY=tp1.y; // wall meets floor here
   const scrW=55;
