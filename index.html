@@ -314,7 +314,23 @@ let edHoverTile=null; // {col,row} under mouse
 function loadLayout(){
   try{
     const d=localStorage.getItem('xtanco_layout');
-    if(d){shopLayout=JSON.parse(d);return true;}
+    if(d){
+      const saved=JSON.parse(d);
+      // Merge: keep saved positions, add any new default items missing
+      shopLayout=saved;
+      for(const def of DEFAULT_LAYOUT){
+        if(!shopLayout.find(i=>i.id===def.id)){
+          shopLayout.push(JSON.parse(JSON.stringify(def)));
+        }
+      }
+      // Ensure all items have sx/sy (migration from old scale format)
+      for(const it of shopLayout){
+        if(!it.sx) it.sx=it.scale||1;
+        if(!it.sy) it.sy=it.scale||1;
+        delete it.scale;
+      }
+      return true;
+    }
   }catch(e){}
   return false;
 }
@@ -451,7 +467,7 @@ document.addEventListener('keydown',e=>{
       if(e.code==='ArrowLeft'&&it.col>0) it.col--;
       if(e.code==='ArrowRight'&&it.col<ISO.cols-1) it.col++;
     }
-    if(e.code==='KeyS'){saveLayout();}
+    if(e.code==='KeyS'){saveLayout();edSaveNotify=90;playSaveBeep();}
     if(e.code==='KeyR'){resetLayout();edSelIdx=-1;}
     if(edSelIdx>=0){
       const it=shopLayout[edSelIdx];
@@ -573,7 +589,7 @@ function doAction(id){
   if(id==='editor'){state=S.EDITOR;edSelIdx=-1;return;}
   // Editor actions
   if(id.startsWith('edsel')){edSelIdx=parseInt(id.slice(5));return;}
-  if(id==='edSave'){saveLayout();showEv('💾 Layout guardado!','#88aa55');return;}
+  if(id==='edSave'){saveLayout();edSaveNotify=90;playSaveBeep();return;}
   if(id==='edReset'){resetLayout();edSelIdx=-1;return;}
   if(id==='edExit'){state=S.GAME;return;}
   if(edSelIdx>=0&&edSelIdx<shopLayout.length){
@@ -2246,10 +2262,37 @@ function drawGameEnd(){
 
 // ── MAIN LOOP ─────────────────────────────────────────────────
 // ── EDITOR MODE ──────────────────────────────────────────────
+// Save notification state
+let edSaveNotify=0; // countdown frames for save notification
+
+// Beep sound for save confirmation
+function playSaveBeep(){
+  try{
+    const ac=new(window.AudioContext||window.webkitAudioContext)();
+    // Two-tone confirmation beep
+    const o1=ac.createOscillator(),g1=ac.createGain();
+    o1.type='sine';o1.frequency.value=880;
+    g1.gain.setValueAtTime(0.15,ac.currentTime);
+    g1.gain.exponentialRampToValueAtTime(0.01,ac.currentTime+0.15);
+    o1.connect(g1);g1.connect(ac.destination);
+    o1.start(ac.currentTime);o1.stop(ac.currentTime+0.15);
+    const o2=ac.createOscillator(),g2=ac.createGain();
+    o2.type='sine';o2.frequency.value=1320;
+    g2.gain.setValueAtTime(0.15,ac.currentTime+0.12);
+    g2.gain.exponentialRampToValueAtTime(0.01,ac.currentTime+0.3);
+    o2.connect(g2);g2.connect(ac.destination);
+    o2.start(ac.currentTime+0.12);o2.stop(ac.currentTime+0.3);
+  }catch(e){}
+}
+
 function drawEditor(){
+  // Clip entire editor to avoid overlapping outside canvas
+  cx.save();
+  cx.beginPath();cx.rect(0,28,W,H-28);cx.clip();
   // Draw shop as background
   drawCityBg();drawShop();drawShopChars();
-  // Grid overlay
+  cx.restore();
+  // Grid overlay (clipped to play area, not overlapping bars)
   cx.globalAlpha=0.15;
   for(let row=0;row<ISO.rows;row++){
     for(let col=0;col<ISO.cols;col++){
@@ -2351,6 +2394,24 @@ function drawEditor(){
     tx('+',sxP+35,btnY+26,'#88ee88',10,'center');
     BTNS['edSyUp']={x:sxP+24,y:btnY+16,w:22,h:12};
     tx((((it.sy||1)*100)|0)+'%',sxP+55,btnY+26,'#ffddaa',7);
+  }
+  // Save notification overlay
+  if(edSaveNotify>0){
+    edSaveNotify--;
+    const alpha=Math.min(1,edSaveNotify/30);
+    // Green flash border
+    cx.globalAlpha=alpha*0.3;
+    r(0,0,W,4,'#44ee44');r(0,H-4,W,4,'#44ee44');
+    r(0,0,4,H,'#44ee44');r(W-4,0,4,H,'#44ee44');
+    cx.globalAlpha=1;
+    // Notification toast
+    cx.globalAlpha=alpha;
+    const nw=220,nh=40,nx=W/2-nw/2,ny=H/2-nh/2-40;
+    r(nx,ny,nw,nh,'#1a4a1aee');
+    rx(nx,ny,nw,nh,'#44ee44',2);
+    tx('✅  LAYOUT GUARDADO',W/2,ny+16,'#88ff88',12,'center');
+    tx('Se cargará automáticamente',W/2,ny+30,'#aaddaa',8,'center');
+    cx.globalAlpha=1;
   }
 }
 
