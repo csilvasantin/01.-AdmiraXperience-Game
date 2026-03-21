@@ -686,26 +686,31 @@ function doAction(id){
   // Visit actions
   if(id==='visitCom'){
     G.fame=Math.min(100,G.fame+12);G.satisfaction=Math.min(100,G.satisfaction+5);
-    showEv('🧑‍💼 Comercial: +12 fama, nuevos productos!','#448844');
+    showEv('🧑‍💼 Comercial: +12 fama, nuevos productos!','#44aa44');
     addFloat(W/2,H/2-40,'+FAMA','#44aa44');
-    monitorAlert={active:true,timer:300,msg:'VISITA COMERCIAL',color:'#cc2222'};
+    monitorAlert={active:true,timer:300,msg:'VISITA COMERCIAL',color:'#22aa44'};
     uiOpen=false;return;
   }
   if(id==='visitTec'){
     G.satisfaction=Math.min(100,G.satisfaction+15);
     for(const p of G.prods) p.stock=Math.min(p.max,p.stock+Math.floor(p.max*0.3));
     showEv('🔧 Técnico: equipos revisados, +15 satisfacción','#4488aa');
-    addFloat(W/2,H/2-40,'+SERVICIO','#4488cc');uiOpen=false;return;
+    addFloat(W/2,H/2-40,'+SERVICIO','#4488cc');
+    monitorAlert={active:true,timer:300,msg:'VISITA TÉCNICO',color:'#2266cc'};
+    uiOpen=false;return;
   }
   if(id==='visitDel'){
     const bonus=500+Math.floor(Math.random()*500);
     G.money+=bonus;G.fame=Math.min(100,G.fame+8);
-    showEv('🏛 Delegación: subvención €'+bonus+', +8 fama','#aa8844');
-    addFloat(W/2,H/2-40,'+€'+bonus,'#ccaa44');uiOpen=false;return;
+    showEv('🏛 Delegación: subvención €'+bonus+', +8 fama','#cc66aa');
+    addFloat(W/2,H/2-40,'+€'+bonus,'#cc66aa');
+    monitorAlert={active:true,timer:300,msg:'VISITA DELEGACIÓN',color:'#cc44aa'};
+    uiOpen=false;return;
   }
   if(id==='visitGC'){
     const hiCnt=G.staff.filter(s=>s.hired).length;
     const avgStk=G.prods.reduce((a,p)=>a+(p.stock/p.max),0)/G.prods.length;
+    monitorAlert={active:true,timer:300,msg:'GUARDIA CIVIL',color:'#111111'};
     if(hiCnt>=1&&avgStk>0.3){
       G.satisfaction=Math.min(100,G.satisfaction+10);
       showEv('👮 Guardia Civil: inspección superada! +10 sat','#448844');
@@ -2458,14 +2463,14 @@ function tabStore(py){
   // Visit action buttons
   tx('— VISITAS —',UI.x+UI.w/2,py+10,P.uiT3,8,'center');
   const visits=[
-    {id:'visitCom',label:'🧑‍💼 Visita Comercial',col:'#2a6a2a',ok:true},
-    {id:'visitTec',label:'🔧 Visita Técnico',col:'#2a4a6a',ok:true},
-    {id:'visitDel',label:'🏛 Visita Delegación',col:'#5a4a2a',ok:true},
-    {id:'visitGC',label:'👮 Visita Guardia Civil',col:'#4a2a2a',ok:true},
+    {id:'visitCom',label:'🧑‍💼 Visita Comercial',col:'#1a4a1a',border:'#44aa44'},
+    {id:'visitTec',label:'🔧 Visita Técnico',col:'#1a2a4a',border:'#4488cc'},
+    {id:'visitDel',label:'🏛 Visita Delegación',col:'#4a1a3a',border:'#cc44aa'},
+    {id:'visitGC',label:'👮 Visita Guardia Civil',col:'#1a1a1a',border:'#666666'},
   ];
   visits.forEach((v,i)=>{
     const vy=py+16+i*28;
-    r(UI.x+5,vy,UI.w-10,22,v.col);rx(UI.x+5,vy,UI.w-10,22,'#8a8a6a',1);
+    r(UI.x+5,vy,UI.w-10,22,v.col);rx(UI.x+5,vy,UI.w-10,22,v.border,1.5);
     r(UI.x+5,vy,UI.w-10,2,'#ffffff18');
     tx(v.label,UI.x+UI.w/2,vy+15,'#e0d8c0',8,'center');
     BTNS[v.id]={x:UI.x+5,y:vy,w:UI.w-10,h:22};
