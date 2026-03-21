@@ -1265,8 +1265,9 @@ function drawShop(){
   tx('✦ '+T().modelNames[activeModel]+' ✦',(signP.x+signP2.x)/2,signY+16,'#f0e8d0',11,'center');
   if(G.storeLevel>=2){tx('★LVL2',signP2.x-30,signY+16,P.yellow,8);}
 
-  // ── LED DISPLAY on left wall ──
+  // ── LED DISPLAY + TFT SCREEN on left wall ──
   drawLED();
+  drawTFTScreen();
 
   // ── FURNITURE & ENTITIES (sorted by screen Y for correct occlusion) ──
   const entities=[];
@@ -1329,20 +1330,16 @@ function drawShop(){
 
 // ── LED DISPLAY (on wall) ────────────────────────────────────
 function drawLED(){
-  // LED on LEFT WALL (the solid wall without windows)
-  // Position: horizontally across the left wall, ~30px below ceiling
-  const lp1=toIso(0,1);   // start (near top of left wall)
-  const lp2=toIso(0,5);   // end (lower on left wall)
-  const ledY1=lp1.y-ISO.wallH+30;
-  const ledY2=lp2.y-ISO.wallH+30;
-  // The left wall is angled, so LED follows the iso angle
-  const lx=Math.min(lp1.x,lp2.x)-2;
-  const ly=Math.min(ledY1,ledY2);
-  const lw=Math.abs(lp2.x-lp1.x)+4;
+  // LED on LEFT WALL — text reads from bottom-left to top-right (readable)
+  // We go from lp2 (bottom) to lp1 (top) so text direction is correct
+  const lp1=toIso(0,5);   // bottom of wall (start of text)
+  const lp2=toIso(0,1);   // top of wall (end of text)
+  const ledYoff=30; // below ceiling
+  const ledY1=lp1.y-ISO.wallH+ledYoff;
+  const ledY2=lp2.y-ISO.wallH+ledYoff;
   const lh=16;
-  // LED panel follows wall angle using transform
   cx.save();
-  // Clip to left wall area
+  // Clip to left wall
   const wallClipPts=[];
   for(let rr=0;rr<=ISO.rows;rr++) wallClipPts.push(toIso(0,rr));
   cx.beginPath();
@@ -1350,7 +1347,7 @@ function drawLED(){
   for(let i=1;i<wallClipPts.length;i++) cx.lineTo(wallClipPts[i].x,wallClipPts[i].y-ISO.wallH);
   for(let i=wallClipPts.length-1;i>=0;i--) cx.lineTo(wallClipPts[i].x,wallClipPts[i].y);
   cx.closePath();cx.clip();
-  // Draw LED panel as a parallelogram following wall angle
+  // Angle from lp1→lp2 (bottom to top = readable direction)
   const angle=Math.atan2(lp2.y-lp1.y,lp2.x-lp1.x);
   const ledLen=Math.sqrt((lp2.x-lp1.x)**2+(lp2.y-lp1.y)**2);
   cx.translate(lp1.x,ledY1);
@@ -1359,7 +1356,7 @@ function drawLED(){
   r(0,-1,ledLen,lh,'#1a1408');
   rx(0,-1,ledLen,lh,'#8a7a50',1);
   // LED dot grid
-  cx.globalAlpha=0.05;
+  cx.globalAlpha=0.04;
   for(let dx=2;dx<ledLen-2;dx+=4)
     for(let dy=1;dy<lh-2;dy+=4)
       r(dx,dy,2,2,'#ffaa00');
@@ -1370,16 +1367,109 @@ function drawLED(){
     ? `  ◈  ${T().customers}: ${G?G.customersToday:0}  ◈  ${T().satisfaction}: ${G?(G.satisfaction|0):0}%  ◈  ${T().fame}: ${G?(G.fame|0):0}%  ◈  `
     : '  ◈  ';
   const fullMsg=msgs.join('   ◆   ')+liveData;
-  cx.font='bold 9px monospace';
+  cx.font='bold 8px monospace';
   const msgW=cx.measureText(fullMsg).width;
-  ledOffset=(ledOffset+0.7)%(msgW+ledLen);
+  ledOffset=(ledOffset+0.6)%(msgW+ledLen);
   cx.beginPath();cx.rect(2,0,ledLen-4,lh-1);cx.clip();
   const scrollX=ledLen-(ledOffset%(msgW+ledLen));
   const pulse=0.7+0.3*Math.sin(tt*0.04);
-  cx.fillStyle=`rgba(255,${160+(80*pulse)|0},0,${0.9+pulse*0.1})`;
-  cx.font='bold 9px monospace';cx.textAlign='left';
+  cx.fillStyle=`rgba(255,${160+(80*pulse)|0},0,1)`;
+  cx.font='bold 8px monospace';cx.textAlign='left';
   cx.fillText(fullMsg,scrollX,11);
   cx.fillText(fullMsg,scrollX+msgW+ledLen*0.3,11);
+  cx.restore();
+}
+
+// ── TFT SCREEN 42" on left wall (Altadis digital signage) ────
+function drawTFTScreen(){
+  // Position below LED on left wall
+  const tp1=toIso(0,1.5);
+  const tp2=toIso(0,4.5);
+  const tftYoff=52; // below LED
+  const tftY1=tp1.y-ISO.wallH+tftYoff;
+  const tftH=55; // screen height
+  cx.save();
+  // Clip to left wall
+  const wallClipPts=[];
+  for(let rr=0;rr<=ISO.rows;rr++) wallClipPts.push(toIso(0,rr));
+  cx.beginPath();
+  cx.moveTo(wallClipPts[0].x,wallClipPts[0].y-ISO.wallH);
+  for(let i=1;i<wallClipPts.length;i++) cx.lineTo(wallClipPts[i].x,wallClipPts[i].y-ISO.wallH);
+  for(let i=wallClipPts.length-1;i>=0;i--) cx.lineTo(wallClipPts[i].x,wallClipPts[i].y);
+  cx.closePath();cx.clip();
+  // Follow wall angle
+  const angle=Math.atan2(tp2.y-tp1.y,tp2.x-tp1.x);
+  const scrLen=Math.sqrt((tp2.x-tp1.x)**2+(tp2.y-tp1.y)**2);
+  cx.translate(tp1.x,tftY1);
+  cx.rotate(angle);
+  // TV bezel (black frame)
+  r(-3,-3,scrLen+6,tftH+6,'#1a1a1a');
+  // Screen body
+  const scrGrad=cx.createLinearGradient(0,0,scrLen,tftH);
+  scrGrad.addColorStop(0,'#003366');
+  scrGrad.addColorStop(0.5,'#004488');
+  scrGrad.addColorStop(1,'#003060');
+  cx.fillStyle=scrGrad;
+  cx.fillRect(0,0,scrLen,tftH);
+  // Altadis branding — animated slideshow
+  const slide=Math.floor(tt/300)%4;
+  // Background pattern
+  cx.globalAlpha=0.08;
+  for(let i=0;i<8;i++){
+    cx.beginPath();cx.arc(scrLen*0.3+i*15,tftH*0.5,20+i*3,0,Math.PI*2);
+    cx.fillStyle='#ffffff';cx.fill();
+  }
+  cx.globalAlpha=1;
+  if(slide===0){
+    // Altadis logo slide
+    cx.fillStyle='#ffffff';cx.font='bold 14px monospace';cx.textAlign='center';
+    cx.fillText('ALTADIS',scrLen/2,22);
+    cx.font='8px monospace';
+    cx.fillText('DISTRIBUCIÓN',scrLen/2,34);
+    // Decorative line
+    cx.strokeStyle='#cc8800';cx.lineWidth=2;
+    cx.beginPath();cx.moveTo(scrLen*0.2,38);cx.lineTo(scrLen*0.8,38);cx.stroke();
+    cx.fillStyle='#ccaa44';cx.font='7px monospace';
+    cx.fillText('Tu estanco de confianza',scrLen/2,48);
+  } else if(slide===1){
+    // Product promo slide
+    cx.fillStyle='#ffcc00';cx.font='bold 11px monospace';cx.textAlign='center';
+    cx.fillText('★ XTANCO ★',scrLen/2,18);
+    cx.fillStyle='#ffffff';cx.font='8px monospace';
+    cx.fillText('Red de estancos digitales',scrLen/2,32);
+    cx.fillStyle='#88ccff';cx.font='7px monospace';
+    cx.fillText('Calidad · Servicio · Innovación',scrLen/2,46);
+  } else if(slide===2){
+    // ADMIRA slide
+    cx.fillStyle='#ff8800';cx.font='bold 12px monospace';cx.textAlign='center';
+    cx.fillText('ADMIRA',scrLen/2,20);
+    cx.fillStyle='#ffffff';cx.font='8px monospace';
+    cx.fillText('La red de estancos',scrLen/2,34);
+    cx.fillStyle='#aaddff';cx.font='7px monospace';
+    cx.fillText('del futuro',scrLen/2,46);
+  } else {
+    // Stats slide
+    cx.fillStyle='#66ff88';cx.font='bold 10px monospace';cx.textAlign='center';
+    cx.fillText('HOY EN TU XTANCO',scrLen/2,16);
+    cx.fillStyle='#ffffff';cx.font='9px monospace';
+    if(G){
+      cx.fillText('Clientes: '+G.customersToday,scrLen/2,30);
+      cx.fillText('Satisfacción: '+(G.satisfaction|0)+'%',scrLen/2,42);
+    }
+  }
+  cx.textAlign='left';
+  // Screen glare effect
+  cx.globalAlpha=0.06;
+  cx.fillStyle='#ffffff';
+  cx.beginPath();
+  cx.moveTo(0,0);cx.lineTo(scrLen*0.4,0);cx.lineTo(0,tftH*0.6);cx.closePath();
+  cx.fill();
+  cx.globalAlpha=1;
+  // Thin bezel highlight
+  cx.strokeStyle='#333';cx.lineWidth=1;
+  cx.strokeRect(-2,-2,scrLen+4,tftH+4);
+  // Wall mount bracket
+  r(scrLen*0.4,-6,scrLen*0.2,4,'#555');
   cx.restore();
 }
 
