@@ -49,7 +49,7 @@ const ELGATO={
   port:9123,
   proxyPort:9124,
 };
-let elgatoState={on:false,busy:false,notify:0,error:false,skyRed:false};
+let elgatoState={on:true,busy:false,notify:0,error:false,skyRed:false}; // lamp starts ON
 let monitorAlert={active:false,timer:0,msg:'',color:''}; // monitor screen alert state
 
 async function elgatoFetch(path,opts){
@@ -2023,40 +2023,67 @@ function drawIsoDoor(col,row){
 function drawIsoFloorLamp(col,row){
   const p=toIso(col,row);
   const isOn=elgatoState.on;
+
+  // ── ENCENDIDA: halo de luz grande en el suelo ──
+  if(isOn){
+    cx.globalAlpha=0.08+0.02*Math.sin(tt*0.04);
+    cx.beginPath();cx.ellipse(p.x,p.y+5,30,15,0,0,Math.PI*2);
+    cx.fillStyle='#ffee66';cx.fill();
+    cx.globalAlpha=1;
+  }
+
   drawIsoShadow(p.x,p.y+4,6,3);
-  // Base (round dark)
+
+  // Base (round)
   cx.beginPath();cx.ellipse(p.x,p.y+2,6,3,0,0,Math.PI*2);
   cx.fillStyle='#3a3028';cx.fill();
   // Pole
-  r(p.x-1,p.y-50,2,52,'#5a5040');
-  r(p.x,p.y-50,1,52,'#6a6050');
-  // Lampshade
-  cx.beginPath();
-  cx.moveTo(p.x-10,p.y-48);
-  cx.lineTo(p.x+10,p.y-48);
-  cx.lineTo(p.x+6,p.y-60);
-  cx.lineTo(p.x-6,p.y-60);
-  cx.closePath();
-  cx.fillStyle=isOn?'#fff8d0':'#a8a088';cx.fill();
-  cx.strokeStyle=isOn?'#ddcc88':'#888070';cx.lineWidth=0.8;cx.stroke();
-  // Light glow (only when ON)
+  r(p.x-1,p.y-50,2,52,isOn?'#6a6050':'#4a4038');
+  r(p.x,p.y-50,1,52,isOn?'#7a7060':'#5a5048');
+
+  // ── ENCENDIDA: pantalla brillante + halo vertical ──
   if(isOn){
-    cx.globalAlpha=0.15+0.03*Math.sin(tt*0.05);
-    cx.beginPath();cx.ellipse(p.x,p.y-20,16,35,0,0,Math.PI*2);
+    // Gran halo vertical de luz
+    cx.globalAlpha=0.12+0.03*Math.sin(tt*0.05);
+    cx.beginPath();cx.ellipse(p.x,p.y-25,18,40,0,0,Math.PI*2);
+    cx.fillStyle='#ffee44';cx.fill();
+    cx.globalAlpha=1;
+    // Pantalla iluminada (crema brillante)
+    cx.beginPath();
+    cx.moveTo(p.x-10,p.y-48);cx.lineTo(p.x+10,p.y-48);
+    cx.lineTo(p.x+6,p.y-60);cx.lineTo(p.x-6,p.y-60);
+    cx.closePath();
+    cx.fillStyle='#fff8d0';cx.fill();
+    cx.strokeStyle='#eedd88';cx.lineWidth=1;cx.stroke();
+    // Bombilla encendida (punto brillante)
+    cx.beginPath();cx.arc(p.x,p.y-52,4,0,Math.PI*2);
+    cx.fillStyle='#ffff88';cx.fill();
+    // Resplandor de la bombilla
+    cx.globalAlpha=0.4;
+    cx.beginPath();cx.arc(p.x,p.y-52,7,0,Math.PI*2);
     cx.fillStyle='#ffee66';cx.fill();
     cx.globalAlpha=1;
-    // Bulb glow
-    cx.beginPath();cx.arc(p.x,p.y-52,3,0,Math.PI*2);
-    cx.fillStyle='#ffee88';cx.fill();
-  } else {
-    // Dim bulb
-    cx.beginPath();cx.arc(p.x,p.y-52,2,0,Math.PI*2);
-    cx.fillStyle='#888070';cx.fill();
+    // Borde superior iluminado
+    r(p.x-6,p.y-61,12,2,'#eedd88');
   }
-  // Top rim
-  r(p.x-6,p.y-61,12,2,isOn?'#ddcc88':'#888070');
-  // Clickable area — register as button
-  BTNS['lampToggle']={x:p.x-12,y:p.y-62,w:24,h:66};
+  // ── APAGADA: todo oscuro/gris ──
+  else {
+    // Pantalla apagada (gris oscuro)
+    cx.beginPath();
+    cx.moveTo(p.x-10,p.y-48);cx.lineTo(p.x+10,p.y-48);
+    cx.lineTo(p.x+6,p.y-60);cx.lineTo(p.x-6,p.y-60);
+    cx.closePath();
+    cx.fillStyle='#7a7068';cx.fill();
+    cx.strokeStyle='#5a5850';cx.lineWidth=0.8;cx.stroke();
+    // Bombilla apagada (punto oscuro)
+    cx.beginPath();cx.arc(p.x,p.y-52,2,0,Math.PI*2);
+    cx.fillStyle='#5a5850';cx.fill();
+    // Borde superior oscuro
+    r(p.x-6,p.y-61,12,2,'#5a5850');
+  }
+
+  // Clickable area
+  BTNS['lampToggle']={x:p.x-14,y:p.y-64,w:28,h:70};
 }
 
 function drawIsoPlant(col,row){
