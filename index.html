@@ -1501,29 +1501,26 @@ function drawIsoCounter(col,row){
 }
 
 function drawIsoShelves(col,row){
-  // Wooden shelf unit: 2 wide, 2 deep, 55px tall
-  drawIsoBlock(col,row,2,2,55,P.furnitureLight,P.furnitureDark,P.furniture,null);
-  // Shelf levels with products (colorful boxes)
+  // Wooden shelf unit: 1 wide, 2 deep, 55px tall (40% narrower)
+  drawIsoBlock(col,row,1,2,55,P.furnitureLight,P.furnitureDark,P.furniture,null);
+  // Shelf levels with products
   const levels=[12,24,36,48];
-  const p=toIso(col+1,row+1);
+  const p=toIso(col+0.5,row+1);
   for(let lv=0;lv<levels.length;lv++){
-    const numP=G.storeLevel>=2?5:3;
+    const numP=G.storeLevel>=2?3:2;
     for(let i=0;i<numP;i++){
       const prod=G.prods[i%G.prods.length];
       const stk=prod.stock/prod.max;
-      const px2=p.x-14+i*7, py2=p.y-levels[lv]-8;
-      // Product box
+      const px2=p.x-8+i*7, py2=p.y-levels[lv]-8;
       r(px2,py2,5,6+lv%2,prod.color);
       r(px2,py2,5,2,'#ffffff33');
-      // Stock dot
       const dc=stk>0.5?P.green:stk>0.2?P.yellow:P.red;
       r(px2+1,py2-3,3,2,dc);
     }
-    // Shelf board line
     cx.strokeStyle=P.furnitureLight;cx.lineWidth=1;
-    cx.beginPath();cx.moveTo(p.x-18,p.y-levels[lv]);cx.lineTo(p.x+18,p.y-levels[lv]);cx.stroke();
+    cx.beginPath();cx.moveTo(p.x-10,p.y-levels[lv]);cx.lineTo(p.x+10,p.y-levels[lv]);cx.stroke();
   }
-  tx(T().staffLabel[1],p.x,p.y-63,'#5a4a30',7,'center');
+  tx(T().staffLabel[1],p.x,p.y-63,'#5a4a30',6,'center');
 }
 
 function drawIsoLottery(col,row){
