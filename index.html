@@ -668,16 +668,19 @@ const SHOP={x:8,y:44,w:630,h:452};
 const UI={x:640,w:160};
 
 // ── ISOMETRIC ENGINE ─────────────────────────────────────────
-// ISO config: fill SHOP area (630x452, starting at y=44)
-// Diamond width = (cols+rows)*tileW/2, height = (cols+rows)*tileH/2
-// With 12 cols, 8 rows: diamond = 20*tileW/2 wide, 20*tileH/2 tall
-// tileW=62, tileH=31 → diamond = 620w x 310h → fits 630w nicely
-// Wall takes ~100px top, floor diamond starts below wall
+// ISO config: calculated to perfectly fill SHOP area (630x452)
+// SHOP starts at y=44, area = 630w × 452h
+// Grid: 12 cols × 8 rows → sum = 20
+// tileW = 630×2/20 = 63 → diamond width = 630px (exact fit)
+// Wall = 100px, remaining floor height = 352px
+// tileH = 352×2/20 = 35.2 ≈ 35 → diamond height = 350px
+// ox = SHOP center X = 8 + 315 = 323
+// oy = SHOP.y + wallH = 44 + 100 = 144
 const ISO={
-  tileW:62,tileH:31, // tile dimensions (2:1 ratio)
-  cols:12,rows:8,     // grid size (wider)
-  ox:316,oy:98,       // origin: top of diamond (centered in SHOP.w, below wall)
-  wallH:100,          // wall height in pixels
+  tileW:63,tileH:35,  // tiles fill width exactly, 2:1.8 ratio for better depth
+  cols:12,rows:8,      // grid size
+  ox:323,oy:144,       // origin: top of diamond, centered below wall
+  wallH:100,           // wall height in pixels
   doorCol:11,doorRow:4,// door position (right edge)
 };
 // Cart→Iso: convert grid (col,row) to screen pixel
