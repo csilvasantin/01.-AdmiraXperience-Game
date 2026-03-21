@@ -6,8 +6,8 @@
   <title>XTANCO — Digital Twin</title>
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
-    body{background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;font-family:monospace;overflow:hidden}
-    canvas{image-rendering:pixelated;display:block}
+    body{background:#000;display:flex;align-items:center;justify-content:center;height:100vh;height:100dvh;width:100vw;font-family:monospace;overflow:hidden}
+    canvas{image-rendering:pixelated;display:block;width:100%;height:100%;object-fit:contain}
   </style>
 </head>
 <body>
@@ -19,6 +19,26 @@
 const cv=document.getElementById('c'), cx=cv.getContext('2d');
 cx.imageSmoothingEnabled=false;
 const W=800,H=500;
+
+// ── RESPONSIVE FULLSCREEN ────────────────────────────────────
+function resizeCanvas(){
+  const vw=window.innerWidth, vh=window.innerHeight;
+  const ratio=W/H; // 1.6
+  let cw,ch;
+  if(vw/vh > ratio){ ch=vh; cw=ch*ratio; }
+  else { cw=vw; ch=cw/ratio; }
+  cv.style.width=cw+'px';
+  cv.style.height=ch+'px';
+}
+resizeCanvas();
+window.addEventListener('resize',resizeCanvas);
+// Mobile touch support
+document.addEventListener('touchmove',e=>e.preventDefault(),{passive:false});
+cv.addEventListener('touchstart',e=>{
+  e.preventDefault();
+  const t=e.touches[0];
+  cv.dispatchEvent(new MouseEvent('click',{clientX:t.clientX,clientY:t.clientY}));
+},{passive:false});
 
 // ── CONFIG ────────────────────────────────────────────────────
 const CFG={
