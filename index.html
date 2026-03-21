@@ -319,8 +319,8 @@ function initGame(){
   // Staff from model — convert grid positions to isometric screen coords
   // Staff positions on the iso grid based on their role
   const staffGridPos=[
-    {col:2,row:1},{col:5,row:1},{col:7,row:1},{col:7,row:4},
-    {col:5,row:3},{col:2,row:3},{col:4,row:5},{col:8,row:2},
+    {col:2,row:1},{col:5,row:1},{col:8,row:1},{col:8,row:4},
+    {col:5,row:3},{col:2,row:3},{col:4,row:5},{col:10,row:2},
   ];
   G.staff=M.staffInit.map((s,i)=>{
     const gp=staffGridPos[i%staffGridPos.length];
@@ -395,11 +395,12 @@ document.addEventListener('keydown',e=>{
     return;
   }
   if(state===S.GAME){
-    if(e.code==='Escape'){openPause();}
-    if(e.code==='Digit1') activeTab=0;
-    if(e.code==='Digit2') activeTab=1;
-    if(e.code==='Digit3') activeTab=2;
-    if(e.code==='Digit4') activeTab=3;
+    if(e.code==='Escape'){if(uiOpen)uiOpen=false;else openPause();}
+    if(e.code==='KeyM'){uiOpen=!uiOpen;}
+    if(e.code==='Digit1'){activeTab=0;uiOpen=true;}
+    if(e.code==='Digit2'){activeTab=1;uiOpen=true;}
+    if(e.code==='Digit3'){activeTab=2;uiOpen=true;}
+    if(e.code==='Digit4'){activeTab=3;uiOpen=true;}
   }
 });
 document.addEventListener('keyup',e=>{keys[e.code]=false;});
@@ -469,6 +470,9 @@ function doAction(id){
       showEv(T().upgradeMsg,P.neon1);addFloat(W/2,H/2-40,'UPGRADE!',P.neon1);
     }
   }
+  if(id==='menu'){uiOpen=!uiOpen;return;}
+  if(id==='closeUI'){uiOpen=false;return;}
+  if(id==='save'){saveGame();showEv('💾 Saved!','#88aa55');return;}
 }
 
 function showEv(msg,col){G.eventMsg=msg;G.eventTimer=160;G.eventColor=col||P.neon1;}
@@ -648,7 +652,7 @@ function spawnCust(){
   const ci=Math.floor(Math.random()*6);
   // Spawn at door position in iso grid, target random browsing spot
   const doorIso=toIso(ISO.doorCol,ISO.doorRow);
-  const tCol=2+Math.random()*5|0, tRow=1+Math.random()*4|0;
+  const tCol=2+Math.random()*7|0, tRow=1+Math.random()*4|0;
   const tIso=toIso(tCol,tRow);
   G.custs.push({
     x:doorIso.x,y:doorIso.y,
@@ -669,21 +673,22 @@ const nl=(x1,y1,x2,y2,c,lw=1)=>{glow(c,5);cx.strokeStyle=c;cx.lineWidth=lw;cx.be
 const nt=(s,x,y,c,sz=12)=>{glow(c,10);tx(s,x,y,c,sz,'center');nog();};
 
 // ── SHOP LAYOUT ───────────────────────────────────────────────
-const SHOP={x:8,y:44,w:630,h:452};
-const UI={x:640,w:160};
+// SHOP now takes FULL width (like GDS). UI panel is an overlay.
+const SHOP={x:0,y:28,w:W,h:H-28-30}; // between top bar (28px) and bottom bar (30px)
+const UI={x:W-170,w:170}; // overlay panel (shown/hidden)
+let uiOpen=false; // toggle with Menu button
 
 // ── ISOMETRIC ENGINE ─────────────────────────────────────────
-// Kairosoft-style: tall walls (~40%), steep floor angle, big characters
-// SHOP: x=8, y=44, w=630, h=452
-// Bottom bar takes 36px → usable h = 416
-// Wall = 170px top, floor diamond ~246px
-// Grid 10x6 → sum=16, tileW=78 → diam_w=624, tileH=30 → diam_h=240
+// Kairosoft-style: FULL WIDTH, tall walls, steep angle
+// SHOP: x=0, y=28, w=800, h=442 (full width between bars)
+// Wall ~170px, floor diamond ~270px
+// Grid 12x6 → sum=18, tileW=800*2/18≈88, tileH=270*2/18=30
 const ISO={
-  tileW:78,tileH:30,   // wide tiles, steep angle like GDS
-  cols:10,rows:6,       // fewer rows = taller walls
-  ox:320,oy:214,        // pushed down for tall wall
-  wallH:170,            // ~40% of view = tall Kairosoft walls
-  doorCol:9,doorRow:3,  // door right side
+  tileW:88,tileH:30,    // wide tiles filling 800px width
+  cols:12,rows:6,        // wide grid
+  ox:400,oy:198,         // centered in full width, below wall
+  wallH:170,             // tall Kairosoft walls
+  doorCol:11,doorRow:3,  // door far right
 };
 // Cart→Iso: convert grid (col,row) to screen pixel
 function toIso(col,row){
@@ -965,7 +970,7 @@ function drawShop(){
   cx.stroke();
 
   // ── LARGE WINDOWS on back wall (Game Dev Story style — BIG) ──
-  const winCols=[1.5,4.5,7.5];
+  const winCols=[1.5,5,8.5];
   for(const wc of winCols){
     const wp1=toIso(wc,0), wp2=toIso(wc+2,0);
     const wy=wp1.y-ISO.wallH+12;
@@ -1024,8 +1029,8 @@ function drawShop(){
   cx.stroke();
 
   // ── SIGN on back wall (wooden board — below windows) ──
-  const signP=toIso(3,0);
-  const signP2=toIso(8,0);
+  const signP=toIso(4,0);
+  const signP2=toIso(9,0);
   const signY=signP.y-18;
   const signW=signP2.x-signP.x;
   // Wooden sign board
@@ -1048,18 +1053,19 @@ function drawShop(){
   // Furniture positions in grid
   // Counter at (1,1) — main sales counter
   entities.push({type:'counter',col:1,row:1,depth:2});
-  // Shelves at (4,0) — product shelves (tobacco, etc)
-  entities.push({type:'shelves',col:4,row:0,depth:4});
-  // Lottery at (7,1)
-  entities.push({type:'lottery',col:7,row:1,depth:8});
-  // Manager desk at (7,4)
-  entities.push({type:'manager',col:7,row:4,depth:11});
+  // Shelves at (5,0) — product shelves
+  entities.push({type:'shelves',col:5,row:0,depth:5});
+  // Lottery at (8,1)
+  entities.push({type:'lottery',col:8,row:1,depth:9});
+  // Manager desk at (8,4)
+  entities.push({type:'manager',col:8,row:4,depth:12});
   // Door at right side
-  entities.push({type:'door',col:ISO.doorCol,row:ISO.doorRow,depth:12});
+  entities.push({type:'door',col:ISO.doorCol,row:ISO.doorRow,depth:14});
   // Decorations
   entities.push({type:'plant',col:0,row:0,depth:0});
   entities.push({type:'plant',col:0,row:5,depth:5});
-  entities.push({type:'vending',col:8,row:0,depth:8});
+  entities.push({type:'plant',col:4,row:5,depth:9});
+  entities.push({type:'vending',col:10,row:0,depth:10});
   entities.push({type:'rug',col:3,row:2,depth:5});
 
   // Staff
@@ -1096,8 +1102,8 @@ function drawShop(){
 
 // ── LED DISPLAY (on wall) ────────────────────────────────────
 function drawLED(){
-  const ledP1=toIso(0.5,0);
-  const ledP2=toIso(9.5,0);
+  const ledP1=toIso(1,0);
+  const ledP2=toIso(11,0);
   const ly=ledP1.y-30;
   const lw=ledP2.x-ledP1.x;
   const lx=ledP1.x;
@@ -1348,50 +1354,37 @@ function drawFloats(){
 
 // ── DRAW HUD ──────────────────────────────────────────────────
 function drawHUD(){
-  // Warm HUD bar (Kairosoft style - dark brown/wood)
-  r(0,0,W,44,'#3a2818');
-  cx.strokeStyle='#5a4830';cx.lineWidth=1;
-  cx.beginPath();cx.moveTo(0,43.5);cx.lineTo(W,43.5);cx.stroke();
-  // Money (golden)
-  tx('€'+(G.money|0).toLocaleString(),10,30,'#ffdd66',17);
-  // Rush / Inspect badge
+  // Compact top bar (GDS style: "Y1 M8 W4 · $226.0K")
+  const hh=28;
+  r(0,0,W,hh,'#2a1e10');
+  cx.strokeStyle='#4a3820';cx.lineWidth=1;
+  cx.beginPath();cx.moveTo(0,hh-0.5);cx.lineTo(W,hh-0.5);cx.stroke();
+  // Year/Week (left)
+  tx(T().yearLbl+G.year+' '+T().weekLbl+G.week+' ·',8,19,'#b0a888',11);
+  // Week progress dot
+  const dotX=108;
+  r(dotX,10,60,6,'#1a1208');
+  r(dotX,10,(60*G.weekTimer/CFG.WEEK_TICKS)|0,6,'#ccaa44');
+  rx(dotX,10,60,6,'#4a3820',1);
+  // Money (golden, prominent)
+  tx('€'+(G.money|0).toLocaleString(),180,19,'#ffdd66',14);
+  // Rush / Inspect badge (right of money)
   if(G.rush.active){
     const f=Math.sin(tt*.1)>.0;
-    r(150,8,110,28,f?'#5a3000':'#4a2800');rx(150,8,110,28,'#ffaa44',2);
-    tx('⚡ RUSH HOUR',205,28,'#ffcc44',11,'center');
+    r(310,4,100,20,f?'#5a3000':'#4a2800');rx(310,4,100,20,'#ffaa44',1.5);
+    tx('⚡ RUSH HOUR',360,18,'#ffcc44',9,'center');
   }
   if(G.inspect.active&&G.inspect.timer>100){
-    r(150,8,110,28,'#4a0010');rx(150,8,110,28,'#ff6688',2);
-    tx('🔍 INSPECCIÓN',205,28,'#ff8899',11,'center');
+    r(310,4,100,20,'#4a0010');rx(310,4,100,20,'#ff6688',1.5);
+    tx('🔍 INSPECCIÓN',360,18,'#ff8899',9,'center');
   }
-  // Year / week
-  tx(T().yearLbl+' '+G.year+'/'+CFG.TOTAL_YEARS+'  '+T().weekLbl+' '+G.week+'/'+CFG.WEEKS_PER_YEAR,272,15,'#b0a888',8);
-  // Week timer bar
-  r(272,20,130,6,'#2a2010');r(272,20,(130*G.weekTimer/CFG.WEEK_TICKS)|0,6,'#ccaa44');rx(272,20,130,6,'#5a4830',1);
-  // Year objective bar
+  // Objective progress (right side of top bar)
   const target=CFG.YEAR_TARGETS[G.year-1];
   const prog=Math.min(1,G.yearRevenue/target);
   const bc=prog>=1?P.green:prog>=0.7?'#ccaa44':'#88aa55';
-  tx(T().objective+': €'+target.toLocaleString(),272,35,'#b0a888',7);
-  r(272,37,130,5,'#2a2010');r(272,37,(130*prog)|0,5,bc);rx(272,37,130,5,'#5a4830',1);
-  tx((prog*100|0)+'%',405,41,bc,7);
-  // Satisfaction
-  tx(T().satisfaction,415,15,'#b0a888',7);
-  r(415,20,65,5,'#2a2010');r(415,20,(65*G.satisfaction/100)|0,5,G.satisfaction>70?P.green:G.satisfaction>40?P.yellow:P.red);
-  rx(415,20,65,5,'#5a4830',1);
-  // Fame
-  tx(T().fame,490,15,'#b0a888',7);
-  r(490,20,50,5,'#2a2010');r(490,20,(50*G.fame/100)|0,5,'#cc6688');rx(490,20,50,5,'#5a4830',1);
-  // Customers
-  tx(T().customers+': '+G.customersToday,415,35,'#d0c8a8',7);
-  // Stat bars (compact, top right)
-  const statX=555;
-  for(let i=0;i<4;i++){
-    const b=G.bars[i];
-    r(statX+i*21,6,18,6,'#2a2010');r(statX+i*21,6,(18*b.val/100)|0,6,b.col);
-    rx(statX+i*21,6,18,6,'#5a4830',1);
-    tx(T().statLabel[i].slice(0,3),statX+i*21+9,22,'#c0b898',6,'center');
-  }
+  tx(T().objective,440,12,'#a09880',7);
+  r(440,15,130,6,'#1a1208');r(440,15,(130*prog)|0,6,bc);rx(440,15,130,6,'#4a3820',1);
+  tx('€'+(G.yearRevenue|0).toLocaleString()+'/€'+target.toLocaleString()+(prog>=1?' ✓':''),440,26,'#c0b898',7);
 }
 
 // ── DRAW EVENT MSG ────────────────────────────────────────────
@@ -1402,74 +1395,94 @@ function drawEvent(){
   tx('  '+G.eventMsg,ex+ew/2,ey+17,'#f0e8c8',10,'center');
 }
 
-// ── DRAW BOTTOM BAR (Game Dev Story style) ───────────────────
+// ── DRAW BOTTOM BAR (GDS style: Yr Sales | Yr Profit | Status | Menu) ──
 function drawBottomBar(){
-  const by=H-36, bh=36;
-  // Bar background (dark brown, like GDS)
+  const bh=30, by=H-bh;
   r(0,by,W,bh,'#2a1e10');
   cx.strokeStyle='#4a3820';cx.lineWidth=1;
   cx.beginPath();cx.moveTo(0,by+0.5);cx.lineTo(W,by+0.5);cx.stroke();
 
-  // Left section: Save icon
-  const savX=12;
-  r(savX,by+6,50,24,'#3a2a18');rx(savX,by+6,50,24,'#5a4830',1);
-  r(savX,by+6,50,3,'#4a3a28');
-  tx('💾',savX+8,by+24,'#f0e8c8',12);tx('Save',savX+28,by+22,'#c0b898',8);
+  // Save button (left)
+  r(4,by+4,44,22,'#3a2a18');rx(4,by+4,44,22,'#5a4830',1);
+  tx('Save',26,by+19,'#c0b898',9,'center');
+  BTNS['save']={x:4,y:by+4,w:44,h:22};
 
   // Yr Sales
-  tx('Yr Sales',85,by+14,'#a09880',7);
-  tx('€'+(G.yearRevenue|0).toLocaleString(),85,by+28,'#ffdd66',10);
+  tx('Yr Sales',60,by+12,'#a09880',8);
+  tx('€'+(G.yearRevenue|0).toLocaleString(),60,by+24,'#ffdd66',10);
+
+  // Separator
+  cx.strokeStyle='#4a3820';cx.beginPath();cx.moveTo(165,by+4);cx.lineTo(165,by+bh-4);cx.stroke();
 
   // Yr Profit
   const profit=G.yearRevenue-G.staff.filter(s=>s.hired).reduce((a,s)=>a+CFG.SALARY[s.role]*s.level*G.week,0);
-  tx('Yr Profit',200,by+14,'#a09880',7);
+  tx('Yr Profit',175,by+12,'#a09880',8);
   const profCol=profit>=0?'#66cc66':'#cc6666';
-  tx((profit>=0?'':'')+'€'+(profit|0).toLocaleString(),200,by+28,profCol,10);
+  tx('€'+(profit|0).toLocaleString(),175,by+24,profCol,10);
 
-  // Satisfaction bar (center)
-  tx('Satisfaction',330,by+14,'#a09880',7);
-  const satW=100;
-  r(330,by+18,satW,8,'#1a1208');
-  r(330,by+18,(satW*G.satisfaction/100)|0,8,G.satisfaction>70?'#55aa55':G.satisfaction>40?'#ccaa44':'#cc5555');
-  rx(330,by+18,satW,8,'#4a3820',1);
-  tx((G.satisfaction|0)+'%',433,by+28,'#c0b898',7);
+  // Separator
+  cx.beginPath();cx.moveTo(290,by+4);cx.lineTo(290,by+bh-4);cx.stroke();
 
-  // Progress bar (week/year)
-  const progW=80;
-  tx(T().yearLbl+' '+G.year+' '+T().weekLbl+' '+G.week,460,by+14,'#a09880',7);
-  r(460,by+18,progW,8,'#1a1208');
-  r(460,by+18,(progW*G.weekTimer/CFG.WEEK_TICKS)|0,8,'#55aa88');
-  rx(460,by+18,progW,8,'#4a3820',1);
+  // Satisfaction + Fame compact
+  tx('Sat '+(G.satisfaction|0)+'%',300,by+12,'#a09880',8);
+  const satW=70;
+  r(300,by+16,satW,5,'#1a1208');
+  r(300,by+16,(satW*G.satisfaction/100)|0,5,G.satisfaction>70?'#55aa55':G.satisfaction>40?'#ccaa44':'#cc5555');
+  tx('Fame '+(G.fame|0)+'%',300,by+28,'#a09880',7);
 
-  // Right section: Menu button
-  const menX=SHOP.w-50;
-  r(menX,by+6,55,24,'#3a2a18');rx(menX,by+6,55,24,'#5a4830',1);
-  r(menX,by+6,55,3,'#4a3a28');
-  tx('Menu',menX+27,by+22,'#c0b898',9,'center');
+  // Separator
+  cx.beginPath();cx.moveTo(400,by+4);cx.lineTo(400,by+bh-4);cx.stroke();
+
+  // Customers today
+  tx(T().customers+': '+G.customersToday,410,by+12,'#a09880',8);
+  // Stat bars mini
+  for(let i=0;i<4;i++){
+    const b=G.bars[i];
+    r(410+i*18,by+17,15,5,'#1a1208');r(410+i*18,by+17,(15*b.val/100)|0,5,b.col);
+  }
+
+  // Separator
+  cx.beginPath();cx.moveTo(500,by+4);cx.lineTo(500,by+bh-4);cx.stroke();
+
+  // New Project / current status
+  const hasProject=G.staff.some(s=>s.hired&&s.busy>0);
+  tx(hasProject?'Selling...':'Idle',515,by+18,hasProject?'#88cc88':'#c0b898',10);
+
+  // Menu button (right)
+  const menX=W-52;
+  r(menX,by+4,46,22,'#3a2a18');rx(menX,by+4,46,22,'#5a4830',1);
+  tx('Menu',menX+23,by+19,'#c0b898',9,'center');
+  BTNS['menu']={x:menX,y:by+4,w:46,h:22};
 }
 
 // ── DRAW UI PANEL ─────────────────────────────────────────────
 function drawUI(){
-  Object.keys(BTNS).forEach(k=>delete BTNS[k]);
-  // Warm panel background
+  if(!uiOpen) return; // panel hidden unless Menu clicked
+  // Semi-transparent overlay behind panel
+  cx.globalAlpha=0.3;r(0,0,W,H,'#000');cx.globalAlpha=1;
+  // Panel background
   r(UI.x,0,UI.w,H,P.ui);
-  cx.strokeStyle='#c0b898';cx.lineWidth=1;
-  cx.beginPath();cx.moveTo(UI.x+0.5,0);cx.lineTo(UI.x+0.5,H);cx.stroke();
+  rx(UI.x,0,UI.w,H,'#a09878',1.5);
+  // Close X button
+  r(UI.x+UI.w-22,4,18,18,'#c8c0a8');rx(UI.x+UI.w-22,4,18,18,'#8a7a5a',1);
+  tx('✕',UI.x+UI.w-13,17,'#5a4020',10,'center');
+  BTNS['closeUI']={x:UI.x+UI.w-22,y:4,w:18,h:18};
   // Tabs (warm style)
   const tabs=T().tabs,tw=UI.w/4;
+  const tabY=26;
   for(let i=0;i<4;i++){
     const tx2=UI.x+i*tw;
-    r(tx2,44,tw,20,i===activeTab?P.uiH:P.uiB);
+    r(tx2,tabY,tw,20,i===activeTab?P.uiH:P.uiB);
     if(i===activeTab){
       cx.strokeStyle='#8a6a30';cx.lineWidth=2;
-      cx.beginPath();cx.moveTo(tx2,63.5);cx.lineTo(tx2+tw,63.5);cx.stroke();
+      cx.beginPath();cx.moveTo(tx2,tabY+19.5);cx.lineTo(tx2+tw,tabY+19.5);cx.stroke();
     }
-    tx(tabs[i].slice(0,3),tx2+tw/2,60,i===activeTab?'#5a4020':P.uiT3,7,'center');
-    BTNS['tab'+i]={x:tx2,y:44,w:tw,h:20};
+    tx(tabs[i].slice(0,3),tx2+tw/2,tabY+15,i===activeTab?'#5a4020':P.uiT3,7,'center');
+    BTNS['tab'+i]={x:tx2,y:tabY,w:tw,h:20};
   }
   cx.strokeStyle='#c0b898';cx.lineWidth=1;
-  cx.beginPath();cx.moveTo(UI.x,64.5);cx.lineTo(UI.x+UI.w,64.5);cx.stroke();
-  const py=68;
+  cx.beginPath();cx.moveTo(UI.x,tabY+20.5);cx.lineTo(UI.x+UI.w,tabY+20.5);cx.stroke();
+  const py=50;
   if(activeTab===0) tabSales(py);
   if(activeTab===1) tabStaff(py);
   if(activeTab===2) tabStock(py);
@@ -1726,7 +1739,6 @@ function loop(){
   if(state===S.YEAR_END){drawYearEnd();return;}
   if(state===S.GAME_END){drawGameEnd();return;}
   if(state===S.PAUSE){
-    // draw game frozen behind
     r(0,0,W,H,P.bg);drawShop();drawShopChars();drawHUD();drawBottomBar();drawUI();
     drawPause();return;
   }
