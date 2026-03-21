@@ -1380,7 +1380,7 @@ function drawShop(){
   cx.stroke();
 
   // ── WINDOWS on back wall (half size, centered in wall) ──
-  const winCols=[1,4.5,8];
+  const winCols=[0.5,4,7.5];
   for(const wc of winCols){
     const wp1=toIso(wc,0), wp2=toIso(wc+1.2,0);
     const whei=Math.floor((ISO.wallH-50)*0.55);
@@ -1463,48 +1463,57 @@ function drawShop(){
     r(wp1.x-5,wy+whei+3,wwid+10,5,'#c8c0a8');
   }
 
-  // ── BIRD flying past windows ──
-  // Bird position: flies across the back wall, only visible through windows
-  // Full cycle: crosses entire back wall then loops
-  const birdCycleLen=900; // frames for full crossing
-  const birdPhase=(tt%birdCycleLen)/birdCycleLen; // 0→1
-  // Bird travels from left window to right window (col 0.5→10.5 on back wall)
-  const birdCol=0.5+birdPhase*10;
-  const birdIso=toIso(birdCol,0);
-  // Bird Y: mid-upper area of windows, slight sine wave for bobbing
-  const birdBaseY=toIso(birdCol,0).y-ISO.wallH+Math.floor((ISO.wallH)*0.35);
+  // ── BIRDS flying past windows (different color each pass) ──
+  const birdColors=['#2a2a2a','#cc4422','#2266cc','#ddaa00','#22aa44','#aa22aa','#dd6622','#4488aa'];
+  const birdCycleLen=700;
+  const birdCycleNum=Math.floor(tt/birdCycleLen); // which cycle we're on
+  const birdPhase=(tt%birdCycleLen)/birdCycleLen;  // 0→1 within cycle
+  const birdCol2=0.5+birdPhase*10;
+  const birdIso=toIso(birdCol2,0);
+  const birdBaseY=toIso(birdCol2,0).y-ISO.wallH+Math.floor((ISO.wallH)*0.35);
   const birdBob=Math.sin(tt*0.12)*3;
   const birdX=birdIso.x;
   const birdY=birdBaseY+birdBob;
-  // Wing flap frame
   const wingFrame=Math.floor(tt/6)%3;
-  // Only draw bird clipped to each window (so it hides behind walls)
+  // Pick color based on cycle number
+  const birdColor=birdColors[birdCycleNum%birdColors.length];
+  // Belly/highlight color (lighter version)
+  const birdBelly=birdCycleNum%2===0?'#ffffff44':'#ffffff22';
+  // Draw bird only through window glass
   for(const wc of winCols){
     const wp1=toIso(wc,0), wp2=toIso(wc+1.2,0);
     const wwy=wp1.y-ISO.wallH+Math.floor((ISO.wallH-Math.floor((ISO.wallH-50)*0.55))/2);
     const wwid2=wp2.x-wp1.x;
     const whei2=Math.floor((ISO.wallH-50)*0.55);
-    // Check if bird is roughly in this window's X range
-    if(birdX>wp1.x-10&&birdX<wp1.x+wwid2+10){
+    if(birdX>wp1.x-12&&birdX<wp1.x+wwid2+12){
       cx.save();
       cx.beginPath();cx.rect(wp1.x,wwy,wwid2,whei2);cx.clip();
-      // Draw bird silhouette
-      cx.fillStyle='#2a2a2a';
       // Body
-      cx.beginPath();cx.ellipse(birdX,birdY,4,2,0,0,Math.PI*2);cx.fill();
+      cx.fillStyle=birdColor;
+      cx.beginPath();cx.ellipse(birdX,birdY,5,2.5,0,0,Math.PI*2);cx.fill();
+      // Belly highlight
+      cx.fillStyle=birdBelly;
+      cx.beginPath();cx.ellipse(birdX+1,birdY+1,3,1.5,0,0,Math.PI*2);cx.fill();
       // Wings (flapping)
-      const wy1=wingFrame===0?-4:wingFrame===1?-2:-5;
-      const wy2=wingFrame===0?-3:wingFrame===1?-5:-2;
+      cx.fillStyle=birdColor;
+      const wy1=wingFrame===0?-5:wingFrame===1?-2:-6;
+      const wy2=wingFrame===0?-4:wingFrame===1?-6:-2;
       cx.beginPath();
-      cx.moveTo(birdX-2,birdY);cx.lineTo(birdX-7,birdY+wy1);cx.lineTo(birdX-4,birdY-1);
-      cx.fill();
+      cx.moveTo(birdX-2,birdY);cx.lineTo(birdX-8,birdY+wy1);cx.lineTo(birdX-4,birdY-1);cx.fill();
       cx.beginPath();
-      cx.moveTo(birdX+2,birdY);cx.lineTo(birdX+7,birdY+wy2);cx.lineTo(birdX+4,birdY-1);
-      cx.fill();
+      cx.moveTo(birdX+2,birdY);cx.lineTo(birdX+8,birdY+wy2);cx.lineTo(birdX+4,birdY-1);cx.fill();
       // Tail
       cx.beginPath();
-      cx.moveTo(birdX-4,birdY);cx.lineTo(birdX-8,birdY+1);cx.lineTo(birdX-4,birdY+1);
-      cx.fill();
+      cx.moveTo(birdX-5,birdY);cx.lineTo(birdX-9,birdY+2);cx.lineTo(birdX-5,birdY+1);cx.fill();
+      // Head/beak
+      cx.beginPath();cx.arc(birdX+5,birdY-1,1.5,0,Math.PI*2);cx.fill();
+      cx.fillStyle='#ee8800';
+      cx.beginPath();cx.moveTo(birdX+7,birdY-1);cx.lineTo(birdX+10,birdY);cx.lineTo(birdX+7,birdY+0.5);cx.fill();
+      // Eye
+      cx.fillStyle='#fff';
+      cx.beginPath();cx.arc(birdX+5.5,birdY-1.5,0.8,0,Math.PI*2);cx.fill();
+      cx.fillStyle='#000';
+      cx.beginPath();cx.arc(birdX+5.8,birdY-1.5,0.4,0,Math.PI*2);cx.fill();
       cx.restore();
     }
   }
