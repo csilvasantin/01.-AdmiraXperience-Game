@@ -626,7 +626,7 @@ function updateGame(){
       if(d<3){c.st='browse';c.timer=60+Math.random()*80;}
       else{c.x+=dx/d*1.3;c.y+=dy/d*1.3;c.dir=dx<0?-1:1;}
     } else if(c.st==='browse'){
-      c.timer--;if(c.timer<=0){c.st='leave';c.tx=660;c.ty=385;}
+      c.timer--;if(c.timer<=0){const dp=toIso(ISO.cols,3);c.st='leave';c.tx=dp.x;c.ty=dp.y-40;}
     } else if(c.st==='leave'){
       const dx=c.tx-c.x,dy=c.ty-c.y,d=Math.sqrt(dx*dx+dy*dy);
       if(d<3) G.custs.splice(i,1);
@@ -650,14 +650,14 @@ function updateGame(){
 function spawnCust(){
   if(G.custs.length>=7) return;
   const ci=Math.floor(Math.random()*6);
-  // Spawn at door position in iso grid, target random browsing spot
-  const doorIso=toIso(ISO.doorCol,ISO.doorRow);
-  const tCol=2+Math.random()*7|0, tRow=1+Math.random()*4|0;
+  // Spawn at door on right wall (between row 2-4)
+  const doorIso=toIso(ISO.cols,3);
+  const tCol=2+Math.random()*6|0, tRow=1+Math.random()*4|0;
   const tIso=toIso(tCol,tRow);
   G.custs.push({
-    x:doorIso.x,y:doorIso.y,
-    tx:tIso.x,ty:tIso.y,
-    gCol:ISO.doorCol,gRow:ISO.doorRow,
+    x:doorIso.x,y:doorIso.y-40,
+    tx:tIso.x-7,ty:tIso.y-20,
+    gCol:ISO.cols,gRow:3,
     st:'walk',timer:0,col:P.prods[ci],hair:Math.floor(Math.random()*6),
     fr:0,ft:0,dir:-1
   });
@@ -1183,6 +1183,72 @@ function drawShop(){
   for(let i=1;i<lwPts.length;i++) cx.lineTo(lwPts[i].x,lwPts[i].y-ISO.wallH);
   cx.stroke();
 
+  // ── RIGHT WALL with DOOR (entry wall) ──
+  const rwPts=[];
+  for(let rr=0;rr<=ISO.rows;rr++) rwPts.push(toIso(ISO.cols,rr));
+  // Right wall body
+  cx.beginPath();
+  cx.moveTo(rwPts[0].x,rwPts[0].y);
+  for(let i=1;i<rwPts.length;i++) cx.lineTo(rwPts[i].x,rwPts[i].y);
+  for(let i=rwPts.length-1;i>=0;i--) cx.lineTo(rwPts[i].x,rwPts[i].y-ISO.wallH);
+  cx.closePath();
+  cx.fillStyle='#c8bca0';cx.fill();
+  // Baseboard
+  cx.beginPath();
+  cx.moveTo(rwPts[0].x,rwPts[0].y);
+  for(let i=1;i<rwPts.length;i++) cx.lineTo(rwPts[i].x,rwPts[i].y);
+  for(let i=rwPts.length-1;i>=0;i--) cx.lineTo(rwPts[i].x,rwPts[i].y-6);
+  cx.closePath();
+  cx.fillStyle='#8a7858';cx.fill();
+  // Ceiling line
+  cx.strokeStyle='#a09070';cx.lineWidth=1;cx.beginPath();
+  cx.moveTo(rwPts[0].x,rwPts[0].y-ISO.wallH);
+  for(let i=1;i<rwPts.length;i++) cx.lineTo(rwPts[i].x,rwPts[i].y-ISO.wallH);
+  cx.stroke();
+
+  // Door on right wall (between row 2 and row 4)
+  const doorTop=toIso(ISO.cols,2);
+  const doorBot=toIso(ISO.cols,4);
+  const doorH=ISO.wallH*0.7;
+  // Door frame (dark wood)
+  cx.beginPath();
+  cx.moveTo(doorTop.x,doorTop.y);
+  cx.lineTo(doorBot.x,doorBot.y);
+  cx.lineTo(doorBot.x,doorBot.y-doorH);
+  cx.lineTo(doorTop.x,doorTop.y-doorH);
+  cx.closePath();
+  cx.fillStyle='#5a4228';cx.fill();
+  // Glass panels (animated sliding)
+  const doorOff=(Math.sin(tt*.022)*3+3)|0;
+  const dMidY=(doorTop.y+doorBot.y)/2;
+  const dMidYh=(doorTop.y-doorH+doorBot.y-doorH)/2;
+  // Top glass panel
+  cx.beginPath();
+  cx.moveTo(doorTop.x,doorTop.y-doorOff*0.8);
+  cx.lineTo(dMidY>doorBot.y?doorBot.x:doorTop.x+(doorBot.x-doorTop.x)*0.48,dMidY-doorOff*0.4);
+  cx.lineTo(dMidY>doorBot.y?doorBot.x:doorTop.x+(doorBot.x-doorTop.x)*0.48,dMidYh+doorOff*0.4);
+  cx.lineTo(doorTop.x,doorTop.y-doorH+doorOff*0.3);
+  cx.closePath();
+  cx.fillStyle='#88bbdd';cx.fill();
+  // Bottom glass panel
+  cx.beginPath();
+  cx.moveTo(doorBot.x,doorBot.y-doorOff*0.3);
+  cx.lineTo(doorTop.x+(doorBot.x-doorTop.x)*0.52,dMidY+doorOff*0.4);
+  cx.lineTo(doorTop.x+(doorBot.x-doorTop.x)*0.52,dMidYh-doorOff*0.3);
+  cx.lineTo(doorBot.x,doorBot.y-doorH+doorOff*0.2);
+  cx.closePath();
+  cx.fillStyle='#7aaacc';cx.fill();
+  // Door frame outline
+  cx.strokeStyle='#4a3018';cx.lineWidth=2;
+  cx.beginPath();
+  cx.moveTo(doorTop.x,doorTop.y);cx.lineTo(doorBot.x,doorBot.y);
+  cx.lineTo(doorBot.x,doorBot.y-doorH);cx.lineTo(doorTop.x,doorTop.y-doorH);
+  cx.closePath();cx.stroke();
+  // OPEN sign on door
+  const doorCx=(doorTop.x+doorBot.x)/2;
+  const doorCy=(doorTop.y+doorBot.y)/2-doorH*0.3;
+  tx('OPEN',doorCx,doorCy,'#4a3018',8,'center');
+
   // ── SIGN on back wall (wooden board — below windows) ──
   const signP=toIso(4,0);
   const signP2=toIso(9,0);
@@ -1201,39 +1267,40 @@ function drawShop(){
   // ── LED DISPLAY on back wall ──
   drawLED();
 
-  // ── FURNITURE & ENTITIES (sorted by depth) ──
-  // Collect all drawable entities with their depth (row+col for sorting)
+  // ── FURNITURE & ENTITIES (sorted by screen Y for correct occlusion) ──
   const entities=[];
 
-  // Furniture positions in grid
-  // Counter at (1,1) — main sales counter
-  entities.push({type:'counter',col:1,row:1,depth:2});
-  // Shelves at (5,0) — product shelves
-  entities.push({type:'shelves',col:5,row:0,depth:5});
-  // Lottery at (8,1)
-  entities.push({type:'lottery',col:8,row:1,depth:9});
-  // Manager desk at (8,4)
-  entities.push({type:'manager',col:8,row:4,depth:12});
-  // Door at right side
-  entities.push({type:'door',col:ISO.doorCol,row:ISO.doorRow,depth:14});
-  // Decorations
-  entities.push({type:'plant',col:0,row:0,depth:0});
-  entities.push({type:'plant',col:0,row:5,depth:5});
-  entities.push({type:'plant',col:4,row:5,depth:9});
-  entities.push({type:'vending',col:10,row:0,depth:10});
-  entities.push({type:'rug',col:3,row:2,depth:5});
+  // Helper: get bottom screen Y of an entity for sorting (painter's algorithm)
+  // Objects with higher Y (lower on screen) are drawn LATER (on top)
+  function isoDepth(col,row){
+    const p=toIso(col,row);
+    return p.y; // screen Y = depth for isometric sorting
+  }
 
-  // Staff
+  // Rug first (flat on floor, always behind everything)
+  entities.push({type:'rug',col:3,row:2,depth:-999});
+
+  // Furniture positions in grid
+  entities.push({type:'counter',col:1,row:1,depth:isoDepth(1,2)});    // bottom edge of counter
+  entities.push({type:'shelves',col:5,row:0,depth:isoDepth(5,2)});    // bottom edge of shelves
+  entities.push({type:'lottery',col:8,row:1,depth:isoDepth(8,2)});
+  entities.push({type:'manager',col:8,row:4,depth:isoDepth(8,5)});
+  entities.push({type:'plant',col:0,row:0,depth:isoDepth(0,1)});
+  entities.push({type:'plant',col:0,row:5,depth:isoDepth(0,6)});
+  entities.push({type:'plant',col:4,row:5,depth:isoDepth(4,6)});
+  entities.push({type:'vending',col:10,row:0,depth:isoDepth(10,1)});
+
+  // Staff — use their actual screen Y position for depth
   for(const s of G.staff){
     if(!s.hired) continue;
-    entities.push({type:'staff',data:s,col:0,row:0,depth:(s.y/14|0)+50});
+    entities.push({type:'staff',data:s,col:0,row:0,depth:s.y+27}); // feet Y
   }
   // Customers
   for(const c of G.custs){
-    entities.push({type:'cust',data:c,col:0,row:0,depth:(c.y/14|0)+50});
+    entities.push({type:'cust',data:c,col:0,row:0,depth:c.y+20}); // feet Y
   }
 
-  // Sort by depth
+  // Sort by depth (lower screen Y = further back = drawn first)
   entities.sort((a,b)=>a.depth-b.depth);
 
   // Draw each entity
@@ -1243,7 +1310,7 @@ function drawShop(){
       case 'shelves': drawIsoShelves(e.col,e.row); break;
       case 'lottery': drawIsoLottery(e.col,e.row); break;
       case 'manager': drawIsoManager(e.col,e.row); break;
-      case 'door': drawIsoDoor(e.col,e.row); break;
+      // door is now drawn on the right wall, not as a floor entity
       case 'plant': drawIsoPlant(e.col,e.row); break;
       case 'vending': drawIsoVending(e.col,e.row); break;
       case 'rug': drawIsoRug(e.col,e.row); break;
