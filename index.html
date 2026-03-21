@@ -6,7 +6,7 @@
   <title>XTANCO — Digital Twin</title>
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
-    body{background:#0a0a0a;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;font-family:monospace;overflow:hidden}
+    body{background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;font-family:monospace;overflow:hidden}
     canvas{image-rendering:pixelated;display:block}
   </style>
 </head>
@@ -14,851 +14,1006 @@
 <canvas id="c" width="800" height="500"></canvas>
 <script>
 // ═══════════════════════════════════════════════════════════════
-//  XTANCO DIGITAL TWIN  —  Game Dev Story style
+//  XTANCO DIGITAL TWIN — BETA v1.0
 // ═══════════════════════════════════════════════════════════════
-const cv = document.getElementById('c');
-const cx = cv.getContext('2d');
-cx.imageSmoothingEnabled = false;
-const W = 800, H = 500;
+const cv=document.getElementById('c'), cx=cv.getContext('2d');
+cx.imageSmoothingEnabled=false;
+const W=800,H=500;
 
-// ── PALETTE ────────────────────────────────────────────────────
-const P = {
-  bg:      '#1a1a2e', wall:    '#16213e', floor:   '#0f3460',
-  floorL:  '#1a4a7a', tile1:   '#0d2d4a', tile2:   '#0a2540',
-  counter: '#2d1b69', counterT:'#4a2d9e', shelf:   '#1e3a5f',
-  shelfT:  '#2a5a8f', desk:    '#2d4a1e', deskT:   '#3d6a2e',
-  neon1:   '#00ffcc', neon2:   '#ff00aa', neon3:   '#ffcc00',
-  neonB:   '#00aaff', dim1:    '#005544', dim2:    '#660044',
-  ui:      '#0d0d1a', uiB:     '#1a1a33', uiH:     '#2a2a55',
-  uiT:     '#00ffcc', uiT2:    '#aaffee', uiT3:    '#667788',
-  btn:     '#1a2a1a', btnH:    '#00ff88', btnSel:  '#003322',
-  skin:    '#ffcc99', hair1:   '#3d2200', hair2:   '#ff6644',
-  hair3:   '#2244aa', hair4:   '#222222', shirt1:  '#4466ff',
-  shirt2:  '#ff4444', shirt3:  '#44aa44', shirt4:  '#aa44ff',
-  pants:   '#334455', shoes:   '#221100', cust1:   '#ff8844',
-  cust2:   '#44ffaa', cust3:   '#ff44aa', cust4:   '#aaff44',
-  prod1:   '#ff4444', prod2:   '#44aaff', prod3:   '#ffaa00',
-  prod4:   '#aa44ff', prod5:   '#ff88aa', prod6:   '#88ffaa',
-  green:   '#00ff44', red:     '#ff4444', yellow:  '#ffcc00',
-  white:   '#ffffff', black:   '#000000', gray:    '#445566',
+// ── CONFIG ────────────────────────────────────────────────────
+const CFG={
+  WEEK_TICKS:480, WEEKS_PER_YEAR:8, TOTAL_YEARS:5,
+  YEAR_TARGETS:[2200,5800,12000,23000,40000],
+  SALE_PROB:0.055, SALE_BASE:3.5, PRODUCT_AVG_PRICE:1.6,
+  RUSH_CHANCE:0.0025, RUSH_DURATION:160, RUSH_MULT:2.4,
+  INSPECT_CHANCE:0.0006,
+  HIRE_COST:[500,400,450,1200],
+  TRAIN_COST:[250,200,220,380],
+  SALARY:[130,105,115,210],
+  RESTOCK_COST:150,
+  ADVERT:[{cost:350,fame:8,label:'BÁSICA'},{cost:800,fame:22,label:'MEDIA'},{cost:1800,fame:50,label:'PREMIUM'}],
+  UPGRADE_COST:4500,
+  START_MONEY:3500,
+  GAMEOVER_THRESHOLD:0.55,
 };
 
-// ── I18N ───────────────────────────────────────────────────────
-const I = {
+// ── PALETTE ───────────────────────────────────────────────────
+const P={
+  bg:'#0d0d1a',wall:'#12122a',floor1:'#0f2a48',floor2:'#0a2040',
+  counter:'#2a1860',counterT:'#3d2a90',shelf:'#1a3455',shelfT:'#225588',
+  desk:'#1e3a18',deskT:'#2e5828',lott:'#1a1a00',lottT:'#ccaa00',
+  door:'#001525',neon1:'#00ffcc',neon2:'#ff00aa',neon3:'#ffcc00',neonB:'#00aaff',
+  ui:'#080812',uiB:'#12122a',uiH:'#1e1e3a',gray:'#334455',
+  uiT:'#00ffcc',uiT2:'#aaffee',uiT3:'#556677',
+  btn:'#0d1a0d',btnA:'#001a12',
+  skin:'#ffcc99',hair:['#2a1500','#cc4422','#1a3399','#111111','#884400','#cc8800'],
+  shirts:['#3355ee','#cc3333','#228833','#8833cc','#cc6600','#006688'],
+  pants:'#223344',shoes:'#180e00',
+  prods:['#ee3333','#3399ee','#eeaa00','#9933ee','#ee6699','#66ee99'],
+  green:'#00ee44',red:'#ee3333',yellow:'#ffcc00',
+  white:'#ffffff',black:'#000000',rushGlow:'#ff8800',inspGlow:'#ff0044',
+};
+
+// ── I18N ──────────────────────────────────────────────────────
+const LANGS={
   es:{
-    menuTitle:'XTANCO', menuSub:'SIMULADOR DE ESTANCO DIGITAL',
-    langPick:'SELECCIONA IDIOMA', startBtn:'PULSA ENTER PARA EMPEZAR',
-    langEs:'🇪🇸  CASTELLANO', langEn:'🇬🇧  ENGLISH',
-    tabs:['VENTAS','PERSONAL','STOCK','LOCAL'],
-    money:'CAJA', week:'SEMANA', year:'AÑO',
-    satisfaction:'SATISFACCIÓN', fame:'FAMA', customers:'CLIENTES HOY',
-    hireBtn:'CONTRATAR', trainBtn:'FORMAR', fireBtn:'DESPEDIR',
-    restockBtn:'REPONER', advertBtn:'PUBLICIDAD', upgradeBtn:'MEJORAR LOCAL',
-    staffLabel:['CAJERO/A','REPOSITOR/A','LOTERÍA','ENCARGADO/A'],
-    productLabel:['TABACO','VAPES','LOTERÍA','PRENSA','CHUCHES','RECARGA'],
-    statLabels:['FUN','VENTAS','STOCK','ATENCIÓN'],
-    eventMsgs:[
-      '¡Cola en la caja!','¡Stock bajo en tabaco!','¡Premio de lotería!',
-      '¡Cliente satisfecho!','¡Reposición completada!','¡Nueva contratación!',
-      '¡Semana récord!','¡Publicidad activa!','¡Local lleno!'
+    menuTitle:'XTANCO',menuSub:'SIMULADOR DE ESTANCO DIGITAL — BETA v1.0',
+    langPick:'SELECCIONA IDIOMA',startBtn:'PULSA ENTER PARA EMPEZAR',
+    langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
+    tut:[
+      {title:'BIENVENIDO A XTANCO',lines:['Gestiona tu estanco durante 5 años.','Alcanza el objetivo de ventas cada año','para avanzar y construir tu negocio.','¡Contrata personal, repón stock y fideliza clientes!']},
+      {title:'GESTIÓN DE PERSONAL',lines:['Contrata empleados en la pestaña PERSONAL.','Cada empleado genera ventas automáticamente.','Fórmalos para subir su nivel (máx. 5)','y aumentar su productividad y salario.']},
+      {title:'EVENTOS ESPECIALES',lines:['⚡ HORA PUNTA: ventas x2.4 durante un tiempo.','🔍 INSPECCIÓN: mantén stock y personal o penalización.','📦 Repón stock regularmente (pestaña STOCK).','👁 Vigila la barra de OBJETIVO del año en el HUD.']},
     ],
-    bubble:['¡Trabajando!','¡Vendido!','¡Cobrando!','¡Reponiendo!','¡Validando!'],
-    noStaff:'— VACANTE —', revenue:'INGRESOS', expenses:'GASTOS',
-    net:'NETO', weekLabel:'SEM', yearLabel:'AÑO',
+    tutNext:'SIGUIENTE →',tutStart:'¡EMPEZAR!',
+    tabs:['VENTAS','PERSONAL','STOCK','LOCAL'],
+    money:'CAJA',week:'SEMANA',year:'AÑO',objective:'OBJETIVO',
+    satisfaction:'SATISFACCIÓN',fame:'FAMA',customers:'CLIENTES HOY',
+    hire:'CONTRATAR',train:'FORMAR',fire:'DESPEDIR',
+    restock:'REPONER',advert:'PUBLICIDAD',upgrade:'MEJORAR LOCAL',
+    noStaff:'— VACANTE —',
+    staffLabel:['CAJERO/A','REPOSITOR/A','LOTERÍA','ENCARGADO/A'],
+    prodLabel:['Tabaco','Vapes','Lotería','Prensa','Chuches','Recarga'],
+    statLabel:['FUN','VENTAS','STOCK','ATENCIÓN'],
+    revenue:'INGRESOS SEM.',expenses:'GASTOS SEM.',net:'NETO SEM.',
+    salary:'SALARIOS/SEM.',weekLbl:'SEM',yearLbl:'AÑO',
+    rushMsg:'⚡ ¡HORA PUNTA!',rushEnd:'Hora punta terminada.',
+    inspMsg:'🔍 ¡INSPECCIÓN!',inspPass:'✓ Inspección superada.',inspFail:'✗ Multa por inspección.',
+    events:['¡Cola en caja!','¡Stock bajo!','¡Premio lotería!','¡Cliente satisfecho!','¡Reposición OK!','¡Nueva contratación!','¡Semana récord!','¡Publicidad activa!','¡Local lleno!'],
+    bubble:['¡Vendiendo!','¡Cobrando!','¡Reponiendo!','¡Validando!','¡Gestionando!'],
+    pauseTitle:'PAUSA — RESUMEN SEMANAL',pauseCont:'ESC / CLICK PARA CONTINUAR',
+    yearEndTitle:'FIN DE AÑO',yearOf:'AÑO',yearRev:'INGRESOS DEL AÑO',
+    yearTarget:'OBJETIVO',yearBonus:'BONUS',yearCont:'CONTINUAR →',
+    yearGameOver:'FIN DE PARTIDA — OBJETIVO NO ALCANZADO',
+    ratings:{S:'¡LEGENDARIO!',A:'¡EXCELENTE!',B:'¡BIEN HECHO!',C:'MEJORABLE',D:'INSUFICIENTE'},
+    ratingBonus:{S:2500,A:1200,B:400,C:0,D:-600},
+    gameEndTitle:'XTANCO CERRADO',gameEndSub:'RESULTADO FINAL',
+    gameEndScore:'PUNTUACIÓN TOTAL',gameEndYears:'AÑOS COMPLETADOS',
+    gameEndRanks:['Kiosco de Barrio','Estanco Conocido','Estanco Popular','Estanco Referente','Xtanco Legendario'],
+    gameEndRestart:'PULSA ENTER PARA REINICIAR',
+    upgradeMsg:'¡Local mejorado a nivel 2!',loanInfo:'(+nivel local = +capacidad)',
   },
   en:{
-    menuTitle:'XTANCO', menuSub:'DIGITAL TOBACCO SHOP SIMULATOR',
-    langPick:'SELECT LANGUAGE', startBtn:'PRESS ENTER TO START',
-    langEs:'🇪🇸  CASTELLANO', langEn:'🇬🇧  ENGLISH',
-    tabs:['SALES','STAFF','STOCK','STORE'],
-    money:'CASH', week:'WEEK', year:'YEAR',
-    satisfaction:'SATISFACTION', fame:'FAME', customers:'CUSTOMERS TODAY',
-    hireBtn:'HIRE', trainBtn:'TRAIN', fireBtn:'FIRE',
-    restockBtn:'RESTOCK', advertBtn:'ADVERTISE', upgradeBtn:'UPGRADE STORE',
-    staffLabel:['CASHIER','STOCKER','LOTTERY','MANAGER'],
-    productLabel:['TOBACCO','VAPES','LOTTERY','PRESS','CANDY','TOPUP'],
-    statLabels:['FUN','SALES','STOCK','SERVICE'],
-    eventMsgs:[
-      'Queue at register!','Low tobacco stock!','Lottery prize!',
-      'Happy customer!','Restock complete!','New hire!',
-      'Record week!','Ad campaign active!','Store packed!'
+    menuTitle:'XTANCO',menuSub:'DIGITAL TOBACCO SHOP SIMULATOR — BETA v1.0',
+    langPick:'SELECT LANGUAGE',startBtn:'PRESS ENTER TO START',
+    langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
+    tut:[
+      {title:'WELCOME TO XTANCO',lines:['Manage your shop for 5 years.','Reach the annual sales target','to progress and grow your business.','Hire staff, restock and keep customers happy!']},
+      {title:'STAFF MANAGEMENT',lines:['Hire employees in the STAFF tab.','Each employee generates sales automatically.','Train them to raise their level (max 5)','and increase their productivity and salary.']},
+      {title:'SPECIAL EVENTS',lines:['⚡ RUSH HOUR: sales x2.4 for a period.','🔍 INSPECTION: keep stock & staff or get fined.','📦 Restock products regularly (STOCK tab).','👁 Watch the OBJECTIVE bar in the HUD.']},
     ],
-    bubble:['Working!','Sold!','Charging!','Restocking!','Validating!'],
-    noStaff:'— VACANT —', revenue:'REVENUE', expenses:'EXPENSES',
-    net:'NET', weekLabel:'WK', yearLabel:'YR',
-  }
+    tutNext:'NEXT →',tutStart:'LET\'S GO!',
+    tabs:['SALES','STAFF','STOCK','STORE'],
+    money:'CASH',week:'WEEK',year:'YEAR',objective:'TARGET',
+    satisfaction:'SATISFACTION',fame:'FAME',customers:'CUSTOMERS TODAY',
+    hire:'HIRE',train:'TRAIN',fire:'FIRE',
+    restock:'RESTOCK',advert:'ADVERTISE',upgrade:'UPGRADE STORE',
+    noStaff:'— VACANT —',
+    staffLabel:['CASHIER','STOCKER','LOTTERY','MANAGER'],
+    prodLabel:['Tobacco','Vapes','Lottery','Press','Candy','Top-Up'],
+    statLabel:['FUN','SALES','STOCK','SERVICE'],
+    revenue:'WEEK REVENUE',expenses:'WEEK EXPENSES',net:'WEEK NET',
+    salary:'SALARIES/WK',weekLbl:'WK',yearLbl:'YR',
+    rushMsg:'⚡ RUSH HOUR!',rushEnd:'Rush hour over.',
+    inspMsg:'🔍 INSPECTION!',inspPass:'✓ Inspection passed.',inspFail:'✗ Inspection fine.',
+    events:['Queue at register!','Low stock!','Lottery prize!','Happy customer!','Restock done!','New hire!','Record week!','Ad active!','Store packed!'],
+    bubble:['Selling!','Charging!','Restocking!','Validating!','Managing!'],
+    pauseTitle:'PAUSE — WEEKLY SUMMARY',pauseCont:'ESC / CLICK TO CONTINUE',
+    yearEndTitle:'YEAR END',yearOf:'YEAR',yearRev:'YEAR REVENUE',
+    yearTarget:'TARGET',yearBonus:'BONUS',yearCont:'CONTINUE →',
+    yearGameOver:'GAME OVER — TARGET NOT REACHED',
+    ratings:{S:'LEGENDARY!',A:'EXCELLENT!',B:'WELL DONE!',C:'NEEDS WORK',D:'INSUFFICIENT'},
+    ratingBonus:{S:2500,A:1200,B:400,C:0,D:-600},
+    gameEndTitle:'SHOP CLOSED',gameEndSub:'FINAL RESULTS',
+    gameEndScore:'TOTAL SCORE',gameEndYears:'YEARS COMPLETED',
+    gameEndRanks:['Neighbourhood Kiosk','Known Tobacconist','Popular Shop','Reference Store','Legendary Xtanco'],
+    gameEndRestart:'PRESS ENTER TO RESTART',
+    upgradeMsg:'Store upgraded to level 2!',loanInfo:'(+store level = +capacity)',
+  },
 };
-let lang='es'; const T=()=>I[lang];
+let lang='es';
+const T=()=>LANGS[lang];
 
-// ── STATE ──────────────────────────────────────────────────────
-let state='menu'; // menu | game
-let menuSel=0, activeTab=0;
-let tt=0; // global tick
+// ── STATE ─────────────────────────────────────────────────────
+const S={MENU:'menu',TUT:'tutorial',GAME:'game',PAUSE:'pause',YEAR_END:'yearEnd',GAME_END:'gameEnd'};
+let state=S.MENU, menuSel=0, tutPage=0;
+let tt=0;
 
-// ── GAME DATA ─────────────────────────────────────────────────
-const WEEK_TICKS = 420; // ticks per in-game week
-let money=5000, week=1, year=1;
-let satisfaction=60, fame=30, customersToday=0;
-let weekRevenue=0, weekExpenses=0;
-let weekTimer=0;
-let eventMsg=null, eventTimer=0;
-
-const staff = [
-  {slot:0, x:180, y:200, hired:true,  name:'ANA',    role:0, level:1, energy:100, busy:0, shirt:P.shirt1, hair:P.hair1, bubbleTimer:0, bubbleIdx:0, animFrame:0, animTimer:0},
-  {slot:1, x:310, y:200, hired:false, name:'JORGE',  role:1, level:1, energy:100, busy:0, shirt:P.shirt2, hair:P.hair2, bubbleTimer:0, bubbleIdx:1, animFrame:0, animTimer:0},
-  {slot:2, x:440, y:200, hired:false, name:'LUCÍA',  role:2, level:1, energy:100, busy:0, shirt:P.shirt3, hair:P.hair3, bubbleTimer:0, bubbleIdx:4, animFrame:0, animTimer:0},
-  {slot:3, x:310, y:310, hired:false, name:'MARCOS', role:3, level:1, energy:100, busy:0, shirt:P.shirt4, hair:P.hair4, bubbleTimer:0, bubbleIdx:0, animFrame:0, animTimer:0},
-];
-const HIRE_COST=[800,600,700,1500];
-const TRAIN_COST=[300,300,300,500];
-const SALARY=[400,350,380,700];
-
-const products=[
-  {id:0,stock:80,maxStock:100,price:8, salesRate:0.8,color:P.prod1},
-  {id:1,stock:60,maxStock:80, price:12,salesRate:0.5,color:P.prod2},
-  {id:2,stock:90,maxStock:100,price:3, salesRate:1.0,color:P.prod3},
-  {id:3,stock:70,maxStock:100,price:2, salesRate:0.6,color:P.prod4},
-  {id:4,stock:50,maxStock:80, price:1, salesRate:0.7,color:P.prod5},
-  {id:5,stock:40,maxStock:60, price:5, salesRate:0.4,color:P.prod6},
-];
-const RESTOCK_COST=200;
-const ADVERT_COST=500;
-
-// ── CUSTOMERS ─────────────────────────────────────────────────
-const customers=[];
-const CUST_COLORS=[P.cust1,P.cust2,P.cust3,P.cust4];
-function spawnCustomer(){
-  if(customers.length>=6) return;
-  customers.push({
-    x:600, y:390+Math.random()*20-10,
-    tx:180+Math.random()*300, ty:220+Math.random()*120,
-    state:'walking', timer:0, color:CUST_COLORS[Math.floor(Math.random()*4)],
-    hair:Object.values({a:P.hair1,b:P.hair2,c:P.hair3,d:P.hair4})[Math.floor(Math.random()*4)],
-    frame:0, fTimer:0, dir:-1, satisfied:Math.random()>0.2
-  });
+// ── GAME STATE ────────────────────────────────────────────────
+let G={};
+function initGame(){
+  G={
+    money:CFG.START_MONEY, week:1, year:1, weekTimer:0,
+    yearRevenue:0, weekRevenue:0, weekExpenses:0,
+    satisfaction:65, fame:25, customersToday:0, totalCustomers:0,
+    totalRevenue:0, totalScore:0, yearsCompleted:0,
+    rush:{active:false,timer:0}, inspect:{active:false,timer:0,warned:false},
+    storeLevel:1, // 1 or 2
+    eventMsg:null, eventTimer:0, eventColor:P.neon1,
+    yearRating:null, yearBonus:0,   // for year-end screen
+    yearEndAnim:0,                   // animation tick
+    gameOverReason:null,
+    pauseData:null,
+  };
+  // Staff
+  G.staff=[
+    {slot:0,x:165,y:195,hired:true, name:'ANA',   role:0,level:1,energy:100,morale:80,busy:0,shirt:0,hair:0,bTimer:0,bIdx:0,aFrame:0,aTimer:0},
+    {slot:1,x:295,y:195,hired:false,name:'JORGE', role:1,level:1,energy:100,morale:80,busy:0,shirt:1,hair:1,bTimer:0,bIdx:2,aFrame:0,aTimer:0},
+    {slot:2,x:425,y:195,hired:false,name:'LUCÍA', role:2,level:1,energy:100,morale:80,busy:0,shirt:2,hair:2,bTimer:0,bIdx:3,aFrame:0,aTimer:0},
+    {slot:3,x:295,y:305,hired:false,name:'MARCOS',role:3,level:1,energy:100,morale:80,busy:0,shirt:3,hair:3,bTimer:0,bIdx:4,aFrame:0,aTimer:0},
+  ];
+  // Products
+  G.prods=[
+    {stock:80,max:100,price:8, factor:1.2,color:P.prods[0]},
+    {stock:60,max:80, price:12,factor:0.9,color:P.prods[1]},
+    {stock:90,max:100,price:3, factor:1.5,color:P.prods[2]},
+    {stock:70,max:100,price:2, factor:1.0,color:P.prods[3]},
+    {stock:50,max:80, price:1, factor:1.3,color:P.prods[4]},
+    {stock:40,max:60, price:5, factor:0.8,color:P.prods[5]},
+  ];
+  // Customers
+  G.custs=[];
+  // Floating numbers
+  G.floats=[];
+  // Stat bars
+  G.bars=[{val:55,col:P.neon1},{val:40,col:P.neon3},{val:72,col:P.neonB},{val:50,col:P.neon2}];
 }
 
-// ── FLOATING NUMBERS ──────────────────────────────────────────
-const floats=[];
-function addFloat(x,y,txt,color){
-  floats.push({x,y,txt,color,life:60,vy:-0.7});
+// ── SAVE / LOAD ───────────────────────────────────────────────
+function saveGame(){
+  try{localStorage.setItem('xtanco_save',JSON.stringify({G,lang,state}));}catch(e){}
 }
-
-// ── PROGRESS BARS ─────────────────────────────────────────────
-const bars=[
-  {label:'FUN',    val:60,  color:P.neon1},
-  {label:'SALES',  val:45,  color:P.neon3},
-  {label:'STOCK',  val:72,  color:P.neonB},
-  {label:'SERVICE',val:55,  color:P.neon2},
-];
+function loadGame(){
+  try{
+    const d=localStorage.getItem('xtanco_save');
+    if(d){const p=JSON.parse(d);G=p.G;lang=p.lang||'es';return true;}
+  }catch(e){}
+  return false;
+}
 
 // ── INPUT ─────────────────────────────────────────────────────
+let activeTab=0;
 const keys={};
+const BTNS={};
 document.addEventListener('keydown',e=>{
   keys[e.code]=true;
-  if(state==='menu'){
+  if(state===S.MENU){
     if(e.code==='ArrowLeft'||e.code==='ArrowUp')   menuSel=0;
     if(e.code==='ArrowRight'||e.code==='ArrowDown') menuSel=1;
-    if(e.code==='Enter'||e.code==='Space'){
-      lang=menuSel===0?'es':'en'; state='game';
+    if(e.code==='Enter'||e.code==='Space'){lang=menuSel===0?'es':'en';initGame();state=S.TUT;tutPage=0;}
+    return;
+  }
+  if(state===S.TUT){
+    if(e.code==='Enter'||e.code==='Space'||e.code==='ArrowRight'){
+      tutPage++;
+      if(tutPage>=T().tut.length){state=S.GAME;}
     }
     return;
   }
-  if(e.code==='Digit1') activeTab=0;
-  if(e.code==='Digit2') activeTab=1;
-  if(e.code==='Digit3') activeTab=2;
-  if(e.code==='Digit4') activeTab=3;
+  if(state===S.YEAR_END){
+    if((e.code==='Enter'||e.code==='Space')&&G.yearEndAnim>80) advanceYear();
+    return;
+  }
+  if(state===S.GAME_END){
+    if(e.code==='Enter'||e.code==='Space'){state=S.MENU;menuSel=0;}
+    return;
+  }
+  if(state===S.PAUSE){
+    if(e.code==='Escape'||e.code==='Enter'||e.code==='Space'){state=S.GAME;}
+    return;
+  }
+  if(state===S.GAME){
+    if(e.code==='Escape'){openPause();}
+    if(e.code==='Digit1') activeTab=0;
+    if(e.code==='Digit2') activeTab=1;
+    if(e.code==='Digit3') activeTab=2;
+    if(e.code==='Digit4') activeTab=3;
+  }
 });
-document.addEventListener('keyup',e=>{keys[e.code]=false});
-
-// mouse for buttons
+document.addEventListener('keyup',e=>{keys[e.code]=false;});
 cv.addEventListener('click',e=>{
-  if(state!=='game') return;
+  if(state===S.TUT){tutPage++;if(tutPage>=T().tut.length)state=S.GAME;return;}
+  if(state===S.PAUSE){state=S.GAME;return;}
+  if(state===S.YEAR_END&&G.yearEndAnim>80){advanceYear();return;}
+  if(state===S.GAME_END){state=S.MENU;menuSel=0;return;}
+  if(state!==S.GAME) return;
   const r=cv.getBoundingClientRect();
-  const mx=(e.clientX-r.left)*(W/r.width)|0;
-  const my=(e.clientY-r.top)*(H/r.height)|0;
-  handleClick(mx,my);
+  const mx=(e.clientX-r.left)*(W/r.width)|0, my=(e.clientY-r.top)*(H/r.height)|0;
+  for(const[id,b] of Object.entries(BTNS)){if(mx>=b.x&&mx<b.x+b.w&&my>=b.y&&my<b.y+b.h){doAction(id);return;}}
 });
 
-const BTN_DEFS={}; // filled during draw
-function handleClick(mx,my){
-  for(const [id,b] of Object.entries(BTN_DEFS)){
-    if(mx>=b.x&&mx<b.x+b.w&&my>=b.y&&my<b.y+b.h){
-      doAction(id);
-      return;
-    }
-  }
-}
-
+// ── ACTIONS ───────────────────────────────────────────────────
 function doAction(id){
-  if(id.startsWith('tab')){
-    activeTab=parseInt(id[3]);
-    return;
-  }
+  if(id.startsWith('tab')){activeTab=parseInt(id[3]);return;}
   if(id.startsWith('hire')){
     const i=parseInt(id[4]);
-    if(!staff[i].hired&&money>=HIRE_COST[i]){
-      money-=HIRE_COST[i]; staff[i].hired=true;
-      weekExpenses+=HIRE_COST[i];
-      showEvent(T().eventMsgs[5]);
-      addFloat(staff[i].x,staff[i].y-40,'+'+T().staffLabel[i],P.neon1);
+    const s=G.staff[i];
+    if(!s.hired&&G.money>=CFG.HIRE_COST[i]){
+      G.money-=CFG.HIRE_COST[i];G.weekExpenses+=CFG.HIRE_COST[i];
+      s.hired=true;s.energy=100;s.morale=85;
+      showEv(T().events[5],P.neon1);addFloat(s.x,s.y-40,'+'+T().staffLabel[i],P.neon1);
     }
-    return;
   }
   if(id.startsWith('train')){
-    const i=parseInt(id[5]);
-    if(staff[i].hired&&money>=TRAIN_COST[i]&&staff[i].level<5){
-      money-=TRAIN_COST[i]; staff[i].level++;
-      weekExpenses+=TRAIN_COST[i];
-      addFloat(staff[i].x,staff[i].y-40,'LVL '+staff[i].level,P.neon3);
+    const i=parseInt(id[5]);const s=G.staff[i];
+    if(s.hired&&G.money>=CFG.TRAIN_COST[i]&&s.level<5){
+      G.money-=CFG.TRAIN_COST[i];G.weekExpenses+=CFG.TRAIN_COST[i];
+      s.level++;s.morale=Math.min(100,s.morale+10);
+      addFloat(s.x,s.y-40,'▲ LVL '+s.level,P.neon3);
     }
-    return;
   }
   if(id.startsWith('rest')){
-    const i=parseInt(id[4]);
-    if(money>=RESTOCK_COST){
-      money-=RESTOCK_COST; products[i].stock=products[i].maxStock;
-      weekExpenses+=RESTOCK_COST;
-      updateBars();
-      showEvent(T().eventMsgs[4]);
+    const i=parseInt(id[4]);const p=G.prods[i];
+    if(G.money>=CFG.RESTOCK_COST&&p.stock<p.max){
+      G.money-=CFG.RESTOCK_COST;G.weekExpenses+=CFG.RESTOCK_COST;
+      p.stock=p.max;updateBars();showEv(T().events[4],P.neonB);
     }
-    return;
   }
-  if(id==='advert'){
-    if(money>=ADVERT_COST){
-      money-=ADVERT_COST; fame=Math.min(100,fame+15);
-      satisfaction=Math.min(100,satisfaction+8);
-      weekExpenses+=ADVERT_COST;
-      showEvent(T().eventMsgs[7]);
-      addFloat(W/2,H/2-40,'+FAME',P.neon2);
+  if(id.startsWith('adv')){
+    const i=parseInt(id[3]);const a=CFG.ADVERT[i];
+    if(G.money>=a.cost){
+      G.money-=a.cost;G.weekExpenses+=a.cost;
+      G.fame=Math.min(100,G.fame+a.fame);
+      G.satisfaction=Math.min(100,G.satisfaction+5);
+      showEv(T().events[7],P.neon2);addFloat(W/2,H/2-40,'+FAMA',P.neon2);
     }
-    return;
   }
   if(id==='upgrade'){
-    if(money>=3000){
-      money-=3000; satisfaction=Math.min(100,satisfaction+12);
-      weekExpenses+=3000;
-      addFloat(W/2,H/2-40,'UPGRADE!',P.neon1);
+    if(G.storeLevel<2&&G.money>=CFG.UPGRADE_COST){
+      G.money-=CFG.UPGRADE_COST;G.weekExpenses+=CFG.UPGRADE_COST;
+      G.storeLevel=2;G.satisfaction=Math.min(100,G.satisfaction+15);
+      showEv(T().upgradeMsg,P.neon1);addFloat(W/2,H/2-40,'UPGRADE!',P.neon1);
     }
-    return;
   }
 }
 
-function showEvent(msg){
-  eventMsg=msg; eventTimer=160;
-}
-
-function updateBars(){
-  const avgStock=products.reduce((a,p)=>a+(p.stock/p.maxStock),0)/products.length;
-  const hiStaff=staff.filter(s=>s.hired).length;
-  bars[0].val=Math.min(100,40+hiStaff*10+fame*0.3);
-  bars[1].val=Math.min(100,20+customersToday*4+satisfaction*0.5);
-  bars[2].val=Math.round(avgStock*100);
-  bars[3].val=Math.min(100,30+hiStaff*12+satisfaction*0.4);
+function showEv(msg,col){G.eventMsg=msg;G.eventTimer=160;G.eventColor=col||P.neon1;}
+function addFloat(x,y,txt,col){G.floats.push({x,y,txt,col,life:65,vy:-0.65});}
+function openPause(){
+  G.pauseData={rev:G.weekRevenue,exp:G.weekExpenses,cust:G.customersToday,sat:G.satisfaction,fame:G.fame};
+  state=S.PAUSE;
 }
 
 // ── GAME LOGIC ────────────────────────────────────────────────
-function updateGame(){
-  tt++;
-  weekTimer++;
+function updateBars(){
+  const hi=G.staff.filter(s=>s.hired);
+  const avgStk=G.prods.reduce((a,p)=>a+(p.stock/p.max),0)/G.prods.length;
+  G.bars[0].val=Math.min(100,35+hi.length*10+G.fame*0.25)|0;
+  G.bars[1].val=Math.min(100,15+G.customersToday*3+G.satisfaction*0.4)|0;
+  G.bars[2].val=(avgStk*100)|0;
+  G.bars[3].val=Math.min(100,25+hi.length*11+G.satisfaction*0.4)|0;
+}
 
-  // Animate staff
-  for(const s of staff){
+function getRating(rev,target){
+  const r=rev/target;
+  if(r>=1.5) return'S'; if(r>=1.2) return'A'; if(r>=1.0) return'B';
+  if(r>=0.8) return'C'; return'D';
+}
+
+function advanceYear(){
+  if(G.year>=CFG.TOTAL_YEARS){
+    // Game end
+    const hireScore=G.staff.filter(s=>s.hired).reduce((a,s)=>a+s.level*200,0);
+    G.totalScore=(G.totalRevenue/100+hireScore+G.fame*50)|0;
+    state=S.GAME_END;
+    saveGame();
+    return;
+  }
+  G.yearsCompleted++;
+  G.year++;G.week=1;G.weekTimer=0;G.yearRevenue=0;G.weekRevenue=0;G.weekExpenses=0;
+  G.customersToday=0;G.yearEndAnim=0;G.yearRating=null;
+  // Satisfaction decay on year transition
+  G.satisfaction=Math.max(20,G.satisfaction-5);
+  state=S.GAME;
+  saveGame();
+}
+
+function endWeek(){
+  // Pay salaries
+  const salaries=G.staff.filter(s=>s.hired).reduce((a,s)=>a+CFG.SALARY[s.role]*s.level,0);
+  if(salaries>0){
+    G.money-=salaries;G.weekExpenses+=salaries;
+    addFloat(SHOP.x+SHOP.w/2,SHOP.y+20,'-€'+salaries+' SAL.',P.red);
+  }
+  // Stock decay
+  for(const p of G.prods) p.stock=Math.max(0,p.stock-(2+Math.random()*4|0));
+  // Satisfaction decay
+  G.satisfaction=Math.max(10,G.satisfaction-1.5);
+  // Morale decay for unhired-slots
+  for(const s of G.staff) if(s.hired) s.morale=Math.max(20,s.morale-2);
+  updateBars();
+  G.weekRevenue=0;G.weekExpenses=0;G.customersToday=0;
+  G.week++;
+  if(G.week>CFG.WEEKS_PER_YEAR){
+    // Year end
+    const target=CFG.YEAR_TARGETS[G.year-1];
+    const rating=getRating(G.yearRevenue,target);
+    const bonus=T().ratingBonus[rating];
+    G.money+=bonus;G.totalRevenue+=G.yearRevenue;
+    G.yearRating=rating;G.yearBonus=bonus;G.yearEndAnim=0;
+    if(G.yearRevenue<target*CFG.GAMEOVER_THRESHOLD){
+      G.gameOverReason='target';
+      G.totalScore=(G.totalRevenue/100)|0;
+      state=S.GAME_END;
+      saveGame();
+      return;
+    }
+    state=S.YEAR_END;
+    saveGame();
+    return;
+  }
+  if(G.week===1&&Math.random()<0.3) showEv(T().events[6],P.neon3);
+}
+
+function updateGame(){
+  tt++;G.weekTimer++;
+
+  // Rush hour
+  if(!G.rush.active&&Math.random()<CFG.RUSH_CHANCE){
+    G.rush.active=true;G.rush.timer=CFG.RUSH_DURATION;
+    showEv(T().rushMsg,P.rushGlow);
+  }
+  if(G.rush.active){
+    G.rush.timer--;
+    if(G.rush.timer<=0){G.rush.active=false;showEv(T().rushEnd,P.neon3);}
+  }
+
+  // Inspection
+  if(!G.inspect.active&&Math.random()<CFG.INSPECT_CHANCE){
+    G.inspect.active=true;G.inspect.timer=200;G.inspect.warned=false;
+    showEv(T().inspMsg,P.inspGlow);
+  }
+  if(G.inspect.active){
+    G.inspect.timer--;
+    if(G.inspect.timer===100&&!G.inspect.warned){
+      G.inspect.warned=true;
+      const hiCnt=G.staff.filter(s=>s.hired).length;
+      const avgStk=G.prods.reduce((a,p)=>a+(p.stock/p.max),0)/G.prods.length;
+      if(hiCnt>=1&&avgStk>0.4){
+        showEv(T().inspPass,P.green);G.satisfaction=Math.min(100,G.satisfaction+8);
+        addFloat(W/2,H/2-40,'✓ PASS',P.green);
+      } else {
+        const fine=600+Math.random()*400|0;
+        G.money-=fine;G.weekExpenses+=fine;
+        showEv(T().inspFail,P.inspGlow);addFloat(W/2,H/2-40,'-€'+fine,P.red);
+        G.satisfaction=Math.max(10,G.satisfaction-15);
+      }
+      G.inspect.active=false;
+    }
+    if(G.inspect.timer<=0) G.inspect.active=false;
+  }
+
+  // Staff work
+  const mult=G.rush.active?CFG.RUSH_MULT:1;
+  for(const s of G.staff){
     if(!s.hired) continue;
-    s.animTimer++;
-    if(s.animTimer>12){s.animFrame=(s.animFrame+1)%2;s.animTimer=0;}
+    s.aTimer++;if(s.aTimer>10){s.aFrame=(s.aFrame+1)%2;s.aTimer=0;}
     if(s.busy>0) s.busy--;
-    if(s.bubbleTimer>0) s.bubbleTimer--;
-    // Random work bubble
-    if(Math.random()<0.003&&s.bubbleTimer===0){
-      s.bubbleTimer=80; s.busy=60;
-      const p=products[Math.floor(Math.random()*products.length)];
+    if(s.bTimer>0) s.bTimer--;
+    s.energy=Math.max(15,s.energy-(s.busy>0?0.04:0.01));
+    if(s.energy<25) s.energy=Math.min(100,s.energy+0.08);
+    const moraleFactor=0.7+(s.morale/100)*0.3;
+    if(Math.random()<CFG.SALE_PROB*moraleFactor*mult&&s.bTimer===0){
+      const p=G.prods[Math.floor(Math.random()*G.prods.length)];
       if(p.stock>0){
-        const sale=s.level*(2+Math.random()*3)|0;
-        const revenue=sale*p.price;
-        money+=revenue; weekRevenue+=revenue;
-        customersToday++;
-        p.stock=Math.max(0,p.stock-sale);
-        addFloat(s.x+10,s.y-30,'+€'+revenue,P.green);
+        s.bTimer=70;s.busy=50;
+        const qty=Math.max(1,(s.level*CFG.SALE_BASE*(0.7+Math.random()*0.6)*p.factor*mult)|0);
+        const rev=qty*p.price;
+        G.money+=rev;G.weekRevenue+=rev;G.yearRevenue+=rev;G.totalRevenue+=rev;
+        G.customersToday++;G.totalCustomers++;
+        p.stock=Math.max(0,p.stock-Math.max(1,(qty/p.price)|0));
+        addFloat(s.x+7,s.y-28,'€'+rev,P.green);
+        if(G.rush.active) addFloat(s.x+7,s.y-16,'x'+CFG.RUSH_MULT.toFixed(1),P.rushGlow);
+        G.satisfaction=Math.min(100,G.satisfaction+0.3);
       }
     }
-    // Energy drain & recovery
-    s.energy=Math.max(20,s.energy-(s.busy>0?0.05:0.01));
-    if(s.energy<30) s.energy=Math.min(100,s.energy+0.1);
   }
 
   // Customers
-  if(Math.random()<0.008*Math.max(1,staff.filter(s=>s.hired).length)) spawnCustomer();
-  for(let i=customers.length-1;i>=0;i--){
-    const c=customers[i];
-    c.fTimer++;
-    if(c.fTimer>10){c.frame=(c.frame+1)%2;c.fTimer=0;}
-    if(c.state==='walking'){
-      const dx=c.tx-c.x, dy=c.ty-c.y;
-      const d=Math.sqrt(dx*dx+dy*dy);
-      if(d<3){c.state='browsing';c.timer=80+Math.random()*60;}
-      else{c.x+=dx/d*1.2;c.y+=dy/d*1.2;c.dir=dx<0?-1:1;}
-    } else if(c.state==='browsing'){
-      c.timer--;
-      if(c.timer<=0){
-        c.state='leaving';c.tx=650;c.ty=390;
-        if(c.satisfied){
-          satisfaction=Math.min(100,satisfaction+0.5);
-          customersToday++;
-        }
-      }
-    } else if(c.state==='leaving'){
-      const dx=c.tx-c.x,dy=c.ty-c.y;
-      const d=Math.sqrt(dx*dx+dy*dy);
-      if(d<3) customers.splice(i,1);
-      else{c.x+=dx/d*1.5;c.y+=dy/d*1.5;c.dir=dx<0?-1:1;}
+  if(Math.random()<0.006*Math.max(1,G.staff.filter(s=>s.hired).length)*(G.rush.active?2:1)) spawnCust();
+  for(let i=G.custs.length-1;i>=0;i--){
+    const c=G.custs[i];c.ft++;if(c.ft>10){c.fr=(c.fr+1)%2;c.ft=0;}
+    if(c.st==='walk'){
+      const dx=c.tx-c.x,dy=c.ty-c.y,d=Math.sqrt(dx*dx+dy*dy);
+      if(d<3){c.st='browse';c.timer=60+Math.random()*80;}
+      else{c.x+=dx/d*1.3;c.y+=dy/d*1.3;c.dir=dx<0?-1:1;}
+    } else if(c.st==='browse'){
+      c.timer--;if(c.timer<=0){c.st='leave';c.tx=660;c.ty=385;}
+    } else if(c.st==='leave'){
+      const dx=c.tx-c.x,dy=c.ty-c.y,d=Math.sqrt(dx*dx+dy*dy);
+      if(d<3) G.custs.splice(i,1);
+      else{c.x+=dx/d*1.6;c.y+=dy/d*1.6;c.dir=dx<0?-1:1;}
     }
   }
 
-  // Floating numbers
-  for(let i=floats.length-1;i>=0;i--){
-    floats[i].y+=floats[i].vy; floats[i].life--;
-    if(floats[i].life<=0) floats.splice(i,1);
+  // Floats
+  for(let i=G.floats.length-1;i>=0;i--){
+    G.floats[i].y+=G.floats[i].vy;G.floats[i].life--;
+    if(G.floats[i].life<=0) G.floats.splice(i,1);
   }
 
-  // Weekly tick
-  if(weekTimer>=WEEK_TICKS){
-    weekTimer=0; week++;
-    // Pay salaries
-    const salaries=staff.filter(s=>s.hired).reduce((a,s)=>a+SALARY[s.role]*s.level,0);
-    money-=salaries; weekExpenses+=salaries;
-    addFloat(SHOP_X+SHOP_W/2,SHOP_Y+10,'-€'+salaries+' SALARIOS',P.red);
-    // Natural stock decay
-    for(const p of products) p.stock=Math.max(0,p.stock-Math.random()*5|0);
-    updateBars();
-    if(week>7){week=1;year++;customersToday=0;}
-    satisfaction=Math.max(10,satisfaction-2);
-    if(week===1){
-      if(weekRevenue>weekExpenses) showEvent(T().eventMsgs[6]);
-      weekRevenue=0; weekExpenses=0;
-    }
-    if(eventTimer===0&&Math.random()<0.3) showEvent(T().eventMsgs[Math.floor(Math.random()*T().eventMsgs.length)]);
-  }
-  if(eventTimer>0) eventTimer--;
+  if(G.eventTimer>0) G.eventTimer--;
+
+  // Week end
+  if(G.weekTimer>=CFG.WEEK_TICKS){G.weekTimer=0;endWeek();}
   updateBars();
 }
 
+function spawnCust(){
+  if(G.custs.length>=7) return;
+  const ci=Math.floor(Math.random()*6);
+  G.custs.push({
+    x:660,y:375+Math.random()*20-10,
+    tx:180+Math.random()*340,ty:215+Math.random()*100,
+    st:'walk',timer:0,col:P.prods[ci],hair:Math.floor(Math.random()*6),
+    fr:0,ft:0,dir:-1
+  });
+}
+
 // ── DRAW HELPERS ──────────────────────────────────────────────
-function r(x,y,w,h,c){cx.fillStyle=c;cx.fillRect(x|0,y|0,w,h);}
-function rx(x,y,w,h,c,lw=1){cx.strokeStyle=c;cx.lineWidth=lw;cx.strokeRect((x|0)+.5,(y|0)+.5,w-1,h-1);}
-function t2(s,x,y,c,sz=9,al='left'){
-  cx.fillStyle=c;cx.font=`${sz}px monospace`;cx.textAlign=al;
-  cx.fillText(s,x|0,y|0);cx.textAlign='left';
-}
-function glow(c,b=8){cx.shadowColor=c;cx.shadowBlur=b;}
-function noglow(){cx.shadowBlur=0;}
-function nline(x1,y1,x2,y2,c,lw=1){
-  glow(c,6);cx.strokeStyle=c;cx.lineWidth=lw;
-  cx.beginPath();cx.moveTo(x1,y1);cx.lineTo(x2,y2);cx.stroke();noglow();
-}
-function nt(s,x,y,c,sz=12){
-  glow(c,10);t2(s,x,y,c,sz,'center');noglow();
-}
+const r=(x,y,w,h,c)=>{cx.fillStyle=c;cx.fillRect(x|0,y|0,w,h);};
+const rx=(x,y,w,h,c,lw=1)=>{cx.strokeStyle=c;cx.lineWidth=lw;cx.strokeRect((x|0)+.5,(y|0)+.5,w-1,h-1);};
+const tx=(s,x,y,c,sz=9,al='left')=>{cx.fillStyle=c;cx.font=sz+'px monospace';cx.textAlign=al;cx.fillText(s,x|0,y|0);cx.textAlign='left';};
+const glow=(c,b=8)=>{cx.shadowColor=c;cx.shadowBlur=b;};
+const nog=()=>{cx.shadowBlur=0;};
+const nl=(x1,y1,x2,y2,c,lw=1)=>{glow(c,5);cx.strokeStyle=c;cx.lineWidth=lw;cx.beginPath();cx.moveTo(x1,y1);cx.lineTo(x2,y2);cx.stroke();nog();};
+const nt=(s,x,y,c,sz=12)=>{glow(c,10);tx(s,x,y,c,sz,'center');nog();};
 
 // ── SHOP LAYOUT ───────────────────────────────────────────────
-const SHOP_X=10, SHOP_Y=50, SHOP_W=620, SHOP_H=400;
-const UI_X=640, UI_W=155;
+const SHOP={x:8,y:44,w:630,h:452};
+const UI={x:640,w:160};
 
-// ── DRAW MENU ────────────────────────────────────────────────
-let menuStars=[];
-for(let i=0;i<100;i++) menuStars.push({x:Math.random()*W,y:Math.random()*H,b:Math.random(),r:Math.random()>.8?2:1});
-
-function drawMenu(){
-  r(0,0,W,H,P.bg);
-  cx.globalAlpha=0.2;
-  for(let x=0;x<W;x+=32){cx.strokeStyle=P.wall;cx.lineWidth=1;cx.beginPath();cx.moveTo(x,0);cx.lineTo(x,H);cx.stroke();}
-  for(let y=0;y<H;y+=32){cx.beginPath();cx.moveTo(0,y);cx.lineTo(W,y);cx.stroke();}
-  cx.globalAlpha=1;
-  for(const s of menuStars){
-    cx.globalAlpha=.15+.25*Math.sin(tt*.02+s.b*10);
-    r(s.x,s.y,s.r,s.r,P.neon1);
-  }
-  cx.globalAlpha=1;
-  nline(0,6,W,6,P.neon2,3); nline(0,H-6,W,H-6,P.neon1,3);
-
-  const ty=H/2-100;
-  glow(P.neon3,20); t2(T().menuTitle,W/2,ty,P.neon3,72,'center'); noglow();
-  nt(T().menuSub,W/2,ty+50,P.neon1,12);
-  nline(W/2-160,ty+64,W/2+160,ty+64,P.neon2,1);
-
-  cx.globalAlpha=.5+.5*Math.abs(Math.sin(tt*.06));
-  nt(T().langPick,W/2,ty+90,P.neon2,13);
-  cx.globalAlpha=1;
-
-  const oy=ty+122, ow=170, oh=40, gap=24;
-  const sx=W/2-(ow*2+gap)/2;
-  [{label:T().langEs,sel:menuSel===0},{label:T().langEn,sel:menuSel===1}].forEach((o,i)=>{
-    const ox=sx+i*(ow+gap);
-    r(ox,oy,ow,oh,o.sel?'#001a12':'#0a0a1a');
-    rx(ox,oy,ow,oh,o.sel?P.neon1:P.gray,o.sel?2:1);
-    if(o.sel){glow(P.neon1,14);}
-    t2(o.label,ox+ow/2,oy+25,o.sel?P.neon1:P.gray,13,'center');
-    noglow();
-    if(o.sel) nt('▶',ox-16,oy+25,P.neon1,12);
-  });
-  cx.globalAlpha=.4+.6*Math.abs(Math.sin(tt*.04));
-  nt(T().startBtn,W/2,oy+58,P.neon3,10);
-  cx.globalAlpha=1;
-  cx.globalAlpha=.3;
-  t2('← →',W/2-12,oy+74,P.gray,9,'center');
-  cx.globalAlpha=1;
-
-  // Mini pixel art character preview
-  drawChibi(W/2-80,oy+110,1,P.shirt1,P.hair1,0,false,tt);
-  drawChibi(W/2-40,oy+108,1,P.shirt2,P.hair2,0,false,tt);
-  drawChibi(W/2+0, oy+110,1,P.shirt3,P.hair3,0,false,tt);
-  drawChibi(W/2+40,oy+108,1,P.shirt4,P.hair4,0,false,tt);
-}
-
-// ── DRAW CHIBI CHARACTER ─────────────────────────────────────
-function drawChibi(x,y,dir,shirt,hair,frame,busy,tick){
+// ── DRAW CHIBI ────────────────────────────────────────────────
+function chibi(x,y,dir,shirt,hair,frame,busy,tick,scale=1){
   cx.save();
-  if(dir===-1){cx.translate(x+10,0);cx.scale(-1,1);cx.translate(-x,0);}
-  // shadow
-  cx.globalAlpha=.25;
-  cx.beginPath();cx.ellipse(x+6,y+24,6,2,0,0,Math.PI*2);
-  cx.fillStyle='#000';cx.fill();cx.globalAlpha=1;
-  // legs
+  if(scale!==1){cx.translate(x,y);cx.scale(scale,scale);cx.translate(-x,-y);}
+  if(dir===-1){cx.translate(x+12,0);cx.scale(-1,1);cx.translate(-x,0);}
+  cx.globalAlpha=0.2;
+  cx.beginPath();cx.ellipse(x+7,y+25,7,2.5,0,0,Math.PI*2);cx.fillStyle='#000';cx.fill();cx.globalAlpha=1;
   const lk=frame===0?0:2;
-  r(x+2,y+16,4,8+lk,P.pants); r(x+7,y+16,4,8-lk,P.pants);
-  r(x+2,y+23,4,2,P.shoes);    r(x+7,y+23,4,2,P.shoes);
-  // body
-  r(x+1,y+7,12,10,shirt);
-  // chest detail
-  r(x+4,y+9,5,3,'#ffffff22');
-  // arms
+  r(x+2,y+17,4,8+lk,P.pants);r(x+8,y+17,4,8-lk,P.pants);
+  r(x+2,y+24,4,2,P.shoes);r(x+8,y+24,4,2,P.shoes);
+  r(x+1,y+7,12,11,P.shirts[shirt]);r(x+4,y+9,5,3,'#ffffff22');
   const ak=busy?(frame===0?-2:2):0;
-  r(x-2,y+8+ak,4,6,shirt); r(x+12,y+8-ak,4,6,shirt);
-  // head (big chibi head)
+  r(x-2,y+8+ak,4,7,P.shirts[shirt]);r(x+12,y+8-ak,4,7,P.shirts[shirt]);
   r(x+0,y-2,14,14,P.skin);
-  // hair
-  r(x+0,y-5,14,7,hair);
-  r(x-1,y-4,3,10,hair); r(x+12,y-4,3,10,hair);
-  // eyes
-  const blink=Math.floor(tick/80)%8===0;
-  r(x+2,y+3,3,blink?1:3,P.black); r(x+8,y+3,3,blink?1:3,P.black);
-  r(x+3,y+3,1,blink?0:1,P.white); r(x+9,y+3,1,blink?0:1,P.white);
-  // mouth
-  r(x+4,y+9,1,1,P.hair1); r(x+8,y+9,1,1,P.hair1);
+  r(x+0,y-6,14,8,P.hair[hair]);r(x-1,y-5,3,10,P.hair[hair]);r(x+12,y-5,3,10,P.hair[hair]);
+  const blink=Math.floor(tick/90)%9===0;
+  r(x+2,y+2,3,blink?1:3,P.black);r(x+8,y+2,3,blink?1:3,P.black);
+  if(!blink){r(x+3,y+3,1,1,P.white);r(x+9,y+3,1,1,P.white);}
+  r(x+4,y+9,1,1,'#cc8866');r(x+8,y+9,1,1,'#cc8866');
   cx.restore();
 }
 
-// ── DRAW SHOP FLOOR ───────────────────────────────────────────
+// ── DRAW MENU ─────────────────────────────────────────────────
+let mStars=[];for(let i=0;i<110;i++) mStars.push({x:Math.random()*W,y:Math.random()*H,b:Math.random(),r:Math.random()>.8?2:1});
+function drawMenu(){
+  r(0,0,W,H,P.bg);
+  cx.globalAlpha=0.18;
+  for(let x=0;x<W;x+=32){cx.strokeStyle=P.wall;cx.lineWidth=1;cx.beginPath();cx.moveTo(x,0);cx.lineTo(x,H);cx.stroke();}
+  for(let y=0;y<H;y+=32){cx.beginPath();cx.moveTo(0,y);cx.lineTo(W,y);cx.stroke();}
+  cx.globalAlpha=1;
+  for(const s of mStars){cx.globalAlpha=.12+.22*Math.sin(tt*.02+s.b*9);r(s.x,s.y,s.r,s.r,P.neon1);}
+  cx.globalAlpha=1;
+  nl(0,5,W,5,P.neon2,3);nl(0,H-5,W,H-5,P.neon1,3);
+  const ty=H/2-110;
+  glow(P.neon3,22);tx(T().menuTitle,W/2,ty,P.neon3,72,'center');nog();
+  nt(T().menuSub,W/2,ty+50,P.neon1,11);
+  nl(W/2-170,ty+63,W/2+170,ty+63,P.neon2,1);
+  cx.globalAlpha=.5+.5*Math.abs(Math.sin(tt*.055));nt(T().langPick,W/2,ty+90,P.neon2,13);cx.globalAlpha=1;
+  const oy=ty+118,ow=175,oh=40,gap=22,sx=W/2-(ow*2+gap)/2;
+  [{label:T().langEs,sel:menuSel===0},{label:T().langEn,sel:menuSel===1}].forEach((o,i)=>{
+    const ox=sx+i*(ow+gap);
+    r(ox,oy,ow,oh,o.sel?'#001a12':'#0a0a18');rx(ox,oy,ow,oh,o.sel?P.neon1:P.gray,o.sel?2:1);
+    if(o.sel){glow(P.neon1,14);}tx(o.label,ox+ow/2,oy+26,o.sel?P.neon1:P.gray,13,'center');nog();
+    if(o.sel) nt('▶',ox-18,oy+26,P.neon1,12);
+  });
+  cx.globalAlpha=.4+.6*Math.abs(Math.sin(tt*.04));nt(T().startBtn,W/2,oy+58,P.neon3,10);cx.globalAlpha=1;
+  cx.globalAlpha=.3;tx('← →',W/2-12,oy+73,P.gray,9,'center');cx.globalAlpha=1;
+  // Mini chibi preview
+  for(let i=0;i<4;i++) chibi(W/2-60+i*40,oy+100,1,i,i,Math.floor(tt/12)%2,false,tt);
+}
+
+// ── DRAW TUTORIAL ─────────────────────────────────────────────
+function drawTutorial(){
+  r(0,0,W,H,P.bg);
+  // Draw dimmed game background
+  cx.globalAlpha=0.08;
+  for(let x=0;x<W;x+=32){cx.strokeStyle=P.neon1;cx.lineWidth=1;cx.beginPath();cx.moveTo(x,0);cx.lineTo(x,H);cx.stroke();}
+  cx.globalAlpha=1;
+  const pg=T().tut[tutPage];
+  const bw=460,bh=260,bx=W/2-bw/2,by=H/2-bh/2;
+  r(bx-2,by-2,bw+4,bh+4,'#000000cc');r(bx,by,bw,bh,'#06061a');
+  glow(P.neon1,12);rx(bx,by,bw,bh,P.neon1,2);nog();
+  // Step dots
+  for(let i=0;i<T().tut.length;i++){
+    const dc=i===tutPage?P.neon1:P.gray;
+    glow(dc,4);r(bx+bw/2-T().tut.length*8+i*18,by+14,8,8,dc);nog();
+  }
+  nt(pg.title,W/2,by+44,P.neon3,15);
+  nl(bx+20,by+54,bx+bw-20,by+54,P.neon2,1);
+  for(let i=0;i<pg.lines.length;i++) tx(pg.lines[i],bx+26,by+76+i*28,P.uiT2,11);
+  const isLast=tutPage===T().tut.length-1;
+  const btnTxt=isLast?T().tutStart:T().tutNext;
+  const bbt=bx+bw/2-70,bbb=by+bh-42,bbw=140,bbh=28;
+  r(bbt,bbb,bbw,bbh,P.btnA);glow(P.neon1,8);rx(bbt,bbb,bbw,bbh,P.neon1,1);nog();
+  tx(btnTxt,bbt+bbw/2,bbb+19,P.neon1,10,'center');
+  cx.globalAlpha=.3;tx('(CLICK / ENTER / →)',W/2,by+bh+20,P.gray,8,'center');cx.globalAlpha=1;
+}
+
+// ── DRAW SHOP ─────────────────────────────────────────────────
 function drawShop(){
-  // Floor
-  r(SHOP_X,SHOP_Y,SHOP_W,SHOP_H,P.floor);
   // Floor tiles
-  for(let tx=SHOP_X;tx<SHOP_X+SHOP_W;tx+=32){
-    for(let ty2=SHOP_Y;ty2<SHOP_Y+SHOP_H;ty2+=32){
-      const alt=(((tx-SHOP_X)/32+(ty2-SHOP_Y)/32)%2===0);
-      r(tx,ty2,31,31,alt?P.tile1:P.tile2);
-    }
+  r(SHOP.x,SHOP.y,SHOP.w,SHOP.h,P.floor1);
+  for(let x=SHOP.x;x<SHOP.x+SHOP.w;x+=32)
+    for(let y=SHOP.y;y<SHOP.y+SHOP.h;y+=32)
+      if((((x-SHOP.x)/32+(y-SHOP.y)/32)%2|0)===0) r(x,y,31,31,P.floor2);
+  // Rush floor glow
+  if(G.rush.active){
+    cx.globalAlpha=0.07+0.05*Math.sin(tt*.08);
+    r(SHOP.x,SHOP.y,SHOP.w,SHOP.h,P.rushGlow);cx.globalAlpha=1;
+  }
+  // Inspection glow
+  if(G.inspect.active&&G.inspect.timer>100){
+    cx.globalAlpha=0.06+0.04*Math.sin(tt*.1);
+    r(SHOP.x,SHOP.y,SHOP.w,SHOP.h,P.inspGlow);cx.globalAlpha=1;
   }
   // Walls
-  r(SHOP_X,SHOP_Y,SHOP_W,8,P.wall);
-  nline(SHOP_X,SHOP_Y,SHOP_X+SHOP_W,SHOP_Y,P.neon2,2);
-  nline(SHOP_X,SHOP_Y,SHOP_X,SHOP_Y+SHOP_H,P.neon1,1);
-  nline(SHOP_X+SHOP_W,SHOP_Y,SHOP_X+SHOP_W,SHOP_Y+SHOP_H,P.neon1,1);
-
-  // Ceiling neon
-  nline(SHOP_X+10,SHOP_Y+10,SHOP_X+SHOP_W-10,SHOP_Y+10,P.neon1,1);
-
-  // SIGN
-  r(220,SHOP_Y+16,200,28,'#1a002a');
-  glow(P.neon3,14);
-  rx(222,SHOP_Y+17,196,26,P.neon3,1);
-  t2('✦  XTANCO GENERIC  ✦',320,SHOP_Y+35,P.neon3,13,'center');
-  noglow();
-
-  drawCounter();
-  drawShelves();
-  drawLotteryDesk();
-  drawManagerDesk();
-  drawDoor();
+  r(SHOP.x,SHOP.y,SHOP.w,8,P.wall);
+  nl(SHOP.x,SHOP.y,SHOP.x+SHOP.w,SHOP.y,P.neon2,2);
+  nl(SHOP.x,SHOP.y,SHOP.x,SHOP.y+SHOP.h,P.neon1,1);
+  nl(SHOP.x+SHOP.w,SHOP.y,SHOP.x+SHOP.w,SHOP.y+SHOP.h,P.neon1,1);
+  nl(SHOP.x,SHOP.y+10,SHOP.x+SHOP.w,SHOP.y+10,P.neon1,1);
+  // Sign
+  r(210,SHOP.y+15,220,26,'#140024');
+  glow(P.neon3,14);rx(212,SHOP.y+16,216,24,P.neon3,1);
+  tx('✦  XTANCO GENERIC  ✦',320,SHOP.y+33,P.neon3,13,'center');nog();
+  if(G.storeLevel>=2){
+    glow(P.neonB,8);tx('★ LVL 2',460,SHOP.y+33,P.neonB,9,'left');nog();
+  }
+  // Elements
+  drawCounter();drawShelves();drawLotteryDesk();drawManagerDesk();drawDoor();
 }
 
 function drawCounter(){
-  // Counter body (cashier station)
-  const cx2=120,cy=170,cw=140,ch=40;
-  r(cx2,cy,cw,ch,P.counter);
-  r(cx2,cy,cw,6,P.counterT);
-  nline(cx2,cy,cx2+cw,cy,P.neon1,2);
-  // Screen
-  r(cx2+8,cy+8,56,24,P.ui);
-  r(cx2+10,cy+10,52,20,'#001a0a');
-  t2(T().money+': €'+(money|0),cx2+12,cy+24,P.neon1,8);
-  // Glass display
-  r(cx2+70,cy+8,62,24,P.glass||'#002244');
-  for(let i=0;i<4;i++){
-    const pc=[P.prod1,P.prod2,P.prod3,P.prod4][i];
-    r(cx2+74+i*14,cy+12,10,16,pc);
-    r(cx2+74+i*14,cy+12,10,2,'#ffffff33');
-  }
-  // Label
-  glow(P.neon1,4);
-  t2(T().staffLabel[0],cx2+cw/2,cy-4,P.neon1,7,'center');
-  noglow();
+  const cx2=105,cy=165,cw=145,ch=42;
+  r(cx2,cy,cw,ch,P.counter);r(cx2,cy,cw,5,P.counterT);
+  nl(cx2,cy,cx2+cw,cy,P.neon1,2);
+  r(cx2+8,cy+8,54,26,P.ui);r(cx2+10,cy+10,50,22,'#001408');
+  tx(T().money+':',cx2+12,cy+21,P.uiT3,7);
+  glow(P.neon1,4);tx('€'+(G.money|0).toLocaleString(),cx2+12,cy+30,P.neon1,9);nog();
+  r(cx2+68,cy+7,68,28,P.door);r(cx2+68,cy+7,68,3,'#0055aa');
+  for(let i=0;i<4;i++){r(cx2+72+i*15,cy+12,11,18,P.prods[i]);r(cx2+72+i*15,cy+12,11,2,'#ffffff33');}
+  glow(P.neon1,4);tx(T().staffLabel[0],cx2+cw/2,cy-3,P.neon1,7,'center');nog();
 }
 
 function drawShelves(){
-  const sx=290,sy=80,sw=120,sh=280;
-  // Back panel
-  r(sx,sy,sw,sh,P.shelf);
-  r(sx,sy,4,sh,P.shelfT); r(sx+sw-4,sy,4,sh,P.shelfT);
-  // Shelf boards
-  const shelfYs=[sy+40,sy+100,sy+160,sy+220];
-  for(const y2 of shelfYs){
-    r(sx,y2,sw,8,P.shelf);
-    nline(sx,y2,sx+sw,y2,P.shelfT,2);
-    // Products on shelf
-    for(let i=0;i<6;i++){
-      const p=products[i%products.length];
-      const stk=p.stock/p.maxStock;
-      const ph=6+Math.floor(i*1.2)%8;
-      r(sx+6+i*18,y2-ph-2,13,ph,p.color);
-      r(sx+6+i*18,y2-ph-2,13,2,'#ffffff33');
-      // Stock indicator dot
-      r(sx+6+i*18+5,y2-ph-5,3,3,stk>0.5?P.green:stk>0.2?P.yellow:P.red);
+  const sx=280,sy=70,sw=130,sh=300;
+  r(sx,sy,sw,sh,P.shelf);r(sx,sy,4,sh,P.shelfT);r(sx+sw-4,sy,4,sh,P.shelfT);
+  const ys=[sy+50,sy+110,sy+170,sy+230];
+  ys.forEach((y,si)=>{
+    r(sx,y,sw,7,P.shelfT);nl(sx,y,sx+sw,y,P.shelfT,2);
+    const numP=G.storeLevel>=2?6:4;
+    for(let i=0;i<numP;i++){
+      const p=G.prods[i%G.prods.length];
+      const stk=p.stock/p.max;
+      const ph=5+Math.floor(i*1.5)%9;
+      r(sx+6+i*19,y-ph-1,14,ph,p.color);r(sx+6+i*19,y-ph-1,14,2,'#ffffff2a');
+      r(sx+6+i*19+5,y-ph+3,4,2,'#ffffff1a');
+      // Stock dot
+      const dc=stk>0.5?P.green:stk>0.2?P.yellow:P.red;
+      glow(dc,3);r(sx+6+i*19+5,y-ph-5,4,4,dc);nog();
     }
-  }
-  nline(sx,sy,sx+sw,sy,P.shelfT,2);
-  glow(P.neon2,4);
-  t2(T().staffLabel[1],sx+sw/2,sy-4,P.neon2,7,'center');
-  noglow();
+  });
+  nl(sx,sy,sx+sw,sy,P.shelfT,2);
+  glow(P.neon2,4);tx(T().staffLabel[1],sx+sw/2,sy-4,P.neon2,7,'center');nog();
 }
 
 function drawLotteryDesk(){
-  const lx=430,ly=170,lw=100,lh=40;
-  r(lx,ly,lw,lh,'#1a1a00');
-  r(lx,ly,lw,5,P.neon3);
-  nline(lx,ly,lx+lw,ly,P.neon3,2);
-  // Screen
-  r(lx+6,ly+7,50,24,'#0a0a00');
-  const digs=String(Math.floor(tt/8)%99999).padStart(5,'0');
-  cx.globalAlpha=.9;
-  t2(digs,lx+8,ly+23,P.neon3,11);
-  cx.globalAlpha=1;
-  t2(T().staffLabel[2],lx+lw/2,ly-4,P.neon3,7,'center');
-  // Neon frame
-  glow(P.neon3,5); rx(lx,ly,lw,lh,P.neon3,1); noglow();
+  const lx=425,ly=165,lw=105,lh=42;
+  r(lx,ly,lw,lh,P.lott);r(lx,ly,lw,5,P.lottT);
+  nl(lx,ly,lx+lw,ly,P.neon3,2);
+  r(lx+5,ly+7,52,26,'#050500');
+  const digs=String(Math.floor(tt/7)%99999).padStart(5,'0');
+  cx.globalAlpha=.9;tx(digs,lx+7,ly+23,P.neon3,12);cx.globalAlpha=1;
+  glow(P.neon3,5);rx(lx,ly,lw,lh,P.neon3,1);nog();
+  glow(P.neon3,4);tx(T().staffLabel[2],lx+lw/2,ly-3,P.neon3,7,'center');nog();
 }
 
 function drawManagerDesk(){
-  const mx=430,my=280,mw=100,mh=40;
-  r(mx,my,mw,mh,P.desk);
-  r(mx,my,mw,5,P.deskT);
-  nline(mx,my,mx+mw,my,P.neonB,2);
-  r(mx+6,my+7,50,24,P.ui);
-  r(mx+8,my+9,46,20,'#001020');
-  t2(T().yearLabel+' '+year,mx+10,my+21,P.neonB,8);
-  t2(T().weekLabel+' '+week,mx+10,my+30,P.neon1,7);
-  t2(T().staffLabel[3],mx+mw/2,my-4,P.neonB,7,'center');
-  glow(P.neonB,4); rx(mx,my,mw,mh,P.neonB,1); noglow();
+  const mx=425,my=280,mw=105,mh=42;
+  r(mx,my,mw,mh,P.desk);r(mx,my,mw,5,P.deskT);
+  nl(mx,my,mx+mw,my,P.neonB,2);
+  r(mx+5,my+7,52,26,P.ui);r(mx+7,my+9,48,22,'#000d18');
+  tx(T().yearLbl+' '+G.year+' / '+T().weekLbl+' '+G.week,mx+9,my+20,P.neonB,8);
+  // week progress mini bar
+  r(mx+7,my+24,48,5,P.uiB);r(mx+7,my+24,(48*G.weekTimer/CFG.WEEK_TICKS)|0,5,P.neonB);
+  glow(P.neonB,4);rx(mx,my,mw,mh,P.neonB,1);nog();
+  glow(P.neonB,4);tx(T().staffLabel[3],mx+mw/2,my-3,P.neonB,7,'center');nog();
 }
 
 function drawDoor(){
-  const dx=560,dy=280,dw=44,dh=140;
-  r(dx,dy,dw,dh,'#001122');
-  const off=(Math.sin(tt*.025)*4+4)|0;
-  r(dx+2,dy+2,dw/2-2-off,dh-4,'#002244');
-  r(dx+dw/2+off,dy+2,dw/2-2-off,dh-4,'#002244');
-  nline(dx,dy,dx+dw,dy,P.neon1,2);
-  nline(dx,dy+dh,dx+dw,dy+dh,P.neon1,1);
-  nline(dx,dy,dx,dy+dh,P.neon1,1);
-  nline(dx+dw,dy,dx+dw,dy+dh,P.neon1,1);
-  t2('IN/OUT',dx+dw/2,dy+dh/2+4,P.neon1,7,'center');
+  const dx=558,dy=265,dw=44,dh=155;
+  r(dx,dy,dw,dh,P.door);
+  const off=(Math.sin(tt*.022)*4+4)|0;
+  r(dx+2,dy+2,dw/2-2-off,dh-4,'#001e38');r(dx+dw/2+off,dy+2,dw/2-2-off,dh-4,'#001e38');
+  nl(dx,dy,dx+dw,dy,P.neon1,2);nl(dx,dy+dh,dx+dw,dy+dh,P.neon1,1);
+  nl(dx,dy,dx,dy+dh,P.neon1,1);nl(dx+dw,dy,dx+dw,dy+dh,P.neon1,1);
+  tx('IN',dx+dw/2,dy+dh/2+4,P.neon1,8,'center');
 }
 
-// ── DRAW STAFF ────────────────────────────────────────────────
-function drawStaff(){
-  for(const s of staff){
+// ── DRAW STAFF & CUSTOMERS ────────────────────────────────────
+function drawShopChars(){
+  for(const s of G.staff){
     if(!s.hired) continue;
-    drawChibi(s.x,s.y,1,s.shirt,s.hair,s.animFrame,s.busy>0,tt);
-    // Name tag
-    t2(s.name,s.x+7,s.y-3,P.white,7,'center');
+    chibi(s.x,s.y,1,s.shirt,s.hair,s.aFrame,s.busy>0,tt);
+    glow(P.white,3);tx(s.name,s.x+7,s.y-3,P.white,7,'center');nog();
     // Energy bar
-    r(s.x,s.y+25,14,3,'#111');
-    r(s.x,s.y+25,(14*(s.energy/100))|0,3,s.energy>50?P.green:s.energy>25?P.yellow:P.red);
+    r(s.x,s.y+26,14,3,'#111');
+    r(s.x,s.y+26,(14*s.energy/100)|0,3,s.energy>50?P.green:s.energy>25?P.yellow:P.red);
     // Level stars
-    for(let i=0;i<s.level;i++) t2('★',s.x-4+i*7,s.y+34,P.neon3,7);
-    // Speech bubble
-    if(s.bubbleTimer>0){
-      const msg=T().bubble[s.bubbleIdx]||'!';
-      const bw=msg.length*6+8, bh=14;
-      const bx=s.x+7-bw/2, by=s.y-22;
-      r(bx,by,bw,bh,'#ffffffee');
-      rx(bx,by,bw,bh,'#000',1);
-      t2(msg,bx+4,by+10,'#000',8);
-      // Tail
-      r(s.x+4,by+bh,4,4,'#ffffffee');
+    for(let i=0;i<s.level;i++){glow(P.neon3,3);tx('★',s.x-3+i*8,s.y+36,P.neon3,7);nog();}
+    // Bubble
+    if(s.bTimer>0){
+      const msg=T().bubble[s.bIdx]||'!';
+      const bw=msg.length*6+8,bh=14,bx2=s.x+7-bw/2,by2=s.y-22;
+      r(bx2,by2,bw,bh,'#ffffffe8');rx(bx2,by2,bw,bh,'#000',1);
+      tx(msg,bx2+4,by2+10,'#000',8);r(s.x+4,by2+bh,4,4,'#ffffffe8');
     }
+    // Rush overlay
+    if(G.rush.active&&s.bTimer>0){glow(P.rushGlow,8);tx('⚡',s.x+14,s.y-24,P.rushGlow,10);nog();}
   }
-}
-
-// ── DRAW CUSTOMERS ────────────────────────────────────────────
-function drawCustomers(){
-  for(const c of customers){
+  for(const c of G.custs){
     cx.save();
     if(c.dir===-1){cx.translate(c.x+10,0);cx.scale(-1,1);cx.translate(-c.x,0);}
-    // tiny customer chibi (smaller)
-    const lk=c.frame===0?0:1;
-    r(c.x+2,c.y+12,3,6+lk,P.pants);
-    r(c.x+6,c.y+12,3,6-lk,P.pants);
-    r(c.x+1,c.y+5,9,8,c.color);
-    r(c.x+0,c.y-2,10,9,P.skin);
-    r(c.x+0,c.y-5,10,5,c.hair);
-    r(c.x+1,c.y+1,2,2,P.black);
-    r(c.x+6,c.y+1,2,2,P.black);
-    if(c.state==='browsing'&&c.satisfied){
-      r(c.x+2,c.y+6,1,1,P.neon3); r(c.x+6,c.y+6,1,1,P.neon3);
-    }
+    const lk=c.fr===0?0:1;
+    r(c.x+2,c.y+12,3,6+lk,P.pants);r(c.x+6,c.y+12,3,6-lk,P.pants);
+    r(c.x+1,c.y+5,9,8,c.col);r(c.x+0,c.y-2,10,9,P.skin);
+    r(c.x+0,c.y-5,10,5,P.hair[c.hair]);
+    r(c.x+1,c.y+1,2,2,P.black);r(c.x+6,c.y+1,2,2,P.black);
     cx.restore();
   }
 }
 
 // ── DRAW FLOATS ───────────────────────────────────────────────
 function drawFloats(){
-  for(const f of floats){
-    cx.globalAlpha=Math.min(1,f.life/20);
-    glow(f.color,6);
-    t2(f.txt,f.x,f.y,f.color,9,'center');
-    noglow();
-    cx.globalAlpha=1;
+  for(const f of G.floats){
+    cx.globalAlpha=Math.min(1,f.life/18);
+    glow(f.col,5);tx(f.txt,f.x,f.y,f.col,9,'center');nog();cx.globalAlpha=1;
   }
 }
 
-// ── DRAW TOP HUD ──────────────────────────────────────────────
+// ── DRAW HUD ──────────────────────────────────────────────────
 function drawHUD(){
-  r(0,0,W,46,P.ui);
-  nline(0,46,W,46,P.neon1,1);
+  r(0,0,W,44,P.ui);nl(0,44,W,44,P.neon1,1);
   // Money
-  glow(P.neon1,6);
-  t2('€ '+(money|0).toLocaleString(),12,30,P.neon1,16);
-  noglow();
-  // Date
-  t2(T().yearLabel+' '+year+'  '+T().weekLabel+' '+week,170,18,P.uiT2,9);
-  // Week progress bar
-  r(170,22,120,6,P.uiB);
-  r(170,22,(120*weekTimer/WEEK_TICKS)|0,6,P.neon3);
-  rx(170,22,120,6,P.gray,1);
+  glow(P.neon1,8);tx('€'+(G.money|0).toLocaleString(),10,30,P.neon1,17);nog();
+  // Rush / Inspect badge
+  if(G.rush.active){
+    const f=Math.sin(tt*.1)>.0;
+    r(150,8,110,28,f?'#2a1400':'#1a0a00');glow(P.rushGlow,12);rx(150,8,110,28,P.rushGlow,2);
+    tx('⚡ RUSH HOUR',205,28,P.rushGlow,11,'center');nog();
+  }
+  if(G.inspect.active&&G.inspect.timer>100){
+    r(150,8,110,28,'#200006');glow(P.inspGlow,12);rx(150,8,110,28,P.inspGlow,2);
+    tx('🔍 INSPECCIÓN',205,28,P.inspGlow,11,'center');nog();
+  }
+  // Year / week
+  tx(T().yearLbl+' '+G.year+'/'+CFG.TOTAL_YEARS+'  '+T().weekLbl+' '+G.week+'/'+CFG.WEEKS_PER_YEAR,272,15,P.uiT3,8);
+  // Week timer bar
+  r(272,20,130,6,P.uiB);r(272,20,(130*G.weekTimer/CFG.WEEK_TICKS)|0,6,P.neon3);rx(272,20,130,6,P.gray,1);
+  // Year objective bar
+  const target=CFG.YEAR_TARGETS[G.year-1];
+  const prog=Math.min(1,G.yearRevenue/target);
+  const bc=prog>=1?P.green:prog>=0.7?P.neon3:P.neon1;
+  tx(T().objective+': €'+target.toLocaleString(),272,35,P.uiT3,7);
+  r(272,37,130,5,P.uiB);r(272,37,(130*prog)|0,5,bc);rx(272,37,130,5,P.gray,1);
+  tx((prog*100|0)+'%',405,41,bc,7);
   // Satisfaction
-  t2(T().satisfaction,310,18,P.uiT3,8);
-  r(310,22,80,6,P.uiB);
-  r(310,22,(80*satisfaction/100)|0,6,satisfaction>70?P.green:satisfaction>40?P.yellow:P.red);
-  rx(310,22,80,6,P.gray,1);
+  tx(T().satisfaction,415,15,P.uiT3,7);
+  r(415,20,65,5,P.uiB);r(415,20,(65*G.satisfaction/100)|0,5,G.satisfaction>70?P.green:G.satisfaction>40?P.yellow:P.red);
+  rx(415,20,65,5,P.gray,1);
   // Fame
-  t2(T().fame,400,18,P.uiT3,8);
-  r(400,22,60,6,P.uiB);
-  r(400,22,(60*fame/100)|0,6,P.neon2);
-  rx(400,22,60,6,P.gray,1);
+  tx(T().fame,490,15,P.uiT3,7);
+  r(490,20,50,5,P.uiB);r(490,20,(50*G.fame/100)|0,5,P.neon2);rx(490,20,50,5,P.gray,1);
   // Customers
-  t2(T().customers+': '+customersToday,470,30,P.uiT2,9);
-  // Stat bars top right
+  tx(T().customers+': '+G.customersToday,415,35,P.uiT2,7);
+  // Stat bars (compact, top right)
+  const statX=555;
   for(let i=0;i<4;i++){
-    const b=bars[i]; const bx=630+i*42, by=6;
-    r(bx,by,38,8,P.uiB);
-    r(bx,by,(38*b.val/100)|0,8,b.color);
-    rx(bx,by,38,8,P.gray,1);
-    t2(T().statLabels[i],bx+19,by+18,b.color,7,'center');
+    const b=G.bars[i];
+    r(statX+i*21,6,18,6,P.uiB);r(statX+i*21,6,(18*b.val/100)|0,6,b.col);
+    rx(statX+i*21,6,18,6,P.gray,1);
+    glow(b.col,3);tx(T().statLabel[i].slice(0,3),statX+i*21+9,22,b.col,6,'center');nog();
   }
 }
 
 // ── DRAW EVENT MSG ────────────────────────────────────────────
 function drawEvent(){
-  if(!eventMsg||eventTimer<=0) return;
-  const ew=260,eh=28,ex=SHOP_X+SHOP_W/2-ew/2,ey=SHOP_Y+20;
-  r(ex,ey,ew,eh,'#000000cc');
-  glow(P.neon3,8); rx(ex,ey,ew,eh,P.neon3,1); noglow();
-  t2('⚡ '+eventMsg,ex+ew/2,ey+18,P.neon3,10,'center');
+  if(!G.eventMsg||G.eventTimer<=0) return;
+  const ew=280,eh=26,ex=SHOP.x+SHOP.w/2-ew/2,ey=SHOP.y+22;
+  r(ex,ey,ew,eh,'#000000dd');glow(G.eventColor,8);rx(ex,ey,ew,eh,G.eventColor,1);nog();
+  tx('  '+G.eventMsg,ex+ew/2,ey+17,G.eventColor,10,'center');
 }
 
 // ── DRAW UI PANEL ─────────────────────────────────────────────
 function drawUI(){
-  Object.keys(BTN_DEFS).forEach(k=>delete BTN_DEFS[k]);
-  r(UI_X,0,UI_W,H,P.ui);
-  nline(UI_X,0,UI_X,H,P.neon1,1);
-
+  Object.keys(BTNS).forEach(k=>delete BTNS[k]);
+  r(UI.x,0,UI.w,H,P.ui);nl(UI.x,0,UI.x,H,P.neon1,1);
   // Tabs
-  const tabs=T().tabs;
-  const tw=UI_W/4;
+  const tabs=T().tabs,tw=UI.w/4;
   for(let i=0;i<4;i++){
-    const tx=UI_X+i*tw;
-    r(tx,46,tw,18,i===activeTab?P.uiH:P.uiB);
-    if(i===activeTab) nline(tx,64,tx+tw,64,P.neon1,2);
-    t2(tabs[i].slice(0,3),tx+tw/2,60,i===activeTab?P.neon1:P.uiT3,7,'center');
-    BTN_DEFS['tab'+i]={x:tx,y:46,w:tw,h:18};
+    const tx2=UI.x+i*tw;
+    r(tx2,44,tw,20,i===activeTab?P.uiH:P.uiB);
+    if(i===activeTab){nl(tx2,64,tx2+tw,64,P.neon1,2);}
+    tx(tabs[i].slice(0,3),tx2+tw/2,60,i===activeTab?P.neon1:P.uiT3,7,'center');
+    BTNS['tab'+i]={x:tx2,y:44,w:tw,h:20};
   }
-  nline(UI_X,64,UI_X+UI_W,64,P.gray,1);
-
-  const py=70;
-  if(activeTab===0) drawTabSales(py);
-  if(activeTab===1) drawTabStaff(py);
-  if(activeTab===2) drawTabStock(py);
-  if(activeTab===3) drawTabStore(py);
+  nl(UI.x,64,UI.x+UI.w,64,P.gray,1);
+  const py=68;
+  if(activeTab===0) tabSales(py);
+  if(activeTab===1) tabStaff(py);
+  if(activeTab===2) tabStock(py);
+  if(activeTab===3) tabStore(py);
 }
 
-function btn(id,x,y,w,h,label,color,enabled=true){
-  const bg=enabled?P.btn:'#0a0a0a';
-  const tc=enabled?color:P.gray;
-  r(x,y,w,h,bg);
-  glow(enabled?color:P.gray,enabled?4:0);
-  rx(x,y,w,h,tc,1);
-  t2(label,x+w/2,y+h/2+4,tc,8,'center');
-  noglow();
-  if(enabled) BTN_DEFS[id]={x,y,w,h};
+function mkBtn(id,x,y,w,h,lbl,col,ok=true){
+  const bg=ok?P.btn:'#080808',tc=ok?col:P.gray;
+  r(x,y,w,h,bg);if(ok)glow(col,4);rx(x,y,w,h,tc,1);nog();
+  tx(lbl,x+w/2,y+h/2+4,tc,7,'center');
+  if(ok) BTNS[id]={x,y,w,h};
 }
 
-function drawTabSales(py){
-  t2(T().revenue,UI_X+6,py+10,P.uiT3,8);
-  glow(P.green,4);
-  t2('€ '+weekRevenue.toFixed(0),UI_X+6,py+24,P.green,13);
-  noglow();
-  t2(T().expenses,UI_X+6,py+40,P.uiT3,8);
-  glow(P.red,4);
-  t2('€ '+weekExpenses.toFixed(0),UI_X+6,py+54,P.red,13);
-  noglow();
-  t2(T().net,UI_X+6,py+70,P.uiT3,8);
-  const net=weekRevenue-weekExpenses;
-  glow(net>=0?P.green:P.red,4);
-  t2((net>=0?'+':'')+'€ '+net.toFixed(0),UI_X+6,py+84,net>=0?P.green:P.red,13);
-  noglow();
-  nline(UI_X+4,py+96,UI_X+UI_W-4,py+96,P.gray,1);
-
-  // Stat bars
+function tabSales(py){
+  tx(T().revenue,UI.x+5,py+12,P.uiT3,7);
+  glow(P.green,4);tx('€'+(G.weekRevenue|0),UI.x+5,py+24,P.green,13);nog();
+  tx(T().expenses,UI.x+5,py+40,P.uiT3,7);
+  glow(P.red,4);tx('€'+(G.weekExpenses|0),UI.x+5,py+52,P.red,13);nog();
+  const net=G.weekRevenue-G.weekExpenses;
+  tx(T().net,UI.x+5,py+68,P.uiT3,7);
+  glow(net>=0?P.green:P.red,4);tx((net>=0?'+':'')+'€'+(net|0),UI.x+5,py+80,net>=0?P.green:P.red,13);nog();
+  nl(UI.x+4,py+92,UI.x+UI.w-4,py+92,P.gray,1);
+  // Year revenue vs target
+  const target=CFG.YEAR_TARGETS[G.year-1],prog=Math.min(1,G.yearRevenue/target);
+  tx(T().objective,UI.x+5,py+102,P.uiT3,7);
+  tx('€'+G.yearRevenue.toLocaleString()+' / €'+target.toLocaleString(),UI.x+5,py+113,P.uiT2,7);
+  r(UI.x+5,py+116,UI.w-10,7,P.uiB);
+  r(UI.x+5,py+116,(UI.w-10)*prog|0,7,prog>=1?P.green:P.neon3);rx(UI.x+5,py+116,UI.w-10,7,P.gray,1);
+  tx((prog*100|0)+'%',UI.x+UI.w-5,py+122,P.neon3,7,'right');
+  nl(UI.x+4,py+130,UI.x+UI.w-4,py+130,P.gray,1);
   for(let i=0;i<4;i++){
-    const b=bars[i];
-    t2(T().statLabels[i],UI_X+6,py+106+i*28,b.color,8);
-    r(UI_X+6,py+110+i*28,UI_W-12,8,P.uiB);
-    r(UI_X+6,py+110+i*28,((UI_W-12)*b.val/100)|0,8,b.color);
-    rx(UI_X+6,py+110+i*28,UI_W-12,8,P.gray,1);
-    t2(b.val+'%',UI_X+UI_W-6,py+118+i*28,b.color,7,'right');
+    const b=G.bars[i];
+    tx(T().statLabel[i],UI.x+5,py+140+i*26,b.col,7);
+    r(UI.x+5,py+143+i*26,UI.w-10,7,P.uiB);
+    r(UI.x+5,py+143+i*26,(UI.w-10)*b.val/100|0,7,b.col);
+    rx(UI.x+5,py+143+i*26,UI.w-10,7,P.gray,1);
+    tx(b.val+'%',UI.x+UI.w-5,py+149+i*26,b.col,7,'right');
   }
-
-  btn('advert',UI_X+6,py+222,UI_W-12,20,T().advertBtn+' -€'+ADVERT_COST,P.neon2,money>=ADVERT_COST);
 }
 
-function drawTabStaff(py){
+function tabStaff(py){
+  const bw=UI.w-10;
   for(let i=0;i<4;i++){
-    const s=staff[i];
-    const ry=py+i*100;
-    r(UI_X+4,ry,UI_W-8,92,s.hired?P.uiH:'#0d0d1a');
-    rx(UI_X+4,ry,UI_W-8,92,s.hired?P.neon1:P.gray,1);
-    // Mini chibi
-    if(s.hired) drawChibi(UI_X+8,ry+30,-1,s.shirt,s.hair,s.animFrame,s.busy>0,tt);
-    // Info
-    const tx2=UI_X+34;
-    t2(s.hired?s.name:T().noStaff,tx2,ry+14,s.hired?P.white:P.gray,8);
-    t2(T().staffLabel[s.role],tx2,ry+26,P.uiT3,7);
+    const s=G.staff[i];
+    const ry=py+i*106;
+    r(UI.x+4,ry,bw,98,s.hired?P.uiH:'#090912');rx(UI.x+4,ry,bw,98,s.hired?P.neon1:P.gray,1);
+    if(s.hired) chibi(UI.x+7,ry+32,-1,s.shirt,s.hair,s.aFrame,s.busy>0,tt,0.85);
+    const ix=UI.x+30;
+    tx(s.hired?s.name:T().noStaff,ix,ry+12,s.hired?P.white:P.gray,8);
+    tx(T().staffLabel[s.role],ix,ry+23,P.uiT3,7);
     if(s.hired){
-      // Level stars
-      for(let l=0;l<s.level;l++) t2('★',tx2+l*9,ry+38,P.neon3,8);
-      // Energy
-      r(tx2,ry+42,UI_W-12-28,5,P.uiB);
-      r(tx2,ry+42,((UI_W-12-28)*s.energy/100)|0,5,s.energy>50?P.green:P.yellow);
-      rx(tx2,ry+42,UI_W-12-28,5,P.gray,1);
-      btn('train'+i,tx2,ry+52,UI_W-12-28,18,T().trainBtn+' LVL '+(s.level+1)+' -€'+TRAIN_COST[i],P.neonB,money>=TRAIN_COST[i]&&s.level<5);
-      t2('💰€'+SALARY[i]*s.level+'/sem',tx2,ry+82,P.red,7);
+      for(let l=0;l<s.level;l++){glow(P.neon3,3);tx('★',ix+l*9,ry+35,P.neon3,8);nog();}
+      r(ix,ry+39,bw-30,4,P.uiB);r(ix,ry+39,(bw-30)*s.energy/100|0,4,s.energy>50?P.green:P.yellow);
+      // Morale
+      r(ix,ry+46,bw-30,4,P.uiB);r(ix,ry+46,(bw-30)*s.morale/100|0,4,P.neon2);
+      mkBtn('train'+i,ix,ry+53,bw-30,18,'LVL'+(s.level+1)+' €'+CFG.TRAIN_COST[i],P.neonB,G.money>=CFG.TRAIN_COST[i]&&s.level<5);
+      tx('€'+CFG.SALARY[s.role]*s.level+'/sem',ix,ry+86,P.red,7);
     } else {
-      btn('hire'+i,tx2,ry+40,UI_W-12-28,18,T().hireBtn+' -€'+HIRE_COST[i],P.neon1,money>=HIRE_COST[i]);
+      mkBtn('hire'+i,ix,ry+40,bw-30,20,T().hire+' €'+CFG.HIRE_COST[i],P.neon1,G.money>=CFG.HIRE_COST[i]);
     }
   }
 }
 
-function drawTabStock(py){
+function tabStock(py){
   for(let i=0;i<6;i++){
-    const p=products[i];
-    const ry=py+i*64;
-    const stk=p.stock/p.maxStock;
-    r(UI_X+4,ry,UI_W-8,56,P.uiB);
-    rx(UI_X+4,ry,UI_W-8,56,P.gray,1);
-    // Color swatch
-    r(UI_X+8,ry+4,12,12,p.color);
-    t2(T().productLabel[i],UI_X+24,ry+14,P.white,8);
-    t2('€'+p.price+'/u',UI_X+24,ry+24,P.uiT3,7);
-    // Stock bar
-    r(UI_X+6,ry+30,UI_W-12,8,P.uiB);
-    r(UI_X+6,ry+30,((UI_W-12)*stk)|0,8,stk>0.5?P.green:stk>0.2?P.yellow:P.red);
-    rx(UI_X+6,ry+30,UI_W-12,8,P.gray,1);
-    t2(p.stock+'/'+p.maxStock,UI_X+UI_W-6,ry+37,P.uiT3,7,'right');
-    btn('rest'+i,UI_X+6,ry+40,UI_W-12,14,'RESTOCK -€'+RESTOCK_COST,P.neonB,money>=RESTOCK_COST&&p.stock<p.maxStock);
+    const p=G.prods[i];
+    const ry=py+i*70;
+    const stk=p.stock/p.max;
+    r(UI.x+4,ry,UI.w-8,62,P.uiB);rx(UI.x+4,ry,UI.w-8,62,stk<0.2?P.red:P.gray,1);
+    r(UI.x+8,ry+4,12,12,p.color);
+    tx(T().prodLabel[i],UI.x+24,ry+13,P.white,8);
+    tx('€'+p.price+'/u',UI.x+24,ry+23,P.uiT3,7);
+    r(UI.x+6,ry+30,UI.w-12,7,P.uiB);
+    r(UI.x+6,ry+30,(UI.w-12)*stk|0,7,stk>0.5?P.green:stk>0.2?P.yellow:P.red);
+    rx(UI.x+6,ry+30,UI.w-12,7,P.gray,1);
+    tx(p.stock+'/'+p.max,UI.x+UI.w-6,ry+36,P.uiT3,7,'right');
+    mkBtn('rest'+i,UI.x+6,ry+42,UI.w-12,16,'RESTOCK €'+CFG.RESTOCK_COST,P.neonB,G.money>=CFG.RESTOCK_COST&&p.stock<p.max);
   }
 }
 
-function drawTabStore(py){
-  t2(T().upgradeBtn,UI_X+6,py+14,P.uiT2,9);
-  t2('-€ 3,000',UI_X+6,py+26,P.red,8);
-  btn('upgrade',UI_X+6,py+32,UI_W-12,20,'UPGRADE -€3000',P.neon1,money>=3000);
-  nline(UI_X+4,py+58,UI_X+UI_W-4,py+58,P.gray,1);
-
-  t2(T().advertBtn,UI_X+6,py+72,P.uiT2,9);
-  t2('-€ '+ADVERT_COST,UI_X+6,py+84,P.red,8);
-  btn('advert2',UI_X+6,py+90,UI_W-12,20,T().advertBtn,P.neon2,money>=ADVERT_COST);
-  BTN_DEFS['advert2']=BTN_DEFS['advert2']||undefined;
-  // reuse advert action
-  if(BTN_DEFS['advert2']) BTN_DEFS['advert']=BTN_DEFS['advert2'];
-
-  nline(UI_X+4,py+116,UI_X+UI_W-4,py+116,P.gray,1);
-
-  // Staff salary summary
-  t2('SALARIOS/SEM',UI_X+6,py+130,P.uiT3,8);
-  const total=staff.filter(s=>s.hired).reduce((a,s)=>a+SALARY[s.role]*s.level,0);
-  glow(P.red,4);
-  t2('€ '+total,UI_X+6,py+144,P.red,13);
-  noglow();
-
+function tabStore(py){
+  // Advert buttons
+  tx('— '+T().advert+' —',UI.x+UI.w/2,py+10,P.uiT3,8,'center');
+  CFG.ADVERT.forEach((a,i)=>{
+    mkBtn('adv'+i,UI.x+5,py+16+i*30,UI.w-10,22,a.label+' +'+a.fame+' €'+a.cost,P.neon2,G.money>=a.cost);
+  });
+  nl(UI.x+4,py+108,UI.x+UI.w-4,py+108,P.gray,1);
+  // Store upgrade
+  tx('— '+T().upgrade+' —',UI.x+UI.w/2,py+120,P.uiT3,8,'center');
+  if(G.storeLevel<2){
+    tx(T().loanInfo,UI.x+UI.w/2,py+132,P.uiT3,7,'center');
+    mkBtn('upgrade',UI.x+5,py+138,UI.w-10,24,'LVL 2  €'+CFG.UPGRADE_COST,P.neon1,G.money>=CFG.UPGRADE_COST);
+  } else {
+    glow(P.neon1,6);tx('★ LVL 2 ACTIVO',UI.x+UI.w/2,py+148,P.neon1,9,'center');nog();
+  }
+  nl(UI.x+4,py+170,UI.x+UI.w-4,py+170,P.gray,1);
+  // Salary summary
+  tx(T().salary,UI.x+5,py+182,P.uiT3,7);
+  const total=G.staff.filter(s=>s.hired).reduce((a,s)=>a+CFG.SALARY[s.role]*s.level,0);
+  glow(P.red,4);tx('€'+total,UI.x+5,py+195,P.red,13);nog();
   // Minimap
-  const mm={x:UI_X+6,y:py+164,w:UI_W-12,h:80};
-  r(mm.x,mm.y,mm.w,mm.h,P.bg);
-  rx(mm.x,mm.y,mm.w,mm.h,P.neon1,1);
-  t2('PLANTA',mm.x+mm.w/2,mm.y-3,P.neon1,7,'center');
-  // floor
-  r(mm.x+2,mm.y+mm.h-8,mm.w-4,6,P.floorL);
-  // objects
-  const mapObjs=[
-    {x:120,c:P.neon1,lbl:'CNT'},{x:290,c:P.neon2,lbl:'SHL'},
-    {x:430,c:P.neon3,lbl:'LOT'},{x:430,c:P.neonB,lbl:'MGR'},
-    {x:560,c:P.neon1,lbl:'OUT'}
-  ];
-  for(const o of mapObjs){
-    const mx2=mm.x+2+((o.x-SHOP_X)/SHOP_W)*(mm.w-4);
-    r(mx2,mm.y+mm.h-14,16,6,o.c);
-    t2(o.lbl,mx2+8,mm.y+mm.h-17,o.c,5,'center');
-  }
-  // customers on minimap
-  for(const c of customers){
-    r(mm.x+2+((c.x-SHOP_X)/SHOP_W)*(mm.w-4),mm.y+mm.h-20,3,3,c.color);
+  const mm={x:UI.x+5,y:py+212,w:UI.w-10,h:80};
+  r(mm.x,mm.y,mm.w,mm.h,P.bg);rx(mm.x,mm.y,mm.w,mm.h,P.neon1,1);
+  tx('PLANTA',mm.x+mm.w/2,mm.y-3,P.neon1,7,'center');
+  r(mm.x+2,mm.y+mm.h-8,mm.w-4,6,P.floor1);
+  [{px:105,c:P.neon1},{px:280,c:P.neon2},{px:425,c:P.neon3},{px:558,c:P.neon1}].forEach(o=>{
+    r(mm.x+2+((o.px-SHOP.x)/SHOP.w)*(mm.w-4),mm.y+mm.h-14,18,5,o.c);
+  });
+  for(const c of G.custs){
+    r(mm.x+2+((c.x-SHOP.x)/SHOP.w)*(mm.w-4),mm.y+mm.h-20,3,3,c.col);
   }
 }
 
-// ── DRAW GAME ────────────────────────────────────────────────
-function drawGame(){
-  r(0,0,W,H,'#050510');
-  drawShop();
-  drawCustomers();
-  drawStaff();
-  drawFloats();
-  drawEvent();
-  drawHUD();
-  drawUI();
+// ── DRAW PAUSE ────────────────────────────────────────────────
+function drawPause(){
+  // Dim background
+  cx.globalAlpha=0.5;r(0,0,W,H,'#000');cx.globalAlpha=1;
+  const pw=380,ph=280,px2=W/2-pw/2,py2=H/2-ph/2;
+  r(px2,py2,pw,ph,'#050510');glow(P.neon1,12);rx(px2,py2,pw,ph,P.neon1,2);nog();
+  nt(T().pauseTitle,W/2,py2+24,P.neon3,13);
+  nl(px2+16,py2+34,px2+pw-16,py2+34,P.neon2,1);
+  const d=G.pauseData||{};
+  const rows=[
+    [T().revenue,'€'+(d.rev|0),P.green],
+    [T().expenses,'€'+(d.exp|0),P.red],
+    [T().net,(d.rev-d.exp>=0?'+':'')+'€'+((d.rev-d.exp)|0),d.rev-d.exp>=0?P.green:P.red],
+    [T().customers+' HOY',d.cust||0,P.neonB],
+    [T().satisfaction,(d.sat|0)+'%',d.sat>70?P.green:P.yellow],
+    [T().fame,(d.fame|0)+'%',P.neon2],
+    [T().objective,((G.yearRevenue/CFG.YEAR_TARGETS[G.year-1]*100)|0)+'%',P.neon3],
+  ];
+  rows.forEach(([lbl,val,col],i)=>{
+    tx(lbl,px2+22,py2+54+i*26,P.uiT3,8);
+    glow(col,3);tx(''+val,px2+pw-22,py2+54+i*26,col,9,'right');nog();
+  });
+  cx.globalAlpha=.5+.5*Math.abs(Math.sin(tt*.05));
+  nt(T().pauseCont,W/2,py2+ph-18,P.gray,8);cx.globalAlpha=1;
+}
+
+// ── DRAW YEAR END ─────────────────────────────────────────────
+const RATING_COLS={S:P.neon3,A:P.green,B:P.neonB,C:P.yellow,D:P.red};
+function drawYearEnd(){
+  G.yearEndAnim++;
+  cx.globalAlpha=Math.min(0.88,G.yearEndAnim/30);r(0,0,W,H,'#000');cx.globalAlpha=1;
+  if(G.yearEndAnim<15) return;
+  const pw=500,ph=340,px2=W/2-pw/2,py2=H/2-ph/2;
+  r(px2,py2,pw,ph,'#050510');
+  const rating=G.yearRating||'C';
+  const rc=RATING_COLS[rating];
+  glow(rc,18);rx(px2,py2,pw,ph,rc,2);nog();
+  nt(T().yearEndTitle+' '+G.year,W/2,py2+28,rc,16);
+  nl(px2+20,py2+38,px2+pw-20,py2+38,rc,1);
+  // Revenue bar animation
+  const target=CFG.YEAR_TARGETS[G.year-1];
+  const maxBar=pw-80;
+  const barProg=Math.min(1,(G.yearEndAnim-20)/60);
+  const revProg=Math.min(G.yearRevenue,target*Math.min(1,barProg));
+  tx(T().yearRev,px2+22,py2+60,P.uiT3,9);
+  r(px2+22,py2+66,maxBar,14,P.uiB);
+  r(px2+22,py2+66,(maxBar*(revProg/target))|0,14,rc);
+  // Target line
+  const tLine=px2+22+(maxBar*Math.min(1,1))|0;
+  nl(tLine,py2+62,tLine,py2+84,P.white,1);
+  tx('€'+G.yearRevenue.toLocaleString(),px2+22,py2+91,rc,10);
+  tx(T().yearTarget+': €'+target.toLocaleString(),px2+22,py2+104,P.uiT3,8);
+  // Rating reveal
+  if(G.yearEndAnim>70){
+    const ratingTxt=T().ratings[rating];
+    glow(rc,20);tx(rating,W/2-40,py2+165,rc,72,'center');nog();
+    nt(ratingTxt,W/2+55,py2+155,rc,13);
+  }
+  // Bonus
+  if(G.yearEndAnim>85){
+    const bonus=G.yearBonus;
+    const bc=bonus>0?P.green:bonus<0?P.red:P.gray;
+    nl(px2+20,py2+195,px2+pw-20,py2+195,P.gray,1);
+    tx(T().yearBonus+':',px2+22,py2+215,P.uiT3,9);
+    glow(bc,6);tx((bonus>=0?'+':'')+'€'+bonus,px2+22,py2+230,bc,16);nog();
+    if(G.year<CFG.TOTAL_YEARS){
+      cx.globalAlpha=.5+.5*Math.abs(Math.sin(tt*.05));
+      nt(T().yearCont,W/2,py2+ph-18,P.neon1,10);cx.globalAlpha=1;
+    } else {
+      cx.globalAlpha=.5+.5*Math.abs(Math.sin(tt*.05));
+      nt(T().yearCont,W/2,py2+ph-18,P.neon3,10);cx.globalAlpha=1;
+    }
+  }
+}
+
+// ── DRAW GAME END ─────────────────────────────────────────────
+function drawGameEnd(){
+  r(0,0,W,H,P.bg);
+  cx.globalAlpha=0.15;
+  for(const s of mStars){cx.globalAlpha=.08+.12*Math.sin(tt*.015+s.b*7);r(s.x,s.y,s.r,s.r,P.neon1);}
+  cx.globalAlpha=1;
+  nl(0,5,W,5,P.neon2,3);nl(0,H-5,W,H-5,P.neon1,3);
+  const isWin=G.yearsCompleted>=CFG.TOTAL_YEARS;
+  const titleCol=isWin?P.neon3:P.red;
+  const pw=520,ph=380,px2=W/2-pw/2,py2=H/2-ph/2;
+  r(px2,py2,pw,ph,'#050510');glow(titleCol,18);rx(px2,py2,pw,ph,titleCol,2);nog();
+  nt(T().gameEndTitle,W/2,py2+28,titleCol,18);
+  nt(T().gameEndSub,W/2,py2+50,P.neon1,11);
+  nl(px2+20,py2+60,px2+pw-20,py2+60,titleCol,1);
+  // Stats
+  const rows=[
+    [T().gameEndYears,G.yearsCompleted+'/'+CFG.TOTAL_YEARS,P.neonB],
+    [T().revenue+' TOTAL','€'+G.totalRevenue.toLocaleString(),P.green],
+    ['CLIENTES TOTALES',G.totalCustomers.toLocaleString(),P.neon1],
+    [T().satisfaction,(G.satisfaction|0)+'%',G.satisfaction>70?P.green:P.yellow],
+    [T().fame,(G.fame|0)+'%',P.neon2],
+  ];
+  rows.forEach(([lbl,val,col],i)=>{
+    tx(lbl,px2+28,py2+85+i*28,P.uiT3,9);
+    glow(col,4);tx(''+val,px2+pw-28,py2+85+i*28,col,11,'right');nog();
+  });
+  nl(px2+20,py2+235,px2+pw-20,py2+235,P.gray,1);
+  // Score
+  tx(T().gameEndScore,px2+28,py2+258,P.uiT3,9);
+  glow(titleCol,10);tx(G.totalScore.toLocaleString(),px2+28,py2+280,titleCol,28);nog();
+  // Rank
+  const rankIdx=Math.min(G.yearsCompleted,T().gameEndRanks.length-1);
+  nt('"'+T().gameEndRanks[rankIdx]+'"',W/2,py2+315,P.neon3,13);
+  cx.globalAlpha=.4+.6*Math.abs(Math.sin(tt*.04));
+  nt(T().gameEndRestart,W/2,py2+ph-18,P.neon1,9);cx.globalAlpha=1;
 }
 
 // ── MAIN LOOP ─────────────────────────────────────────────────
 function loop(){
   requestAnimationFrame(loop);
-  if(state==='menu'){
-    tt++;
-    cx.clearRect(0,0,W,H);
-    drawMenu();
-  } else {
-    updateGame();
-    cx.clearRect(0,0,W,H);
-    drawGame();
+  tt++;
+  cx.clearRect(0,0,W,H);
+  if(state===S.MENU){drawMenu();return;}
+  if(state===S.TUT){drawTutorial();return;}
+  if(state===S.YEAR_END){drawYearEnd();return;}
+  if(state===S.GAME_END){drawGameEnd();return;}
+  if(state===S.PAUSE){
+    // draw game frozen behind
+    r(0,0,W,H,P.bg);drawShop();drawShopChars();drawHUD();drawUI();
+    drawPause();return;
   }
+  // GAME
+  updateGame();
+  r(0,0,W,H,P.bg);
+  drawShop();drawShopChars();drawFloats();drawEvent();drawHUD();drawUI();
 }
 loop();
 </script>

@@ -70,6 +70,54 @@ Tabaco, Vapes, Lotería, Prensa, Chuches, Recarga móvil
 
 ---
 
+## [v1.0-beta] — 2026-03-21
+
+### Primera beta jugable completa — estilo Game Dev Story
+
+**Bucle de juego completo: 5 años, objetivos, puntuación final.**
+
+**Novedades:**
+
+**Sistema de estados:**
+- Menú → Tutorial (3 pantallas) → Juego → Fin de año → Juego → ... → Fin de partida
+- Pantalla de pausa (ESC) con resumen semanal
+
+**Tutorial interactivo (3 pantallas):**
+- Bienvenida y objetivo del juego
+- Gestión de personal
+- Eventos especiales y consejos
+
+**Progresión por años:**
+- 5 años de juego, 8 semanas por año
+- Objetivo de ingresos por año: €2.200 / €5.800 / €12.000 / €23.000 / €40.000
+- Si no alcanzas el 55% del objetivo → Game Over
+
+**Pantalla de Fin de Año (inspirada en Game Dev Story):**
+- Barra de ingresos animada vs objetivo
+- Rating: D / C / B / A / S con colores y brillo
+- Bonus o penalización según rating
+- S (≥150%): +€2.500 | A (≥120%): +€1.200 | B (≥100%): +€400 | C: €0 | D: -€600
+
+**Pantalla de Fin de Partida:**
+- Score total, clientes atendidos, años completados
+- Ranking: Kiosco de Barrio → Estanco Conocido → Estanco Popular → Estanco Referente → Xtanco Legendario
+
+**Eventos especiales:**
+- ⚡ Hora punta: multiplicador x2.4 de ventas + glow naranja en el local
+- 🔍 Inspección: si tienes stock bajo o sin personal → multa aleatoria €600-1000
+
+**Mejoras de local:**
+- Nivel 2 (€4.500): desbloquea más referencias en estanterías + boost de satisfacción
+
+**Guardado automático:**
+- localStorage — la partida se guarda al fin de cada semana y año
+
+**Economía balanceada:**
+- Cajero/a L1: ~€140/semana de ingresos, €130/semana de salario
+- Objetivo año 1 alcanzable con 1-2 empleados entrenados a nivel 2-3
+
+---
+
 ## Roadmap
 
 | Versión | Objetivo |
