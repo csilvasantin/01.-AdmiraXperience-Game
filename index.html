@@ -1084,12 +1084,13 @@ function drawShop(){
   for(let i=1;i<wallPts.length;i++) cx.lineTo(wallPts[i].x,wallPts[i].y-ISO.wallH);
   cx.stroke();
 
-  // ── LARGE WINDOWS — show isometric city through them ──
-  const winCols=[1.5,5,8.5];
+  // ── WINDOWS on back wall (half size, centered in wall) ──
+  const winCols=[1.5,4,6.5,9];
   for(const wc of winCols){
-    const wp1=toIso(wc,0), wp2=toIso(wc+2,0);
-    const wy=wp1.y-ISO.wallH+12;
-    const wwid=wp2.x-wp1.x, whei=ISO.wallH-35;
+    const wp1=toIso(wc,0), wp2=toIso(wc+1.2,0);
+    const whei=Math.floor((ISO.wallH-50)*0.55);
+    const wy=wp1.y-ISO.wallH+Math.floor((ISO.wallH-whei)/2);
+    const wwid=wp2.x-wp1.x;
     // Window frame outer
     r(wp1.x-3,wy-3,wwid+6,whei+6,'#e8e4dc');
     // Clip to window and draw city through it
@@ -1264,7 +1265,7 @@ function drawShop(){
   tx('✦ '+T().modelNames[activeModel]+' ✦',(signP.x+signP2.x)/2,signY+16,'#f0e8d0',11,'center');
   if(G.storeLevel>=2){tx('★LVL2',signP2.x-30,signY+16,P.yellow,8);}
 
-  // ── LED DISPLAY on back wall ──
+  // ── LED DISPLAY on left wall ──
   drawLED();
 
   // ── FURNITURE & ENTITIES (sorted by screen Y for correct occlusion) ──
@@ -1328,18 +1329,39 @@ function drawShop(){
 
 // ── LED DISPLAY (on wall) ────────────────────────────────────
 function drawLED(){
-  const ledP1=toIso(1,0);
-  const ledP2=toIso(11,0);
-  const ly=ledP1.y-30;
-  const lw=ledP2.x-ledP1.x;
-  const lx=ledP1.x;
+  // LED on LEFT WALL (the solid wall without windows)
+  // Position: horizontally across the left wall, ~30px below ceiling
+  const lp1=toIso(0,1);   // start (near top of left wall)
+  const lp2=toIso(0,5);   // end (lower on left wall)
+  const ledY1=lp1.y-ISO.wallH+30;
+  const ledY2=lp2.y-ISO.wallH+30;
+  // The left wall is angled, so LED follows the iso angle
+  const lx=Math.min(lp1.x,lp2.x)-2;
+  const ly=Math.min(ledY1,ledY2);
+  const lw=Math.abs(lp2.x-lp1.x)+4;
   const lh=16;
-  r(lx,ly,lw,lh,'#1a1408');
-  rx(lx,ly,lw,lh,'#8a7a50',1);
+  // LED panel follows wall angle using transform
+  cx.save();
+  // Clip to left wall area
+  const wallClipPts=[];
+  for(let rr=0;rr<=ISO.rows;rr++) wallClipPts.push(toIso(0,rr));
+  cx.beginPath();
+  cx.moveTo(wallClipPts[0].x,wallClipPts[0].y-ISO.wallH);
+  for(let i=1;i<wallClipPts.length;i++) cx.lineTo(wallClipPts[i].x,wallClipPts[i].y-ISO.wallH);
+  for(let i=wallClipPts.length-1;i>=0;i--) cx.lineTo(wallClipPts[i].x,wallClipPts[i].y);
+  cx.closePath();cx.clip();
+  // Draw LED panel as a parallelogram following wall angle
+  const angle=Math.atan2(lp2.y-lp1.y,lp2.x-lp1.x);
+  const ledLen=Math.sqrt((lp2.x-lp1.x)**2+(lp2.y-lp1.y)**2);
+  cx.translate(lp1.x,ledY1);
+  cx.rotate(angle);
+  // LED body
+  r(0,-1,ledLen,lh,'#1a1408');
+  rx(0,-1,ledLen,lh,'#8a7a50',1);
   // LED dot grid
   cx.globalAlpha=0.05;
-  for(let dx=lx+2;dx<lx+lw-2;dx+=4)
-    for(let dy=ly+2;dy<ly+lh-2;dy+=4)
+  for(let dx=2;dx<ledLen-2;dx+=4)
+    for(let dy=1;dy<lh-2;dy+=4)
       r(dx,dy,2,2,'#ffaa00');
   cx.globalAlpha=1;
   // Scrolling text
@@ -1350,20 +1372,15 @@ function drawLED(){
   const fullMsg=msgs.join('   ◆   ')+liveData;
   cx.font='bold 9px monospace';
   const msgW=cx.measureText(fullMsg).width;
-  ledOffset=(ledOffset+0.8)%(msgW+lw);
-  cx.save();
-  cx.beginPath();cx.rect(lx+2,ly+1,lw-4,lh-2);cx.clip();
-  const scrollX=lx+lw-(ledOffset%(msgW+lw));
+  ledOffset=(ledOffset+0.7)%(msgW+ledLen);
+  cx.beginPath();cx.rect(2,0,ledLen-4,lh-1);cx.clip();
+  const scrollX=ledLen-(ledOffset%(msgW+ledLen));
   const pulse=0.7+0.3*Math.sin(tt*0.04);
-  glow('#ffaa00',5*pulse);
-  cx.fillStyle=`rgba(255,${160+(80*pulse)|0},0,1)`;
+  cx.fillStyle=`rgba(255,${160+(80*pulse)|0},0,${0.9+pulse*0.1})`;
   cx.font='bold 9px monospace';cx.textAlign='left';
-  cx.fillText(fullMsg,scrollX,ly+12);
-  cx.fillText(fullMsg,scrollX+msgW+lw*0.3,ly+12);
-  nog();cx.restore();
-  // ADMIRA badge
-  r(lx,ly,42,lh,'#5a3a10');rx(lx,ly,42,lh,'#aa8830',1);
-  tx('ADMIRA',lx+21,ly+11,'#ffcc44',8,'center');
+  cx.fillText(fullMsg,scrollX,11);
+  cx.fillText(fullMsg,scrollX+msgW+ledLen*0.3,11);
+  cx.restore();
 }
 
 // ── ISOMETRIC FURNITURE ──────────────────────────────────────
