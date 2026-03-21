@@ -291,18 +291,20 @@ let ledOffset=0;
 // ── LAYOUT EDITOR ────────────────────────────────────────────
 // Furniture layout — editable positions
 const DEFAULT_LAYOUT=[
-  {id:'counter',type:'counter',col:1,row:1,label:'Mostrador'},
-  {id:'shelves',type:'shelves',col:3,row:0,label:'Estantería'},
-  {id:'wineRack',type:'wineRack',col:6,row:0,label:'Botellero'},
-  {id:'lottery',type:'lottery',col:9,row:0,label:'Lotería'},
-  {id:'vending',type:'vending',col:10,row:1,label:'Vending'},
-  {id:'magazines',type:'magazines',col:9,row:3,label:'Revistero'},
-  {id:'manager',type:'manager',col:9,row:5,label:'Escritorio'},
-  {id:'plant1',type:'plant',col:0,row:0,label:'Planta 1'},
-  {id:'plant2',type:'plant',col:11,row:0,label:'Planta 2'},
-  {id:'plant3',type:'plant',col:0,row:5,label:'Planta 3'},
-  {id:'plant4',type:'plant',col:7,row:5,label:'Planta 4'},
-  {id:'rug',type:'rug',col:3,row:2,label:'Alfombra'},
+  {id:'counter',type:'counter',col:1,row:1,scale:1,label:'Mostrador'},
+  {id:'shelves',type:'shelves',col:3,row:0,scale:1,label:'Estantería'},
+  {id:'wineRack',type:'wineRack',col:6,row:0,scale:1,label:'Botellero'},
+  {id:'lottery',type:'lottery',col:9,row:0,scale:1,label:'Lotería'},
+  {id:'vending',type:'vending',col:10,row:1,scale:1,label:'Vending'},
+  {id:'magazines',type:'magazines',col:9,row:3,scale:1,label:'Revistero'},
+  {id:'manager',type:'manager',col:9,row:5,scale:1,label:'Escritorio'},
+  {id:'plant1',type:'plant',col:0,row:0,scale:1,label:'Planta 1'},
+  {id:'plant2',type:'plant',col:11,row:0,scale:1,label:'Planta 2'},
+  {id:'plant3',type:'plant',col:0,row:5,scale:1,label:'Planta 3'},
+  {id:'plant4',type:'plant',col:7,row:5,scale:1,label:'Planta 4'},
+  {id:'rug',type:'rug',col:3,row:2,scale:1,label:'Alfombra'},
+  {id:'led',type:'led',col:0,row:0,scale:1,label:'LED Banner'},
+  {id:'tft',type:'tft',col:0,row:2,scale:1,label:'Pantalla TFT'},
 ];
 let shopLayout=JSON.parse(JSON.stringify(DEFAULT_LAYOUT));
 let edSelIdx=-1; // selected furniture index in editor
@@ -451,6 +453,11 @@ document.addEventListener('keydown',e=>{
     }
     if(e.code==='KeyS'){saveLayout();}
     if(e.code==='KeyR'){resetLayout();edSelIdx=-1;}
+    if(edSelIdx>=0){
+      const it=shopLayout[edSelIdx];
+      if(e.code==='Equal'||e.code==='NumpadAdd'){it.scale=Math.min(2,(it.scale||1)+0.1);}
+      if(e.code==='Minus'||e.code==='NumpadSubtract'){it.scale=Math.max(0.3,(it.scale||1)-0.1);}
+    }
     return;
   }
   if(state===S.GAME){
@@ -570,6 +577,8 @@ function doAction(id){
     if(id==='edDown'&&it.row<ISO.rows-1){it.row++;return;}
     if(id==='edLeft'&&it.col>0){it.col--;return;}
     if(id==='edRight'&&it.col<ISO.cols-1){it.col++;return;}
+    if(id==='edScaleUp'){it.scale=Math.min(2,(it.scale||1)+0.1);return;}
+    if(id==='edScaleDown'){it.scale=Math.max(0.3,(it.scale||1)-0.1);return;}
   }
 }
 
@@ -1363,24 +1372,25 @@ function drawShop(){
   tx('✦ '+T().modelNames[activeModel]+' ✦',(signP.x+signP2.x)/2,signY+16,'#f0e8d0',11,'center');
   if(G.storeLevel>=2){tx('★LVL2',signP2.x-30,signY+16,P.yellow,8);}
 
-  // ── LED DISPLAY + TFT SCREEN on left wall ──
-  drawLED();
-  drawTFTScreen();
+  // ── LED DISPLAY + TFT SCREEN (from layout) ──
+  const ledItem=shopLayout.find(i=>i.id==='led');
+  const tftItem=shopLayout.find(i=>i.id==='tft');
+  if(ledItem) drawLED(ledItem.scale||1);
+  if(tftItem) drawTFTScreen(tftItem.scale||1);
 
   // ── FURNITURE & ENTITIES (sorted by screen Y for correct occlusion) ──
   const entities=[];
 
-  // Helper: get bottom screen Y of an entity for sorting (painter's algorithm)
-  // Objects with higher Y (lower on screen) are drawn LATER (on top)
   function isoDepth(col,row){
     const p=toIso(col,row);
-    return p.y; // screen Y = depth for isometric sorting
+    return p.y;
   }
 
-  // Furniture from editable layout
+  // Furniture from editable layout (skip wall-mounted: led, tft)
   for(const item of shopLayout){
+    if(item.type==='led'||item.type==='tft') continue;
     const d=item.type==='rug'?-999:isoDepth(item.col,item.row+1);
-    entities.push({type:item.type,col:item.col,row:item.row,depth:d,layoutId:item.id});
+    entities.push({type:item.type,col:item.col,row:item.row,depth:d,layoutId:item.id,scale:item.scale||1});
   }
 
   // Staff — use their actual screen Y position for depth
@@ -1396,19 +1406,31 @@ function drawShop(){
   // Sort by depth (lower screen Y = further back = drawn first)
   entities.sort((a,b)=>a.depth-b.depth);
 
+  // Helper: draw furniture with scale transform
+  function drawScaled(e,fn){
+    const s=e.scale||1;
+    if(s===1){fn(e.col,e.row);return;}
+    const p=toIso(e.col,e.row);
+    cx.save();
+    cx.translate(p.x,p.y);
+    cx.scale(s,s);
+    cx.translate(-p.x,-p.y);
+    fn(e.col,e.row);
+    cx.restore();
+  }
+
   // Draw each entity
   for(const e of entities){
     switch(e.type){
-      case 'counter': drawIsoCounter(e.col,e.row); break;
-      case 'shelves': drawIsoShelves(e.col,e.row); break;
-      case 'lottery': drawIsoLottery(e.col,e.row); break;
-      case 'manager': drawIsoManager(e.col,e.row); break;
-      // door is now drawn on the right wall, not as a floor entity
-      case 'plant': drawIsoPlant(e.col,e.row); break;
-      case 'vending': drawIsoVending(e.col,e.row); break;
-      case 'wineRack': drawIsoWineRack(e.col,e.row); break;
-      case 'magazines': drawIsoMagazineRack(e.col,e.row); break;
-      case 'rug': drawIsoRug(e.col,e.row); break;
+      case 'counter': drawScaled(e,drawIsoCounter); break;
+      case 'shelves': drawScaled(e,drawIsoShelves); break;
+      case 'lottery': drawScaled(e,drawIsoLottery); break;
+      case 'manager': drawScaled(e,drawIsoManager); break;
+      case 'plant': drawScaled(e,drawIsoPlant); break;
+      case 'vending': drawScaled(e,drawIsoVending); break;
+      case 'wineRack': drawScaled(e,drawIsoWineRack); break;
+      case 'magazines': drawScaled(e,drawIsoMagazineRack); break;
+      case 'rug': drawScaled(e,drawIsoRug); break;
       case 'staff': drawIsoStaff(e.data); break;
       case 'cust': drawIsoCust(e.data); break;
     }
@@ -1418,11 +1440,10 @@ function drawShop(){
 }
 
 // ── LED DISPLAY (on wall) ────────────────────────────────────
-function drawLED(){
-  // LED on LEFT WALL — text reads from bottom-left to top-right (readable)
-  // We go from lp2 (bottom) to lp1 (top) so text direction is correct
-  const lp1=toIso(0,5.5); // bottom of wall (start of text) — longer
-  const lp2=toIso(0,0.5); // top of wall (end of text) — longer
+function drawLED(sc){
+  sc=sc||1;
+  const lp1=toIso(0,0.5+5*(1-sc)/2+5*sc); // scaled range
+  const lp2=toIso(0,0.5+5*(1-sc)/2);       // scaled range
   const ledYoff=30; // below ceiling
   const ledY1=lp1.y-ISO.wallH+ledYoff;
   const ledY2=lp2.y-ISO.wallH+ledYoff;
@@ -1470,10 +1491,13 @@ function drawLED(){
 }
 
 // ── TFT SCREEN 42" on left wall (Altadis digital signage) ────
-function drawTFTScreen(){
-  // Position: centered on left wall, under LED
-  const tp1=toIso(0,2.2);
-  const tp2=toIso(0,3.8);
+function drawTFTScreen(sc){
+  sc=sc||1;
+  // Position: centered on left wall, scaled
+  const center=3;
+  const halfSpan=0.8*sc;
+  const tp1=toIso(0,center-halfSpan);
+  const tp2=toIso(0,center+halfSpan);
   // Below LED, lower on wall
   const wallTopY=tp1.y-ISO.wallH+65; // further below LED
   const scrW=35;
@@ -2277,7 +2301,7 @@ function drawEditor(){
     r(ix,H-panH+6,itemW,34,sel?'#4a3a20':'#3a2a18');
     rx(ix,H-panH+6,itemW,34,sel?'#ffcc00':'#5a4830',sel?2:1);
     tx(shopLayout[i].label,ix+itemW/2,H-panH+18,sel?'#ffcc00':'#c0b898',7,'center');
-    tx('('+shopLayout[i].col+','+shopLayout[i].row+')',ix+itemW/2,H-panH+32,sel?'#ffdd88':'#8a7a60',6,'center');
+    tx('('+shopLayout[i].col+','+shopLayout[i].row+') '+(((shopLayout[i].scale||1)*100)|0)+'%',ix+itemW/2,H-panH+32,sel?'#ffdd88':'#8a7a60',5,'center');
     BTNS['edsel'+i]={x:ix,y:H-panH+6,w:itemW,h:34};
   }
   // Buttons
@@ -2294,26 +2318,41 @@ function drawEditor(){
   r(144,btnY,60,26,'#3a3a18');rx(144,btnY,60,26,'#aaaa44',1);
   tx('✕ Salir',174,btnY+18,'#dddd88',8,'center');
   BTNS['edExit']={x:144,y:btnY,w:60,h:26};
-  // Arrow buttons for fine positioning (if item selected)
+  // Controls for selected item (position + scale)
   if(edSelIdx>=0){
-    const ax=W-180;
-    tx(shopLayout[edSelIdx].label,ax+50,btnY-6,'#ffcc00',9,'center');
-    // Up (row-1)
+    const it=shopLayout[edSelIdx];
+    const ax=W-280;
+    tx(it.label,ax+50,btnY-6,'#ffcc00',9,'center');
+    // Position arrows
     r(ax+35,btnY,30,12,'#3a2a18');rx(ax+35,btnY,30,12,'#8a7a50',1);
     tx('▲',ax+50,btnY+10,'#c0b898',9,'center');
     BTNS['edUp']={x:ax+35,y:btnY,w:30,h:12};
-    // Down (row+1)
     r(ax+35,btnY+14,30,12,'#3a2a18');rx(ax+35,btnY+14,30,12,'#8a7a50',1);
     tx('▼',ax+50,btnY+24,'#c0b898',9,'center');
     BTNS['edDown']={x:ax+35,y:btnY+14,w:30,h:12};
-    // Left (col-1)
     r(ax+5,btnY+7,28,12,'#3a2a18');rx(ax+5,btnY+7,28,12,'#8a7a50',1);
     tx('◀',ax+19,btnY+17,'#c0b898',9,'center');
     BTNS['edLeft']={x:ax+5,y:btnY+7,w:28,h:12};
-    // Right (col+1)
     r(ax+67,btnY+7,28,12,'#3a2a18');rx(ax+67,btnY+7,28,12,'#8a7a50',1);
     tx('▶',ax+81,btnY+17,'#c0b898',9,'center');
     BTNS['edRight']={x:ax+67,y:btnY+7,w:28,h:12};
+    // Scale controls
+    const sx=ax+110;
+    tx('Tamaño: '+(it.scale||1).toFixed(1),sx+30,btnY-6,'#aaddff',8,'center');
+    // Minus
+    r(sx,btnY+2,26,22,'#3a2020');rx(sx,btnY+2,26,22,'#aa5555',1);
+    tx('−',sx+13,btnY+17,'#ee8888',12,'center');
+    BTNS['edScaleDown']={x:sx,y:btnY+2,w:26,h:22};
+    // Plus
+    r(sx+32,btnY+2,26,22,'#203a20');rx(sx+32,btnY+2,26,22,'#55aa55',1);
+    tx('+',sx+45,btnY+17,'#88ee88',12,'center');
+    BTNS['edScaleUp']={x:sx+32,y:btnY+2,w:26,h:22};
+    // Scale bar visual
+    const barX=sx+64,barW=60,barH=8;
+    r(barX,btnY+9,barW,barH,'#1a1208');
+    r(barX,btnY+9,barW*Math.min((it.scale||1)/2,1),barH,'#55aaaa');
+    rx(barX,btnY+9,barW,barH,'#4a3820',1);
+    tx((((it.scale||1)*100)|0)+'%',barX+barW+4,btnY+17,'#aaddff',7);
   }
 }
 
