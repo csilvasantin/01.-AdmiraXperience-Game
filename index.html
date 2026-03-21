@@ -384,6 +384,8 @@ function loadLayout(){
           shopLayout.push(JSON.parse(JSON.stringify(def)));
         }
       }
+      // Remove items that no longer exist in DEFAULT (e.g. deleted TFT)
+      shopLayout=shopLayout.filter(i=>DEFAULT_LAYOUT.find(d=>d.id===i.id)||i._custom);
       // Ensure all items have sx/sy (migration from old scale format)
       for(const it of shopLayout){
         if(!it.sx) it.sx=it.scale||1;
@@ -556,6 +558,9 @@ document.addEventListener('keydown',e=>{
     }
     if(e.code==='KeyS'){saveLayout();edSaveNotify=90;playSaveBeep();}
     if(e.code==='KeyR'){resetLayout();edSelIdx=-1;}
+    if((e.code==='Delete'||e.code==='Backspace')&&edSelIdx>=0){
+      shopLayout.splice(edSelIdx,1);edSelIdx=-1;
+    }
     if(edSelIdx>=0){
       const it=shopLayout[edSelIdx];
       // Shift+arrows = resize, plain arrows = move
@@ -685,6 +690,22 @@ function doAction(id){
   if(id==='edSave'){saveLayout();edSaveNotify=90;playSaveBeep();return;}
   if(id==='edReset'){resetLayout();edSelIdx=-1;return;}
   if(id==='edExit'){state=S.GAME;return;}
+  if(id==='edDelete'&&edSelIdx>=0&&edSelIdx<shopLayout.length){
+    shopLayout.splice(edSelIdx,1);
+    edSelIdx=-1;
+    return;
+  }
+  if(id==='edAdd'){
+    // Find first missing item from DEFAULT_LAYOUT and add it back
+    for(const def of DEFAULT_LAYOUT){
+      if(!shopLayout.find(i=>i.id===def.id)){
+        shopLayout.push(JSON.parse(JSON.stringify(def)));
+        edSelIdx=shopLayout.length-1;
+        return;
+      }
+    }
+    return;
+  }
   if(edSelIdx>=0&&edSelIdx<shopLayout.length){
     const it=shopLayout[edSelIdx];
     if(id==='edUp'&&it.row>0){it.row--;return;}
@@ -2529,6 +2550,19 @@ function drawEditor(){
   r(144,btnY,60,26,'#3a3a18');rx(144,btnY,60,26,'#aaaa44',1);
   tx('✕ Salir',174,btnY+18,'#dddd88',8,'center');
   BTNS['edExit']={x:144,y:btnY,w:60,h:26};
+  // Delete selected item button
+  if(edSelIdx>=0){
+    r(212,btnY,66,26,'#5a1a1a');rx(212,btnY,66,26,'#ee3333',1);
+    tx('🗑 Eliminar',245,btnY+18,'#ff6666',8,'center');
+    BTNS['edDelete']={x:212,y:btnY,w:66,h:26};
+  }
+  // Add item back button (if items have been deleted)
+  if(shopLayout.length<DEFAULT_LAYOUT.length){
+    const addX=edSelIdx>=0?286:212;
+    r(addX,btnY,60,26,'#1a3a1a');rx(addX,btnY,60,26,'#44cc44',1);
+    tx('+ Añadir',addX+30,btnY+18,'#66ee66',8,'center');
+    BTNS['edAdd']={x:addX,y:btnY,w:60,h:26};
+  }
   // Controls for selected item (position + scale)
   if(edSelIdx>=0){
     const it=shopLayout[edSelIdx];
