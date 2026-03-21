@@ -38,14 +38,102 @@
   </style>
 </head>
 <body>
-  <div id="hud">⬡ XTANCO GENERIC — DIGITAL TWIN v0.1 ⬡</div>
+  <div id="hud" id="hud">⬡ XTANCO GENERIC — DIGITAL TWIN v0.1 ⬡</div>
   <canvas id="canvas" width="800" height="450"></canvas>
-  <div id="controls">← → MOVER &nbsp;|&nbsp; ↑ / ESPACIO SALTAR &nbsp;|&nbsp; E INTERACTUAR</div>
+  <div id="controls" id="controls"></div>
 
 <script>
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 ctx.imageSmoothingEnabled = false;
+const hudEl = document.getElementById('hud');
+const controlsEl = document.getElementById('controls');
+
+// ─── I18N ─────────────────────────────────────────────────────────────────────
+const i18n = {
+  es: {
+    hud:          '⬡ XTANCO GENERIC — DIGITAL TWIN v0.1 ⬡',
+    controls:     '← → MOVER \u00a0|\u00a0 ↑ / ESPACIO SALTAR \u00a0|\u00a0 E INTERACTUAR',
+    minimap:      'PLANTA',
+    menuTitle:    'XTANCO',
+    menuSub:      'DIGITAL TWIN v0.1',
+    menuPrompt:   'SELECCIONA IDIOMA',
+    menuStart:    'PULSA ENTER PARA EMPEZAR',
+    langEs:       '🇪🇸  CASTELLANO',
+    langEn:       '🇬🇧  ENGLISH',
+    labels: {
+      counter:  'MOSTRADOR',
+      shelf:    'ESTANTERÍA',
+      machine:  'MÁQUINA VENDING',
+      sign:     'XTANCO GENERIC',
+      lottery:  'LOTERÍA',
+      door:     'SALIDA',
+    },
+    interact: {
+      counter:  ['MOSTRADOR DIGITAL', 'Gestión de ventas', 'Inventario en tiempo real', 'TPV integrado'],
+      shelf:    ['ESTANTERÍA SMART',   'Stock auto-sincronizado', 'Productos: 48 refs', 'Reposición automática'],
+      machine:  ['VENDING XT-3000',    'Pagos NFC/crypto', 'Temperatura: 18°C', 'Ocupación: 73%'],
+      lottery:  ['TERMINAL LOTERÍAS',  'Conexión SCR en vivo', 'Premios pendientes: 2', 'Validación QR activa'],
+      door:     ['ACCESO PRINCIPAL',   'Aforo: 4/12 personas', 'Sensor activo', 'Cámaras: ON'],
+    },
+    overlays: [
+      { key: 'stock',   text: 'STOCK: 94%' },
+      { key: 'ref',     text: 'REF: 48'    },
+      { key: 'occ',     text: 'OCC: 73%'   },
+      { key: 'active',  text: 'ACTIVO'     },
+    ],
+    counterScreen: ['VENTAS HOY', '€ 1.247,50', '▲ +12%'],
+    vendingScreen:  ['SELECT', 'PRODUCT'],
+    lotteryLabel:  'LOTERÍA',
+    exitLabel:     'EXIT',
+    interactKey:   'E',
+  },
+  en: {
+    hud:          '⬡ XTANCO GENERIC — DIGITAL TWIN v0.1 ⬡',
+    controls:     '← → MOVE \u00a0|\u00a0 ↑ / SPACE JUMP \u00a0|\u00a0 E INTERACT',
+    minimap:      'FLOOR PLAN',
+    menuTitle:    'XTANCO',
+    menuSub:      'DIGITAL TWIN v0.1',
+    menuPrompt:   'SELECT LANGUAGE',
+    menuStart:    'PRESS ENTER TO START',
+    langEs:       '🇪🇸  CASTELLANO',
+    langEn:       '🇬🇧  ENGLISH',
+    labels: {
+      counter:  'COUNTER',
+      shelf:    'SHELVES',
+      machine:  'VENDING MACHINE',
+      sign:     'XTANCO GENERIC',
+      lottery:  'LOTTERY',
+      door:     'EXIT',
+    },
+    interact: {
+      counter:  ['DIGITAL COUNTER',    'Sales management', 'Real-time inventory', 'Integrated POS'],
+      shelf:    ['SMART SHELVING',      'Auto-synced stock', 'Products: 48 refs', 'Auto-replenishment'],
+      machine:  ['VENDING XT-3000',     'NFC/crypto payments', 'Temperature: 18°C', 'Occupancy: 73%'],
+      lottery:  ['LOTTERY TERMINAL',    'Live SCR connection', 'Pending prizes: 2', 'Active QR validation'],
+      door:     ['MAIN ACCESS',         'Capacity: 4/12 people', 'Sensor active', 'Cameras: ON'],
+    },
+    overlays: [
+      { key: 'stock',   text: 'STOCK: 94%' },
+      { key: 'ref',     text: 'REF: 48'    },
+      { key: 'occ',     text: 'OCC: 73%'   },
+      { key: 'active',  text: 'ACTIVE'     },
+    ],
+    counterScreen: ['TODAY SALES', '€ 1,247.50', '▲ +12%'],
+    vendingScreen:  ['SELECT', 'PRODUCT'],
+    lotteryLabel:  'LOTTERY',
+    exitLabel:     'EXIT',
+    interactKey:   'E',
+  },
+};
+
+// ─── STATE ────────────────────────────────────────────────────────────────────
+let state = 'menu';   // 'menu' | 'playing'
+let lang  = 'es';
+let menuSelected = 0; // 0 = es, 1 = en
+
+function t(key) { return i18n[lang][key]; }
+function tl(key) { return i18n[lang].labels[key]; }
 
 // ─── PALETTE ─────────────────────────────────────────────────────────────────
 const C = {
@@ -78,47 +166,36 @@ const C = {
 };
 
 // ─── WORLD ───────────────────────────────────────────────────────────────────
-const TILE = 16;
 const W = canvas.width;
 const H = canvas.height;
 const GROUND_Y = H - 60;
 
-// Platforms
 const platforms = [
-  // Main floor
-  { x: 0, y: GROUND_Y, w: W, h: 60 },
-  // Counter platform
-  { x: 80, y: GROUND_Y - 48, w: 160, h: 48 },
-  // Shelf platforms
-  { x: 320, y: GROUND_Y - 80, w: 120, h: 12 },
+  { x: 0,   y: GROUND_Y,       w: W,   h: 60 },
+  { x: 80,  y: GROUND_Y - 48,  w: 160, h: 48 },
+  { x: 320, y: GROUND_Y - 80,  w: 120, h: 12 },
   { x: 320, y: GROUND_Y - 140, w: 120, h: 12 },
   { x: 320, y: GROUND_Y - 200, w: 120, h: 12 },
-  // Upper walkway
   { x: 550, y: GROUND_Y - 120, w: 200, h: 12 },
-  // Machine base
-  { x: 600, y: GROUND_Y - 48, w: 80, h: 48 },
+  { x: 600, y: GROUND_Y - 48,  w: 80,  h: 48 },
 ];
 
-// Interactable objects
 const objects = [
-  { type: 'counter',   x: 80,  y: GROUND_Y - 48, w: 160, h: 48, label: 'MOSTRADOR', color: C.neon1 },
-  { type: 'shelf',     x: 320, y: GROUND_Y - 200, w: 120, h: 200, label: 'ESTANTERÍA', color: C.neon2 },
-  { type: 'machine',   x: 600, y: GROUND_Y - 130, w: 80, h: 82, label: 'MÁQUINA VENDING', color: C.machineL },
-  { type: 'sign',      x: 340, y: 30, w: 120, h: 40, label: 'XTANCO GENERIC', color: C.neon3 },
-  { type: 'lottery',   x: 480, y: GROUND_Y - 48, w: 60, h: 48, label: 'LOTERÍA', color: C.neon3 },
-  { type: 'door',      x: 730, y: GROUND_Y - 100, w: 40, h: 100, label: 'SALIDA', color: C.neon1 },
+  { type: 'counter', x: 80,  y: GROUND_Y - 48,  w: 160, h: 48,  color: C.neon1 },
+  { type: 'shelf',   x: 320, y: GROUND_Y - 200,  w: 120, h: 200, color: C.neon2 },
+  { type: 'machine', x: 600, y: GROUND_Y - 130,  w: 80,  h: 82,  color: C.machineL },
+  { type: 'sign',    x: 340, y: 30,               w: 120, h: 40,  color: C.neon3 },
+  { type: 'lottery', x: 480, y: GROUND_Y - 48,   w: 60,  h: 48,  color: C.neon3 },
+  { type: 'door',    x: 730, y: GROUND_Y - 100,  w: 40,  h: 100, color: C.neon1 },
 ];
 
 // ─── PLAYER ──────────────────────────────────────────────────────────────────
 const player = {
   x: 150, y: GROUND_Y - 32,
-  w: 14, h: 22,
+  w: 14,  h: 22,
   vx: 0, vy: 0,
   onGround: false,
-  dir: 1,
-  frame: 0,
-  frameTimer: 0,
-  interacting: false,
+  dir: 1, frame: 0, frameTimer: 0,
   interactTarget: null,
 };
 
@@ -126,96 +203,32 @@ const player = {
 const keys = {};
 document.addEventListener('keydown', e => {
   keys[e.code] = true;
-  if ((e.code === 'KeyE') && player.interactTarget) {
+
+  if (state === 'menu') {
+    if (e.code === 'ArrowUp'   || e.code === 'ArrowLeft')  menuSelected = 0;
+    if (e.code === 'ArrowDown' || e.code === 'ArrowRight') menuSelected = 1;
+    if (e.code === 'Enter' || e.code === 'Space') {
+      lang = menuSelected === 0 ? 'es' : 'en';
+      state = 'playing';
+      hudEl.textContent = t('hud');
+      controlsEl.textContent = t('controls');
+    }
+    return;
+  }
+
+  if (e.code === 'KeyE' && player.interactTarget) {
     showInteraction(player.interactTarget);
   }
 });
 document.addEventListener('keyup', e => { keys[e.code] = false; });
 
 // ─── INTERACTION UI ───────────────────────────────────────────────────────────
-let interactionMsg = null;
+let interactionMsg  = null;
 let interactionTimer = 0;
-const interactionTexts = {
-  counter:  ['MOSTRADOR DIGITAL', 'Gestión de ventas', 'Inventario en tiempo real', 'TPV integrado'],
-  shelf:    ['ESTANTERÍA SMART', 'Stock auto-sincronizado', 'Productos: 48 refs', 'Reposición automática'],
-  machine:  ['VENDING XT-3000', 'Pagos NFC/crypto', 'Temperatura: 18°C', 'Ocupación: 73%'],
-  lottery:  ['TERMINAL LOTERÍAS', 'Conexión SCR en vivo', 'Premios pendientes: 2', 'Validación QR activa'],
-  door:     ['ACCESO PRINCIPAL', 'Aforo: 4/12 personas', 'Sensor activo', 'Cámaras: ON'],
-};
 
 function showInteraction(obj) {
-  interactionMsg = interactionTexts[obj.type] || [obj.label];
+  interactionMsg  = i18n[lang].interact[obj.type] || [tl(obj.type)];
   interactionTimer = 180;
-}
-
-// ─── CAMERA ──────────────────────────────────────────────────────────────────
-const cam = { x: 0, y: 0 };
-const WORLD_W = W; // single screen for now
-
-// ─── PHYSICS ─────────────────────────────────────────────────────────────────
-function updatePlayer() {
-  const spd = 2.8;
-  const jumpForce = -8;
-  const gravity = 0.35;
-
-  // Horizontal
-  if (keys['ArrowLeft'] || keys['KeyA']) {
-    player.vx = -spd;
-    player.dir = -1;
-  } else if (keys['ArrowRight'] || keys['KeyD']) {
-    player.vx = spd;
-    player.dir = 1;
-  } else {
-    player.vx *= 0.7;
-  }
-
-  // Jump
-  if ((keys['ArrowUp'] || keys['Space'] || keys['KeyW']) && player.onGround) {
-    player.vy = jumpForce;
-    player.onGround = false;
-  }
-
-  player.vy += gravity;
-  player.x += player.vx;
-  player.y += player.vy;
-
-  // Animate
-  if (Math.abs(player.vx) > 0.5) {
-    player.frameTimer++;
-    if (player.frameTimer > 8) { player.frame = (player.frame + 1) % 2; player.frameTimer = 0; }
-  } else {
-    player.frame = 0;
-  }
-
-  // Collisions
-  player.onGround = false;
-  for (const p of platforms) {
-    if (
-      player.x + player.w > p.x && player.x < p.x + p.w &&
-      player.y + player.h > p.y && player.y + player.h < p.y + p.h + Math.abs(player.vy) + 1 &&
-      player.vy >= 0
-    ) {
-      player.y = p.y - player.h;
-      player.vy = 0;
-      player.onGround = true;
-    }
-  }
-
-  // Bounds
-  player.x = Math.max(0, Math.min(WORLD_W - player.w, player.x));
-  if (player.y > H) { player.y = GROUND_Y - player.h; player.vy = 0; }
-
-  // Interaction detection
-  player.interactTarget = null;
-  for (const obj of objects) {
-    if (
-      player.x + player.w > obj.x - 20 && player.x < obj.x + obj.w + 20 &&
-      player.y + player.h > obj.y && player.y < obj.y + obj.h
-    ) {
-      player.interactTarget = obj;
-      break;
-    }
-  }
 }
 
 // ─── DRAW HELPERS ─────────────────────────────────────────────────────────────
@@ -224,12 +237,7 @@ function rect(x, y, w, h, color) {
   ctx.fillRect(Math.round(x), Math.round(y), w, h);
 }
 
-function pixel(x, y, color) {
-  ctx.fillStyle = color;
-  ctx.fillRect(Math.round(x), Math.round(y), 2, 2);
-}
-
-function text(str, x, y, color, size = 10, align = 'left') {
+function txt(str, x, y, color, size = 10, align = 'left') {
   ctx.fillStyle = color;
   ctx.font = `${size}px monospace`;
   ctx.textAlign = align;
@@ -240,7 +248,7 @@ function text(str, x, y, color, size = 10, align = 'left') {
 function neonText(str, x, y, color, size = 12) {
   ctx.shadowColor = color;
   ctx.shadowBlur = 10;
-  text(str, x, y, color, size, 'center');
+  txt(str, x, y, color, size, 'center');
   ctx.shadowBlur = 0;
 }
 
@@ -256,17 +264,104 @@ function neonLine(x1, y1, x2, y2, color, width = 1) {
   ctx.shadowBlur = 0;
 }
 
-// ─── DRAW BACKGROUND ──────────────────────────────────────────────────────────
+// ─── MENU ────────────────────────────────────────────────────────────────────
 let bgStars = [];
-for (let i = 0; i < 60; i++) {
-  bgStars.push({ x: Math.random() * W, y: Math.random() * (H * 0.5), r: Math.random() > 0.8 ? 2 : 1, b: Math.random() });
+for (let i = 0; i < 80; i++) {
+  bgStars.push({ x: Math.random() * W, y: Math.random() * H, r: Math.random() > 0.8 ? 2 : 1, b: Math.random() });
 }
 
-function drawBackground(t) {
-  // Sky / wall
-  rect(0, 0, W, H, C.bg);
+function drawMenu(tt) {
+  // Background
+  rect(0, 0, W, H, C.dark);
+  ctx.globalAlpha = 0.3;
+  for (let x = 0; x < W; x += 32) {
+    ctx.strokeStyle = C.wallLine; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+  }
+  for (let y = 0; y < H; y += 32) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
 
-  // Grid lines on wall
+  // Stars
+  for (const s of bgStars) {
+    const alpha = 0.2 + 0.3 * Math.sin(tt * 0.02 + s.b * 10);
+    ctx.globalAlpha = alpha;
+    rect(s.x, s.y, s.r, s.r, C.neon1);
+    ctx.globalAlpha = 1;
+  }
+
+  // Ceiling / floor neon strips
+  neonLine(0, 4,    W, 4,    C.neon2, 3);
+  neonLine(0, H-4,  W, H-4,  C.neon1, 3);
+
+  // Title
+  const titleY = H / 2 - 80;
+  neonText(i18n.es.menuTitle, W / 2, titleY, C.neon3, 64);
+  neonText(i18n.es.menuSub,   W / 2, titleY + 44, C.neon1, 14);
+
+  // Divider
+  neonLine(W / 2 - 140, titleY + 58, W / 2 + 140, titleY + 58, C.neon2, 1);
+
+  // Prompt
+  const promptY = titleY + 85;
+  const flash = Math.sin(tt * 0.06) > 0;
+  ctx.globalAlpha = flash ? 1 : 0.5;
+  neonText(i18n[menuSelected === 0 ? 'es' : 'en'].menuPrompt, W / 2, promptY, C.neon2, 13);
+  ctx.globalAlpha = 1;
+
+  // Language options
+  const optY = promptY + 36;
+  const optW = 160, optH = 36, gap = 20;
+  const totalW = optW * 2 + gap;
+  const startX = W / 2 - totalW / 2;
+
+  const options = [
+    { label: i18n.es.langEs, sel: menuSelected === 0 },
+    { label: i18n.en.langEn, sel: menuSelected === 1 },
+  ];
+
+  options.forEach((opt, i) => {
+    const ox = startX + i * (optW + gap);
+    const col = opt.sel ? C.neon1 : '#334455';
+    const bg  = opt.sel ? '#001a12' : '#0a0a1a';
+
+    rect(ox, optY, optW, optH, bg);
+    ctx.strokeStyle = col;
+    ctx.lineWidth = opt.sel ? 2 : 1;
+    ctx.shadowColor = col;
+    ctx.shadowBlur = opt.sel ? 14 : 4;
+    ctx.strokeRect(ox + 0.5, optY + 0.5, optW - 1, optH - 1);
+    ctx.shadowBlur = 0;
+
+    neonText(opt.label, ox + optW / 2, optY + 23, opt.sel ? C.neon1 : '#667788', 13);
+
+    // Cursor arrow
+    if (opt.sel) {
+      neonText('▶', ox - 14, optY + 23, C.neon1, 12);
+    }
+  });
+
+  // Start prompt
+  const startAlpha = 0.4 + 0.6 * Math.abs(Math.sin(tt * 0.04));
+  ctx.globalAlpha = startAlpha;
+  neonText(i18n[menuSelected === 0 ? 'es' : 'en'].menuStart, W / 2, optY + 60, C.neon3, 10);
+  ctx.globalAlpha = 1;
+
+  // Arrow hint
+  ctx.globalAlpha = 0.35;
+  txt('← →  /  ↑ ↓', W / 2 - 30, optY + 76, '#556677', 9);
+  ctx.globalAlpha = 1;
+}
+
+// ─── GAME DRAW ───────────────────────────────────────────────────────────────
+let gameStars = [];
+for (let i = 0; i < 60; i++) {
+  gameStars.push({ x: Math.random() * W, y: Math.random() * (H * 0.5), r: Math.random() > 0.8 ? 2 : 1, b: Math.random() });
+}
+
+function drawBackground(tt) {
+  rect(0, 0, W, H, C.bg);
   ctx.strokeStyle = C.wallLine;
   ctx.lineWidth = 1;
   ctx.globalAlpha = 0.3;
@@ -278,24 +373,20 @@ function drawBackground(t) {
   }
   ctx.globalAlpha = 1;
 
-  // Stars / ambient particles
-  for (const s of bgStars) {
-    const alpha = 0.3 + 0.3 * Math.sin(t * 0.02 + s.b * 10);
+  for (const s of gameStars) {
+    const alpha = 0.3 + 0.3 * Math.sin(tt * 0.02 + s.b * 10);
     ctx.globalAlpha = alpha;
     rect(s.x, s.y, s.r, s.r, C.neon1);
     ctx.globalAlpha = 1;
   }
 
-  // Ceiling neon strip
-  neonLine(0, 8, W, 8, C.neon2, 3);
+  neonLine(0, 8,  W, 8,  C.neon2, 3);
   neonLine(0, 12, W, 12, C.neon1, 1);
 }
 
-// ─── DRAW SIGN ────────────────────────────────────────────────────────────────
-function drawSign(t) {
+function drawSign(tt) {
   const obj = objects.find(o => o.type === 'sign');
-  const flash = Math.sin(t * 0.05) > 0;
-
+  const flash = Math.sin(tt * 0.05) > 0;
   rect(obj.x - 4, obj.y - 4, obj.w + 8, obj.h + 8, '#1a002a');
   ctx.strokeStyle = flash ? C.neon2 : C.neon3;
   ctx.lineWidth = 2;
@@ -303,75 +394,53 @@ function drawSign(t) {
   ctx.shadowBlur = 12;
   ctx.strokeRect(obj.x, obj.y, obj.w, obj.h);
   ctx.shadowBlur = 0;
-
-  neonText('XTANCO', obj.x + obj.w / 2, obj.y + 20, flash ? C.neon2 : C.neon3, 18);
+  neonText('XTANCO',  obj.x + obj.w / 2, obj.y + 20, flash ? C.neon2 : C.neon3, 18);
   neonText('GENERIC', obj.x + obj.w / 2, obj.y + 36, C.neon1, 10);
 }
 
-// ─── DRAW FLOOR ───────────────────────────────────────────────────────────────
 function drawFloor() {
   rect(0, GROUND_Y, W, 60, C.floor);
   rect(0, GROUND_Y, W, 3, C.floorTop);
-
-  // Floor grid
   ctx.globalAlpha = 0.15;
-  for (let x = 0; x < W; x += 32) {
-    neonLine(x, GROUND_Y, x, H, C.neon1, 1);
-  }
+  for (let x = 0; x < W; x += 32) neonLine(x, GROUND_Y, x, H, C.neon1, 1);
   neonLine(0, GROUND_Y + 30, W, GROUND_Y + 30, C.neon1, 1);
   ctx.globalAlpha = 1;
 }
 
-// ─── DRAW COUNTER ─────────────────────────────────────────────────────────────
 function drawCounter() {
   const obj = objects.find(o => o.type === 'counter');
-  const x = obj.x, y = obj.y, w = obj.w, h = obj.h;
-
-  // Body
+  const { x, y, w, h } = obj;
   rect(x, y, w, h, C.counter);
   rect(x, y, w, 4, C.counterT);
 
-  // Screen on counter
   rect(x + 10, y + 8, 50, 32, C.screen);
   rect(x + 12, y + 10, 46, 28, '#001a0a');
-  // Screen content
+  const cs = i18n[lang].counterScreen;
   ctx.globalAlpha = 0.8;
-  text('VENTAS HOY', x + 14, y + 22, C.machineL, 7);
-  text('€ 1,247.50', x + 14, y + 32, C.neon1, 8);
-  text('▲ +12%', x + 14, y + 40, '#00ff44', 7);
+  txt(cs[0], x + 14, y + 22, C.machineL, 7);
+  txt(cs[1], x + 14, y + 32, C.neon1, 8);
+  txt(cs[2], x + 14, y + 40, '#00ff44', 7);
   ctx.globalAlpha = 1;
 
-  // Glass display case
   rect(x + 70, y + 10, 80, 32, C.glass);
   rect(x + 70, y + 10, 80, 3, C.glassH);
-  // Products inside
   for (let i = 0; i < 8; i++) {
     const colors = [C.prod1, C.prod2, C.prod3, C.prod4];
     rect(x + 74 + i * 9, y + 16, 6, 20, colors[i % 4]);
     rect(x + 74 + i * 9, y + 16, 6, 3, '#ffffff44');
   }
-
-  // Counter neon strip
   neonLine(x, y, x + w, y, C.neon1, 2);
 }
 
-// ─── DRAW SHELVES ─────────────────────────────────────────────────────────────
 function drawShelves() {
-  const shelfObjs = platforms.filter((_, i) => i >= 2 && i <= 4);
   const ys = [GROUND_Y - 80, GROUND_Y - 140, GROUND_Y - 200];
   const sx = 320, sw = 120;
-
-  // Back panel
   rect(sx, ys[2], sw, GROUND_Y - ys[2], C.shelf);
   rect(sx, ys[2], 3, GROUND_Y - ys[2], C.shelfT);
   rect(sx + sw - 3, ys[2], 3, GROUND_Y - ys[2], C.shelfT);
-
-  // Each shelf
   for (const y of ys) {
     rect(sx, y, sw, 8, '#1e1e5a');
     neonLine(sx, y, sx + sw, y, C.shelfT, 2);
-
-    // Products on shelf
     const prodColors = [C.prod1, C.prod2, C.prod3, C.prod4, C.neon3, C.prod1, C.prod2];
     for (let i = 0; i < 7; i++) {
       const px = sx + 5 + i * 16;
@@ -383,25 +452,18 @@ function drawShelves() {
   }
 }
 
-// ─── DRAW VENDING MACHINE ─────────────────────────────────────────────────────
-function drawVending(t) {
+function drawVending(tt) {
   const obj = objects.find(o => o.type === 'machine');
-  const x = obj.x, y = obj.y, w = obj.w, h = obj.h;
-
-  // Body
+  const { x, y, w, h } = obj;
   rect(x, y, w, h, C.machine);
   rect(x, y, w, 4, '#002a00');
-
-  // Screen
   rect(x + 5, y + 8, 45, 30, C.screen);
-  const screenPulse = Math.sin(t * 0.05);
-  ctx.globalAlpha = 0.6 + 0.4 * screenPulse;
-  text('SELECT', x + 8, y + 20, C.machineL, 7);
-  text('PRODUCT', x + 8, y + 29, C.machineL, 7);
-  text(`[${String(Math.floor(t / 20) % 99).padStart(2,'0')}]`, x + 8, y + 38, C.neon1, 8);
+  const vs = i18n[lang].vendingScreen;
+  ctx.globalAlpha = 0.6 + 0.4 * Math.sin(tt * 0.05);
+  txt(vs[0], x + 8, y + 20, C.machineL, 7);
+  txt(vs[1], x + 8, y + 29, C.machineL, 7);
+  txt(`[${String(Math.floor(tt / 20) % 99).padStart(2, '0')}]`, x + 8, y + 38, C.neon1, 8);
   ctx.globalAlpha = 1;
-
-  // Product grid
   rect(x + 5, y + 42, 55, 32, '#0a1a0a');
   for (let row = 0; row < 2; row++) {
     for (let col = 0; col < 4; col++) {
@@ -410,240 +472,223 @@ function drawVending(t) {
       rect(x + 8 + col * 13, y + 45 + row * 14, 10, 2, '#ffffff33');
     }
   }
-
-  // Buttons
   for (let i = 0; i < 4; i++) {
-    rect(x + 60, y + 20 + i * 14, 12, 10, i === Math.floor(t / 30) % 4 ? C.machineL : '#004400');
+    rect(x + 60, y + 20 + i * 14, 12, 10, i === Math.floor(tt / 30) % 4 ? C.machineL : '#004400');
   }
-
-  // Neon outline
-  ctx.strokeStyle = C.machineL;
-  ctx.lineWidth = 1;
-  ctx.shadowColor = C.machineL;
-  ctx.shadowBlur = 8;
+  ctx.strokeStyle = C.machineL; ctx.lineWidth = 1;
+  ctx.shadowColor = C.machineL; ctx.shadowBlur = 8;
   ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
   ctx.shadowBlur = 0;
 }
 
-// ─── DRAW LOTTERY TERMINAL ────────────────────────────────────────────────────
-function drawLottery(t) {
+function drawLottery(tt) {
   const obj = objects.find(o => o.type === 'lottery');
-  const x = obj.x, y = obj.y, w = obj.w, h = obj.h;
-
+  const { x, y, w, h } = obj;
   rect(x, y, w, h, '#1a1a00');
   rect(x, y, w, 4, C.neon3);
-
-  // Screen
   rect(x + 3, y + 6, w - 6, 24, '#0a0a00');
-  const digits = String(Math.floor(t / 10) % 99999).padStart(5, '0');
+  const digits = String(Math.floor(tt / 10) % 99999).padStart(5, '0');
   ctx.globalAlpha = 0.9;
-  text(digits, x + 6, y + 22, C.neon3, 10);
+  txt(digits, x + 6, y + 22, C.neon3, 10);
   ctx.globalAlpha = 1;
-  text('LOTERÍA', x + 5, y + 36, C.neon3, 7);
-
-  ctx.strokeStyle = C.neon3;
-  ctx.lineWidth = 1;
-  ctx.shadowColor = C.neon3;
-  ctx.shadowBlur = 6;
+  txt(i18n[lang].lotteryLabel, x + 5, y + 36, C.neon3, 7);
+  ctx.strokeStyle = C.neon3; ctx.lineWidth = 1;
+  ctx.shadowColor = C.neon3; ctx.shadowBlur = 6;
   ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
   ctx.shadowBlur = 0;
 }
 
-// ─── DRAW DOOR ───────────────────────────────────────────────────────────────
-function drawDoor(t) {
+function drawDoor(tt) {
   const obj = objects.find(o => o.type === 'door');
-  const x = obj.x, y = obj.y, w = obj.w, h = obj.h;
-
+  const { x, y, w, h } = obj;
   rect(x, y, w, h, '#001122');
-
-  // Sliding door lines
-  const offset = (Math.sin(t * 0.03) * 4 + 4) | 0;
+  const offset = (Math.sin(tt * 0.03) * 4 + 4) | 0;
   rect(x + 2, y + 2, w / 2 - 2 - offset, h - 4, '#002244');
   rect(x + w / 2 + offset, y + 2, w / 2 - 2 - offset, h - 4, '#002244');
-
-  // Glow lines
   neonLine(x, y, x + w, y, C.neon1, 2);
   neonLine(x, y + h, x + w, y + h, C.neon1, 1);
   neonLine(x, y, x, y + h, C.neon1, 1);
   neonLine(x + w, y, x + w, y + h, C.neon1, 1);
-
-  text('EXIT', x + w / 2 - 10, y + h / 2 + 4, C.neon1, 8);
+  txt(i18n[lang].exitLabel, x + w / 2 - 10, y + h / 2 + 4, C.neon1, 8);
 }
 
-// ─── DRAW UPPER WALKWAY ──────────────────────────────────────────────────────
 function drawWalkway() {
   const p = platforms[5];
   rect(p.x, p.y, p.w, p.h, '#1a1a3a');
   neonLine(p.x, p.y, p.x + p.w, p.y, C.neon2, 2);
-
-  // Railing
-  for (let x = p.x; x < p.x + p.w; x += 16) {
-    neonLine(x, p.y, x, p.y - 12, C.neon2, 1);
-  }
+  for (let x = p.x; x < p.x + p.w; x += 16) neonLine(x, p.y, x, p.y - 12, C.neon2, 1);
   neonLine(p.x, p.y - 12, p.x + p.w, p.y - 12, C.neon2, 1);
 }
 
-// ─── DRAW PLAYER ─────────────────────────────────────────────────────────────
-function drawPlayer(t) {
+function drawPlayer(tt) {
   const x = Math.round(player.x);
   const y = Math.round(player.y);
-  const d = player.dir;
   const f = player.frame;
-
   ctx.save();
-  if (d === -1) {
-    ctx.translate(x + player.w, 0);
-    ctx.scale(-1, 1);
-    ctx.translate(-x, 0);
+  if (player.dir === -1) {
+    ctx.translate(x + player.w, 0); ctx.scale(-1, 1); ctx.translate(-x, 0);
   }
-
-  // Shadow
   ctx.globalAlpha = 0.3;
   ctx.beginPath();
   ctx.ellipse(x + 7, y + player.h + 2, 8, 3, 0, 0, Math.PI * 2);
-  ctx.fillStyle = '#000';
-  ctx.fill();
+  ctx.fillStyle = '#000'; ctx.fill();
   ctx.globalAlpha = 1;
 
-  // Legs (animated)
   const legOff = f === 0 ? 0 : 2;
   rect(x + 2, y + 14, 4, 8 + legOff, C.playerB);
   rect(x + 8, y + 14, 4, 8 - legOff, C.playerB);
-
-  // Body
   rect(x + 1, y + 6, 12, 10, C.playerB);
-
-  // Visor / helmet
   rect(x + 1, y, 12, 8, '#334455');
   rect(x + 2, y + 1, 10, 5, C.glass);
-  // Visor shine
   ctx.globalAlpha = 0.5;
   rect(x + 3, y + 2, 4, 2, '#aaddff');
   ctx.globalAlpha = 1;
-
-  // Arms
   const armOff = player.onGround && Math.abs(player.vx) > 0.5 ? (f === 0 ? -2 : 2) : 0;
   rect(x - 2, y + 7 + armOff, 4, 6, C.playerS);
   rect(x + 12, y + 7 - armOff, 4, 6, C.playerS);
-
-  // Chest light
-  const lightPulse = Math.sin(t * 0.07) > 0;
-  rect(x + 4, y + 8, 6, 4, lightPulse ? C.neon1 : C.playerB);
-
+  rect(x + 4, y + 8, 6, 4, Math.sin(tt * 0.07) > 0 ? C.neon1 : C.playerB);
   ctx.restore();
 }
 
-// ─── DRAW INTERACT PROMPT ────────────────────────────────────────────────────
 function drawInteractPrompt() {
   if (!player.interactTarget) return;
   const obj = player.interactTarget;
   const px = Math.round(player.x + player.w / 2);
   const py = Math.round(player.y - 18);
-
+  const label = tl(obj.type);
   ctx.fillStyle = '#000000aa';
-  ctx.fillRect(px - 30, py - 12, 60, 14);
-  neonText('[E] ' + obj.label, px, py, obj.color, 8);
+  ctx.fillRect(px - 34, py - 12, 68, 14);
+  neonText(`[${i18n[lang].interactKey}] ${label}`, px, py, obj.color, 8);
 }
 
-// ─── DRAW INTERACTION PANEL ──────────────────────────────────────────────────
 function drawInteractionPanel() {
   if (!interactionMsg || interactionTimer <= 0) return;
-
-  const pw = 200, ph = 90;
-  const px = W / 2 - pw / 2;
-  const py = 60;
-
+  const pw = 210, ph = 90;
+  const px = W / 2 - pw / 2, py = 60;
   ctx.fillStyle = '#000000cc';
   ctx.fillRect(px, py, pw, ph);
-  ctx.strokeStyle = C.neon1;
-  ctx.lineWidth = 1;
-  ctx.shadowColor = C.neon1;
-  ctx.shadowBlur = 8;
+  ctx.strokeStyle = C.neon1; ctx.lineWidth = 1;
+  ctx.shadowColor = C.neon1; ctx.shadowBlur = 8;
   ctx.strokeRect(px, py, pw, ph);
   ctx.shadowBlur = 0;
-
   neonText(interactionMsg[0], px + pw / 2, py + 18, C.neon1, 10);
   for (let i = 1; i < interactionMsg.length; i++) {
-    text('• ' + interactionMsg[i], px + 12, py + 30 + i * 14, '#aaffee', 9);
+    txt('• ' + interactionMsg[i], px + 12, py + 30 + i * 14, '#aaffee', 9);
   }
-
   interactionTimer--;
 }
 
-// ─── DRAW DATA OVERLAYS ──────────────────────────────────────────────────────
-function drawOverlays(t) {
-  // Mini data labels floating
-  const labels = [
-    { x: 160, y: GROUND_Y - 70, text: 'STOCK: 94%', color: C.neon1 },
-    { x: 370, y: GROUND_Y - 220, text: 'REF: 48', color: C.neon2 },
-    { x: 615, y: GROUND_Y - 150, text: 'OCC: 73%', color: C.machineL },
-    { x: 490, y: GROUND_Y - 65, text: 'ACTIVO', color: C.neon3 },
+function drawOverlays(tt) {
+  const overlays = i18n[lang].overlays;
+  const positions = [
+    { x: 160, y: GROUND_Y - 70, color: C.neon1 },
+    { x: 370, y: GROUND_Y - 220, color: C.neon2 },
+    { x: 615, y: GROUND_Y - 150, color: C.machineL },
+    { x: 490, y: GROUND_Y - 65, color: C.neon3 },
   ];
-
-  for (const l of labels) {
-    const fy = l.y + Math.sin(t * 0.03 + l.x) * 2;
+  overlays.forEach((l, i) => {
+    const pos = positions[i];
+    const fy = pos.y + Math.sin(tt * 0.03 + pos.x) * 2;
     ctx.globalAlpha = 0.75;
-    text(l.text, l.x, fy, l.color, 8);
+    txt(l.text, pos.x, fy, pos.color, 8);
     ctx.globalAlpha = 1;
-  }
+  });
 }
 
-// ─── DRAW MINIMAP ─────────────────────────────────────────────────────────────
 function drawMinimap() {
   const mx = W - 110, my = 20, mw = 90, mh = 50;
   ctx.fillStyle = '#000000bb';
   ctx.fillRect(mx, my, mw, mh);
-  ctx.strokeStyle = C.neon1;
-  ctx.lineWidth = 1;
+  ctx.strokeStyle = C.neon1; ctx.lineWidth = 1;
   ctx.strokeRect(mx, my, mw, mh);
-
-  text('PLANTA', mx + mw / 2 - 14, my - 2, C.neon1, 7);
-
-  // Floor
+  txt(t('minimap'), mx + 4, my - 2, C.neon1, 7);
   ctx.fillStyle = C.floorTop;
   ctx.fillRect(mx + 2, my + mh - 6, mw - 4, 4);
-
-  // Objects on minimap
   for (const obj of objects) {
     if (obj.type === 'sign') continue;
-    const mmx = mx + 2 + (obj.x / W) * (mw - 4);
-    const mmy = my + (obj.y / H) * mh;
     ctx.fillStyle = obj.color;
-    ctx.fillRect(mmx, mmy, (obj.w / W) * (mw - 4), 3);
+    ctx.fillRect(mx + 2 + (obj.x / W) * (mw - 4), my + (obj.y / H) * mh, (obj.w / W) * (mw - 4), 3);
+  }
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(mx + 2 + (player.x / W) * (mw - 4), my + (player.y / H) * mh, 3, 4);
+}
+
+// ─── PHYSICS ─────────────────────────────────────────────────────────────────
+function updatePlayer() {
+  if (state !== 'playing') return;
+
+  if (keys['ArrowLeft'] || keys['KeyA']) { player.vx = -2.8; player.dir = -1; }
+  else if (keys['ArrowRight'] || keys['KeyD']) { player.vx = 2.8; player.dir = 1; }
+  else { player.vx *= 0.7; }
+
+  if ((keys['ArrowUp'] || keys['Space'] || keys['KeyW']) && player.onGround) {
+    player.vy = -8; player.onGround = false;
   }
 
-  // Player on minimap
-  const pmx = mx + 2 + (player.x / W) * (mw - 4);
-  const pmy = my + (player.y / H) * mh;
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(pmx, pmy, 3, 4);
+  player.vy += 0.35;
+  player.x += player.vx;
+  player.y += player.vy;
+
+  if (Math.abs(player.vx) > 0.5) {
+    player.frameTimer++;
+    if (player.frameTimer > 8) { player.frame = (player.frame + 1) % 2; player.frameTimer = 0; }
+  } else { player.frame = 0; }
+
+  player.onGround = false;
+  for (const p of platforms) {
+    if (
+      player.x + player.w > p.x && player.x < p.x + p.w &&
+      player.y + player.h > p.y && player.y + player.h < p.y + p.h + Math.abs(player.vy) + 1 &&
+      player.vy >= 0
+    ) {
+      player.y = p.y - player.h; player.vy = 0; player.onGround = true;
+    }
+  }
+
+  player.x = Math.max(0, Math.min(W - player.w, player.x));
+  if (player.y > H) { player.y = GROUND_Y - player.h; player.vy = 0; }
+
+  player.interactTarget = null;
+  for (const obj of objects) {
+    if (
+      player.x + player.w > obj.x - 20 && player.x < obj.x + obj.w + 20 &&
+      player.y + player.h > obj.y && player.y < obj.y + obj.h
+    ) { player.interactTarget = obj; break; }
+  }
 }
 
 // ─── MAIN LOOP ───────────────────────────────────────────────────────────────
-let t = 0;
+let tt = 0;
 function loop() {
-  t++;
+  tt++;
   updatePlayer();
-
   ctx.clearRect(0, 0, W, H);
 
-  drawBackground(t);
-  drawSign(t);
-  drawWalkway();
-  drawShelves();
-  drawCounter();
-  drawLottery(t);
-  drawVending(t);
-  drawDoor(t);
-  drawFloor();
-  drawPlayer(t);
-  drawInteractPrompt();
-  drawInteractionPanel();
-  drawOverlays(t);
-  drawMinimap();
+  if (state === 'menu') {
+    drawMenu(tt);
+  } else {
+    drawBackground(tt);
+    drawSign(tt);
+    drawWalkway();
+    drawShelves();
+    drawCounter();
+    drawLottery(tt);
+    drawVending(tt);
+    drawDoor(tt);
+    drawFloor();
+    drawPlayer(tt);
+    drawInteractPrompt();
+    drawInteractionPanel();
+    drawOverlays(tt);
+    drawMinimap();
+  }
 
   requestAnimationFrame(loop);
 }
+
+// Init HUD with default (menu shows before lang is set)
+hudEl.textContent = '';
+controlsEl.textContent = '';
 
 loop();
 </script>
