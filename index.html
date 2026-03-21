@@ -364,6 +364,8 @@ const DEFAULT_LAYOUT=[
   {id:'plant3',type:'plant',col:0,row:5,sx:1,sy:1,label:'Planta 3'},
   {id:'plant4',type:'plant',col:7,row:5,sx:1,sy:1,label:'Planta 4'},
   {id:'rug',type:'rug',col:3,row:2,sx:1,sy:1,label:'Alfombra'},
+  {id:'cashRegister',type:'cashRegister',col:1,row:1,sx:1,sy:1,label:'Caja registr.'},
+  {id:'monitor',type:'monitor',col:1,row:2,sx:1,sy:1,label:'Monitor PC'},
   {id:'floorLamp',type:'floorLamp',col:0,row:1,sx:1,sy:1,label:'Lámpara pie'},
   {id:'led',type:'led',col:0,row:0,sx:1,sy:1,label:'LED Banner'},
 ];
@@ -418,7 +420,7 @@ function screenToIso(sx,sy){
 const FURNITURE_SIZE={
   counter:[1,2], shelves:[1,2], wineRack:[2,1], lottery:[2,1],
   vending:[1,1], magazines:[2,1], manager:[2,1], plant:[1,1],
-  floorLamp:[1,1], rug:[2,2],
+  floorLamp:[1,1], rug:[2,2], cashRegister:[1,1], monitor:[1,1],
 };
 
 // Check if a tile is blocked by furniture
@@ -1664,6 +1666,8 @@ function drawShop(){
       case 'manager': drawScaled(e,drawIsoManager); break;
       case 'plant': drawScaled(e,drawIsoPlant); break;
       case 'floorLamp': drawScaled(e,drawIsoFloorLamp); break;
+      case 'cashRegister': drawScaled(e,drawIsoCashRegister); break;
+      case 'monitor': drawScaled(e,drawIsoMonitor); break;
       case 'vending': drawScaled(e,drawIsoVending); break;
       case 'wineRack': drawScaled(e,drawIsoWineRack); break;
       case 'magazines': drawScaled(e,drawIsoMagazineRack); break;
@@ -1796,22 +1800,60 @@ function drawWallClock(){
 // ── ISOMETRIC FURNITURE ──────────────────────────────────────
 
 function drawIsoCounter(col,row){
-  // Wooden counter: 1 tile wide, 2 deep, 16px tall (40% smaller)
+  // Wooden counter: 1 tile wide, 2 deep, 16px tall (clean, no register on top)
   drawIsoBlock(col,row,1,2,16,P.furnitureLight,P.furnitureDark,P.furniture,null);
-  // Cash register on top
-  const p=toIso(col+0.5,row+1);
-  r(p.x-8,p.y-22,16,8,'#ddd8c8');rx(p.x-8,p.y-22,16,8,'#aaa090',1);
-  // Screen with money
-  r(p.x-6,p.y-20,10,5,'#224422');
-  tx('€'+(G.money|0>9999?((G.money/1000|0)+'K'):(G.money|0)),p.x-5,p.y-16,'#66cc66',5);
   // Products displayed along counter
+  const p=toIso(col+0.5,row+1);
   for(let i=0;i<Math.min(3,G.prods.length);i++){
     const pp=toIso(col+0.2,row+0.3+i*0.6);
     r(pp.x-2,pp.y-20,5,6,G.prods[i].color);
     r(pp.x-2,pp.y-20,5,1,'#ffffff44');
   }
-  // Label
   tx(T().staffLabel[0],p.x,p.y-28,'#5a4a30',6,'center');
+}
+
+// ── CASH REGISTER (sits on top of counter) ───────────────────
+function drawIsoCashRegister(col,row){
+  const p=toIso(col+0.5,row+0.5);
+  // Register body (cream/beige box)
+  r(p.x-10,p.y-24,20,12,'#ddd8c8');
+  rx(p.x-10,p.y-24,20,12,'#aaa090',1);
+  // Top highlight
+  r(p.x-10,p.y-24,20,2,'#eee8d8');
+  // Screen (dark green LCD)
+  r(p.x-8,p.y-22,12,6,'#1a3a1a');
+  // Money display
+  const moneyTxt=G.money|0>9999?'€'+((G.money/1000|0))+'K':'€'+(G.money|0);
+  tx(moneyTxt,p.x-7,p.y-17,'#55cc55',5);
+  // Buttons row
+  r(p.x+5,p.y-21,4,3,'#888');
+  r(p.x+5,p.y-17,4,3,'#cc4444');
+  // Cash drawer
+  r(p.x-9,p.y-12,18,3,'#c8c0a8');
+  rx(p.x-9,p.y-12,18,3,'#a09880',0.5);
+  // Drawer handle
+  r(p.x-2,p.y-11,4,1,'#888');
+}
+
+// ── PC MONITOR (sits on desk/counter) ────────────────────────
+function drawIsoMonitor(col,row){
+  const p=toIso(col+0.5,row+0.5);
+  // Monitor stand base
+  r(p.x-6,p.y-10,12,3,'#555');
+  r(p.x-2,p.y-13,4,4,'#666');
+  // Monitor body (dark frame)
+  r(p.x-12,p.y-30,24,18,'#2a2a2a');
+  rx(p.x-12,p.y-30,24,18,'#1a1a1a',1);
+  // Screen (blue-ish with content)
+  r(p.x-10,p.y-28,20,14,'#1a3050');
+  // Screen content: XTANCO logo
+  tx('XTANCO',p.x,p.y-22,'#88bbdd',6,'center');
+  // Blinking cursor
+  if(Math.floor(tt/30)%2===0){
+    r(p.x-4,p.y-17,6,1,'#66aacc');
+  }
+  // Power LED
+  r(p.x+8,p.y-13,2,2,Math.floor(tt/60)%2===0?'#44cc44':'#228822');
 }
 
 function drawIsoShelves(col,row){
