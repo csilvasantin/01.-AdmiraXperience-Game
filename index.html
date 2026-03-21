@@ -686,7 +686,7 @@ let uiOpen=false; // toggle with Menu button
 const ISO={
   tileW:88,tileH:30,    // wide tiles filling 800px width
   cols:12,rows:6,        // wide grid
-  ox:400,oy:198,         // centered in full width, below wall
+  ox:340,oy:198,         // shifted left to reduce right-side air
   wallH:170,             // tall Kairosoft walls
   doorCol:11,doorRow:3,  // door far right
 };
@@ -1386,10 +1386,10 @@ function drawTFTScreen(){
   // Position: centered on left wall, under LED
   const tp1=toIso(0,2.2);
   const tp2=toIso(0,3.8);
-  // Center vertically on wall (not touching floor)
-  const wallTopY=tp1.y-ISO.wallH+45; // below LED
+  // Below LED, lower on wall
+  const wallTopY=tp1.y-ISO.wallH+65; // further below LED
   const scrW=35;
-  const tftY1=wallTopY; // start below LED banner
+  const tftY1=wallTopY;
   cx.save();
   // Clip to left wall
   const wallClipPts=[];
