@@ -491,8 +491,9 @@ function initGame(){
     gameOverReason:null,
     pauseData:null,
     doorOpen:0,
-    gameTime:shopTimeSettings.openHour, // current hour (float, e.g. 14.5 = 14:30)
+    gameTime:shopTimeSettings.openHour,
     dayEnded:false,
+    lampIntensity:0, // 0-100% progressive lamp brightness
   };
   // Staff from model — convert grid positions to isometric screen coords
   // Staff positions on the iso grid based on their role
@@ -891,12 +892,23 @@ function updateGame(){
   G.gameTime+=hoursPerFrame;
   // Sync weekTimer to gameTime progress (for compatibility with existing systems)
   G.weekTimer=Math.floor(((G.gameTime-shopTimeSettings.openHour)/dayHours)*CFG.WEEK_TICKS);
-  // Auto-light at dusk (19:00)
-  if(G.gameTime>=19&&!elgatoState.on&&!G.dayEnded){
+  // Progressive lighting: 16h=10%, +25%/h, 20h+=100%, 21h+=off
+  // Calculate lamp intensity based on game time
+  let lampIntensity=0;
+  if(G.gameTime>=16&&G.gameTime<shopTimeSettings.closeHour&&!G.dayEnded){
+    lampIntensity=Math.min(100,10+(G.gameTime-16)*25); // 16h=10,17h=35,18h=60,19h=85,20h=100+
+  }
+  G.lampIntensity=lampIntensity;
+  // Auto-turn on lamp when intensity > 0
+  if(lampIntensity>0&&!elgatoState.on){
     elgatoState.on=true;
-    elgatoState.notify=90;
-    // Try real lamp (just PUT, don't toggle back)
-    try{elgatoFetch('/elgato/lights',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({numberOfLights:1,lights:[{on:1}]})});}catch(e){}
+    elgatoState.notify=60;
+  }
+  // Send progressive brightness to real Elgato lamp (throttled: every 60 frames ≈ 1s)
+  if(elgatoState.on&&lampIntensity>0&&tt%60===0){
+    try{elgatoFetch('/elgato/lights',{method:'PUT',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({numberOfLights:1,lights:[{on:1,brightness:Math.round(lampIntensity)}]})
+    });}catch(e){}
   }
   // Update wall clock from game time
   _clockH=Math.floor(G.gameTime)%12;
@@ -2136,62 +2148,62 @@ function drawIsoDoor(col,row){
 function drawIsoFloorLamp(col,row){
   const p=toIso(col,row);
   const isOn=elgatoState.on;
+  const intensity=G?G.lampIntensity/100:0; // 0.0→1.0
 
-  // ── ENCENDIDA: halo de luz grande en el suelo ──
-  if(isOn){
-    cx.globalAlpha=0.08+0.02*Math.sin(tt*0.04);
-    cx.beginPath();cx.ellipse(p.x,p.y+5,30,15,0,0,Math.PI*2);
+  // ── Halo de luz en el suelo (proporcional a intensidad) ──
+  if(isOn&&intensity>0){
+    cx.globalAlpha=(0.03+0.12*intensity)+0.02*Math.sin(tt*0.04);
+    const haloR=12+18*intensity;
+    cx.beginPath();cx.ellipse(p.x,p.y+5,haloR,haloR*0.5,0,0,Math.PI*2);
     cx.fillStyle='#ffee66';cx.fill();
     cx.globalAlpha=1;
   }
 
   drawIsoShadow(p.x,p.y+4,6,3);
 
-  // Base (round)
+  // Base
   cx.beginPath();cx.ellipse(p.x,p.y+2,6,3,0,0,Math.PI*2);
   cx.fillStyle='#3a3028';cx.fill();
   // Pole
-  r(p.x-1,p.y-50,2,52,isOn?'#6a6050':'#4a4038');
-  r(p.x,p.y-50,1,52,isOn?'#7a7060':'#5a5048');
+  const poleLight=isOn?Math.floor(60+intensity*20):40;
+  r(p.x-1,p.y-50,2,52,`rgb(${poleLight+10},${poleLight},${poleLight-10})`);
+  r(p.x,p.y-50,1,52,`rgb(${poleLight+20},${poleLight+10},${poleLight})`);
 
-  // ── ENCENDIDA: pantalla brillante + halo vertical ──
-  if(isOn){
-    // Gran halo vertical de luz
-    cx.globalAlpha=0.12+0.03*Math.sin(tt*0.05);
-    cx.beginPath();cx.ellipse(p.x,p.y-25,18,40,0,0,Math.PI*2);
+  if(isOn&&intensity>0){
+    // ── Halo vertical (crece con intensidad) ──
+    cx.globalAlpha=(0.04+0.12*intensity)+0.02*Math.sin(tt*0.05);
+    cx.beginPath();cx.ellipse(p.x,p.y-25,10+8*intensity,20+20*intensity,0,0,Math.PI*2);
     cx.fillStyle='#ffee44';cx.fill();
     cx.globalAlpha=1;
-    // Pantalla iluminada (crema brillante)
+    // Pantalla (más brillante con intensidad)
+    const shadeR=Math.floor(200+55*intensity),shadeG=Math.floor(190+50*intensity),shadeB=Math.floor(140+60*intensity);
     cx.beginPath();
     cx.moveTo(p.x-10,p.y-48);cx.lineTo(p.x+10,p.y-48);
     cx.lineTo(p.x+6,p.y-60);cx.lineTo(p.x-6,p.y-60);
     cx.closePath();
-    cx.fillStyle='#fff8d0';cx.fill();
-    cx.strokeStyle='#eedd88';cx.lineWidth=1;cx.stroke();
-    // Bombilla encendida (punto brillante)
-    cx.beginPath();cx.arc(p.x,p.y-52,4,0,Math.PI*2);
-    cx.fillStyle='#ffff88';cx.fill();
-    // Resplandor de la bombilla
-    cx.globalAlpha=0.4;
-    cx.beginPath();cx.arc(p.x,p.y-52,7,0,Math.PI*2);
+    cx.fillStyle=`rgb(${shadeR},${shadeG},${shadeB})`;cx.fill();
+    cx.strokeStyle=`rgba(238,221,136,${0.3+intensity*0.7})`;cx.lineWidth=1;cx.stroke();
+    // Bombilla (tamaño proporcional)
+    const bulbR=2+2*intensity;
+    cx.beginPath();cx.arc(p.x,p.y-52,bulbR,0,Math.PI*2);
+    cx.fillStyle=`rgba(255,255,136,${0.4+intensity*0.6})`;cx.fill();
+    // Resplandor
+    cx.globalAlpha=0.15+0.3*intensity;
+    cx.beginPath();cx.arc(p.x,p.y-52,bulbR+3+2*intensity,0,Math.PI*2);
     cx.fillStyle='#ffee66';cx.fill();
     cx.globalAlpha=1;
-    // Borde superior iluminado
-    r(p.x-6,p.y-61,12,2,'#eedd88');
-  }
-  // ── APAGADA: todo oscuro/gris ──
-  else {
-    // Pantalla apagada (gris oscuro)
+    // Borde superior
+    r(p.x-6,p.y-61,12,2,`rgba(238,221,136,${0.3+intensity*0.7})`);
+  } else {
+    // ── APAGADA ──
     cx.beginPath();
     cx.moveTo(p.x-10,p.y-48);cx.lineTo(p.x+10,p.y-48);
     cx.lineTo(p.x+6,p.y-60);cx.lineTo(p.x-6,p.y-60);
     cx.closePath();
     cx.fillStyle='#7a7068';cx.fill();
     cx.strokeStyle='#5a5850';cx.lineWidth=0.8;cx.stroke();
-    // Bombilla apagada (punto oscuro)
     cx.beginPath();cx.arc(p.x,p.y-52,2,0,Math.PI*2);
     cx.fillStyle='#5a5850';cx.fill();
-    // Borde superior oscuro
     r(p.x-6,p.y-61,12,2,'#5a5850');
   }
 
