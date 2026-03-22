@@ -702,10 +702,23 @@ function doAction(id){
   }
   if(id.startsWith('train')){
     const i=parseInt(id[5]);const s=G.staff[i];
-    if(s.hired&&G.money>=CFG.TRAIN_COST[i]&&s.level<5){
-      G.money-=CFG.TRAIN_COST[i];G.weekExpenses+=CFG.TRAIN_COST[i];
+    if(s.hired&&G.money>=CFG.TRAIN_COST[s.role%CFG.TRAIN_COST.length]&&s.level<5){
+      G.money-=CFG.TRAIN_COST[s.role%CFG.TRAIN_COST.length];G.weekExpenses+=CFG.TRAIN_COST[s.role%CFG.TRAIN_COST.length];
       s.level++;s.morale=Math.min(100,s.morale+10);
       addFloat(s.x,s.y-40,'▲ LVL '+s.level,P.neon3);
+    }
+  }
+  if(id.startsWith('fire')){
+    const i=parseInt(id[4]);const s=G.staff[i];
+    if(s.hired&&i>0){ // can't fire staff[0] (player-controlled)
+      s.fired=true; // mark as leaving
+      s.clickBubble=120;
+      s.fireBubble=true;
+      // Set target to door
+      const doorP=toIso(ISO.cols,3);
+      s.fireTx=doorP.x;s.fireTy=doorP.y-40;
+      G.doorOpen=60;
+      addFloat(s.x,s.y-40,'Bye bye!','#cc4444');
     }
   }
   if(id.startsWith('rest')){
@@ -1085,6 +1098,22 @@ function updateGame(){
   if(G.doorOpen>0) G.doorOpen--;
   if(monitorAlert.timer>0) monitorAlert.timer--;
   else monitorAlert.active=false;
+  // Fired staff walks to door and leaves
+  for(const s of G.staff){
+    if(!s.fired) continue;
+    const dx=s.fireTx-s.x,dy=s.fireTy-s.y;
+    const d=Math.sqrt(dx*dx+dy*dy);
+    if(d<5){
+      // Reached door — unhire
+      s.hired=false;s.fired=false;s.fireBubble=false;s.clickBubble=0;
+      G.doorOpen=50;
+    } else {
+      s.x+=dx/d*1.5;s.y+=dy/d*1.5;
+      s.dir=dx>0?1:-1;
+      s.aTimer++;if(s.aTimer>6){s.aFrame=(s.aFrame+1)%2;s.aTimer=0;}
+      s.isWalking=true;
+    }
+  }
 
   // Week end
   if(G.weekTimer>=CFG.WEEK_TICKS){G.weekTimer=0;endWeek();}
@@ -2494,19 +2523,20 @@ function drawIsoStaff(s){
   // Clickable area for interaction bubble
   const si=G.staff.indexOf(s);
   if(si>=0) BTNS['staffClick'+si]={x:s.x-4,y:s.y-10,w:22,h:40};
-  // Interactive speech bubble when clicked
+  // Interactive speech bubble when clicked or fired
   if(s.clickBubble&&s.clickBubble>0){
     s.clickBubble--;
+    const isFiring=s.fireBubble;
     const msg1=s.name;
-    const msg2='I love Altadis!!';
-    const bw2=Math.max(msg1.length,msg2.length)*5+12;
+    const msg2=isFiring?'Bye bye!! 👋':'I love Altadis!!';
+    const borderCol=isFiring?'#cc3333':'#4466cc';
+    const bw2=Math.max(msg1.length,msg2.length)*5+14;
     const bh2=22,bx3=s.x+7-bw2/2,by3=s.y-38;
-    r(bx3,by3,bw2,bh2,'#ffffffee');rx(bx3,by3,bw2,bh2,'#4466cc',1.5);
-    // Triangle pointer
+    r(bx3,by3,bw2,bh2,'#ffffffee');rx(bx3,by3,bw2,bh2,borderCol,1.5);
     cx.fillStyle='#ffffffee';
     cx.beginPath();cx.moveTo(s.x+4,by3+bh2);cx.lineTo(s.x+10,by3+bh2);cx.lineTo(s.x+7,by3+bh2+5);cx.closePath();cx.fill();
-    tx(msg1,bx3+bw2/2,by3+9,'#4466cc',7,'center');
-    tx(msg2,bx3+bw2/2,by3+18,'#cc4444',6,'center');
+    tx(msg1,bx3+bw2/2,by3+9,borderCol,7,'center');
+    tx(msg2,bx3+bw2/2,by3+18,isFiring?'#cc3333':'#cc4444',6,'center');
   }
   // Energy bar
   r(s.x-1,s.y+28,16,3,'#c0b8a0');
@@ -2783,8 +2813,13 @@ function tabStaff(py){
       } else {
         tx('MAX LVL',ix+20,ry+66,'#ddaa22',7,'center');
       }
-      // Salary
-      tx('€'+CFG.SALARY[s.role%CFG.SALARY.length]*s.level+'/día',ix,ry+cardH-6,'#cc6666',6);
+      // Salary + Fire button
+      tx('€'+CFG.SALARY[s.role%CFG.SALARY.length]*s.level+'/día',ix,ry+cardH-8,'#cc6666',6);
+      // Fire button (red, right side)
+      const fbx=UI.x+bw-32,fby=ry+cardH-18;
+      r(fbx,fby,30,14,'#4a1a1a');rx(fbx,fby,30,14,'#cc3333',1);
+      tx('🚪',fbx+15,fby+11,'#ff6666',7,'center');
+      BTNS['fire'+i]={x:fbx,y:fby,w:30,h:14};
     } else {
       // Hire button
       mkBtn('hire'+i,ix,ry+38,bw-36,22,T().hire+' €'+CFG.HIRE_COST[s.role%CFG.HIRE_COST.length],rb,G.money>=CFG.HIRE_COST[s.role%CFG.HIRE_COST.length]);
