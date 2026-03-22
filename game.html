@@ -56,7 +56,7 @@
 </div>
 <script>
 // ═══════════════════════════════════════════════════════════════
-//  XTANCO DIGITAL TWIN — BETA v1.19
+//  XTANCO DIGITAL TWIN — BETA v1.20
 // ═══════════════════════════════════════════════════════════════
 const cv=document.getElementById('c'), cx=cv.getContext('2d');
 cx.imageSmoothingEnabled=false;
@@ -422,7 +422,7 @@ let activeModel=0;
 // ── I18N ──────────────────────────────────────────────────────
 const LANGS={
   es:{
-    menuTitle:'XTANCO',menuSub:'SIMULADOR DE ESTANCO DIGITAL — BETA v1.19',
+    menuTitle:'XTANCO',menuSub:'SIMULADOR DE ESTANCO DIGITAL — BETA v1.20',
     langPick:'SELECCIONA IDIOMA',startBtn:'PULSA ENTER PARA EMPEZAR',
     langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
     tut:[
@@ -472,7 +472,7 @@ const LANGS={
     modelStart:['€3.500','€2.800','€4.500','€6.000'],
   },
   en:{
-    menuTitle:'XTANCO',menuSub:'DIGITAL TOBACCO SHOP SIMULATOR — BETA v1.19',
+    menuTitle:'XTANCO',menuSub:'DIGITAL TOBACCO SHOP SIMULATOR — BETA v1.20',
     langPick:'SELECT LANGUAGE',startBtn:'PRESS ENTER TO START',
     langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
     tut:[
@@ -2171,56 +2171,65 @@ function drawShop(){
   cx.restore(); // end clip
 }
 
+function drawXtancoLogo(x,y){
+  // Small globe + XTANCO text centered at (x,y)
+  const gr=5;
+  cx.beginPath();cx.arc(x-10,y,gr,0,Math.PI*2);
+  const grd=cx.createRadialGradient(x-12,y-2,1,x-10,y,gr);
+  grd.addColorStop(0,'#88ddee');grd.addColorStop(0.5,'#4a99aa');grd.addColorStop(1,'#2a6677');
+  cx.fillStyle=grd;cx.fill();cx.strokeStyle='#1a445588';cx.lineWidth=0.6;cx.stroke();
+  cx.fillStyle='#1a4455';cx.font='bold 5px monospace';cx.textAlign='left';
+  cx.fillText('XTANCO',x-3,y+2);
+  cx.textAlign='left';
+}
+
 function drawGlassDoor(){
   const doorTop=toIso(ISO.cols,2);
   const doorBot=toIso(ISO.cols,4);
   const doorH=ISO.wallH*0.7;
-  // Door frame (dark wood)
-  cx.beginPath();
-  cx.moveTo(doorTop.x,doorTop.y);cx.lineTo(doorBot.x,doorBot.y);
-  cx.lineTo(doorBot.x,doorBot.y-doorH);cx.lineTo(doorTop.x,doorTop.y-doorH);
-  cx.closePath();cx.fillStyle='#5a4228';cx.fill();
-  // Glass panels — open/close based on customer traffic
-  const doorAmt=G&&G.doorOpen>0?Math.min(1,G.doorOpen>40?1:(G.doorOpen/40)):0;
-  const doorOff=(doorAmt*6)|0;
+  const dMidX=(doorTop.x+doorBot.x)/2;
   const dMidY=(doorTop.y+doorBot.y)/2;
   const dMidYh=(doorTop.y-doorH+doorBot.y-doorH)/2;
-  // Top glass panel
-  cx.beginPath();
-  cx.moveTo(doorTop.x,doorTop.y-doorOff*0.8);
-  cx.lineTo(doorTop.x+(doorBot.x-doorTop.x)*0.48,dMidY-doorOff*0.4);
-  cx.lineTo(doorTop.x+(doorBot.x-doorTop.x)*0.48,dMidYh+doorOff*0.4);
-  cx.lineTo(doorTop.x,doorTop.y-doorH+doorOff*0.3);
-  cx.closePath();cx.fillStyle='rgba(136,187,221,0.85)';cx.fill();
-  // Bottom glass panel
-  cx.beginPath();
-  cx.moveTo(doorBot.x,doorBot.y-doorOff*0.3);
-  cx.lineTo(doorTop.x+(doorBot.x-doorTop.x)*0.52,dMidY+doorOff*0.4);
-  cx.lineTo(doorTop.x+(doorBot.x-doorTop.x)*0.52,dMidYh-doorOff*0.3);
-  cx.lineTo(doorBot.x,doorBot.y-doorH+doorOff*0.2);
-  cx.closePath();cx.fillStyle='rgba(122,170,204,0.85)';cx.fill();
-  // Door frame outline
-  cx.strokeStyle='#4a3018';cx.lineWidth=2;
+  // Door frame (dark wood outline)
+  cx.strokeStyle='#4a3018';cx.lineWidth=2.5;
   cx.beginPath();
   cx.moveTo(doorTop.x,doorTop.y);cx.lineTo(doorBot.x,doorBot.y);
   cx.lineTo(doorBot.x,doorBot.y-doorH);cx.lineTo(doorTop.x,doorTop.y-doorH);
   cx.closePath();cx.stroke();
-  // XTANCO logo on TOP glass panel only
-  const logoCx=doorTop.x+(doorBot.x-doorTop.x)*0.22;
-  const logoCy=(doorTop.y-doorH*0.5);
-  const globeR=6,globeX=logoCx-6,globeY=logoCy;
-  cx.beginPath();cx.arc(globeX,globeY,globeR,0,Math.PI*2);
-  const grd=cx.createRadialGradient(globeX-2,globeY-2,1,globeX,globeY,globeR);
-  grd.addColorStop(0,'#88ddee');grd.addColorStop(0.5,'#4a99aa');grd.addColorStop(1,'#2a6677');
-  cx.fillStyle=grd;cx.fill();cx.strokeStyle='#1a4455';cx.lineWidth=0.8;cx.stroke();
-  cx.strokeStyle='#aaeeff44';cx.lineWidth=0.5;
-  cx.beginPath();cx.ellipse(globeX,globeY,globeR*0.7,globeR*0.3,0.3,0,Math.PI*2);cx.stroke();
-  cx.fillStyle='#1a4455';cx.font='bold 6px monospace';cx.textAlign='left';
-  cx.fillText('XTANCO',globeX+globeR+2,globeY+2);
-  // OPEN sign on bottom panel
-  const openCx=doorBot.x-(doorBot.x-doorTop.x)*0.25;
-  const openCy=(doorBot.y-doorH*0.25);
-  tx('OPEN',openCx,openCy,'#2a6644',7,'center');
+  // Center divider (frame between two doors)
+  cx.lineWidth=2;
+  cx.beginPath();cx.moveTo(dMidX,dMidY);cx.lineTo(dMidX,dMidY-doorH+((doorTop.y-doorH)-(doorBot.y-doorH))/2);cx.stroke();
+  // Sliding animation — panels slide toward center when open
+  const doorAmt=G&&G.doorOpen>0?Math.min(1,G.doorOpen>40?1:(G.doorOpen/40)):0;
+  const slide=doorAmt*8; // pixels of slide
+  // ── TOP PANEL (slides down toward center when open) ──
+  cx.globalAlpha=0.5; // 50% transparent
+  cx.beginPath();
+  cx.moveTo(doorTop.x,doorTop.y+slide*0.4);
+  cx.lineTo(dMidX,dMidY+slide*0.2);
+  cx.lineTo(dMidX,(dMidY+dMidYh)/2+slide*0.1);
+  cx.lineTo(doorTop.x,doorTop.y-doorH+slide*0.5);
+  cx.closePath();cx.fillStyle='#88bbdd';cx.fill();
+  cx.strokeStyle='#4a301844';cx.lineWidth=1;cx.stroke();
+  // Logo centered on top panel
+  const topCx=(doorTop.x+dMidX)/2;
+  const topCy=((doorTop.y+dMidY)/2-doorH*0.35)+slide*0.3;
+  drawXtancoLogo(topCx,topCy);
+  // ── BOTTOM PANEL (slides up toward center when open) ──
+  cx.beginPath();
+  cx.moveTo(doorBot.x,doorBot.y-slide*0.3);
+  cx.lineTo(dMidX,dMidY-slide*0.2);
+  cx.lineTo(dMidX,(dMidY+dMidYh)/2-slide*0.1);
+  cx.lineTo(doorBot.x,doorBot.y-doorH-slide*0.4);
+  cx.closePath();cx.fillStyle='#7aaacc';cx.fill();
+  cx.strokeStyle='#4a301844';cx.lineWidth=1;cx.stroke();
+  // Logo centered on bottom panel
+  const botCx=(doorBot.x+dMidX)/2;
+  const botCy=((doorBot.y+dMidY)/2-doorH*0.35)-slide*0.3;
+  drawXtancoLogo(botCx,botCy);
+  cx.globalAlpha=1;
+  // OPEN sign at bottom
+  if(doorAmt<0.5) tx('OPEN',(doorTop.x+doorBot.x)/2,(doorTop.y+doorBot.y)/2-doorH*0.15,'#2a664488',7,'center');
 }
 
 // ── LED DISPLAY (on LEFT WALL, middle height) ────────────────
