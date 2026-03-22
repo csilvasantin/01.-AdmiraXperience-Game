@@ -879,7 +879,23 @@ function doAction(id){
     }
     return;
   }
+  // ── Menu touch/click actions ──
+  if(id==='menuStart'){lang=menuSel===0?'es':'en';modelSel=0;state=S.MODEL_SEL;return;}
+  if(id==='menuLangEs'){menuSel=0;return;}
+  if(id==='menuLangEn'){menuSel=1;return;}
   if(id==='menuSettings'){state=S.SETTINGS;return;}
+  // ── Model selection touch/click ──
+  if(id.startsWith('model')&&id!=='modelConfirm'){
+    const mi=parseInt(id.slice(5));
+    if(!isNaN(mi)&&mi>=0&&mi<MODELS.length){modelSel=mi;}
+    return;
+  }
+  if(id==='modelConfirm'){
+    lang=menuSel===0?'es':'en';initGame(modelSel);tutPage=0;state=S.TUT;return;
+  }
+  // ── Tutorial touch/click ──
+  if(id==='tutNext'){tutPage++;if(tutPage>=T().tut.length)state=S.GAME;return;}
+  if(id==='skipTut'){state=S.GAME;return;}
   if(id==='setOpenDown'){shopTimeSettings.openHour=Math.max(0,shopTimeSettings.openHour-1);return;}
   if(id==='setOpenUp'){shopTimeSettings.openHour=Math.min(shopTimeSettings.closeHour-1,shopTimeSettings.openHour+1);return;}
   if(id==='setCloseDown'){shopTimeSettings.closeHour=Math.max(shopTimeSettings.openHour+1,shopTimeSettings.closeHour-1);return;}
@@ -1391,8 +1407,16 @@ function drawMenu(){
     if(o.sel){glow(P.neon1,14);}tx(o.label,ox+ow/2,oy+26,o.sel?P.neon1:P.gray,13,'center');nog();
     if(o.sel) nt('▶',ox-18,oy+26,P.neon1,12);
   });
-  cx.globalAlpha=.4+.6*Math.abs(Math.sin(tt*.04));nt(T().startBtn,W/2,oy+58,P.neon3,10);cx.globalAlpha=1;
-  cx.globalAlpha=.3;tx('← →',W/2-12,oy+73,P.gray,9,'center');cx.globalAlpha=1;
+  // Start button (clickable)
+  const startBtnW=160,startBtnH=30,startBtnX=W/2-startBtnW/2,startBtnY=oy+48;
+  r(startBtnX,startBtnY,startBtnW,startBtnH,'#0a1a0a');rx(startBtnX,startBtnY,startBtnW,startBtnH,P.neon3,1.5);
+  cx.globalAlpha=.5+.5*Math.abs(Math.sin(tt*.04));
+  tx(T().startBtn,W/2,startBtnY+20,P.neon3,12,'center');
+  cx.globalAlpha=1;
+  BTNS['menuStart']={x:startBtnX,y:startBtnY,w:startBtnW,h:startBtnH};
+  // Language buttons (clickable)
+  BTNS['menuLangEs']={x:sx,y:oy,w:ow,h:oh};
+  BTNS['menuLangEn']={x:sx+ow+gap,y:oy,w:ow,h:oh};
   // Mini chibi preview
   for(let i=0;i<4;i++) chibi(W/2-60+i*40,oy+100,1,i,i,Math.floor(tt/12)%2,false,tt);
   // Settings button
@@ -1543,12 +1567,16 @@ function drawModelSelect(){
       chibi(startX+c*16,cy3+ch-32,1,c%P.shirts.length,c%P.hair.length,Math.floor(tt/14)%2,false,tt,0.7);
     }
     if(numC>4) tx('+'+(numC-4),startX+64,cy3+ch-16,mc,7);
+    // Clickable area for each model card
+    BTNS['model'+i]={x:cx3,y:cy3,w:cw,h:ch};
   }
-  // Bottom hint
-  cx.globalAlpha=.4+.6*Math.abs(Math.sin(tt*.04));
-  nt(T().startBtn,W/2,H-20,P.neon3,9);
+  // Bottom confirm button (clickable)
+  const confirmW=180,confirmH=28,confirmX=W/2-confirmW/2,confirmY=H-38;
+  r(confirmX,confirmY,confirmW,confirmH,'#0a1a0a');rx(confirmX,confirmY,confirmW,confirmH,P.neon3,1.5);
+  cx.globalAlpha=.5+.5*Math.abs(Math.sin(tt*.04));
+  tx(T().startBtn,W/2,confirmY+19,P.neon3,11,'center');
   cx.globalAlpha=1;
-  cx.globalAlpha=.3;tx('← → ↑ ↓  +  ENTER',W/2,H-8,P.gray,8,'center');cx.globalAlpha=1;
+  BTNS['modelConfirm']={x:confirmX,y:confirmY,w:confirmW,h:confirmH};
 }
 
 // ── DRAW TUTORIAL ─────────────────────────────────────────────
@@ -1575,6 +1603,12 @@ function drawTutorial(){
   const bbt=bx+bw/2-70,bbb=by+bh-42,bbw=140,bbh=28;
   r(bbt,bbb,bbw,bbh,P.btnA);glow(P.neon1,8);rx(bbt,bbb,bbw,bbh,P.neon1,1);nog();
   tx(btnTxt,bbt+bbw/2,bbb+19,P.neon1,10,'center');
+  BTNS['tutNext']={x:bbt,y:bbb,w:bbw,h:bbh};
+  // Skip button
+  const skipX=bx+bw-60,skipY=by+8;
+  r(skipX,skipY,50,18,'#1a0a0a');rx(skipX,skipY,50,18,'#aa4444',1);
+  tx('SKIP ⏭',skipX+25,skipY+13,'#cc6666',8,'center');
+  BTNS['skipTut']={x:skipX,y:skipY,w:50,h:18};
   cx.globalAlpha=.3;tx('(CLICK / ENTER / →)',W/2,by+bh+20,P.gray,8,'center');cx.globalAlpha=1;
 }
 
