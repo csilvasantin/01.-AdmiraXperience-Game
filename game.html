@@ -53,7 +53,7 @@
 <canvas id="c" width="800" height="500"></canvas>
 <script>
 // ═══════════════════════════════════════════════════════════════
-//  XTANCO DIGITAL TWIN — BETA v1.15
+//  XTANCO DIGITAL TWIN — BETA v1.16
 // ═══════════════════════════════════════════════════════════════
 const cv=document.getElementById('c'), cx=cv.getContext('2d');
 cx.imageSmoothingEnabled=false;
@@ -240,7 +240,7 @@ const CFG={
 
 // ── PALETTE (Kairosoft warm style) ────────────────────────────
 const P={
-  bg:'#d4c8a8',wall:'#e8dcc0',floor1:'#c8bb98',floor2:'#bfb28a',
+  bg:'#4a7a38',wall:'#e8dcc0',floor1:'#c8bb98',floor2:'#bfb28a',
   counter:'#8b6e4e',counterT:'#a0845c',shelf:'#7a5c3a',shelfT:'#9a7a52',
   desk:'#6b8a5a',deskT:'#7ca06a',lott:'#8a7a40',lottT:'#b8a550',
   door:'#5a4832',neon1:'#2a8a5a',neon2:'#c05a6a',neon3:'#d4a030',neonB:'#4a7ab0',
@@ -357,7 +357,7 @@ let activeModel=0;
 // ── I18N ──────────────────────────────────────────────────────
 const LANGS={
   es:{
-    menuTitle:'XTANCO',menuSub:'SIMULADOR DE ESTANCO DIGITAL — BETA v1.15',
+    menuTitle:'XTANCO',menuSub:'SIMULADOR DE ESTANCO DIGITAL — BETA v1.16',
     langPick:'SELECCIONA IDIOMA',startBtn:'PULSA ENTER PARA EMPEZAR',
     langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
     tut:[
@@ -407,7 +407,7 @@ const LANGS={
     modelStart:['€3.500','€2.800','€4.500','€6.000'],
   },
   en:{
-    menuTitle:'XTANCO',menuSub:'DIGITAL TOBACCO SHOP SIMULATOR — BETA v1.15',
+    menuTitle:'XTANCO',menuSub:'DIGITAL TOBACCO SHOP SIMULATOR — BETA v1.16',
     langPick:'SELECT LANGUAGE',startBtn:'PRESS ENTER TO START',
     langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
     tut:[
@@ -1334,7 +1334,7 @@ let uiOpen=false; // toggle with Menu button
 const ISO={
   tileW:88,tileH:30,    // wide tiles filling 800px width
   cols:12,rows:6,        // wide grid
-  ox:320,oy:208,         // centered to use full canvas, wall tops clear of HUD (28px)
+  ox:300,oy:200,         // shifted left so right corner fits, wall tops at y=30
   wallH:170,             // tall Kairosoft walls
   doorCol:11,doorRow:3,  // door far right
 };
@@ -1780,10 +1780,22 @@ function drawCityBg(){
   }
 
   // Isometric street/sidewalk tiles in front of buildings
-  // (these will be covered by the shop floor, only edges visible)
   for(let c=-2;c<ISO.cols+3;c++){
     for(let rr=-2;rr<0;rr++){
       drawIsoTile(c,rr,'#8a8878','#7a786810');
+    }
+  }
+  // Grass tiles around the shop exterior (bottom and right sides)
+  for(let c=-3;c<ISO.cols+5;c++){
+    for(let rr=ISO.rows;rr<ISO.rows+4;rr++){
+      const gc=((c+rr)%2===0)?'#6a9a48':'#5e8e42';
+      drawIsoTile(c,rr,gc,'#5a8a3810');
+    }
+  }
+  for(let c=ISO.cols;c<ISO.cols+5;c++){
+    for(let rr=-2;rr<ISO.rows+4;rr++){
+      const gc=((c+rr)%2===0)?'#6a9a48':'#5e8e42';
+      drawIsoTile(c,rr,gc,'#5a8a3810');
     }
   }
 }
@@ -2909,11 +2921,11 @@ function drawHUD(){
   rx(dotX,10,50,6,'#4a3820',1);
   // Money (golden, euro after amount)
   tx((G.money|0).toLocaleString()+'€',218,19,'#ffdd66',14);
-  // People counter: camera icon + people inside now + in/out arrows
+  // People counter: camera + inside now + in/out
   const insideNow=G.custs?G.custs.length:0;
-  tx('📷 '+ insideNow,290,14,'#88ccee',10);
-  tx('↓'+(G.custIn||0),330,10,'#66cc88',8);
-  tx('↑'+(G.custOut||0),330,22,'#cc8866',8);
+  tx('📷'+insideNow,430,19,'#88ccee',14);
+  tx('↓'+( G.custIn||0),480,12,'#66cc88',9);
+  tx('↑'+(G.custOut||0),480,24,'#cc8866',9);
   // Ingresos Día
   const dayInc=G.sales.reduce((s,v)=>s+v,0);
   tx('Ing. Día',330,12,'#a09880',7);
@@ -2922,9 +2934,9 @@ function drawHUD(){
   const target=CFG.YEAR_TARGETS[G.year-1];
   const prog=Math.min(1,G.yearRevenue/target);
   const bc=prog>=1?P.green:prog>=0.7?'#ccaa44':'#88aa55';
-  tx('Facturación',410,12,'#a09880',7);
-  r(410,15,130,6,'#1a1208');r(410,15,(130*prog)|0,6,bc);rx(410,15,130,6,'#4a3820',1);
-  tx((G.yearRevenue|0).toLocaleString()+'€/'+(target).toLocaleString()+'€'+(prog>=1?' ✓':''),410,26,'#c0b898',7);
+  tx('Fact.',520,12,'#a09880',7);
+  r(520,15,110,6,'#1a1208');r(520,15,(110*prog)|0,6,bc);rx(520,15,110,6,'#4a3820',1);
+  tx((G.yearRevenue|0).toLocaleString()+'/'+(target).toLocaleString()+'€',520,26,'#c0b898',7);
   // Rush / Inspect badge (far right of top bar)
   if(G.rush.active){
     const f=Math.sin(tt*.08)>.0;
