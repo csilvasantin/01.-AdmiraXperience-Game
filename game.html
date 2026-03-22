@@ -45,7 +45,7 @@
 <canvas id="c" width="800" height="500"></canvas>
 <script>
 // ═══════════════════════════════════════════════════════════════
-//  XTANCO DIGITAL TWIN — BETA v1.3
+//  XTANCO DIGITAL TWIN — BETA v1.4
 // ═══════════════════════════════════════════════════════════════
 const cv=document.getElementById('c'), cx=cv.getContext('2d');
 cx.imageSmoothingEnabled=false;
@@ -330,7 +330,7 @@ let activeModel=0;
 // ── I18N ──────────────────────────────────────────────────────
 const LANGS={
   es:{
-    menuTitle:'XTANCO',menuSub:'SIMULADOR DE ESTANCO DIGITAL — BETA v1.3',
+    menuTitle:'XTANCO',menuSub:'SIMULADOR DE ESTANCO DIGITAL — BETA v1.4',
     langPick:'SELECCIONA IDIOMA',startBtn:'PULSA ENTER PARA EMPEZAR',
     langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
     tut:[
@@ -380,7 +380,7 @@ const LANGS={
     modelStart:['€3.500','€2.800','€4.500','€6.000'],
   },
   en:{
-    menuTitle:'XTANCO',menuSub:'DIGITAL TOBACCO SHOP SIMULATOR — BETA v1.3',
+    menuTitle:'XTANCO',menuSub:'DIGITAL TOBACCO SHOP SIMULATOR — BETA v1.4',
     langPick:'SELECT LANGUAGE',startBtn:'PRESS ENTER TO START',
     langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
     tut:[
@@ -1940,29 +1940,7 @@ function drawShop(){
   for(let i=1;i<lwPts.length;i++) cx.lineTo(lwPts[i].x,lwPts[i].y-ISO.wallH);
   cx.stroke();
 
-  // ── RIGHT WALL with DOOR (entry wall) ──
-  const rwPts=[];
-  for(let rr=0;rr<=ISO.rows;rr++) rwPts.push(toIso(ISO.cols,rr));
-  // Right wall body
-  cx.beginPath();
-  cx.moveTo(rwPts[0].x,rwPts[0].y);
-  for(let i=1;i<rwPts.length;i++) cx.lineTo(rwPts[i].x,rwPts[i].y);
-  for(let i=rwPts.length-1;i>=0;i--) cx.lineTo(rwPts[i].x,rwPts[i].y-ISO.wallH);
-  cx.closePath();
-  cx.fillStyle='#c8bca0';cx.fill();
-  // Baseboard
-  cx.beginPath();
-  cx.moveTo(rwPts[0].x,rwPts[0].y);
-  for(let i=1;i<rwPts.length;i++) cx.lineTo(rwPts[i].x,rwPts[i].y);
-  for(let i=rwPts.length-1;i>=0;i--) cx.lineTo(rwPts[i].x,rwPts[i].y-6);
-  cx.closePath();
-  cx.fillStyle='#8a7858';cx.fill();
-  // Ceiling line
-  cx.strokeStyle='#a09070';cx.lineWidth=1;cx.beginPath();
-  cx.moveTo(rwPts[0].x,rwPts[0].y-ISO.wallH);
-  for(let i=1;i<rwPts.length;i++) cx.lineTo(rwPts[i].x,rwPts[i].y-ISO.wallH);
-  cx.stroke();
-
+  // ── RIGHT WALL — only door visible, no solid wall ──
   // Door on right wall (between row 2 and row 4)
   const doorTop=toIso(ISO.cols,2);
   const doorBot=toIso(ISO.cols,4);
@@ -2002,10 +1980,29 @@ function drawShop(){
   cx.moveTo(doorTop.x,doorTop.y);cx.lineTo(doorBot.x,doorBot.y);
   cx.lineTo(doorBot.x,doorBot.y-doorH);cx.lineTo(doorTop.x,doorTop.y-doorH);
   cx.closePath();cx.stroke();
-  // OPEN sign on door
+  // ── XTANCO logo on door glass ──
   const doorCx=(doorTop.x+doorBot.x)/2;
-  const doorCy=(doorTop.y+doorBot.y)/2-doorH*0.3;
-  tx('OPEN',doorCx,doorCy,'#4a3018',8,'center');
+  const doorCy=(doorTop.y+doorBot.y)/2-doorH*0.35;
+  // Globe/sphere icon (teal gradient)
+  const globeR=7;
+  const globeX=doorCx-8, globeY=doorCy-2;
+  // Outer circle
+  cx.beginPath();cx.arc(globeX,globeY,globeR,0,Math.PI*2);
+  const grd=cx.createRadialGradient(globeX-2,globeY-2,1,globeX,globeY,globeR);
+  grd.addColorStop(0,'#88ddee');grd.addColorStop(0.5,'#4a99aa');grd.addColorStop(1,'#2a6677');
+  cx.fillStyle=grd;cx.fill();
+  cx.strokeStyle='#1a4455';cx.lineWidth=0.8;cx.stroke();
+  // Wave lines on globe
+  cx.strokeStyle='#aaeeff44';cx.lineWidth=0.6;
+  cx.beginPath();cx.ellipse(globeX,globeY,globeR*0.7,globeR*0.3,0.3,0,Math.PI*2);cx.stroke();
+  cx.beginPath();cx.ellipse(globeX,globeY-2,globeR*0.5,globeR*0.2,-0.2,0,Math.PI*2);cx.stroke();
+  cx.beginPath();cx.ellipse(globeX,globeY+2,globeR*0.6,globeR*0.2,0.1,0,Math.PI*2);cx.stroke();
+  // XTANCO text next to globe
+  cx.fillStyle='#2a5566';cx.font='bold 7px monospace';cx.textAlign='left';
+  cx.fillText('XTANCO',globeX+globeR+3,globeY+3);
+  cx.textAlign='left';
+  // OPEN sign below
+  tx('OPEN',doorCx,doorCy+14,'#2a6644',7,'center');
 
 
   // ── CLOCK on left wall ──
