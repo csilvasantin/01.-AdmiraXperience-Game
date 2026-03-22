@@ -57,7 +57,7 @@
 </div>
 <script>
 // ═══════════════════════════════════════════════════════════════
-//  XTANCO DIGITAL TWIN — BETA v1.22
+//  XTANCO DIGITAL TWIN — BETA v1.23
 // ═══════════════════════════════════════════════════════════════
 const cv=document.getElementById('c'), cx=cv.getContext('2d');
 cx.imageSmoothingEnabled=false;
@@ -435,7 +435,7 @@ let activeModel=0;
 // ── I18N ──────────────────────────────────────────────────────
 const LANGS={
   es:{
-    menuTitle:'XTANCO',menuSub:'SIMULADOR DE ESTANCO DIGITAL — BETA v1.22',
+    menuTitle:'XTANCO',menuSub:'SIMULADOR DE ESTANCO DIGITAL — BETA v1.23',
     langPick:'SELECCIONA IDIOMA',startBtn:'PULSA ENTER PARA EMPEZAR',
     langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
     tut:[
@@ -485,7 +485,7 @@ const LANGS={
     modelStart:['€3.500','€2.800','€4.500','€6.000'],
   },
   en:{
-    menuTitle:'XTANCO',menuSub:'DIGITAL TOBACCO SHOP SIMULATOR — BETA v1.22',
+    menuTitle:'XTANCO',menuSub:'DIGITAL TOBACCO SHOP SIMULATOR — BETA v1.23',
     langPick:'SELECT LANGUAGE',startBtn:'PRESS ENTER TO START',
     langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
     tut:[
@@ -1023,6 +1023,15 @@ function doAction(id){
   if(id==='setCloseUp'){shopTimeSettings.closeHour=Math.min(24,shopTimeSettings.closeHour+1);return;}
   if(id==='setDurDown'){shopTimeSettings.dayDurationSec=Math.max(60,shopTimeSettings.dayDurationSec-30);return;}
   if(id==='setDurUp'){shopTimeSettings.dayDurationSec=Math.min(600,shopTimeSettings.dayDurationSec+30);return;}
+  if(id==='musicToggle'){toggleMusic();return;}
+  if(id==='musicPrev'||id==='musicNext'){
+    const songs=['Titi Me Preguntó - Bad Bunny','Despechá - Rosalía','La Bicicleta - Shakira','Bailando - Enrique Iglesias','Dákiti - Bad Bunny','Vivir Mi Vida - Marc Anthony'];
+    const ci=songs.indexOf(G.nowPlaying);
+    const ni=id==='musicNext'?(ci+1)%songs.length:(ci-1+songs.length)%songs.length;
+    G.nowPlaying=songs[ni];shopTimeSettings.nowPlaying=songs[ni];
+    addFloat(W/2,40,'♪ '+songs[ni],'#cc99dd');
+    return;
+  }
   if(id==='songPrev'||id==='songNext'){
     const songs=['Titi Me Preguntó - Bad Bunny','Despechá - Rosalía','La Bicicleta - Shakira','Bailando - Enrique Iglesias','Dákiti - Bad Bunny','Vivir Mi Vida - Marc Anthony'];
     const ci=songs.indexOf(shopTimeSettings.nowPlaying);
@@ -3045,8 +3054,20 @@ function drawHUD(){
   tx('📷'+insideNow,moneyEnd,19,'#88ccee',11);
   tx('▲'+(G.custIn||0),moneyEnd+35,19,'#44dd66',11);
   tx('▼'+(G.custOut||0),moneyEnd+68,19,'#dd4444',11);
-  // Now playing 🎵
-  tx('♪ '+(G.nowPlaying||''),moneyEnd+105,19,'#cc99dd',9);
+  // Now playing 🎵 — interactive: ♪ mute | ◀ prev | ▶ next
+  const musicX=moneyEnd+100;
+  const isMuted=bgMusic.paused;
+  const noteCol=isMuted?'#664466':'#cc99dd';
+  tx('♪',musicX,19,noteCol,12);
+  BTNS['musicToggle']={x:musicX-4,y:2,w:14,h:24};
+  // Song title
+  tx(G.nowPlaying||'',musicX+16,19,isMuted?'#665566':'#cc99dd',8);
+  // Prev/Next arrows
+  const arrowX=musicX+16+(G.nowPlaying||'').length*5+8;
+  tx('◀',arrowX,19,'#aa88cc',10);
+  BTNS['musicPrev']={x:arrowX-3,y:2,w:14,h:24};
+  tx('▶',arrowX+16,19,'#aa88cc',10);
+  BTNS['musicNext']={x:arrowX+13,y:2,w:14,h:24};
   // Ingresos Día
   const dayInc=G.sales.reduce((s,v)=>s+v,0);
   tx('Ing.',moneyEnd+105,8,'#a09880',6);
