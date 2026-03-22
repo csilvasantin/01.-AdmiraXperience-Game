@@ -53,7 +53,7 @@
 <canvas id="c" width="800" height="500"></canvas>
 <script>
 // ═══════════════════════════════════════════════════════════════
-//  XTANCO DIGITAL TWIN — BETA v1.13
+//  XTANCO DIGITAL TWIN — BETA v1.14
 // ═══════════════════════════════════════════════════════════════
 const cv=document.getElementById('c'), cx=cv.getContext('2d');
 cx.imageSmoothingEnabled=false;
@@ -357,7 +357,7 @@ let activeModel=0;
 // ── I18N ──────────────────────────────────────────────────────
 const LANGS={
   es:{
-    menuTitle:'XTANCO',menuSub:'SIMULADOR DE ESTANCO DIGITAL — BETA v1.13',
+    menuTitle:'XTANCO',menuSub:'SIMULADOR DE ESTANCO DIGITAL — BETA v1.14',
     langPick:'SELECCIONA IDIOMA',startBtn:'PULSA ENTER PARA EMPEZAR',
     langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
     tut:[
@@ -407,7 +407,7 @@ const LANGS={
     modelStart:['€3.500','€2.800','€4.500','€6.000'],
   },
   en:{
-    menuTitle:'XTANCO',menuSub:'DIGITAL TOBACCO SHOP SIMULATOR — BETA v1.13',
+    menuTitle:'XTANCO',menuSub:'DIGITAL TOBACCO SHOP SIMULATOR — BETA v1.14',
     langPick:'SELECT LANGUAGE',startBtn:'PRESS ENTER TO START',
     langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
     tut:[
@@ -573,7 +573,7 @@ function initGame(){
   G={
     money:CFG.START_MONEY, week:1, year:1, weekTimer:0,
     yearRevenue:0, weekRevenue:0, weekExpenses:0,
-    satisfaction:65, fame:25, customersToday:0, totalCustomers:0,
+    satisfaction:65, fame:25, customersToday:0, custIn:0, custOut:0, totalCustomers:0,
     totalRevenue:0, totalScore:0, yearsCompleted:0,
     rush:{active:false,timer:0}, inspect:{active:false,timer:0,warned:false},
     storeLevel:1,
@@ -1028,7 +1028,7 @@ function advanceYear(){
   }
   G.yearsCompleted++;
   G.year++;G.week=1;G.weekTimer=0;G.yearRevenue=0;G.weekRevenue=0;G.weekExpenses=0;
-  G.customersToday=0;G.yearEndAnim=0;G.yearRating=null;
+  G.customersToday=0;G.custIn=0;G.custOut=0;G.yearEndAnim=0;G.yearRating=null;
   // Satisfaction decay on year transition
   G.satisfaction=Math.max(20,G.satisfaction-5);
   state=S.GAME;
@@ -1049,7 +1049,7 @@ function endWeek(){
   // Morale decay for unhired-slots
   for(const s of G.staff) if(s.hired) s.morale=Math.max(20,s.morale-2);
   updateBars();
-  G.weekRevenue=0;G.weekExpenses=0;G.customersToday=0;
+  G.weekRevenue=0;G.weekExpenses=0;G.customersToday=0;G.custIn=0;G.custOut=0;
   // Reset day for next week
   G.gameTime=shopTimeSettings.openHour;
   G.dayEnded=false;
@@ -1245,7 +1245,7 @@ function updateGame(){
     } else if(c.st==='leave'){
       const dx=c.tx-c.x,dy=c.ty-c.y,d=Math.sqrt(dx*dx+dy*dy);
       if(d<30&&G.doorOpen<30) G.doorOpen=40;
-      if(d<3) G.custs.splice(i,1);
+      if(d<3){G.custOut++;G.custs.splice(i,1);}
       else{
         const nx=c.x+dx/d*1.6, ny=c.y+dy/d*1.6;
         if(canWalkTo(nx+5,ny+20)){c.x=nx;c.y=ny;c.dir=dx<0?-1:1;}
@@ -1308,7 +1308,7 @@ function spawnCust(){
     fr:0,ft:0,dir:-1
   });
   G.doorOpen=60; // open door for customer entering
-  G.customersToday++;G.totalCustomers++; // count when entering, not when buying
+  G.customersToday++;G.totalCustomers++;G.custIn++; // count entry
 }
 
 // ── DRAW HELPERS ──────────────────────────────────────────────
@@ -1334,7 +1334,7 @@ let uiOpen=false; // toggle with Menu button
 const ISO={
   tileW:88,tileH:30,    // wide tiles filling 800px width
   cols:12,rows:6,        // wide grid
-  ox:290,oy:218,         // shifted left+down to fill screen better
+  ox:310,oy:195,         // balanced to show all corners
   wallH:170,             // tall Kairosoft walls
   doorCol:11,doorRow:3,  // door far right
 };
@@ -2909,8 +2909,9 @@ function drawHUD(){
   rx(dotX,10,50,6,'#4a3820',1);
   // Money (golden, euro after amount)
   tx((G.money|0).toLocaleString()+'€',218,19,'#ffdd66',14);
-  // People counter (customers today, excluding staff)
-  tx('👥 '+(G.customersToday||0),290,19,'#88ccee',11);
+  // People counter with in/out arrows
+  tx('👥 '+(G.customersToday||0),290,13,'#88ccee',10);
+  tx('↓'+(G.custIn||0)+' ↑'+(G.custOut||0),290,24,'#7799aa',7);
   // Ingresos Día
   const dayInc=G.sales.reduce((s,v)=>s+v,0);
   tx('Ing. Día',330,12,'#a09880',7);
