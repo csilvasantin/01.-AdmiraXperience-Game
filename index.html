@@ -49,8 +49,33 @@ const ELGATO={
   port:9123,
   proxyPort:9124,
 };
-let elgatoState={on:true,busy:false,notify:0,error:false,skyRed:false}; // lamp starts ON
-let monitorAlert={active:false,timer:0,msg:'',color:''}; // monitor screen alert state
+let elgatoState={on:false,busy:false,notify:0,error:false,skyRed:false}; // lamp starts OFF (auto-on at dusk)
+let monitorAlert={active:false,timer:0,msg:'',color:''};
+
+// ── SHOP TIME SYSTEM ─────────────────────────────────────────
+// Day runs from openHour to closeHour in DAY_DURATION_SEC real seconds
+const SHOP_TIME_DEFAULTS={openHour:9,closeHour:21,dayDurationSec:300}; // 5 min = 300s
+let shopTimeSettings=JSON.parse(JSON.stringify(SHOP_TIME_DEFAULTS));
+// Load/save settings
+function loadShopSettings(){
+  try{const d=localStorage.getItem('xtanco_settings');if(d){Object.assign(shopTimeSettings,JSON.parse(d));}}catch(e){}
+}
+function saveShopSettings(){
+  try{localStorage.setItem('xtanco_settings',JSON.stringify(shopTimeSettings));}catch(e){}
+}
+loadShopSettings();
+
+// Get sky colors based on game hour (returns [top, mid, bottom])
+function getSkyColors(hour){
+  if(hour<7)  return ['#0a0a2a','#1a1a3a','#2a2a4a']; // night
+  if(hour<9)  return ['#3a5a8a','#5a7aaa','#8aaacc']; // dawn
+  if(hour<12) return ['#5a99cc','#7ab8dd','#a8d4ee']; // morning
+  if(hour<16) return ['#4a8acc','#6aaadd','#98ccee']; // midday
+  if(hour<18) return ['#cc8844','#dd9955','#eebb77']; // sunset
+  if(hour<19) return ['#aa4433','#cc5544','#dd7755']; // dusk
+  if(hour<20) return ['#3a2244','#4a3355','#5a4466']; // twilight
+  return ['#0a0a1a','#1a1a2a','#2a2a3a']; // night
+}
 
 async function elgatoFetch(path,opts){
   // When served from the proxy (localhost:9124), use same origin
@@ -344,7 +369,7 @@ let lang='es';
 const T=()=>LANGS[lang];
 
 // ── STATE ─────────────────────────────────────────────────────
-const S={MENU:'menu',MODEL_SEL:'modelSel',TUT:'tutorial',GAME:'game',PAUSE:'pause',YEAR_END:'yearEnd',GAME_END:'gameEnd',EDITOR:'editor'};
+const S={MENU:'menu',MODEL_SEL:'modelSel',TUT:'tutorial',GAME:'game',PAUSE:'pause',YEAR_END:'yearEnd',GAME_END:'gameEnd',EDITOR:'editor',SETTINGS:'settings'};
 let state=S.MENU, menuSel=0, modelSel=0, tutPage=0;
 let tt=0;
 let ledOffset=0;
@@ -465,7 +490,9 @@ function initGame(){
     yearEndAnim:0,
     gameOverReason:null,
     pauseData:null,
-    doorOpen:0, // timer: >0 means door is open (counts down)
+    doorOpen:0,
+    gameTime:shopTimeSettings.openHour, // current hour (float, e.g. 14.5 = 14:30)
+    dayEnded:false,
   };
   // Staff from model — convert grid positions to isometric screen coords
   // Staff positions on the iso grid based on their role
@@ -515,6 +542,10 @@ document.addEventListener('keydown',e=>{
     if(e.code==='ArrowLeft'||e.code==='ArrowUp')   menuSel=0;
     if(e.code==='ArrowRight'||e.code==='ArrowDown') menuSel=1;
     if(e.code==='Enter'||e.code==='Space'){lang=menuSel===0?'es':'en';modelSel=0;state=S.MODEL_SEL;}
+    return;
+  }
+  if(state===S.SETTINGS){
+    if(e.code==='Escape'){saveShopSettings();state=S.MENU;}
     return;
   }
   if(state===S.MODEL_SEL){
@@ -605,7 +636,7 @@ cv.addEventListener('click',e=>{
   if(state===S.PAUSE){state=S.GAME;return;}
   if(state===S.YEAR_END&&G.yearEndAnim>80){advanceYear();return;}
   if(state===S.GAME_END){state=S.MENU;menuSel=0;return;}
-  if(state!==S.GAME&&state!==S.EDITOR) return;
+  if(state!==S.GAME&&state!==S.EDITOR&&state!==S.SETTINGS&&state!==S.MENU) return;
   const r2=cv.getBoundingClientRect();
   const mx=(e.clientX-r2.left)*(W/r2.width)|0, my=(e.clientY-r2.top)*(H/r2.height)|0;
   // Check buttons first
@@ -720,6 +751,14 @@ function doAction(id){
     uiOpen=false;return;
   }
   if(id==='lampToggle'){toggleStudioLight();return;}
+  if(id==='menuSettings'){state=S.SETTINGS;return;}
+  if(id==='setOpenDown'){shopTimeSettings.openHour=Math.max(0,shopTimeSettings.openHour-1);return;}
+  if(id==='setOpenUp'){shopTimeSettings.openHour=Math.min(shopTimeSettings.closeHour-1,shopTimeSettings.openHour+1);return;}
+  if(id==='setCloseDown'){shopTimeSettings.closeHour=Math.max(shopTimeSettings.openHour+1,shopTimeSettings.closeHour-1);return;}
+  if(id==='setCloseUp'){shopTimeSettings.closeHour=Math.min(24,shopTimeSettings.closeHour+1);return;}
+  if(id==='setDurDown'){shopTimeSettings.dayDurationSec=Math.max(60,shopTimeSettings.dayDurationSec-30);return;}
+  if(id==='setDurUp'){shopTimeSettings.dayDurationSec=Math.min(600,shopTimeSettings.dayDurationSec+30);return;}
+  if(id==='setBack'){saveShopSettings();state=S.MENU;return;}
   if(id==='menu'){uiOpen=!uiOpen;return;}
   if(id==='closeUI'){uiOpen=false;return;}
   if(id==='save'){saveGame();showEv('💾 Saved!','#88aa55');return;}
@@ -814,6 +853,13 @@ function endWeek(){
   for(const s of G.staff) if(s.hired) s.morale=Math.max(20,s.morale-2);
   updateBars();
   G.weekRevenue=0;G.weekExpenses=0;G.customersToday=0;
+  // Reset day for next week
+  G.gameTime=shopTimeSettings.openHour;
+  G.dayEnded=false;
+  G.weekTimer=0;
+  // Turn off lamp for new morning
+  elgatoState.on=false;
+  try{elgatoFetch('/elgato/lights',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({numberOfLights:1,lights:[{on:0}]})});}catch(e){}
   G.week++;
   if(G.week>CFG.WEEKS_PER_YEAR){
     // Year end
@@ -837,7 +883,29 @@ function endWeek(){
 }
 
 function updateGame(){
-  tt++;G.weekTimer++;
+  tt++;
+  // ── GAME TIME: advance clock (1 day = dayDurationSec real seconds) ──
+  const dayHours=shopTimeSettings.closeHour-shopTimeSettings.openHour;
+  const framesPerDay=shopTimeSettings.dayDurationSec*60; // at 60fps
+  const hoursPerFrame=dayHours/framesPerDay;
+  G.gameTime+=hoursPerFrame;
+  // Sync weekTimer to gameTime progress (for compatibility with existing systems)
+  G.weekTimer=Math.floor(((G.gameTime-shopTimeSettings.openHour)/dayHours)*CFG.WEEK_TICKS);
+  // Auto-light at dusk (19:00)
+  if(G.gameTime>=19&&!elgatoState.on&&!G.dayEnded){
+    elgatoState.on=true;
+    elgatoState.notify=90;
+    // Try real lamp (just PUT, don't toggle back)
+    try{elgatoFetch('/elgato/lights',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({numberOfLights:1,lights:[{on:1}]})});}catch(e){}
+  }
+  // Update wall clock from game time
+  _clockH=Math.floor(G.gameTime)%12;
+  _clockM=Math.floor((G.gameTime%1)*60);
+  // Day end = closing time
+  if(G.gameTime>=shopTimeSettings.closeHour&&!G.dayEnded){
+    G.dayEnded=true;
+    G.weekTimer=CFG.WEEK_TICKS; // trigger endWeek
+  }
 
   // ── PLAYER CONTROL: move manager with Q/A/O/P ──
   // Collision: convert screen position to iso grid, reject if outside floor
@@ -1153,6 +1221,68 @@ function drawMenu(){
   cx.globalAlpha=.3;tx('← →',W/2-12,oy+73,P.gray,9,'center');cx.globalAlpha=1;
   // Mini chibi preview
   for(let i=0;i<4;i++) chibi(W/2-60+i*40,oy+100,1,i,i,Math.floor(tt/12)%2,false,tt);
+  // Settings button
+  const setX=W/2-40,setY=oy+140;
+  r(setX,setY,80,22,'#0a0a18');rx(setX,setY,80,22,P.gray,1);
+  tx('⚙ SETTINGS',W/2,setY+16,P.gray,9,'center');
+  BTNS['menuSettings']={x:setX,y:setY,w:80,h:22};
+}
+
+// ── SETTINGS SCREEN ──────────────────────────────────────────
+function drawSettings(){
+  r(0,0,W,H,P.bg);
+  cx.globalAlpha=0.1;
+  for(let x=0;x<W;x+=32){cx.strokeStyle=P.wall;cx.lineWidth=1;cx.beginPath();cx.moveTo(x,0);cx.lineTo(x,H);cx.stroke();}
+  cx.globalAlpha=1;
+  nt('⚙ AJUSTES DE TIENDA',W/2,40,P.neon3,16);
+  const bw=300,bx=W/2-bw/2;
+  // Open hour
+  tx('Hora de apertura:',bx,90,'#c0b898',11);
+  r(bx+180,76,40,22,'#3a2a18');rx(bx+180,76,40,22,'#8a7a50',1);
+  tx(String(shopTimeSettings.openHour).padStart(2,'0')+':00',bx+200,92,'#ffdd66',12,'center');
+  r(bx+140,76,18,22,'#3a2020');rx(bx+140,76,18,22,'#aa5555',1);tx('−',bx+149,92,'#ee8888',12,'center');
+  BTNS['setOpenDown']={x:bx+140,y:76,w:18,h:22};
+  r(bx+232,76,18,22,'#203a20');rx(bx+232,76,18,22,'#55aa55',1);tx('+',bx+241,92,'#88ee88',12,'center');
+  BTNS['setOpenUp']={x:bx+232,y:76,w:18,h:22};
+  // Close hour
+  tx('Hora de cierre:',bx,130,'#c0b898',11);
+  r(bx+180,116,40,22,'#3a2a18');rx(bx+180,116,40,22,'#8a7a50',1);
+  tx(String(shopTimeSettings.closeHour).padStart(2,'0')+':00',bx+200,132,'#ffdd66',12,'center');
+  r(bx+140,116,18,22,'#3a2020');rx(bx+140,116,18,22,'#aa5555',1);tx('−',bx+149,132,'#ee8888',12,'center');
+  BTNS['setCloseDown']={x:bx+140,y:116,w:18,h:22};
+  r(bx+232,116,18,22,'#203a20');rx(bx+232,116,18,22,'#55aa55',1);tx('+',bx+241,132,'#88ee88',12,'center');
+  BTNS['setCloseUp']={x:bx+232,y:116,w:18,h:22};
+  // Day duration
+  tx('Duración del día (segundos):',bx,170,'#c0b898',11);
+  r(bx+220,156,50,22,'#3a2a18');rx(bx+220,156,50,22,'#8a7a50',1);
+  tx(shopTimeSettings.dayDurationSec+'s',bx+245,172,'#ffdd66',12,'center');
+  r(bx+180,156,18,22,'#3a2020');rx(bx+180,156,18,22,'#aa5555',1);tx('−',bx+189,172,'#ee8888',12,'center');
+  BTNS['setDurDown']={x:bx+180,y:156,w:18,h:22};
+  r(bx+282,156,18,22,'#203a20');rx(bx+282,156,18,22,'#55aa55',1);tx('+',bx+291,172,'#88ee88',12,'center');
+  BTNS['setDurUp']={x:bx+282,y:156,w:18,h:22};
+  // Info
+  const dayH=shopTimeSettings.closeHour-shopTimeSettings.openHour;
+  tx('El reloj irá de '+String(shopTimeSettings.openHour).padStart(2,'0')+':00 a '+String(shopTimeSettings.closeHour).padStart(2,'0')+':00',bx,210,'#8a8070',9);
+  tx('('+dayH+'h de tienda) en '+shopTimeSettings.dayDurationSec+' segundos reales ('+(shopTimeSettings.dayDurationSec/60).toFixed(1)+' min)',bx,225,'#8a8070',9);
+  tx('La lámpara se enciende automáticamente a las 19:00',bx,245,'#8a8070',9);
+  // Sky preview strip
+  tx('Vista del cielo durante el día:',bx,270,'#c0b898',9);
+  for(let i=0;i<200;i++){
+    const h=shopTimeSettings.openHour+(i/200)*dayH;
+    const c=getSkyColors(h);
+    r(bx+50+i,280,1,20,c[1]);
+  }
+  rx(bx+50,280,200,20,'#8a7a50',1);
+  // Time labels under preview
+  tx(String(shopTimeSettings.openHour).padStart(2,'0'),bx+50,310,'#8a8070',7,'center');
+  tx('13',bx+100,310,'#8a8070',7,'center');
+  tx('17',bx+150,310,'#8a8070',7,'center');
+  tx(String(shopTimeSettings.closeHour).padStart(2,'0'),bx+250,310,'#8a8070',7,'center');
+  // Back button
+  const bbx=W/2-50,bby=340;
+  r(bbx,bby,100,28,'#2a5a2a');rx(bbx,bby,100,28,'#44aa44',1);
+  tx('✓ GUARDAR',W/2,bby+19,'#88ee88',10,'center');
+  BTNS['setBack']={x:bbx,y:bby,w:100,h:28};
 }
 
 // ── DRAW MODEL SELECT ────────────────────────────────────────
@@ -1329,15 +1459,10 @@ function drawCityBg(){
   const skyH=ISO.wallH+60;
   // Sky gradient
   const skyGrad=cx.createLinearGradient(0,skyTop,0,skyTop+skyH);
-  if(elgatoState.skyRed){
-    skyGrad.addColorStop(0,'#cc3322');
-    skyGrad.addColorStop(0.4,'#dd5533');
-    skyGrad.addColorStop(1,'#ee8855');
-  } else {
-    skyGrad.addColorStop(0,'#5a99cc');
-    skyGrad.addColorStop(0.4,'#7ab8dd');
-    skyGrad.addColorStop(1,'#a8d4ee');
-  }
+  const skyCols=G?getSkyColors(G.gameTime):getSkyColors(12);
+  skyGrad.addColorStop(0,skyCols[0]);
+  skyGrad.addColorStop(0.5,skyCols[1]);
+  skyGrad.addColorStop(1,skyCols[2]);
   cx.fillStyle=skyGrad;
   cx.fillRect(0,skyTop,W,skyH);
 
@@ -1434,15 +1559,10 @@ function drawShop(){
     cx.beginPath();cx.rect(wp1.x,wy,wwid,whei);cx.clip();
     // Sky
     const skyGrad=cx.createLinearGradient(0,wy,0,wy+whei);
-    if(elgatoState.skyRed){
-      skyGrad.addColorStop(0,'#cc3322');
-      skyGrad.addColorStop(0.5,'#dd5533');
-      skyGrad.addColorStop(1,'#ee8855');
-    } else {
-      skyGrad.addColorStop(0,'#5a99cc');
-      skyGrad.addColorStop(0.5,'#7ab8dd');
-      skyGrad.addColorStop(1,'#a8d4ee');
-    }
+    const wSkyCols=G?getSkyColors(G.gameTime):getSkyColors(12);
+    skyGrad.addColorStop(0,wSkyCols[0]);
+    skyGrad.addColorStop(0.5,wSkyCols[1]);
+    skyGrad.addColorStop(1,wSkyCols[2]);
     cx.fillStyle=skyGrad;cx.fillRect(wp1.x,wy,wwid,whei);
     // Clouds
     cx.fillStyle='#d0e8f8';
@@ -1772,15 +1892,8 @@ function drawLED(scx,scy){
 }
 
 // ── WALL CLOCK (above LED on left wall) ──────────────────────
-// Cached clock time — only updates when minute changes
-let _clockH=0,_clockM=-1;
-function _updateClockTime(){
-  const now=new Date();
-  _clockH=now.getHours()%12;
-  _clockM=now.getMinutes();
-}
-_updateClockTime();
-setInterval(_updateClockTime,1000); // check every second, but hands only jump per minute
+// Clock time derived from game time (not real time)
+let _clockH=9,_clockM=0;
 
 function drawWallClock(){
   // Position: centered on left wall, above the LED banner
@@ -2263,7 +2376,10 @@ function drawHUD(){
   cx.strokeStyle='#4a3820';cx.lineWidth=1;
   cx.beginPath();cx.moveTo(0,hh-0.5);cx.lineTo(W,hh-0.5);cx.stroke();
   // Year/Week (left)
-  tx(T().yearLbl+G.year+' '+T().weekLbl+G.week+' ·',8,19,'#b0a888',11);
+  // Show game clock + year/week
+  const hh=Math.floor(G.gameTime),mm=Math.floor((G.gameTime%1)*60);
+  const timeStr=String(hh).padStart(2,'0')+':'+String(mm).padStart(2,'0');
+  tx(timeStr+' · '+T().yearLbl+G.year+' '+T().weekLbl+G.week,8,19,'#b0a888',11);
   // Week progress dot
   const dotX=108;
   r(dotX,10,60,6,'#1a1208');
@@ -2846,6 +2962,7 @@ function loop(){
   if(state===S.YEAR_END){drawYearEnd();return;}
   if(state===S.GAME_END){drawGameEnd();return;}
   if(state===S.EDITOR){drawEditor();return;}
+  if(state===S.SETTINGS){drawSettings();return;}
   if(state===S.PAUSE){
     r(0,0,W,H,P.bg);drawCityBg();drawShop();drawShopChars();drawHUD();drawBottomBar();drawUI();
     drawPause();return;
