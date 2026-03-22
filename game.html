@@ -53,7 +53,7 @@
 <canvas id="c" width="800" height="500"></canvas>
 <script>
 // ═══════════════════════════════════════════════════════════════
-//  XTANCO DIGITAL TWIN — BETA v1.14
+//  XTANCO DIGITAL TWIN — BETA v1.15
 // ═══════════════════════════════════════════════════════════════
 const cv=document.getElementById('c'), cx=cv.getContext('2d');
 cx.imageSmoothingEnabled=false;
@@ -357,7 +357,7 @@ let activeModel=0;
 // ── I18N ──────────────────────────────────────────────────────
 const LANGS={
   es:{
-    menuTitle:'XTANCO',menuSub:'SIMULADOR DE ESTANCO DIGITAL — BETA v1.14',
+    menuTitle:'XTANCO',menuSub:'SIMULADOR DE ESTANCO DIGITAL — BETA v1.15',
     langPick:'SELECCIONA IDIOMA',startBtn:'PULSA ENTER PARA EMPEZAR',
     langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
     tut:[
@@ -407,7 +407,7 @@ const LANGS={
     modelStart:['€3.500','€2.800','€4.500','€6.000'],
   },
   en:{
-    menuTitle:'XTANCO',menuSub:'DIGITAL TOBACCO SHOP SIMULATOR — BETA v1.14',
+    menuTitle:'XTANCO',menuSub:'DIGITAL TOBACCO SHOP SIMULATOR — BETA v1.15',
     langPick:'SELECT LANGUAGE',startBtn:'PRESS ENTER TO START',
     langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
     tut:[
@@ -1334,7 +1334,7 @@ let uiOpen=false; // toggle with Menu button
 const ISO={
   tileW:88,tileH:30,    // wide tiles filling 800px width
   cols:12,rows:6,        // wide grid
-  ox:310,oy:195,         // balanced to show all corners
+  ox:320,oy:208,         // centered to use full canvas, wall tops clear of HUD (28px)
   wallH:170,             // tall Kairosoft walls
   doorCol:11,doorRow:3,  // door far right
 };
@@ -2909,9 +2909,11 @@ function drawHUD(){
   rx(dotX,10,50,6,'#4a3820',1);
   // Money (golden, euro after amount)
   tx((G.money|0).toLocaleString()+'€',218,19,'#ffdd66',14);
-  // People counter with in/out arrows
-  tx('👥 '+(G.customersToday||0),290,13,'#88ccee',10);
-  tx('↓'+(G.custIn||0)+' ↑'+(G.custOut||0),290,24,'#7799aa',7);
+  // People counter: camera icon + people inside now + in/out arrows
+  const insideNow=G.custs?G.custs.length:0;
+  tx('📷 '+ insideNow,290,14,'#88ccee',10);
+  tx('↓'+(G.custIn||0),330,10,'#66cc88',8);
+  tx('↑'+(G.custOut||0),330,22,'#cc8866',8);
   // Ingresos Día
   const dayInc=G.sales.reduce((s,v)=>s+v,0);
   tx('Ing. Día',330,12,'#a09880',7);
