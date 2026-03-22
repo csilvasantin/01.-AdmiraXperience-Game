@@ -2798,9 +2798,8 @@ function drawElgatoNotify(){
 
 // ── DRAW BOTTOM BAR (GDS style: Yr Sales | Yr Profit | Status | Menu) ──
 function drawBottomBar(){
+  if(!G||!G.staff||!G.bars) return; // guard: game not ready yet
   const bh=32, by=H-bh;
-  // BRIGHT RED DEBUG — remove after confirming visibility
-  r(0,by-4,W,4,'#ff0000');
   // Solid dark background — high contrast against game area
   r(0,by,W,bh,'#282030');
   // Bright top border
@@ -2820,7 +2819,8 @@ function drawBottomBar(){
   cx.beginPath();cx.moveTo(155,by+5);cx.lineTo(155,by+bh-3);cx.stroke();
 
   // Yr Profit
-  const profit=G.yearRevenue-G.staff.filter(s=>s.hired).reduce((a,s)=>a+CFG.SALARY[s.role]*s.level*G.week,0);
+  const staff=G.staff||[];
+  const profit=G.yearRevenue-(staff.filter(s=>s.hired).reduce((a,s)=>a+CFG.SALARY[s.role]*s.level*G.week,0));
   tx('Yr Profit',165,by+13,'#bbaa88',8);
   const profCol=profit>=0?'#66ee66':'#ee6666';
   tx((profit|0).toLocaleString()+'€',165,by+26,profCol,10);
@@ -2832,18 +2832,20 @@ function drawBottomBar(){
   tx('Sat '+(G.satisfaction|0)+'%',285,by+13,'#bbaa88',8);
   const satW=60;
   r(285,by+17,satW,5,'#0a0a0a');
-  r(285,by+17,(satW*G.satisfaction/100)|0,5,G.satisfaction>70?'#55cc55':G.satisfaction>40?'#ccaa44':'#cc5555');
+  r(285,by+17,(satW*(G.satisfaction||0)/100)|0,5,(G.satisfaction||0)>70?'#55cc55':(G.satisfaction||0)>40?'#ccaa44':'#cc5555');
   tx('Fame '+(G.fame|0)+'%',285,by+28,'#bbaa88',7);
 
   // Separator
   cx.beginPath();cx.moveTo(380,by+5);cx.lineTo(380,by+bh-3);cx.stroke();
 
   // Customers today
-  tx('Clientes: '+G.customersToday,390,by+13,'#bbaa88',8);
+  tx('Clientes: '+(G.customersToday||0),390,by+13,'#bbaa88',8);
   // Stat bars mini
-  for(let i=0;i<4;i++){
-    const b=G.bars[i];
-    r(390+i*18,by+18,15,5,'#0a0a0a');r(390+i*18,by+18,(15*b.val/100)|0,5,b.col);
+  const bars=G.bars||[];
+  for(let i=0;i<Math.min(4,bars.length);i++){
+    const b=bars[i];
+    if(!b) continue;
+    r(390+i*18,by+18,15,5,'#0a0a0a');r(390+i*18,by+18,(15*(b.val||0)/100)|0,5,b.col||'#888');
   }
 
   // Separator
