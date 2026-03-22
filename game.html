@@ -45,7 +45,7 @@
 <canvas id="c" width="800" height="500"></canvas>
 <script>
 // ═══════════════════════════════════════════════════════════════
-//  XTANCO DIGITAL TWIN — BETA v1.4
+//  XTANCO DIGITAL TWIN — BETA v1.5
 // ═══════════════════════════════════════════════════════════════
 const cv=document.getElementById('c'), cx=cv.getContext('2d');
 cx.imageSmoothingEnabled=false;
@@ -330,7 +330,7 @@ let activeModel=0;
 // ── I18N ──────────────────────────────────────────────────────
 const LANGS={
   es:{
-    menuTitle:'XTANCO',menuSub:'SIMULADOR DE ESTANCO DIGITAL — BETA v1.4',
+    menuTitle:'XTANCO',menuSub:'SIMULADOR DE ESTANCO DIGITAL — BETA v1.5',
     langPick:'SELECCIONA IDIOMA',startBtn:'PULSA ENTER PARA EMPEZAR',
     langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
     tut:[
@@ -380,7 +380,7 @@ const LANGS={
     modelStart:['€3.500','€2.800','€4.500','€6.000'],
   },
   en:{
-    menuTitle:'XTANCO',menuSub:'DIGITAL TOBACCO SHOP SIMULATOR — BETA v1.4',
+    menuTitle:'XTANCO',menuSub:'DIGITAL TOBACCO SHOP SIMULATOR — BETA v1.5',
     langPick:'SELECT LANGUAGE',startBtn:'PRESS ENTER TO START',
     langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
     tut:[
@@ -2161,61 +2161,60 @@ function drawAltadisTFT(){
   cx.moveTo(tl.x,tl.y);cx.lineTo(tr.x,tr.y);
   cx.lineTo(br.x,br.y);cx.lineTo(bl.x,bl.y);
   cx.closePath();cx.fillStyle='#002244';cx.fill();
-  // Clip text to screen shape
+  // Apply affine transform to map a virtual 100x100 rect → the parallelogram on the wall
   cx.save();
   cx.beginPath();
   cx.moveTo(tl.x,tl.y);cx.lineTo(tr.x,tr.y);
   cx.lineTo(br.x,br.y);cx.lineTo(bl.x,bl.y);
   cx.closePath();cx.clip();
-  // Center of screen
-  const cX=(tl.x+tr.x+bl.x+br.x)/4;
-  const cY=(tl.y+tr.y+bl.y+br.y)/4;
-  const sH=bl.y-tl.y;
+  // Virtual screen: 100 wide × 100 tall mapped to the parallelogram
+  // tl→(0,0) tr→(100,0) bl→(0,100) br→(100,100)
+  const vW=100,vH=100;
+  // Affine transform: maps (0,0)→tl, (vW,0)→tr, (0,vH)→bl
+  const ax=(tr.x-tl.x)/vW, ay=(tr.y-tl.y)/vW;
+  const bx=(bl.x-tl.x)/vH, by=(bl.y-tl.y)/vH;
+  cx.setTransform(ax,ay,bx,by,tl.x,tl.y);
+  // Now all draws use virtual coords (0,0)→(100,100) and are auto-skewed
+  const cX=vW/2, cY=vH/2;
+  const sH=vH;
 
   if(G&&G.tftStockIdx>=0&&G.tftStockIdx<G.prods.length&&G.tftStockTimer>0){
-    // ── ADMIRA: Product stock display ──
+    // ── ADMIRA: Product stock display (virtual 100x100 coords) ──
     const pi=G.tftStockIdx;
     const prod=G.prods[pi];
     const stk=prod.stock/prod.max;
     const prodName=T().prodLabel[pi]||'Producto';
-    // Background with product color tint
-    r(tl.x,tl.y,br.x-tl.x,sH,'#0a1a2a');
-    // Product color bar at top
-    const barH=sH*0.08;
-    r(tl.x,tl.y,br.x-tl.x,barH,prod.color);
-    // ADMIRA header
+    cx.fillStyle='#0a1a2a';cx.fillRect(0,0,vW,vH);
+    // Color bar top
+    cx.fillStyle=prod.color;cx.fillRect(0,0,vW,6);
     cx.textAlign='center';
-    cx.fillStyle='#ccaa44';cx.font='bold '+Math.max(5,Math.round(sH*0.08))+'px monospace';
-    cx.fillText('ADMIRA',cX,cY-sH*0.35);
+    // ADMIRA header
+    cx.fillStyle='#ccaa44';cx.font='bold 7px monospace';
+    cx.fillText('ADMIRA',cX,16);
     // Product name
-    cx.fillStyle='#ffffff';cx.font='bold '+Math.max(7,Math.round(sH*0.16))+'px monospace';
-    cx.fillText(prodName,cX,cY-sH*0.12);
-    // Big product color block
-    r(cX-8,cY-sH*0.05,16,16,prod.color);
-    rx(cX-8,cY-sH*0.05,16,16,'#ffffff44',1);
-    // Stock bar (big)
-    const barW2=40,barY=cY+sH*0.12;
-    r(cX-barW2/2,barY,barW2,6,'#1a1a2a');
-    r(cX-barW2/2,barY,barW2*stk,6,stk>0.5?P.green:stk>0.2?P.yellow:P.red);
-    rx(cX-barW2/2,barY,barW2,6,'#4a4a6a',1);
+    cx.fillStyle='#ffffff';cx.font='bold 12px monospace';
+    cx.fillText(prodName,cX,34);
+    // Product color block
+    cx.fillStyle=prod.color;cx.fillRect(cX-6,40,12,10);
+    // Stock bar
+    cx.fillStyle='#1a1a2a';cx.fillRect(15,56,70,5);
+    cx.fillStyle=stk>0.5?P.green:stk>0.2?P.yellow:P.red;cx.fillRect(15,56,70*stk,5);
     // Stock numbers
-    cx.fillStyle='#ffffff';cx.font=Math.max(6,Math.round(sH*0.11))+'px monospace';
-    cx.fillText(prod.stock+'/'+prod.max,cX,cY+sH*0.3);
+    cx.fillStyle='#ffffff';cx.font='8px monospace';
+    cx.fillText(prod.stock+'/'+prod.max,cX,72);
     // Percentage
     cx.fillStyle=stk>0.5?'#66ee66':stk>0.2?'#eecc44':'#ee4444';
-    cx.font='bold '+Math.max(5,Math.round(sH*0.09))+'px monospace';
-    cx.fillText(Math.round(stk*100)+'%',cX,cY+sH*0.42);
+    cx.font='bold 8px monospace';
+    cx.fillText(Math.round(stk*100)+'%',cX,84);
     // Price
-    cx.fillStyle='#8899bb';cx.font=Math.max(4,Math.round(sH*0.07))+'px monospace';
-    cx.fillText(prod.price+'€/ud',cX,cY+sH*0.5);
+    cx.fillStyle='#8899bb';cx.font='6px monospace';
+    cx.fillText(prod.price+'€/ud',cX,94);
     cx.textAlign='left';
   } else if(G&&G.tftOgre>0){
-    // ── OGRE PIXEL ART (Visita Delegación) ──
-    // Pink background
-    r(tl.x,tl.y,br.x-tl.x,sH,'#cc44aa');
-    // Ogre body (green character, original pixel art)
+    // ── OGRE PIXEL ART (Visita Delegación, virtual 100x100 coords) ──
+    cx.fillStyle='#cc44aa';cx.fillRect(0,0,vW,vH);
     const ox=cX,oy=cY;
-    const sc=sH/80; // scale to fit screen
+    const sc=1.2; // scale for virtual coords
     // Legs (brown pants)
     cx.fillStyle='#8a6a30';
     r(ox-8*sc,oy+14*sc,6*sc,12*sc,'#8a6a30');
@@ -2280,31 +2279,36 @@ function drawAltadisTFT(){
     cx.textAlign='left';
   } else {
     // ── NORMAL ALTADIS SCREEN ──
-    // Glow
-    cx.globalAlpha=0.06;
-    cx.beginPath();cx.ellipse(cX,cY,30,sH*0.3,0,0,Math.PI*2);
-    cx.fillStyle='#4488cc';cx.fill();cx.globalAlpha=1;
-    cx.strokeStyle='#cc9933';cx.lineWidth=1;
-    cx.beginPath();cx.moveTo(cX-25,cY-sH*0.3);cx.lineTo(cX+25,cY-sH*0.3);cx.stroke();
-    cx.fillStyle='#ffffff';cx.font='bold '+Math.max(8,Math.round(sH*0.2))+'px monospace';
-    cx.textAlign='center';
-    cx.fillText('ALTADIS',cX,cY-sH*0.08);
-    cx.fillStyle='#ccaa44';cx.font=Math.max(5,Math.round(sH*0.1))+'px monospace';
-    cx.fillText('DISTRIBUCIÓN',cX,cY+sH*0.08);
-    cx.beginPath();cx.moveTo(cX-22,cY+sH*0.15);cx.lineTo(cX+22,cY+sH*0.15);cx.stroke();
-    cx.fillStyle='#8899bb';cx.font=Math.max(4,Math.round(sH*0.07))+'px monospace';
-    cx.fillText('Tu estanco',cX,cY+sH*0.28);
-    cx.fillText('de confianza',cX,cY+sH*0.36);
+    // Background fill
+    cx.fillStyle='#002244';cx.fillRect(0,0,vW,vH);
+    // Subtle glow
+    cx.globalAlpha=0.08;cx.fillStyle='#4488cc';
+    cx.beginPath();cx.ellipse(cX,cY,40,30,0,0,Math.PI*2);cx.fill();cx.globalAlpha=1;
+    // Gold line
+    cx.strokeStyle='#cc9933';cx.lineWidth=0.5;
+    cx.beginPath();cx.moveTo(15,28);cx.lineTo(85,28);cx.stroke();
+    // ALTADIS
+    cx.fillStyle='#ffffff';cx.font='bold 14px monospace';cx.textAlign='center';
+    cx.fillText('ALTADIS',cX,42);
+    // DISTRIBUCIÓN
+    cx.fillStyle='#ccaa44';cx.font='8px monospace';
+    cx.fillText('DISTRIBUCIÓN',cX,55);
+    // Line
+    cx.beginPath();cx.moveTo(20,60);cx.lineTo(80,60);cx.stroke();
+    // Slogan
+    cx.fillStyle='#8899bb';cx.font='6px monospace';
+    cx.fillText('Tu estanco',cX,72);
+    cx.fillText('de confianza',cX,82);
     cx.textAlign='left';
   }
-  cx.restore(); // undo screen clip
-  // Glare
+  cx.restore(); // undo screen clip + transform
+  // Glare (back to normal coords)
   cx.globalAlpha=0.04;cx.fillStyle='#fff';
-  cx.beginPath();cx.moveTo(tl.x,tl.y);cx.lineTo((tl.x+tr.x)/2,tl.y);cx.lineTo(bl.x,(tl.y+bl.y)/2);cx.closePath();cx.fill();
+  cx.beginPath();cx.moveTo(tl.x,tl.y);cx.lineTo((tl.x+tr.x)/2,(tl.y+tr.y)/2);cx.lineTo(bl.x,(tl.y+bl.y)/2);cx.closePath();cx.fill();
   cx.globalAlpha=1;
-  // Mount
-  const mx=(tl.x+tr.x)/2, my=tl.y-4;
-  r(mx-8,my,16,3,'#444');
+  // Mount bracket
+  const mountX=(tl.x+tr.x)/2, mountY=(tl.y+tr.y)/2-4;
+  cx.fillStyle='#444';cx.fillRect(mountX-4,mountY,8,3);
   cx.restore();
 }
 
