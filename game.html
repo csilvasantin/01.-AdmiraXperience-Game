@@ -45,7 +45,7 @@
 <canvas id="c" width="800" height="500"></canvas>
 <script>
 // ═══════════════════════════════════════════════════════════════
-//  XTANCO DIGITAL TWIN — BETA v1.6
+//  XTANCO DIGITAL TWIN — BETA v1.7
 // ═══════════════════════════════════════════════════════════════
 const cv=document.getElementById('c'), cx=cv.getContext('2d');
 cx.imageSmoothingEnabled=false;
@@ -330,7 +330,7 @@ let activeModel=0;
 // ── I18N ──────────────────────────────────────────────────────
 const LANGS={
   es:{
-    menuTitle:'XTANCO',menuSub:'SIMULADOR DE ESTANCO DIGITAL — BETA v1.6',
+    menuTitle:'XTANCO',menuSub:'SIMULADOR DE ESTANCO DIGITAL — BETA v1.7',
     langPick:'SELECCIONA IDIOMA',startBtn:'PULSA ENTER PARA EMPEZAR',
     langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
     tut:[
@@ -380,7 +380,7 @@ const LANGS={
     modelStart:['€3.500','€2.800','€4.500','€6.000'],
   },
   en:{
-    menuTitle:'XTANCO',menuSub:'DIGITAL TOBACCO SHOP SIMULATOR — BETA v1.6',
+    menuTitle:'XTANCO',menuSub:'DIGITAL TOBACCO SHOP SIMULATOR — BETA v1.7',
     langPick:'SELECT LANGUAGE',startBtn:'PRESS ENTER TO START',
     langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
     tut:[
@@ -451,7 +451,7 @@ const DEFAULT_LAYOUT=[
   {id:'manager',type:'manager',col:9,row:5,sx:1,sy:1,label:'Escritorio'},
   {id:'plant1',type:'plant',col:0,row:0,sx:1,sy:1,label:'Planta 1'},
   {id:'plant3',type:'plant',col:0,row:5,sx:1,sy:1,label:'Planta 2'},
-  {id:'rug',type:'rug',col:3,row:2,sx:1,sy:1,label:'Alfombra'},
+  {id:'rug',type:'rug',col:7,row:4,sx:1,sy:1,label:'Alfombra'},
   {id:'floorLamp',type:'floorLamp',col:0,row:1,sx:1,sy:1,label:'Lámpara pie'},
   {id:'led',type:'led',col:0,row:0,sx:1,sy:1,label:'LED Banner'},
 ];
@@ -2152,15 +2152,16 @@ function drawAltadisTFT(){
   for(let i=1;i<wallClipPts.length;i++) cx.lineTo(wallClipPts[i].x,wallClipPts[i].y-ISO.wallH);
   for(let i=wallClipPts.length-1;i>=0;i--) cx.lineTo(wallClipPts[i].x,wallClipPts[i].y);
   cx.closePath();cx.clip();
-  // 4 corners of the screen on the wall (between plants row 1→5)
-  // Top-left and top-right follow the wall at LED bottom + gap
-  const ledEndY=ISO.wallH*0.3+20; // LED bottom offset from ceiling
-  const pTL=toIso(0,1.5); // top-left wall position
-  const pBL=toIso(0,4.5); // bottom-left wall position
-  const tl={x:pTL.x, y:pTL.y-ISO.wallH+ledEndY+10};
-  const tr={x:pBL.x, y:pBL.y-ISO.wallH+ledEndY+10};
-  const bl={x:pTL.x, y:pTL.y-10};  // near wall base
-  const br={x:pBL.x, y:pBL.y-10};
+  // 4 corners of the screen on the wall (between row 1.5→4.5)
+  // On the LEFT iso wall: row 4.5 is visually LEFT, row 1.5 is visually RIGHT
+  const ledEndY=ISO.wallH*0.3+20;
+  const pR=toIso(0,1.5); // wall point at row 1.5 (visually RIGHT)
+  const pL=toIso(0,4.5); // wall point at row 4.5 (visually LEFT)
+  // tl=top-left (visual), tr=top-right (visual), etc.
+  const tl={x:pL.x, y:pL.y-ISO.wallH+ledEndY+10};  // top-LEFT
+  const tr={x:pR.x, y:pR.y-ISO.wallH+ledEndY+10};  // top-RIGHT
+  const bl={x:pL.x, y:pL.y-10};                      // bottom-LEFT
+  const br={x:pR.x, y:pR.y-10};                      // bottom-RIGHT
   // Draw bezel (black parallelogram)
   cx.beginPath();
   cx.moveTo(tl.x-3,tl.y-3);cx.lineTo(tr.x-3,tr.y-3);
