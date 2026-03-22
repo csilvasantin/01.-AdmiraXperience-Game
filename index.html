@@ -502,7 +502,9 @@ function initGame(){
     gameTime:shopTimeSettings.openHour,
     dayEnded:false,
     lampIntensity:0,
-    tftOgre:0, // timer: show ogre on TFT screen
+    tftOgre:0,
+    tftStockIdx:-1,   // selected product showing on Admira screen (-1=none)
+    tftStockTimer:0,  // how long to show product on Admira
   };
   // Staff from model — convert grid positions to isometric screen coords
   // Staff positions on the iso grid based on their role
@@ -721,6 +723,11 @@ function doAction(id){
       G.doorOpen=60;
       addFloat(s.x,s.y-40,'Bye bye!','#cc4444');
     }
+  }
+  if(id.startsWith('stockShow')){
+    const si=parseInt(id.slice(9));
+    G.tftStockIdx=si;G.tftStockTimer=600; // show on Admira for 10 seconds
+    return;
   }
   if(id.startsWith('rest')){
     const i=parseInt(id[4]);const p=G.prods[i];
@@ -1101,6 +1108,7 @@ function updateGame(){
   if(monitorAlert.timer>0) monitorAlert.timer--;
   else monitorAlert.active=false;
   if(G.tftOgre>0) G.tftOgre--;
+  if(G.tftStockTimer>0){G.tftStockTimer--;}else{G.tftStockIdx=-1;}
   // Fired staff walks to door and leaves
   for(const s of G.staff){
     if(!s.fired) continue;
@@ -2049,7 +2057,44 @@ function drawAltadisTFT(){
   const cY=(tl.y+tr.y+bl.y+br.y)/4;
   const sH=bl.y-tl.y;
 
-  if(G&&G.tftOgre>0){
+  if(G&&G.tftStockIdx>=0&&G.tftStockIdx<G.prods.length&&G.tftStockTimer>0){
+    // ── ADMIRA: Product stock display ──
+    const pi=G.tftStockIdx;
+    const prod=G.prods[pi];
+    const stk=prod.stock/prod.max;
+    const prodName=T().prodLabel[pi]||'Producto';
+    // Background with product color tint
+    r(tl.x,tl.y,br.x-tl.x,sH,'#0a1a2a');
+    // Product color bar at top
+    const barH=sH*0.08;
+    r(tl.x,tl.y,br.x-tl.x,barH,prod.color);
+    // ADMIRA header
+    cx.textAlign='center';
+    cx.fillStyle='#ccaa44';cx.font='bold '+Math.max(5,Math.round(sH*0.08))+'px monospace';
+    cx.fillText('ADMIRA',cX,cY-sH*0.35);
+    // Product name
+    cx.fillStyle='#ffffff';cx.font='bold '+Math.max(7,Math.round(sH*0.16))+'px monospace';
+    cx.fillText(prodName,cX,cY-sH*0.12);
+    // Big product color block
+    r(cX-8,cY-sH*0.05,16,16,prod.color);
+    rx(cX-8,cY-sH*0.05,16,16,'#ffffff44',1);
+    // Stock bar (big)
+    const barW2=40,barY=cY+sH*0.12;
+    r(cX-barW2/2,barY,barW2,6,'#1a1a2a');
+    r(cX-barW2/2,barY,barW2*stk,6,stk>0.5?P.green:stk>0.2?P.yellow:P.red);
+    rx(cX-barW2/2,barY,barW2,6,'#4a4a6a',1);
+    // Stock numbers
+    cx.fillStyle='#ffffff';cx.font=Math.max(6,Math.round(sH*0.11))+'px monospace';
+    cx.fillText(prod.stock+'/'+prod.max,cX,cY+sH*0.3);
+    // Percentage
+    cx.fillStyle=stk>0.5?'#66ee66':stk>0.2?'#eecc44':'#ee4444';
+    cx.font='bold '+Math.max(5,Math.round(sH*0.09))+'px monospace';
+    cx.fillText(Math.round(stk*100)+'%',cX,cY+sH*0.42);
+    // Price
+    cx.fillStyle='#8899bb';cx.font=Math.max(4,Math.round(sH*0.07))+'px monospace';
+    cx.fillText(prod.price+'€/ud',cX,cY+sH*0.5);
+    cx.textAlign='left';
+  } else if(G&&G.tftOgre>0){
     // ── OGRE PIXEL ART (Visita Delegación) ──
     // Pink background
     r(tl.x,tl.y,br.x-tl.x,sH,'#cc44aa');
@@ -2905,15 +2950,19 @@ function tabStock(py){
     const p=G.prods[i];
     const ry=py+i*stockCardH;
     const stk=p.stock/p.max;
-    r(UI.x+4,ry,UI.w-8,62,P.uiB);rx(UI.x+4,ry,UI.w-8,62,stk<0.2?P.red:P.gray,1);
+    const isSel=G.tftStockIdx===i;
+    r(UI.x+4,ry,UI.w-8,62,isSel?'#2a3a4a':P.uiB);
+    rx(UI.x+4,ry,UI.w-8,62,isSel?'#66aacc':(stk<0.2?P.red:P.gray),isSel?2:1);
     r(UI.x+8,ry+4,12,12,p.color);
-    tx(T().prodLabel[i],UI.x+24,ry+13,P.white,8);
-    tx('€'+p.price+'/u',UI.x+24,ry+23,P.uiT3,7);
+    tx(T().prodLabel[i],UI.x+24,ry+13,isSel?'#88ccee':P.white,8);
+    tx(p.price+'/u',UI.x+24,ry+23,P.uiT3,7);
     r(UI.x+6,ry+30,UI.w-12,7,P.uiB);
     r(UI.x+6,ry+30,(UI.w-12)*stk|0,7,stk>0.5?P.green:stk>0.2?P.yellow:P.red);
     rx(UI.x+6,ry+30,UI.w-12,7,P.gray,1);
     tx(p.stock+'/'+p.max,UI.x+UI.w-6,ry+36,P.uiT3,7,'right');
-    mkBtn('rest'+i,UI.x+6,ry+42,UI.w-12,16,'RESTOCK €'+CFG.RESTOCK_COST,P.neonB,G.money>=CFG.RESTOCK_COST&&p.stock<p.max);
+    // Click on product card → show on Admira screen
+    BTNS['stockShow'+i]={x:UI.x+4,y:ry,w:UI.w-8,h:28};
+    mkBtn('rest'+i,UI.x+6,ry+42,UI.w-12,16,'RESTOCK '+CFG.RESTOCK_COST+'€',P.neonB,G.money>=CFG.RESTOCK_COST&&p.stock<p.max);
   }
 }
 
