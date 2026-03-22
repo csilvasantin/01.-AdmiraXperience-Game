@@ -60,7 +60,7 @@
 </div>
 <script>
 // ═══════════════════════════════════════════════════════════════
-//  XTANCO DIGITAL TWIN — BETA v1.31
+//  XTANCO DIGITAL TWIN — BETA v1.32
 // ═══════════════════════════════════════════════════════════════
 const cv=document.getElementById('c'), cx=cv.getContext('2d');
 cx.imageSmoothingEnabled=false;
@@ -378,7 +378,7 @@ const MODELS=[
     SALE_PROB:0.055,SALE_BASE:3.5,
     RUSH_CHANCE:0.0025,RUSH_DURATION:160,RUSH_MULT:2.4,
     INSPECT_CHANCE:0.0006,
-    HIRE_COST:[500,400,450,1200],TRAIN_COST:[250,200,220,380],SALARY:[130,105,115,210],
+    HIRE_COST:[500,400,450,1200,800],TRAIN_COST:[250,200,220,380,300],SALARY:[130,105,115,210,160],
     RESTOCK_COST:150,UPGRADE_COST:4500,
     ADVERT:[{cost:350,fame:8,label:'BÁSICA'},{cost:800,fame:22,label:'MEDIA'},{cost:1800,fame:50,label:'PREMIUM'}],
     staffInit:[
@@ -401,7 +401,7 @@ const MODELS=[
     SALE_PROB:0.06,SALE_BASE:3.0,
     RUSH_CHANCE:0.003,RUSH_DURATION:180,RUSH_MULT:2.2,
     INSPECT_CHANCE:0.0004,
-    HIRE_COST:[400,350],TRAIN_COST:[200,180],SALARY:[110,95],
+    HIRE_COST:[400,350,400,1000,700],TRAIN_COST:[200,180,200,350,280],SALARY:[110,95,110,200,150],
     RESTOCK_COST:120,UPGRADE_COST:3500,
     ADVERT:[{cost:250,fame:10,label:'BÁSICA'},{cost:600,fame:25,label:'MEDIA'},{cost:1400,fame:48,label:'PREMIUM'}],
     staffInit:[
@@ -467,7 +467,7 @@ let activeModel=0;
 // ── I18N ──────────────────────────────────────────────────────
 const LANGS={
   es:{
-    menuTitle:'XTANCO',menuSub:'SIMULADOR DE ESTANCO DIGITAL — BETA v1.31',
+    menuTitle:'XTANCO',menuSub:'SIMULADOR DE ESTANCO DIGITAL — BETA v1.32',
     langPick:'SELECCIONA IDIOMA',startBtn:'PULSA ENTER PARA EMPEZAR',
     langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
     tut:[
@@ -517,7 +517,7 @@ const LANGS={
     modelStart:['€3.500','€2.800','€4.500','€6.000'],
   },
   en:{
-    menuTitle:'XTANCO',menuSub:'DIGITAL TOBACCO SHOP SIMULATOR — BETA v1.31',
+    menuTitle:'XTANCO',menuSub:'DIGITAL TOBACCO SHOP SIMULATOR — BETA v1.32',
     langPick:'SELECT LANGUAGE',startBtn:'PRESS ENTER TO START',
     langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
     tut:[
