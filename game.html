@@ -30,6 +30,9 @@
 </head>
 <body>
 <div id="topBar">
+  <span id="bbClock" style="color:#ffdd66;font-size:12px;font-weight:bold">09:00</span>
+  <span id="bbDate" style="color:#b0a888;font-size:9px">22/03/2026</span>
+  <div class="sep"></div>
   <button class="btn-save" id="btnSave">💾</button>
   <div class="sep"></div>
   <div class="stat"><span class="stat-label">Ventas</span><span class="stat-val" id="bbSales">0€</span></div>
@@ -57,7 +60,7 @@
 </div>
 <script>
 // ═══════════════════════════════════════════════════════════════
-//  XTANCO DIGITAL TWIN — BETA v1.25
+//  XTANCO DIGITAL TWIN — BETA v1.26
 // ═══════════════════════════════════════════════════════════════
 const cv=document.getElementById('c'), cx=cv.getContext('2d');
 cx.imageSmoothingEnabled=false;
@@ -84,6 +87,7 @@ window.addEventListener('resize',resizeCanvas);
 const SONG_LIST=[
   'Titi Me Preguntó - Bad Bunny',
   'Careless Whisper - George Michael',
+  'Hard Techno - DJ Novah',
   'Despechá - Rosalía',
   'La Bicicleta - Shakira',
   'Bailando - Enrique Iglesias',
@@ -93,6 +97,7 @@ const SONG_LIST=[
 const SONG_FILES={
   'Titi Me Preguntó - Bad Bunny':'music/titi.mp3',
   'Careless Whisper - George Michael':'music/careless.mp3',
+  'Hard Techno - DJ Novah':'music/dj-novah.mp3',
 };
 
 // ── BACKGROUND MUSIC ─────────────────────────────────────────
@@ -190,6 +195,13 @@ function updateHtmlBar(){
   const se=document.getElementById('bbStatus');
   se.textContent=hasProj?'Vendiendo...':'Idle';
   se.style.color=hasProj?'#88ee88':'#bbaa88';
+  // Clock + date
+  if(G.gameTime){
+    const gh=Math.floor(G.gameTime),gm=Math.floor((G.gameTime%1)*60);
+    document.getElementById('bbClock').textContent=String(gh).padStart(2,'0')+':'+String(gm).padStart(2,'0');
+  }
+  const now=new Date();
+  document.getElementById('bbDate').textContent=String(now.getDate()).padStart(2,'0')+'/'+String(now.getMonth()+1).padStart(2,'0')+'/'+now.getFullYear();
   // ── Competitor market share (simulated, fluctuates with game time) ──
   if(G.gameTime){
     const t=G.gameTime+G.week*12+G.year*52;
@@ -322,9 +334,9 @@ const CFG={
   SALE_PROB:0.055, SALE_BASE:3.5, PRODUCT_AVG_PRICE:1.6,
   RUSH_CHANCE:0.0025, RUSH_DURATION:160, RUSH_MULT:2.4,
   INSPECT_CHANCE:0.0006,
-  HIRE_COST:[500,400,450,1200],
-  TRAIN_COST:[250,200,220,380],
-  SALARY:[130,105,115,210],
+  HIRE_COST:[500,400,450,1200,800],
+  TRAIN_COST:[250,200,220,380,300],
+  SALARY:[130,105,115,210,160],
   RESTOCK_COST:150,
   ADVERT:[{cost:350,fame:8,label:'BÁSICA'},{cost:800,fame:22,label:'MEDIA'},{cost:1800,fame:50,label:'PREMIUM'}],
   UPGRADE_COST:4500,
@@ -371,6 +383,7 @@ const MODELS=[
       {slot:1,x:295,y:195,hired:false,name:'JORGE', role:1},
       {slot:2,x:425,y:195,hired:false,name:'LUCÍA', role:2},
       {slot:3,x:295,y:305,hired:false,name:'MARCOS',role:3},
+      {slot:4,x:425,y:305,hired:false,name:'NOVAH', role:4},
     ],
     prodsInit:[
       {stock:80,max:100,price:8, factor:1.2},{stock:60,max:80, price:12,factor:0.9},
@@ -451,7 +464,7 @@ let activeModel=0;
 // ── I18N ──────────────────────────────────────────────────────
 const LANGS={
   es:{
-    menuTitle:'XTANCO',menuSub:'SIMULADOR DE ESTANCO DIGITAL — BETA v1.25',
+    menuTitle:'XTANCO',menuSub:'SIMULADOR DE ESTANCO DIGITAL — BETA v1.26',
     langPick:'SELECCIONA IDIOMA',startBtn:'PULSA ENTER PARA EMPEZAR',
     langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
     tut:[
@@ -466,7 +479,7 @@ const LANGS={
     hire:'CONTRATAR',train:'FORMAR',fire:'DESPEDIR',
     restock:'REPONER',advert:'PUBLICIDAD',upgrade:'MEJORAR LOCAL',
     noStaff:'— VACANTE —',
-    staffLabel:['CAJERO/A','REPOSITOR/A','AZAFATA','STORE MANAGER'],
+    staffLabel:['CAJERO/A','REPOSITOR/A','AZAFATA','STORE MANAGER','DJ'],
     prodLabel:['Tabaco','Vapes','Lotería','Prensa','Chuches','Recarga','Premium','Accesorios'],
     statLabel:['FUN','VENTAS','STOCK','ATENCIÓN'],
     revenue:'INGRESOS SEM.',expenses:'GASTOS SEM.',net:'NETO SEM.',
@@ -501,7 +514,7 @@ const LANGS={
     modelStart:['€3.500','€2.800','€4.500','€6.000'],
   },
   en:{
-    menuTitle:'XTANCO',menuSub:'DIGITAL TOBACCO SHOP SIMULATOR — BETA v1.25',
+    menuTitle:'XTANCO',menuSub:'DIGITAL TOBACCO SHOP SIMULATOR — BETA v1.26',
     langPick:'SELECT LANGUAGE',startBtn:'PRESS ENTER TO START',
     langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
     tut:[
@@ -516,7 +529,7 @@ const LANGS={
     hire:'HIRE',train:'TRAIN',fire:'FIRE',
     restock:'RESTOCK',advert:'ADVERTISE',upgrade:'UPGRADE STORE',
     noStaff:'— VACANT —',
-    staffLabel:['CASHIER','STOCKER','HOSTESS','STORE MANAGER'],
+    staffLabel:['CASHIER','STOCKER','HOSTESS','STORE MANAGER','DJ'],
     prodLabel:['Tobacco','Vapes','Lottery','Press','Candy','Top-Up','Premium','Accessories'],
     statLabel:['FUN','SALES','STOCK','SERVICE'],
     revenue:'WEEK REVENUE',expenses:'WEEK EXPENSES',net:'WEEK NET',
@@ -613,6 +626,27 @@ function resetLayout(){
   shopLayout=JSON.parse(JSON.stringify(DEFAULT_LAYOUT));
   saveLayout();
 }
+// Export layout as JSON file download
+function exportLayout(){
+  const blob=new Blob([JSON.stringify(shopLayout,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download='xtanco-layout.json';a.click();URL.revokeObjectURL(a.href);
+}
+// Import layout from JSON file
+function importLayout(file){
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const data=JSON.parse(e.target.result);
+      if(Array.isArray(data)){shopLayout=data;saveLayout();}
+    }catch(err){}
+  };
+  reader.readAsText(file);
+}
+// Try to load layout.json from server on first visit (fallback to localStorage)
+fetch('layout.json?_='+Date.now()).then(r=>{if(r.ok)return r.json();throw 0;})
+  .then(d=>{if(Array.isArray(d)&&d.length>0&&!localStorage.getItem('xtanco_layout')){shopLayout=d;saveLayout();}})
+  .catch(()=>{});
 loadLayout();
 
 // Convert screen coords to iso grid tile
@@ -1667,7 +1701,7 @@ function drawSettings(){
   tx(String(shopTimeSettings.closeHour).padStart(2,'0'),bx+250,310,'#8a8070',7,'center');
   // ── Staff configuration ──
   const roleNames=['CAJERO/A','REPOSITOR/A','AZAFATA','STORE MANAGER'];
-  const roleIcons2=['💰','📦','🎀','👔'];
+  const roleIcons2=['💰','📦','🎀','👔','🎧'];
   const roleCols=['#44aa66','#88aa44','#aa44aa','#4466cc'];
   tx('— PERSONAL —',bx+bw/2,330,'#c0b898',10,'center');
   if(!shopTimeSettings.staff) shopTimeSettings.staff=JSON.parse(JSON.stringify(SHOP_TIME_DEFAULTS.staff));
@@ -3035,7 +3069,20 @@ function drawIsoStaff(s){
 function drawIsoCust(c){
   // Customers never wear blue (index 0) — use indices 1-5 only
   const shirtIdx=1+(Math.abs(c.hair)%(P.shirts.length-1));
-  chibi(c.x,c.y,c.dir||1,shirtIdx,c.hair%P.hair.length,c.fr,false,tt);
+  // DJ effect: customers dance (bob up/down + alternate frame fast)
+  const djHired=G&&G.staff&&G.staff.some(s=>s.hired&&s.role===4);
+  if(djHired){
+    const bob=Math.sin(tt*0.2+c.x*0.1)*3;
+    chibi(c.x,c.y+bob,c.dir||1,shirtIdx,c.hair%P.hair.length,Math.floor(tt/6)%2,true,tt);
+    // Musical notes floating
+    if(tt%30<2){
+      const noteX=c.x+Math.random()*12-6;
+      cx.fillStyle=['#ff44cc','#44ffcc','#ffcc44','#44ccff'][Math.floor(Math.random()*4)];
+      cx.font='8px monospace';cx.fillText('♪',noteX,c.y-20-Math.random()*10);
+    }
+  } else {
+    chibi(c.x,c.y,c.dir||1,shirtIdx,c.hair%P.hair.length,c.fr,false,tt);
+  }
 }
 
 // Legacy compat: drawShopChars is now handled inside drawShop via entity sorting
@@ -3056,22 +3103,16 @@ function drawHUD(){
   r(0,0,W,hh,'#2a1e10');
   cx.strokeStyle='#4a3820';cx.lineWidth=1;
   cx.beginPath();cx.moveTo(0,hh-0.5);cx.lineTo(W,hh-0.5);cx.stroke();
-  // Game clock + today's date
-  const gh=Math.floor(G.gameTime),gm=Math.floor((G.gameTime%1)*60);
-  const timeStr=String(gh).padStart(2,'0')+':'+String(gm).padStart(2,'0');
-  const now=new Date();
-  const dateStr=String(now.getDate()).padStart(2,'0')+'/'+String(now.getMonth()+1).padStart(2,'0')+'/'+now.getFullYear();
-  tx(timeStr+' · '+dateStr,8,19,'#b0a888',11);
-  // Week progress dot
-  const dotX=155;
+  // Week progress dot (time/date now in HTML bar)
+  const dotX=8;
   r(dotX,10,50,6,'#1a1208');
   r(dotX,10,(50*G.weekTimer/CFG.WEEK_TICKS)|0,6,'#ccaa44');
   rx(dotX,10,50,6,'#4a3820',1);
   // Money (golden, euro after amount)
-  tx((G.money|0).toLocaleString()+'€',218,19,'#ffdd66',14);
-  // People counter right after € — camera + green arrow in + red arrow out
+  tx((G.money|0).toLocaleString()+'€',70,19,'#ffdd66',14);
+  // People counter right after €
   const insideNow=G.custs?G.custs.length:0;
-  const moneyEnd=270;
+  const moneyEnd=130;
   tx('📷'+insideNow,moneyEnd,19,'#88ccee',11);
   tx('▲'+(G.custIn||0),moneyEnd+35,19,'#44dd66',11);
   tx('▼'+(G.custOut||0),moneyEnd+68,19,'#dd4444',11);
@@ -3286,7 +3327,7 @@ function tabStaff(py){
   // Role colors and icons
   const roleColors=['#2a6a4a','#4a5a2a','#5a2a5a','#2a3a6a'];
   const roleBorders=['#44aa66','#88aa44','#aa44aa','#4466cc'];
-  const roleIcons=['💰','📦','🎀','👔'];
+  const roleIcons=['💰','📦','🎀','👔','🎧'];
   for(let i=0;i<G.staff.length;i++){
     const s=G.staff[i];
     const cardH=Math.min(98,Math.floor((H-py-8)/G.staff.length)-4);
@@ -3302,7 +3343,7 @@ function tabStaff(py){
     if(s.hired) chibi(UI.x+9,ry+32,-1,s.shirt,s.hair,s.aFrame,s.busy>0,tt,0.85);
     const ix=UI.x+32;
     // Icon + Name
-    tx(roleIcons[s.role%4],UI.x+8,ry+14,'#fff',10);
+    tx(roleIcons[s.role%roleIcons.length],UI.x+8,ry+14,'#fff',10);
     tx(s.hired?s.name:T().noStaff,ix,ry+12,s.hired?'#fff':P.gray,8);
     // Role label
     tx(T().staffLabel[s.role],ix,ry+23,s.hired?rb:'#666',7);
