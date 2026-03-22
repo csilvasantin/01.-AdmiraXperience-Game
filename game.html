@@ -57,7 +57,7 @@
 </div>
 <script>
 // ═══════════════════════════════════════════════════════════════
-//  XTANCO DIGITAL TWIN — BETA v1.21
+//  XTANCO DIGITAL TWIN — BETA v1.22
 // ═══════════════════════════════════════════════════════════════
 const cv=document.getElementById('c'), cx=cv.getContext('2d');
 cx.imageSmoothingEnabled=false;
@@ -435,7 +435,7 @@ let activeModel=0;
 // ── I18N ──────────────────────────────────────────────────────
 const LANGS={
   es:{
-    menuTitle:'XTANCO',menuSub:'SIMULADOR DE ESTANCO DIGITAL — BETA v1.21',
+    menuTitle:'XTANCO',menuSub:'SIMULADOR DE ESTANCO DIGITAL — BETA v1.22',
     langPick:'SELECCIONA IDIOMA',startBtn:'PULSA ENTER PARA EMPEZAR',
     langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
     tut:[
@@ -485,7 +485,7 @@ const LANGS={
     modelStart:['€3.500','€2.800','€4.500','€6.000'],
   },
   en:{
-    menuTitle:'XTANCO',menuSub:'DIGITAL TOBACCO SHOP SIMULATOR — BETA v1.21',
+    menuTitle:'XTANCO',menuSub:'DIGITAL TOBACCO SHOP SIMULATOR — BETA v1.22',
     langPick:'SELECT LANGUAGE',startBtn:'PRESS ENTER TO START',
     langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
     tut:[
@@ -547,17 +547,17 @@ let ledOffset=0;
 // ── LAYOUT EDITOR ────────────────────────────────────────────
 // Furniture layout — editable positions
 const DEFAULT_LAYOUT=[
-  {id:'counter',type:'counter',col:1,row:1,sx:1,sy:1,label:'Mostrador+Caja+PC'},
-  {id:'shelves',type:'shelves',col:3,row:0,sx:1,sy:1,label:'Estantería'},
-  {id:'wineRack',type:'wineRack',col:6,row:0,sx:1,sy:1,label:'Botellero'},
-  {id:'lottery',type:'lottery',col:9,row:0,sx:1,sy:1,label:'Lotería'},
-  {id:'vending',type:'vending',col:10,row:1,sx:1,sy:1,label:'Vending'},
-  {id:'magazines',type:'magazines',col:9,row:3,sx:1,sy:1,label:'Revistero'},
-  {id:'manager',type:'manager',col:9,row:5,sx:1,sy:1,label:'Escritorio'},
+  {id:'counter',type:'counter',col:1,row:2,sx:1,sy:1,label:'Mostrador+Caja+PC'},
+  {id:'shelves',type:'shelves',col:4,row:0,sx:1,sy:1,label:'Estantería'},
+  {id:'wineRack',type:'wineRack',col:8,row:0,sx:1,sy:1,label:'Botellero'},
+  {id:'lottery',type:'lottery',col:6,row:1,sx:1,sy:1,label:'Lotería'},
+  {id:'vending',type:'vending',col:10,row:2,sx:1,sy:1,label:'Vending'},
+  {id:'magazines',type:'magazines',col:3,row:3,sx:1,sy:1,label:'Revistero'},
+  {id:'manager',type:'manager',col:7,row:4,sx:1,sy:1,label:'Escritorio'},
   {id:'plant1',type:'plant',col:0,row:0,sx:1,sy:1,label:'Planta 1'},
   {id:'plant3',type:'plant',col:0,row:5,sx:1,sy:1,label:'Planta 2'},
-  {id:'rug',type:'rug',col:7,row:4,sx:1,sy:1,label:'Alfombra'},
-  {id:'floorLamp',type:'floorLamp',col:0,row:1,sx:1,sy:1,label:'Lámpara pie'},
+  {id:'rug',type:'rug',col:5,row:2,sx:1,sy:1,label:'Alfombra'},
+  {id:'floorLamp',type:'floorLamp',col:10,row:5,sx:1,sy:1,label:'Lámpara pie'},
   {id:'led',type:'led',col:0,row:0,sx:1,sy:1,label:'LED Banner'},
 ];
 let shopLayout=JSON.parse(JSON.stringify(DEFAULT_LAYOUT));
@@ -2197,52 +2197,60 @@ function drawXtancoLogo(x,y){
 }
 
 function drawGlassDoor(){
-  const doorTop=toIso(ISO.cols,2);
-  const doorBot=toIso(ISO.cols,4);
-  const doorH=ISO.wallH*0.7;
-  const dMidX=(doorTop.x+doorBot.x)/2;
-  const dMidY=(doorTop.y+doorBot.y)/2;
-  const dMidYh=(doorTop.y-doorH+doorBot.y-doorH)/2;
-  // Door frame (dark wood outline)
-  cx.strokeStyle='#4a3018';cx.lineWidth=2.5;
-  cx.beginPath();
-  cx.moveTo(doorTop.x,doorTop.y);cx.lineTo(doorBot.x,doorBot.y);
-  cx.lineTo(doorBot.x,doorBot.y-doorH);cx.lineTo(doorTop.x,doorTop.y-doorH);
-  cx.closePath();cx.stroke();
-  // Center divider (frame between two doors)
-  cx.lineWidth=2;
-  cx.beginPath();cx.moveTo(dMidX,dMidY);cx.lineTo(dMidX,dMidY-doorH+((doorTop.y-doorH)-(doorBot.y-doorH))/2);cx.stroke();
-  // Sliding animation — panels slide toward center when open
+  // Door occupies right wall between row 2 and row 4
+  const dt=toIso(ISO.cols,2);  // top corner (higher on screen)
+  const dm=toIso(ISO.cols,3);  // middle (center divider)
+  const db=toIso(ISO.cols,4);  // bottom corner (lower on screen)
+  const doorH=ISO.wallH*0.75;
+  // Sliding animation
   const doorAmt=G&&G.doorOpen>0?Math.min(1,G.doorOpen>40?1:(G.doorOpen/40)):0;
-  const slide=doorAmt*8; // pixels of slide
-  // ── TOP PANEL (slides down toward center when open) ──
-  cx.globalAlpha=0.5; // 50% transparent
+  // Slide direction follows the wall diagonal
+  const sdx=(dm.x-dt.x)*doorAmt*0.35;
+  const sdy=(dm.y-dt.y)*doorAmt*0.35;
+  // ── DOOR FRAME (dark wood) ──
+  cx.fillStyle='#4a3018';
+  // Frame outline
+  cx.strokeStyle='#3a2010';cx.lineWidth=3;
   cx.beginPath();
-  cx.moveTo(doorTop.x,doorTop.y+slide*0.4);
-  cx.lineTo(dMidX,dMidY+slide*0.2);
-  cx.lineTo(dMidX,(dMidY+dMidYh)/2+slide*0.1);
-  cx.lineTo(doorTop.x,doorTop.y-doorH+slide*0.5);
-  cx.closePath();cx.fillStyle='#88bbdd';cx.fill();
-  cx.strokeStyle='#4a301844';cx.lineWidth=1;cx.stroke();
-  // Logo centered on top panel
-  const topCx=(doorTop.x+dMidX)/2;
-  const topCy=((doorTop.y+dMidY)/2-doorH*0.35)+slide*0.3;
-  drawXtancoLogo(topCx,topCy);
-  // ── BOTTOM PANEL (slides up toward center when open) ──
+  cx.moveTo(dt.x,dt.y);cx.lineTo(db.x,db.y);
+  cx.lineTo(db.x,db.y-doorH);cx.lineTo(dt.x,dt.y-doorH);
+  cx.closePath();cx.stroke();
+  // Center bar (horizontal divider between two panels)
+  cx.lineWidth=2.5;
+  cx.beginPath();cx.moveTo(dm.x,dm.y);cx.lineTo(dm.x,dm.y-doorH);cx.stroke();
+  // ── TOP PANEL (row 2→3, slides toward center when open) ──
+  cx.globalAlpha=0.5;
+  cx.fillStyle='#88bbdd';
   cx.beginPath();
-  cx.moveTo(doorBot.x,doorBot.y-slide*0.3);
-  cx.lineTo(dMidX,dMidY-slide*0.2);
-  cx.lineTo(dMidX,(dMidY+dMidYh)/2-slide*0.1);
-  cx.lineTo(doorBot.x,doorBot.y-doorH-slide*0.4);
-  cx.closePath();cx.fillStyle='#7aaacc';cx.fill();
-  cx.strokeStyle='#4a301844';cx.lineWidth=1;cx.stroke();
-  // Logo centered on bottom panel
-  const botCx=(doorBot.x+dMidX)/2;
-  const botCy=((doorBot.y+dMidY)/2-doorH*0.35)-slide*0.3;
-  drawXtancoLogo(botCx,botCy);
+  cx.moveTo(dt.x+sdx,dt.y+sdy);         // top-right + slide
+  cx.lineTo(dm.x,dm.y);                   // center (fixed)
+  cx.lineTo(dm.x,dm.y-doorH);             // center top (fixed)
+  cx.lineTo(dt.x+sdx,dt.y-doorH+sdy);     // top-right top + slide
+  cx.closePath();cx.fill();
+  cx.strokeStyle='#5a4a3844';cx.lineWidth=0.5;cx.stroke();
+  // Logo on top panel
+  const t1cx=(dt.x+sdx+dm.x)/2;
+  const t1cy=((dt.y+sdy+dm.y)/2)-doorH*0.4;
+  drawXtancoLogo(t1cx,t1cy);
+  // ── BOTTOM PANEL (row 3→4, slides toward center when open) ──
+  cx.fillStyle='#7aaacc';
+  cx.beginPath();
+  cx.moveTo(db.x-sdx,db.y-sdy);           // bottom-left - slide
+  cx.lineTo(dm.x,dm.y);                    // center (fixed)
+  cx.lineTo(dm.x,dm.y-doorH);              // center top (fixed)
+  cx.lineTo(db.x-sdx,db.y-doorH-sdy);      // bottom-left top - slide
+  cx.closePath();cx.fill();
+  cx.strokeStyle='#5a4a3844';cx.lineWidth=0.5;cx.stroke();
+  // Logo on bottom panel
+  const b1cx=(db.x-sdx+dm.x)/2;
+  const b1cy=((db.y-sdy+dm.y)/2)-doorH*0.4;
+  drawXtancoLogo(b1cx,b1cy);
   cx.globalAlpha=1;
-  // OPEN sign at bottom
-  if(doorAmt<0.5) tx('OPEN',(doorTop.x+doorBot.x)/2,(doorTop.y+doorBot.y)/2-doorH*0.15,'#2a664488',7,'center');
+  // OPEN sign (only when closed)
+  if(doorAmt<0.3){
+    const oCx=(dt.x+db.x)/2, oCy=(dt.y+db.y)/2-doorH*0.2;
+    tx('OPEN',oCx,oCy,'#2a664466',8,'center');
+  }
 }
 
 // ── LED DISPLAY (on LEFT WALL, middle height) ────────────────
