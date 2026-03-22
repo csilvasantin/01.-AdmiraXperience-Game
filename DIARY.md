@@ -2,6 +2,89 @@
 
 ---
 
+## [v2.2] — 2026-03-22
+
+### Ciclo de día completo, cielo dinámico e iluminación progresiva IoT
+
+**El juego ahora tiene un ciclo de día real** basado en el reloj de pared del Xtanco, con cielo que cambia de color y lámpara que se enciende progresivamente al anochecer.
+
+---
+
+### Sistema de tiempo de juego
+
+- El reloj de pared ya no muestra la hora real del sistema
+- Ahora marca la **hora del juego** (`G.gameTime`), de apertura a cierre
+- Un día completo (09:00→21:00 = 12 horas de tienda) se juega en **5 minutos reales** (300 segundos)
+- Cada frame avanza el reloj: `hoursPerFrame = dayHours / (duration * 60fps)`
+- `weekTimer` se calcula automáticamente desde `gameTime` para compatibilidad con mecánicas existentes (salarios, fin de semana, etc.)
+- Al llegar a la hora de cierre → se dispara `endWeek()` (pago de salarios, decay de stock)
+- Al empezar un nuevo día → el reloj vuelve a la hora de apertura
+
+### Cielo dinámico según hora del juego
+
+El cielo cambia progresivamente durante el día, tanto en el fondo como a través de las ventanas:
+
+| Hora | Cielo |
+|------|-------|
+| 07:00-09:00 | Azul grisáceo (amanecer) |
+| 09:00-12:00 | Azul claro (mañana) |
+| 12:00-16:00 | Azul brillante (mediodía) |
+| 16:00-18:00 | Naranja (atardecer) |
+| 18:00-19:00 | Rojo (crepúsculo) |
+| 19:00-20:00 | Púrpura (penumbra) |
+| 20:00+ | Azul oscuro/negro (noche) |
+
+Función `getSkyColors(hour)` retorna 3 color stops para el degradado del cielo.
+
+### Iluminación progresiva de la lámpara
+
+La lámpara del Xtanco (y la Elgato Key Light real) se enciende **progresivamente**:
+
+| Hora | Intensidad | Elgato brightness |
+|------|-----------|-------------------|
+| 09:00-16:00 | 0% (apagada) | off |
+| 16:00 | 10% | brightness: 10 |
+| 17:00 | 35% | brightness: 35 |
+| 18:00 | 60% | brightness: 60 |
+| 19:00 | 85% | brightness: 85 |
+| 20:00+ | 100% | brightness: 100 |
+| 21:00 (cierre) | off | off |
+
+**Visual progresivo de la lámpara:**
+- Halo en el suelo: radio crece de 12px a 30px
+- Cono de luz vertical: se expande con la intensidad
+- Bombilla: crece de 2px a 4px con aureola radiante
+- Pantalla: transición de tibio oscuro a blanco brillante
+- Elgato real: recibe `brightness` progresivo cada ~1 segundo (throttled a 60 frames)
+
+### Settings de tienda (nueva pantalla)
+
+Nueva opción **⚙ SETTINGS** accesible desde el menú principal:
+
+| Ajuste | Default | Rango |
+|--------|---------|-------|
+| Hora apertura | 09:00 | 0-23 |
+| Hora cierre | 21:00 | 1-24 |
+| Duración del día | 300s (5 min) | 60-600s |
+
+- Preview visual del cielo a lo largo del día
+- Información de duración (horas de tienda en X segundos reales)
+- Se guarda en `localStorage` (`xtanco_settings`)
+- Botón ✓ GUARDAR o Escape para volver al menú
+
+### HUD actualizado
+
+- La barra superior ahora muestra: `14:35 · Y1 W1` (hora del juego + año/semana)
+- El reloj se actualiza suavemente con el gameTime
+
+### Correcciones técnicas
+
+- Variable duplicada `hh` que impedía cargar el juego → renombrada a `gh`/`gm`
+- Estado `S.SETTINGS` añadido a la máquina de estados
+- Click handler extendido para soportar SETTINGS y MENU
+
+---
+
 ## [v2.1] — 2026-03-21
 
 ### Interactividad, packs de muebles, visitas y lámpara inteligente
