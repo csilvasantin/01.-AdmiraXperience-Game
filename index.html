@@ -49,7 +49,7 @@ const ELGATO={
   port:9123,
   proxyPort:9124,
 };
-let elgatoState={on:false,busy:false,notify:0,error:false,skyRed:false}; // lamp starts OFF (auto-on at dusk)
+let elgatoState={on:false,busy:false,notify:0,error:false,skyRed:false,manualOff:false}; // lamp starts OFF (auto-on at dusk)
 let monitorAlert={active:false,timer:0,msg:'',color:''};
 
 // ── SHOP TIME SYSTEM ─────────────────────────────────────────
@@ -111,6 +111,7 @@ async function toggleStudioLight(){
   // Always toggle visual state immediately (responsive)
   const newOn=!elgatoState.on;
   elgatoState.on=newOn;
+  elgatoState.manualOff=!newOn; // if turning off manually, prevent auto-on
   elgatoState.skyRed=newOn;
   elgatoState.notify=120;
   // Play sound
@@ -920,7 +921,8 @@ function endWeek(){
   G.gameTime=shopTimeSettings.openHour;
   G.dayEnded=false;
   G.weekTimer=0;
-  // Turn off lamp for new morning
+  // Turn off lamp for new morning — reset manual override
+  elgatoState.manualOff=false;
   elgatoState.on=false;
   try{elgatoFetch('/elgato/lights',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({numberOfLights:1,lights:[{on:0}]})});}catch(e){}
   G.week++;
@@ -960,14 +962,17 @@ function updateGame(){
   if(G.gameTime>=16&&G.gameTime<shopTimeSettings.closeHour&&!G.dayEnded){
     lampIntensity=Math.min(100,10+(G.gameTime-16)*25); // 16h=10,17h=35,18h=60,19h=85,20h=100+
   }
+  // If manually turned off, intensity is 0 visually
+  if(elgatoState.manualOff) lampIntensity=0;
   G.lampIntensity=lampIntensity;
-  // Auto-turn on lamp when intensity > 0
-  if(lampIntensity>0&&!elgatoState.on){
+  // Auto-turn on lamp when intensity > 0 (only if not manually turned off)
+  if(lampIntensity>0&&!elgatoState.on&&!elgatoState.manualOff){
     elgatoState.on=true;
+    elgatoState.manualOff=false;
     elgatoState.notify=60;
   }
   // Send progressive brightness to real Elgato lamp (throttled: every 60 frames ≈ 1s)
-  if(elgatoState.on&&lampIntensity>0&&tt%60===0){
+  if(elgatoState.on&&lampIntensity>0&&!elgatoState.manualOff&&tt%60===0){
     try{elgatoFetch('/elgato/lights',{method:'PUT',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({numberOfLights:1,lights:[{on:1,brightness:Math.round(lampIntensity)}]})
     });}catch(e){}
@@ -2708,18 +2713,22 @@ function drawHUD(){
   rx(dotX,10,50,6,'#4a3820',1);
   // Money (golden, euro after amount)
   tx((G.money|0).toLocaleString()+'€',218,19,'#ffdd66',14);
+  // Ingresos Día
+  const dayInc=G.sales.reduce((s,v)=>s+v,0);
+  tx('Ing. Día',280,12,'#a09880',7);
+  tx(dayInc.toLocaleString()+'€',280,24,dayInc>0?'#66ee88':'#888866',10);
   // Facturación + progress bar
   const target=CFG.YEAR_TARGETS[G.year-1];
   const prog=Math.min(1,G.yearRevenue/target);
   const bc=prog>=1?P.green:prog>=0.7?'#ccaa44':'#88aa55';
-  tx('Facturación',350,12,'#a09880',7);
-  r(350,15,130,6,'#1a1208');r(350,15,(130*prog)|0,6,bc);rx(350,15,130,6,'#4a3820',1);
-  tx((G.yearRevenue|0).toLocaleString()+'€/'+(target).toLocaleString()+'€'+(prog>=1?' ✓':''),350,26,'#c0b898',7);
+  tx('Facturación',380,12,'#a09880',7);
+  r(380,15,130,6,'#1a1208');r(380,15,(130*prog)|0,6,bc);rx(380,15,130,6,'#4a3820',1);
+  tx((G.yearRevenue|0).toLocaleString()+'€/'+(target).toLocaleString()+'€'+(prog>=1?' ✓':''),380,26,'#c0b898',7);
   // Rush / Inspect badge (far right of top bar)
   if(G.rush.active){
     const f=Math.sin(tt*.08)>.0;
-    r(600,2,120,24,f?'#5a3000':'#4a2800');rx(600,2,120,24,'#ffaa44',2);
-    tx('⚡ HORA PUNTA ⚡',660,18,'#ffcc44',10,'center');
+    r(620,2,120,24,f?'#5a3000':'#4a2800');rx(620,2,120,24,'#ffaa44',2);
+    tx('⚡ HORA PUNTA ⚡',680,18,'#ffcc44',10,'center');
   }
   if(G.inspect.active&&G.inspect.timer>100){
     r(600,2,120,24,'#4a0010');rx(600,2,120,24,'#ff6688',2);
