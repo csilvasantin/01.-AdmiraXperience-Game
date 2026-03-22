@@ -57,7 +57,7 @@
 </div>
 <script>
 // ═══════════════════════════════════════════════════════════════
-//  XTANCO DIGITAL TWIN — BETA v1.23
+//  XTANCO DIGITAL TWIN — BETA v1.24
 // ═══════════════════════════════════════════════════════════════
 const cv=document.getElementById('c'), cx=cv.getContext('2d');
 cx.imageSmoothingEnabled=false;
@@ -80,6 +80,21 @@ function resizeCanvas(){
 resizeCanvas();
 window.addEventListener('resize',resizeCanvas);
 
+// ── SONG LIST & AUDIO FILES ──────────────────────────────────
+const SONG_LIST=[
+  'Titi Me Preguntó - Bad Bunny',
+  'Careless Whisper - George Michael',
+  'Despechá - Rosalía',
+  'La Bicicleta - Shakira',
+  'Bailando - Enrique Iglesias',
+  'Dákiti - Bad Bunny',
+  'Vivir Mi Vida - Marc Anthony',
+];
+const SONG_FILES={
+  'Titi Me Preguntó - Bad Bunny':'music/titi.mp3',
+  'Careless Whisper - George Michael':'music/careless.mp3',
+};
+
 // ── BACKGROUND MUSIC ─────────────────────────────────────────
 const bgMusic=document.getElementById('bgMusic');
 bgMusic.volume=0.3;
@@ -95,6 +110,7 @@ function toggleMusic(){
 // ── VIDEO MONITOR (YouTube embed on counter PC) ──────────────
 const YOUTUBE_VIDEOS={
   'Titi Me Preguntó - Bad Bunny':'Cr8K88UcO0s',
+  'Careless Whisper - George Michael':'izGwDsrQ1eQ',
   'Despechá - Rosalía':'p_i1Ps2bVU8',
   'La Bicicleta - Shakira':'FcdOLKx2XG8',
   'Bailando - Enrique Iglesias':'NUsoVlDFqZg',
@@ -435,7 +451,7 @@ let activeModel=0;
 // ── I18N ──────────────────────────────────────────────────────
 const LANGS={
   es:{
-    menuTitle:'XTANCO',menuSub:'SIMULADOR DE ESTANCO DIGITAL — BETA v1.23',
+    menuTitle:'XTANCO',menuSub:'SIMULADOR DE ESTANCO DIGITAL — BETA v1.24',
     langPick:'SELECCIONA IDIOMA',startBtn:'PULSA ENTER PARA EMPEZAR',
     langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
     tut:[
@@ -485,7 +501,7 @@ const LANGS={
     modelStart:['€3.500','€2.800','€4.500','€6.000'],
   },
   en:{
-    menuTitle:'XTANCO',menuSub:'DIGITAL TOBACCO SHOP SIMULATOR — BETA v1.23',
+    menuTitle:'XTANCO',menuSub:'DIGITAL TOBACCO SHOP SIMULATOR — BETA v1.24',
     langPick:'SELECT LANGUAGE',startBtn:'PRESS ENTER TO START',
     langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
     tut:[
@@ -1025,15 +1041,20 @@ function doAction(id){
   if(id==='setDurUp'){shopTimeSettings.dayDurationSec=Math.min(600,shopTimeSettings.dayDurationSec+30);return;}
   if(id==='musicToggle'){toggleMusic();return;}
   if(id==='musicPrev'||id==='musicNext'){
-    const songs=['Titi Me Preguntó - Bad Bunny','Despechá - Rosalía','La Bicicleta - Shakira','Bailando - Enrique Iglesias','Dákiti - Bad Bunny','Vivir Mi Vida - Marc Anthony'];
+    const songs=SONG_LIST;
     const ci=songs.indexOf(G.nowPlaying);
     const ni=id==='musicNext'?(ci+1)%songs.length:(ci-1+songs.length)%songs.length;
     G.nowPlaying=songs[ni];shopTimeSettings.nowPlaying=songs[ni];
+    // Switch audio file if available locally
+    if(SONG_FILES[songs[ni]]){
+      bgMusic.src=SONG_FILES[songs[ni]];
+      bgMusic.play().catch(()=>{});
+    }
     addFloat(W/2,40,'♪ '+songs[ni],'#cc99dd');
     return;
   }
   if(id==='songPrev'||id==='songNext'){
-    const songs=['Titi Me Preguntó - Bad Bunny','Despechá - Rosalía','La Bicicleta - Shakira','Bailando - Enrique Iglesias','Dákiti - Bad Bunny','Vivir Mi Vida - Marc Anthony'];
+    const songs=SONG_LIST;
     const ci=songs.indexOf(shopTimeSettings.nowPlaying);
     const ni=id==='songNext'?(ci+1)%songs.length:(ci-1+songs.length)%songs.length;
     shopTimeSettings.nowPlaying=songs[ni];
@@ -1621,7 +1642,7 @@ function drawSettings(){
   r(bx+120,186,180,22,'#2a1a2a');rx(bx+120,186,180,22,'#8a5a8a',1);
   tx(shopTimeSettings.nowPlaying||'Sin música',bx+130,202,'#cc99dd',8);
   // Cycle through songs
-  const songs=['Titi Me Preguntó - Bad Bunny','Despechá - Rosalía','La Bicicleta - Shakira','Bailando - Enrique Iglesias','Dákiti - Bad Bunny','Vivir Mi Vida - Marc Anthony'];
+  const songs=SONG_LIST;
   r(bx+100,186,18,22,'#2a1a2a');rx(bx+100,186,18,22,'#aa55aa',1);tx('◀',bx+109,202,'#cc88cc',12,'center');
   BTNS['songPrev']={x:bx+100,y:186,w:18,h:22};
   r(bx+302,186,18,22,'#2a1a2a');rx(bx+302,186,18,22,'#aa55aa',1);tx('▶',bx+311,202,'#cc88cc',12,'center');
