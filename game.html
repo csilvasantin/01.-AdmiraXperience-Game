@@ -53,7 +53,7 @@
 <canvas id="c" width="800" height="500"></canvas>
 <script>
 // ═══════════════════════════════════════════════════════════════
-//  XTANCO DIGITAL TWIN — BETA v1.8
+//  XTANCO DIGITAL TWIN — BETA v1.9
 // ═══════════════════════════════════════════════════════════════
 const cv=document.getElementById('c'), cx=cv.getContext('2d');
 cx.imageSmoothingEnabled=false;
@@ -357,7 +357,7 @@ let activeModel=0;
 // ── I18N ──────────────────────────────────────────────────────
 const LANGS={
   es:{
-    menuTitle:'XTANCO',menuSub:'SIMULADOR DE ESTANCO DIGITAL — BETA v1.8',
+    menuTitle:'XTANCO',menuSub:'SIMULADOR DE ESTANCO DIGITAL — BETA v1.9',
     langPick:'SELECCIONA IDIOMA',startBtn:'PULSA ENTER PARA EMPEZAR',
     langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
     tut:[
@@ -407,7 +407,7 @@ const LANGS={
     modelStart:['€3.500','€2.800','€4.500','€6.000'],
   },
   en:{
-    menuTitle:'XTANCO',menuSub:'DIGITAL TOBACCO SHOP SIMULATOR — BETA v1.8',
+    menuTitle:'XTANCO',menuSub:'DIGITAL TOBACCO SHOP SIMULATOR — BETA v1.9',
     langPick:'SELECT LANGUAGE',startBtn:'PRESS ENTER TO START',
     langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
     tut:[
@@ -587,6 +587,7 @@ function initGame(){
     dayEnded:false,
     lampIntensity:0,
     tftOgre:0,
+    tftParty:0,       // PARTY!! timer when manager touches customer
     tftStockIdx:-1,   // selected product showing on Admira screen (-1=none)
     tftStockTimer:0,  // how long to show product on Admira
   };
@@ -1148,6 +1149,22 @@ function updateGame(){
       mgr.isWalking=false;
     }
   }
+
+  // ── PARTY: Manager touches customer → show on Admira ──
+  if(G.staff&&G.staff[0]&&G.staff[0].hired&&G.custs){
+    const mgr=G.staff[0];
+    for(const c of G.custs){
+      const dx=mgr.x-c.x,dy=mgr.y-c.y;
+      if(Math.sqrt(dx*dx+dy*dy)<18){
+        if(!G.tftParty||G.tftParty<=0){
+          G.tftParty=180; // show PARTY for 3 seconds
+          addFloat(mgr.x,mgr.y-40,'🎉 PARTY!','#ff44cc');
+        }
+        break;
+      }
+    }
+  }
+  if(G.tftParty>0) G.tftParty--;
 
   // Rush hour (badge shown in top bar, no floating event)
   if(!G.rush.active&&Math.random()<CFG.RUSH_CHANCE){
@@ -1977,70 +1994,7 @@ function drawShop(){
   for(let i=1;i<lwPts.length;i++) cx.lineTo(lwPts[i].x,lwPts[i].y-ISO.wallH);
   cx.stroke();
 
-  // ── RIGHT WALL — only door visible, no solid wall ──
-  // Door on right wall (between row 2 and row 4)
-  const doorTop=toIso(ISO.cols,2);
-  const doorBot=toIso(ISO.cols,4);
-  const doorH=ISO.wallH*0.7;
-  // Door frame (dark wood)
-  cx.beginPath();
-  cx.moveTo(doorTop.x,doorTop.y);
-  cx.lineTo(doorBot.x,doorBot.y);
-  cx.lineTo(doorBot.x,doorBot.y-doorH);
-  cx.lineTo(doorTop.x,doorTop.y-doorH);
-  cx.closePath();
-  cx.fillStyle='#5a4228';cx.fill();
-  // Glass panels — open/close based on customer traffic
-  const doorAmt=G&&G.doorOpen>0?Math.min(1,G.doorOpen>40?1:(G.doorOpen/40)):0;
-  const doorOff=(doorAmt*6)|0;
-  const dMidY=(doorTop.y+doorBot.y)/2;
-  const dMidYh=(doorTop.y-doorH+doorBot.y-doorH)/2;
-  // Top glass panel
-  cx.beginPath();
-  cx.moveTo(doorTop.x,doorTop.y-doorOff*0.8);
-  cx.lineTo(dMidY>doorBot.y?doorBot.x:doorTop.x+(doorBot.x-doorTop.x)*0.48,dMidY-doorOff*0.4);
-  cx.lineTo(dMidY>doorBot.y?doorBot.x:doorTop.x+(doorBot.x-doorTop.x)*0.48,dMidYh+doorOff*0.4);
-  cx.lineTo(doorTop.x,doorTop.y-doorH+doorOff*0.3);
-  cx.closePath();
-  cx.fillStyle='#88bbdd';cx.fill();
-  // Bottom glass panel
-  cx.beginPath();
-  cx.moveTo(doorBot.x,doorBot.y-doorOff*0.3);
-  cx.lineTo(doorTop.x+(doorBot.x-doorTop.x)*0.52,dMidY+doorOff*0.4);
-  cx.lineTo(doorTop.x+(doorBot.x-doorTop.x)*0.52,dMidYh-doorOff*0.3);
-  cx.lineTo(doorBot.x,doorBot.y-doorH+doorOff*0.2);
-  cx.closePath();
-  cx.fillStyle='#7aaacc';cx.fill();
-  // Door frame outline
-  cx.strokeStyle='#4a3018';cx.lineWidth=2;
-  cx.beginPath();
-  cx.moveTo(doorTop.x,doorTop.y);cx.lineTo(doorBot.x,doorBot.y);
-  cx.lineTo(doorBot.x,doorBot.y-doorH);cx.lineTo(doorTop.x,doorTop.y-doorH);
-  cx.closePath();cx.stroke();
-  // ── XTANCO logo on door glass ──
-  const doorCx=(doorTop.x+doorBot.x)/2;
-  const doorCy=(doorTop.y+doorBot.y)/2-doorH*0.35;
-  // Globe/sphere icon (teal gradient)
-  const globeR=7;
-  const globeX=doorCx-8, globeY=doorCy-2;
-  // Outer circle
-  cx.beginPath();cx.arc(globeX,globeY,globeR,0,Math.PI*2);
-  const grd=cx.createRadialGradient(globeX-2,globeY-2,1,globeX,globeY,globeR);
-  grd.addColorStop(0,'#88ddee');grd.addColorStop(0.5,'#4a99aa');grd.addColorStop(1,'#2a6677');
-  cx.fillStyle=grd;cx.fill();
-  cx.strokeStyle='#1a4455';cx.lineWidth=0.8;cx.stroke();
-  // Wave lines on globe
-  cx.strokeStyle='#aaeeff44';cx.lineWidth=0.6;
-  cx.beginPath();cx.ellipse(globeX,globeY,globeR*0.7,globeR*0.3,0.3,0,Math.PI*2);cx.stroke();
-  cx.beginPath();cx.ellipse(globeX,globeY-2,globeR*0.5,globeR*0.2,-0.2,0,Math.PI*2);cx.stroke();
-  cx.beginPath();cx.ellipse(globeX,globeY+2,globeR*0.6,globeR*0.2,0.1,0,Math.PI*2);cx.stroke();
-  // XTANCO text next to globe
-  cx.fillStyle='#2a5566';cx.font='bold 7px monospace';cx.textAlign='left';
-  cx.fillText('XTANCO',globeX+globeR+3,globeY+3);
-  cx.textAlign='left';
-  // OPEN sign below
-  tx('OPEN',doorCx,doorCy+14,'#2a6644',7,'center');
-
+  // ── RIGHT WALL door drawn AFTER furniture (see drawGlassDoor below) ──
 
   // ── CLOCK on left wall ──
   drawWallClock();
@@ -2109,7 +2063,60 @@ function drawShop(){
     }
   }
 
+  // ── GLASS DOOR — drawn LAST, always on top of furniture/characters ──
+  drawGlassDoor();
+
   cx.restore(); // end clip
+}
+
+function drawGlassDoor(){
+  const doorTop=toIso(ISO.cols,2);
+  const doorBot=toIso(ISO.cols,4);
+  const doorH=ISO.wallH*0.7;
+  // Door frame (dark wood)
+  cx.beginPath();
+  cx.moveTo(doorTop.x,doorTop.y);cx.lineTo(doorBot.x,doorBot.y);
+  cx.lineTo(doorBot.x,doorBot.y-doorH);cx.lineTo(doorTop.x,doorTop.y-doorH);
+  cx.closePath();cx.fillStyle='#5a4228';cx.fill();
+  // Glass panels — open/close based on customer traffic
+  const doorAmt=G&&G.doorOpen>0?Math.min(1,G.doorOpen>40?1:(G.doorOpen/40)):0;
+  const doorOff=(doorAmt*6)|0;
+  const dMidY=(doorTop.y+doorBot.y)/2;
+  const dMidYh=(doorTop.y-doorH+doorBot.y-doorH)/2;
+  // Top glass panel
+  cx.beginPath();
+  cx.moveTo(doorTop.x,doorTop.y-doorOff*0.8);
+  cx.lineTo(doorTop.x+(doorBot.x-doorTop.x)*0.48,dMidY-doorOff*0.4);
+  cx.lineTo(doorTop.x+(doorBot.x-doorTop.x)*0.48,dMidYh+doorOff*0.4);
+  cx.lineTo(doorTop.x,doorTop.y-doorH+doorOff*0.3);
+  cx.closePath();cx.fillStyle='rgba(136,187,221,0.85)';cx.fill();
+  // Bottom glass panel
+  cx.beginPath();
+  cx.moveTo(doorBot.x,doorBot.y-doorOff*0.3);
+  cx.lineTo(doorTop.x+(doorBot.x-doorTop.x)*0.52,dMidY+doorOff*0.4);
+  cx.lineTo(doorTop.x+(doorBot.x-doorTop.x)*0.52,dMidYh-doorOff*0.3);
+  cx.lineTo(doorBot.x,doorBot.y-doorH+doorOff*0.2);
+  cx.closePath();cx.fillStyle='rgba(122,170,204,0.85)';cx.fill();
+  // Door frame outline
+  cx.strokeStyle='#4a3018';cx.lineWidth=2;
+  cx.beginPath();
+  cx.moveTo(doorTop.x,doorTop.y);cx.lineTo(doorBot.x,doorBot.y);
+  cx.lineTo(doorBot.x,doorBot.y-doorH);cx.lineTo(doorTop.x,doorTop.y-doorH);
+  cx.closePath();cx.stroke();
+  // XTANCO logo
+  const doorCx=(doorTop.x+doorBot.x)/2;
+  const doorCy=(doorTop.y+doorBot.y)/2-doorH*0.35;
+  const globeR=7,globeX=doorCx-8,globeY=doorCy-2;
+  cx.beginPath();cx.arc(globeX,globeY,globeR,0,Math.PI*2);
+  const grd=cx.createRadialGradient(globeX-2,globeY-2,1,globeX,globeY,globeR);
+  grd.addColorStop(0,'#88ddee');grd.addColorStop(0.5,'#4a99aa');grd.addColorStop(1,'#2a6677');
+  cx.fillStyle=grd;cx.fill();cx.strokeStyle='#1a4455';cx.lineWidth=0.8;cx.stroke();
+  cx.strokeStyle='#aaeeff44';cx.lineWidth=0.6;
+  cx.beginPath();cx.ellipse(globeX,globeY,globeR*0.7,globeR*0.3,0.3,0,Math.PI*2);cx.stroke();
+  cx.beginPath();cx.ellipse(globeX,globeY-2,globeR*0.5,globeR*0.2,-0.2,0,Math.PI*2);cx.stroke();
+  cx.fillStyle='#2a5566';cx.font='bold 7px monospace';cx.textAlign='left';
+  cx.fillText('XTANCO',globeX+globeR+3,globeY+3);
+  tx('OPEN',doorCx,doorCy+14,'#2a6644',7,'center');
 }
 
 // ── LED DISPLAY (on LEFT WALL, middle height) ────────────────
@@ -2216,7 +2223,25 @@ function drawAltadisTFT(){
   const cX=vW/2, cY=vH/2;
   const sH=vH;
 
-  if(G&&G.tftStockIdx>=0&&G.tftStockIdx<G.prods.length&&G.tftStockTimer>0){
+  if(G&&G.tftParty>0){
+    // ── PARTY!! on Admira screen ──
+    const flash=Math.sin(tt*0.15)>0;
+    cx.fillStyle=flash?'#ff22aa':'#aa1188';cx.fillRect(0,0,vW,vH);
+    // Confetti
+    for(let i=0;i<12;i++){
+      const cx2=10+Math.random()*80,cy2=10+Math.random()*80;
+      cx.fillStyle=['#ff0','#0ff','#f0f','#0f0','#f80','#08f'][i%6];
+      cx.fillRect(cx2,cy2,4,4);
+    }
+    cx.textAlign='center';
+    cx.fillStyle='#ffffff';cx.font='bold 18px monospace';
+    cx.fillText('PARTY',cX,42);
+    cx.fillStyle='#ffee44';cx.font='bold 14px monospace';
+    cx.fillText('!!',cX,62);
+    cx.fillStyle='#fff';cx.font='8px monospace';
+    cx.fillText('🎉🎊🎉',cX,80);
+    cx.textAlign='left';
+  } else if(G&&G.tftStockIdx>=0&&G.tftStockIdx<G.prods.length&&G.tftStockTimer>0){
     // ── ADMIRA: Product stock display (virtual 100x100 coords) ──
     const pi=G.tftStockIdx;
     const prod=G.prods[pi];
