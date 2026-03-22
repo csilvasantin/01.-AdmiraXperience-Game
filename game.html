@@ -60,7 +60,7 @@
 </div>
 <script>
 // ═══════════════════════════════════════════════════════════════
-//  XTANCO DIGITAL TWIN — BETA v1.29
+//  XTANCO DIGITAL TWIN — BETA v1.30
 // ═══════════════════════════════════════════════════════════════
 const cv=document.getElementById('c'), cx=cv.getContext('2d');
 cx.imageSmoothingEnabled=false;
@@ -467,7 +467,7 @@ let activeModel=0;
 // ── I18N ──────────────────────────────────────────────────────
 const LANGS={
   es:{
-    menuTitle:'XTANCO',menuSub:'SIMULADOR DE ESTANCO DIGITAL — BETA v1.29',
+    menuTitle:'XTANCO',menuSub:'SIMULADOR DE ESTANCO DIGITAL — BETA v1.30',
     langPick:'SELECCIONA IDIOMA',startBtn:'PULSA ENTER PARA EMPEZAR',
     langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
     tut:[
@@ -517,7 +517,7 @@ const LANGS={
     modelStart:['€3.500','€2.800','€4.500','€6.000'],
   },
   en:{
-    menuTitle:'XTANCO',menuSub:'DIGITAL TOBACCO SHOP SIMULATOR — BETA v1.29',
+    menuTitle:'XTANCO',menuSub:'DIGITAL TOBACCO SHOP SIMULATOR — BETA v1.30',
     langPick:'SELECT LANGUAGE',startBtn:'PRESS ENTER TO START',
     langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
     tut:[
@@ -646,7 +646,7 @@ function importLayout(file){
   reader.readAsText(file);
 }
 // Layout version — when this changes, reset to new DEFAULT_LAYOUT
-const LAYOUT_VERSION='v1.29';
+const LAYOUT_VERSION='v1.30';
 const savedVer=localStorage.getItem('xtanco_layout_ver');
 if(savedVer!==LAYOUT_VERSION){
   // New version: reset layout to updated defaults
@@ -1491,11 +1491,11 @@ let uiOpen=false; // toggle with Menu button
 // Wall ~170px, floor diamond ~270px
 // Grid 12x6 → sum=18, tileW=800*2/18≈88, tileH=270*2/18=30
 const ISO={
-  tileW:88,tileH:30,    // wide tiles filling 800px width
-  cols:12,rows:6,        // wide grid
-  ox:270,oy:192,         // shifted left+up for extra tile margin on left and bottom
-  wallH:170,             // tall Kairosoft walls
-  doorCol:11,doorRow:3,  // door far right
+  tileW:80,tileH:28,    // slightly smaller tiles to fit +1 col/row
+  cols:13,rows:7,        // +1 each direction for bigger shop
+  ox:270,oy:185,         // adjusted for larger grid
+  wallH:165,             // walls
+  doorCol:12,doorRow:3,  // door far right (moved with cols)
 };
 // Cart→Iso: convert grid (col,row) to screen pixel
 function toIso(col,row){
