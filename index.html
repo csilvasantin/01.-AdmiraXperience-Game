@@ -3484,7 +3484,53 @@ function loop(){
   if(demoMode) demoUpdate();
   updateGame();
   r(0,0,W,H,P.bg);
-  drawCityBg();drawShop();drawShopChars();drawFloats();drawEvent();drawHUD();drawElgatoNotify();drawBottomBar();drawDemoBadge();drawUI();
+  drawCityBg();drawShop();drawShopChars();drawFloats();drawEvent();drawHUD();drawElgatoNotify();drawDemoBadge();drawUI();
+  // ── BOTTOM BAR — drawn LAST, INLINE, to guarantee visibility ──
+  if(G&&G.staff&&G.bars){
+    const _bh=32,_by=H-_bh;
+    cx.save();
+    cx.setTransform(1,0,0,1,0,0); // reset any transform
+    cx.globalAlpha=1;
+    cx.globalCompositeOperation='source-over';
+    cx.fillStyle='#282030';cx.fillRect(0,_by,W,_bh);
+    cx.fillStyle='#ffaa44';cx.fillRect(0,_by,W,2);
+    // Save button
+    cx.fillStyle='#226622';cx.fillRect(4,_by+5,50,24);
+    cx.strokeStyle='#44ff44';cx.lineWidth=2;cx.strokeRect(4,_by+5,50,24);
+    cx.fillStyle='#fff';cx.font='bold 10px monospace';cx.textAlign='center';
+    cx.fillText('SAVE',29,_by+21);
+    // Yr Sales
+    cx.textAlign='left';cx.fillStyle='#bbaa88';cx.font='8px monospace';
+    cx.fillText('Yr Sales',60,_by+13);
+    cx.fillStyle='#ffdd66';cx.font='10px monospace';
+    cx.fillText((G.yearRevenue|0)+'€',60,_by+26);
+    // Yr Profit
+    const _staff=G.staff||[];
+    const _profit=G.yearRevenue-(_staff.filter(s=>s.hired).reduce((a,s)=>a+(CFG.SALARY[s.role]||0)*s.level*(G.week||0),0));
+    cx.fillStyle='#bbaa88';cx.font='8px monospace';
+    cx.fillText('Yr Profit',170,_by+13);
+    cx.fillStyle=_profit>=0?'#66ee66':'#ee6666';cx.font='10px monospace';
+    cx.fillText((_profit|0)+'€',170,_by+26);
+    // Sat
+    cx.fillStyle='#bbaa88';cx.font='8px monospace';
+    cx.fillText('Sat '+(G.satisfaction|0)+'%',290,_by+13);
+    cx.fillText('Cli: '+(G.customersToday||0),290,_by+26);
+    // Edit button
+    cx.fillStyle='#442266';cx.fillRect(W-120,_by+5,54,24);
+    cx.strokeStyle='#aa66ff';cx.lineWidth=2;cx.strokeRect(W-120,_by+5,54,24);
+    cx.fillStyle='#fff';cx.font='bold 10px monospace';cx.textAlign='center';
+    cx.fillText('EDIT',W-93,_by+21);
+    // Menu button
+    cx.fillStyle='#664411';cx.fillRect(W-58,_by+5,52,24);
+    cx.strokeStyle='#ffaa44';cx.lineWidth=2;cx.strokeRect(W-58,_by+5,52,24);
+    cx.fillStyle='#fff';
+    cx.fillText('MENU',W-32,_by+21);
+    cx.textAlign='left';
+    cx.restore();
+    BTNS['save']={x:4,y:_by+5,w:50,h:24};
+    BTNS['editor']={x:W-120,y:_by+5,w:54,h:24};
+    BTNS['menu']={x:W-58,y:_by+5,w:52,h:24};
+  }
 }
 loop();
 </script>
