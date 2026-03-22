@@ -60,7 +60,7 @@
 </div>
 <script>
 // ═══════════════════════════════════════════════════════════════
-//  XTANCO DIGITAL TWIN — BETA v1.30
+//  XTANCO DIGITAL TWIN — BETA v1.31
 // ═══════════════════════════════════════════════════════════════
 const cv=document.getElementById('c'), cx=cv.getContext('2d');
 cx.imageSmoothingEnabled=false;
@@ -467,7 +467,7 @@ let activeModel=0;
 // ── I18N ──────────────────────────────────────────────────────
 const LANGS={
   es:{
-    menuTitle:'XTANCO',menuSub:'SIMULADOR DE ESTANCO DIGITAL — BETA v1.30',
+    menuTitle:'XTANCO',menuSub:'SIMULADOR DE ESTANCO DIGITAL — BETA v1.31',
     langPick:'SELECCIONA IDIOMA',startBtn:'PULSA ENTER PARA EMPEZAR',
     langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
     tut:[
@@ -517,7 +517,7 @@ const LANGS={
     modelStart:['€3.500','€2.800','€4.500','€6.000'],
   },
   en:{
-    menuTitle:'XTANCO',menuSub:'DIGITAL TOBACCO SHOP SIMULATOR — BETA v1.30',
+    menuTitle:'XTANCO',menuSub:'DIGITAL TOBACCO SHOP SIMULATOR — BETA v1.31',
     langPick:'SELECT LANGUAGE',startBtn:'PRESS ENTER TO START',
     langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
     tut:[
@@ -595,38 +595,47 @@ let shopLayout=JSON.parse(JSON.stringify(DEFAULT_LAYOUT));
 let edSelIdx=-1; // selected furniture index in editor
 let edHoverTile=null; // {col,row} under mouse
 
-// Load saved layout
+// ── LAYOUT PERSISTENCE ───────────────────────────────────────
+// Always load from localStorage. If nothing saved, use DEFAULT_LAYOUT.
+// The "Save" button in editor saves to localStorage.
+// The "Reset" button saves current positions as the new default
+// (stored separately so code updates don't overwrite user layout).
 function loadLayout(){
   try{
-    const d=localStorage.getItem('xtanco_layout');
+    // First try user's custom saved layout
+    const d=localStorage.getItem('xtanco_layout_user');
     if(d){
       const saved=JSON.parse(d);
-      // Merge: keep saved positions, add any new default items missing
-      shopLayout=saved;
-      for(const def of DEFAULT_LAYOUT){
-        if(!shopLayout.find(i=>i.id===def.id)){
-          shopLayout.push(JSON.parse(JSON.stringify(def)));
+      if(Array.isArray(saved)&&saved.length>0){
+        shopLayout=saved;
+        // Add any NEW items from DEFAULT that user doesn't have
+        for(const def of DEFAULT_LAYOUT){
+          if(!shopLayout.find(i=>i.id===def.id)){
+            shopLayout.push(JSON.parse(JSON.stringify(def)));
+          }
         }
+        for(const it of shopLayout){
+          if(!it.sx) it.sx=1; if(!it.sy) it.sy=1;
+        }
+        return;
       }
-      // Remove items that no longer exist in DEFAULT (e.g. deleted TFT)
-      shopLayout=shopLayout.filter(i=>DEFAULT_LAYOUT.find(d=>d.id===i.id)||i._custom);
-      // Ensure all items have sx/sy (migration from old scale format)
-      for(const it of shopLayout){
-        if(!it.sx) it.sx=it.scale||1;
-        if(!it.sy) it.sy=it.scale||1;
-        delete it.scale;
-      }
-      return true;
     }
   }catch(e){}
-  return false;
+  // Fallback to DEFAULT_LAYOUT
+  shopLayout=JSON.parse(JSON.stringify(DEFAULT_LAYOUT));
 }
 function saveLayout(){
-  try{localStorage.setItem('xtanco_layout',JSON.stringify(shopLayout));}catch(e){}
+  // Save to persistent user storage (survives code updates)
+  try{localStorage.setItem('xtanco_layout_user',JSON.stringify(shopLayout));}catch(e){}
 }
 function resetLayout(){
-  shopLayout=JSON.parse(JSON.stringify(DEFAULT_LAYOUT));
+  // Reset = save current layout as the new user default
   saveLayout();
+}
+function resetToFactory(){
+  // Factory reset = go back to code DEFAULT_LAYOUT
+  localStorage.removeItem('xtanco_layout_user');
+  shopLayout=JSON.parse(JSON.stringify(DEFAULT_LAYOUT));
 }
 // Export layout as JSON file download
 function exportLayout(){
@@ -644,14 +653,6 @@ function importLayout(file){
     }catch(err){}
   };
   reader.readAsText(file);
-}
-// Layout version — when this changes, reset to new DEFAULT_LAYOUT
-const LAYOUT_VERSION='v1.30';
-const savedVer=localStorage.getItem('xtanco_layout_ver');
-if(savedVer!==LAYOUT_VERSION){
-  // New version: reset layout to updated defaults
-  localStorage.removeItem('xtanco_layout');
-  localStorage.setItem('xtanco_layout_ver',LAYOUT_VERSION);
 }
 loadLayout();
 
