@@ -1857,8 +1857,8 @@ function drawLED(scx,scy){
   const start=0.5+(5-span)/2;
   const lp1=toIso(0,start+span); // bottom (text starts here)
   const lp2=toIso(0,start);      // top (text ends here)
-  // Position at middle height of left wall
-  const ledYoff=Math.round(ISO.wallH/2);
+  // Position at 40% height (10% higher, just below clock)
+  const ledYoff=Math.round(ISO.wallH*0.4);
   const ledY=lp1.y-ISO.wallH+ledYoff;
   const lh=Math.round(16*scy);
   cx.save();
