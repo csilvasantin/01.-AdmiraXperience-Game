@@ -2,86 +2,135 @@
 
 ---
 
-## [v2.2] — 2026-03-22
+## [v2.4] — 2026-03-22
 
-### Ciclo de día completo, cielo dinámico e iluminación progresiva IoT
+### Sesión maratón: DJ, música, persistencia, contador, competencia y mejoras masivas
 
-**El juego ahora tiene un ciclo de día real** basado en el reloj de pared del Xtanco, con cielo que cambia de color y lámpara que se enciende progresivamente al anochecer.
+**40+ commits en una sola sesión.** El Xtanco ha pasado de ser un simulador estático a un juego vivo con música, personal interactivo, persistencia real y datos de mercado.
 
 ---
 
-### Sistema de tiempo de juego
+### Hilo musical del Xtanco
 
-- El reloj de pared ya no muestra la hora real del sistema
-- Ahora marca la **hora del juego** (`G.gameTime`), de apertura a cierre
-- Un día completo (09:00→21:00 = 12 horas de tienda) se juega en **5 minutos reales** (300 segundos)
-- Cada frame avanza el reloj: `hoursPerFrame = dayHours / (duration * 60fps)`
-- `weekTimer` se calcula automáticamente desde `gameTime` para compatibilidad con mecánicas existentes (salarios, fin de semana, etc.)
-- Al llegar a la hora de cierre → se dispara `endWeek()` (pago de salarios, decay de stock)
-- Al empezar un nuevo día → el reloj vuelve a la hora de apertura
+- **3 canciones** incluidas como MP3 en `/music/`:
+  - Titi Me Pregunto - Bad Bunny
+  - Careless Whisper - George Michael
+  - La Perla - Rosalia
+- **Controles interactivos en HUD**: nota musical clickable para mutear + flechas prev/next
+- La musica empieza automaticamente al iniciar partida
+- Tecla **M** para mutear/desmutear
+- Cancion actual visible en la barra superior con titulo y artista
+- Loop automatico: al acabar una cancion pasa a la siguiente
 
-### Cielo dinámico según hora del juego
+### Perfil DJ (5to empleado)
 
-El cielo cambia progresivamente durante el día, tanto en el fondo como a través de las ventanas:
+| Caracteristica | Detalle |
+|----------------|---------|
+| Coste | 200 euros |
+| Musica | Novah - Hard Techno (exclusiva, no en playlist normal) |
+| Efecto visual | Todos los empleados y clientes bailan |
+| Bocadillos | "Altadis Party!!" en rosa para todo el staff |
+| Lampara | Efecto strobe (parpadeo rapido ON/OFF) |
+| Clientes | Bob animado + notas musicales flotantes |
 
-| Hora | Cielo |
-|------|-------|
-| 07:00-09:00 | Azul grisáceo (amanecer) |
-| 09:00-12:00 | Azul claro (mañana) |
-| 12:00-16:00 | Azul brillante (mediodía) |
-| 16:00-18:00 | Naranja (atardecer) |
-| 18:00-19:00 | Rojo (crepúsculo) |
-| 19:00-20:00 | Púrpura (penumbra) |
-| 20:00+ | Azul oscuro/negro (noche) |
+- La cancion de Novah SOLO se puede activar contratando al DJ
+- Al despedir al DJ, vuelve la musica normal y el comportamiento estandar
 
-Función `getSkyColors(hour)` retorna 3 color stops para el degradado del cielo.
+### Uniforme del equipo Xtanco
 
-### Iluminación progresiva de la lámpara
+- Todos los empleados llevan **camiseta azul con una X blanca** en el pecho
+- Los clientes NUNCA visten de azul (colores 1-5, excluyendo indice 0)
+- Pelo siempre negro para empleados (pelo de Altadis)
+- Distincion visual inmediata entre staff y clientes
 
-La lámpara del Xtanco (y la Elgato Key Light real) se enciende **progresivamente**:
+### Sistema de contratacion/despido mejorado (PER)
 
-| Hora | Intensidad | Elgato brightness |
-|------|-----------|-------------------|
-| 09:00-16:00 | 0% (apagada) | off |
-| 16:00 | 10% | brightness: 10 |
-| 17:00 | 35% | brightness: 35 |
-| 18:00 | 60% | brightness: 60 |
-| 19:00 | 85% | brightness: 85 |
-| 20:00+ | 100% | brightness: 100 |
-| 21:00 (cierre) | off | off |
+- Boton **ECHAR** funcional para cada empleado
+- Al despedir: bocadillo "Bye Bye!" + animacion de salida por la puerta
+- **Recontratacion**: al volver a pulsar CONTRATAR, el empleado regresa a su puesto
+- Toggle hire/fire para los 5 roles: Cajero, Repositor, Azafata, Store Manager, DJ
 
-**Visual progresivo de la lámpara:**
-- Halo en el suelo: radio crece de 12px a 30px
-- Cono de luz vertical: se expande con la intensidad
-- Bombilla: crece de 2px a 4px con aureola radiante
-- Pantalla: transición de tibio oscuro a blanco brillante
-- Elgato real: recibe `brightness` progresivo cada ~1 segundo (throttled a 60 frames)
+### Contador de personas (HUD)
 
-### Settings de tienda (nueva pantalla)
+- **Icono de camara** con numero de personas actualmente en la tienda
+- **Flecha verde hacia arriba**: total de entradas del dia
+- **Flecha roja hacia abajo**: total de salidas del dia
+- Solo cuenta clientes (no empleados)
+- Se resetea cada dia de juego
+- Posicionado junto al dinero en la barra principal
 
-Nueva opción **⚙ SETTINGS** accesible desde el menú principal:
+### Cuota de mercado (barra superior)
 
-| Ajuste | Default | Rango |
-|--------|---------|-------|
-| Hora apertura | 09:00 | 0-23 |
-| Hora cierre | 21:00 | 1-24 |
-| Duración del día | 300s (5 min) | 60-600s |
+4 cajas con los competidores de tabaco en Espana:
 
-- Preview visual del cielo a lo largo del día
-- Información de duración (horas de tienda en X segundos reales)
-- Se guarda en `localStorage` (`xtanco_settings`)
-- Botón ✓ GUARDAR o Escape para volver al menú
+| Marca | Cuota | Color |
+|-------|-------|-------|
+| ALTADIS | 28% | Amarillo |
+| JTI | 27% | Rojo |
+| PM | 23% | Azul |
+| BAT | 22% | Gris |
 
-### HUD actualizado
+### Pantalla Admira interactiva (TFT pared izquierda)
 
-- La barra superior ahora muestra: `14:35 · Y1 W1` (hora del juego + año/semana)
-- El reloj se actualiza suavemente con el gameTime
+- Click en productos del menu STO → muestra info en pantalla Admira durante 10 segundos
+- Muestra: nombre, barra de stock, porcentaje, precio por unidad
+- Header "ADMIRA" en dorado
+- Prioridad: Stock > Fiesta > Ogro (delegacion) > Altadis (default)
+- **Cuando staff toca a un cliente**: pantalla muestra "FIESTA!!" con confeti
+- Correccion de perspectiva: texto correctamente orientado en la pared isometrica
 
-### Correcciones técnicas
+### Ciclo de dia completo
 
-- Variable duplicada `hh` que impedía cargar el juego → renombrada a `gh`/`gm`
-- Estado `S.SETTINGS` añadido a la máquina de estados
-- Click handler extendido para soportar SETTINGS y MENU
+- Reloj de pared marca hora del juego (09:00→21:00 en 5 minutos reales)
+- Cielo dinamico: azul mañana → naranja atardecer → purpura → noche
+- Lampara progresiva: 16h=10%, 17h=35%, 18h=60%, 19h=85%, 20h=100%
+- Elgato Key Light fisica sincronizada con intensidad progresiva
+- Settings de tienda: hora apertura/cierre configurable
+
+### Fecha real en HUD
+
+- Reemplazado "AÑO 1 SEM 1" por **fecha real** (22/03/2026)
+- "Ingresos Dia" visible junto a la fecha
+- Euro siempre detras de la cantidad (3500 euros)
+
+### Layout persistente
+
+- Los cambios de posicion de muebles se guardan en **localStorage** con clave dedicada
+- Boton RESET graba la posicion actual como nuevo default
+- Al recargar la pagina, se restaura la ultima posicion guardada
+- El layout sobrevive actualizaciones del codigo (clave separada del versionado)
+
+### Cesped exterior
+
+- Zona fuera del Xtanco rellena con **cesped verde isometrico** con patron de rombos
+- El shop ocupa 13x7 tiles (ampliado +1 col y +1 row respecto a v2.2)
+
+### Puerta de cristal mejorada
+
+- Logo XTANCO solo en una puerta (no centrado entre las dos)
+- Puerta siempre renderizada por encima de muebles (z-order correcto)
+- Animacion de apertura/cierre cuando entran/salen clientes
+
+### Ventanas ajustadas
+
+- 3 ventanas (no 4)
+- Movidas 10% mas arriba y mas cerca de la puerta
+- Pajaros animados de colores distintos pasan entre ventanas
+
+### Sistema de cache resuelto
+
+- `index.html` = loader que redirige a `game.html?v=timestamp`
+- Service Worker con cache-busting en activacion
+- Nunca mas se carga una version antigua
+
+### Correcciones tecnicas
+
+- Variable duplicada `hh` → renombrada
+- Menu siempre visible (fondo oscuro contrastado)
+- Mapa de dureza en muebles (colisiones staff + clientes)
+- Puerta de cristal sin triangulo transparente
+- Renders envueltos en try/catch para evitar crashes
+- `cx.save()/restore()` alrededor de cada funcion de render
 
 ---
 
@@ -399,10 +448,12 @@ Tabaco, Vapes, Lotería, Prensa, Chuches, Recarga móvil
 | v0.3 | Rediseño Game Dev Story | ✅ |
 | v1.0-beta | Bucle completo 5 años | ✅ |
 | v2.0 | Motor isométrico + editor + IoT | ✅ |
-| v2.1 | Interacción manager-muebles (vender, reponer) | 🔜 |
-| v2.2 | Diálogos con clientes al acercarse | 🔜 |
-| v2.3 | Muebles Altadis específicos (góndolas, vitrinas) | 🔜 |
-| v2.4 | Sonido ambiente + música chiptune | 🔜 |
+| v2.1 | Interactividad, packs, visitas, lampara IoT | ✅ |
+| v2.2 | Ciclo de dia, cielo dinamico, iluminacion progresiva | ✅ |
+| v2.3 | Fecha real, ingresos dia, contador personas | ✅ |
+| v2.4 | DJ, musica, competencia, persistencia, cesped | ✅ |
+| v2.5 | Dialogos con clientes, misiones diarias | 🔜 |
+| v2.6 | Muebles Altadis especificos (gondolas, vitrinas) | 🔜 |
 | v3.0 | Datos en tiempo real via API | 🔜 |
 
 ---
