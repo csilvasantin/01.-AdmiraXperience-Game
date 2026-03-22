@@ -54,7 +54,15 @@ let monitorAlert={active:false,timer:0,msg:'',color:''};
 
 // ── SHOP TIME SYSTEM ─────────────────────────────────────────
 // Day runs from openHour to closeHour in DAY_DURATION_SEC real seconds
-const SHOP_TIME_DEFAULTS={openHour:9,closeHour:21,dayDurationSec:300}; // 5 min = 300s
+const SHOP_TIME_DEFAULTS={
+  openHour:9,closeHour:21,dayDurationSec:300,
+  staff:[
+    {name:'ANA',role:0},    // Cajera
+    {name:'JORGE',role:1},  // Repositor
+    {name:'LUCÍA',role:2},  // Azafata
+    {name:'MARCOS',role:3}, // Store Manager
+  ]
+};
 let shopTimeSettings=JSON.parse(JSON.stringify(SHOP_TIME_DEFAULTS));
 // Load/save settings
 function loadShopSettings(){
@@ -512,10 +520,14 @@ function initGame(){
   G.staff=M.staffInit.map((s,i)=>{
     const gp=staffGridPos[i%staffGridPos.length];
     const iso=toIso(gp.col,gp.row);
+    // Apply custom names/roles from settings
+    const custom=shopTimeSettings.staff&&shopTimeSettings.staff[i];
+    const staffName=custom?custom.name:s.name;
+    const staffRole=custom?custom.role:s.role;
     return {
-      ...s,x:iso.x-7,y:iso.y-20,
+      ...s,name:staffName,role:staffRole,x:iso.x-7,y:iso.y-20,
       level:1,energy:100,morale:80,busy:0,dir:1,isWalking:false,
-      shirt:i%P.shirts.length,hair:i%P.hair.length,
+      shirt:0,hair:i%P.hair.length, // all staff wear blue (shirt index 0)
       bTimer:0,bIdx:i%5,aFrame:0,aTimer:0,
     };
   });
@@ -760,6 +772,13 @@ function doAction(id){
     uiOpen=false;return;
   }
   if(id==='lampToggle'){toggleStudioLight();return;}
+  if(id.startsWith('staffClick')){
+    const si=parseInt(id.slice(10));
+    if(G.staff&&G.staff[si]&&G.staff[si].hired){
+      G.staff[si].clickBubble=180; // show bubble for 3 seconds
+    }
+    return;
+  }
   if(id==='menuSettings'){state=S.SETTINGS;return;}
   if(id==='setOpenDown'){shopTimeSettings.openHour=Math.max(0,shopTimeSettings.openHour-1);return;}
   if(id==='setOpenUp'){shopTimeSettings.openHour=Math.min(shopTimeSettings.closeHour-1,shopTimeSettings.openHour+1);return;}
@@ -768,6 +787,19 @@ function doAction(id){
   if(id==='setDurDown'){shopTimeSettings.dayDurationSec=Math.max(60,shopTimeSettings.dayDurationSec-30);return;}
   if(id==='setDurUp'){shopTimeSettings.dayDurationSec=Math.min(600,shopTimeSettings.dayDurationSec+30);return;}
   if(id==='setBack'){saveShopSettings();state=S.MENU;return;}
+  // Staff name/role settings
+  const staffNames=['ANA','JORGE','LUCÍA','MARCOS','PABLO','ELENA','SARA','DIEGO','MARTA','HUGO','ALBA','INÉS'];
+  if(id.startsWith('staffNamePrev')){
+    const si=parseInt(id.slice(13));const st=shopTimeSettings.staff[si];
+    const ci=staffNames.indexOf(st.name);st.name=staffNames[(ci-1+staffNames.length)%staffNames.length];return;
+  }
+  if(id.startsWith('staffNameNext')){
+    const si=parseInt(id.slice(13));const st=shopTimeSettings.staff[si];
+    const ci=staffNames.indexOf(st.name);st.name=staffNames[(ci+1)%staffNames.length];return;
+  }
+  if(id.startsWith('staffRoleCycle')){
+    const si=parseInt(id.slice(14));shopTimeSettings.staff[si].role=(shopTimeSettings.staff[si].role+1)%4;return;
+  }
   if(id==='menu'){uiOpen=!uiOpen;return;}
   if(id==='closeUI'){uiOpen=false;return;}
   if(id==='save'){saveGame();showEv('💾 Saved!','#88aa55');return;}
@@ -1298,8 +1330,37 @@ function drawSettings(){
   tx('13',bx+100,310,'#8a8070',7,'center');
   tx('17',bx+150,310,'#8a8070',7,'center');
   tx(String(shopTimeSettings.closeHour).padStart(2,'0'),bx+250,310,'#8a8070',7,'center');
+  // ── Staff configuration ──
+  const roleNames=['CAJERO/A','REPOSITOR/A','AZAFATA','STORE MANAGER'];
+  const roleIcons2=['💰','📦','🎀','👔'];
+  const roleCols=['#44aa66','#88aa44','#aa44aa','#4466cc'];
+  tx('— PERSONAL —',bx+bw/2,330,'#c0b898',10,'center');
+  if(!shopTimeSettings.staff) shopTimeSettings.staff=JSON.parse(JSON.stringify(SHOP_TIME_DEFAULTS.staff));
+  for(let i=0;i<4;i++){
+    const st=shopTimeSettings.staff[i]||(shopTimeSettings.staff[i]={name:'STAFF'+(i+1),role:0});
+    const sy=338+i*34;
+    // Card
+    r(bx,sy,bw,30,'#1a1a18');rx(bx,sy,bw,30,roleCols[st.role],1);
+    r(bx,sy,3,30,roleCols[st.role]);
+    // Icon + Name
+    tx(roleIcons2[st.role],bx+8,sy+20,'#fff',10);
+    tx(st.name,bx+24,sy+13,'#fff',9);
+    tx(roleNames[st.role],bx+24,sy+25,roleCols[st.role],7);
+    // Name edit buttons (cycle through preset names)
+    const names=['ANA','JORGE','LUCÍA','MARCOS','PABLO','ELENA','SARA','DIEGO','MARTA','HUGO','ALBA','INÉS'];
+    r(bx+bw-90,sy+2,26,12,'#3a2a18');rx(bx+bw-90,sy+2,26,12,'#8a7a50',1);
+    tx('◀',bx+bw-77,sy+12,'#c0b898',8,'center');
+    BTNS['staffNamePrev'+i]={x:bx+bw-90,y:sy+2,w:26,h:12};
+    r(bx+bw-60,sy+2,26,12,'#3a2a18');rx(bx+bw-60,sy+2,26,12,'#8a7a50',1);
+    tx('▶',bx+bw-47,sy+12,'#c0b898',8,'center');
+    BTNS['staffNameNext'+i]={x:bx+bw-60,y:sy+2,w:26,h:12};
+    // Role cycle button
+    r(bx+bw-90,sy+16,56,12,'#2a2a3a');rx(bx+bw-90,sy+16,56,12,roleCols[st.role],1);
+    tx('Rol ▶',bx+bw-62,sy+26,roleCols[st.role],7,'center');
+    BTNS['staffRoleCycle'+i]={x:bx+bw-90,y:sy+16,w:56,h:12};
+  }
   // Back button
-  const bbx=W/2-50,bby=340;
+  const bbx=W/2-50,bby=480;
   r(bbx,bby,100,28,'#2a5a2a');rx(bbx,bby,100,28,'#44aa44',1);
   tx('✓ GUARDAR',W/2,bby+19,'#88ee88',10,'center');
   BTNS['setBack']={x:bbx,y:bby,w:100,h:28};
@@ -2419,7 +2480,7 @@ function drawIsoMagazineRack(col,row){
 function drawIsoStaff(s){
   const dir=s.dir||1;
   const isPlayer=G.staff&&s===G.staff[0];
-  // Player indicator: pulsing arrow above head
+  // Player indicator
   if(isPlayer){
     const bob=Math.sin(tt*0.08)*3;
     cx.globalAlpha=0.7+0.3*Math.sin(tt*0.06);
@@ -2430,6 +2491,23 @@ function drawIsoStaff(s){
   // Name tag
   const nameCol=isPlayer?'#cc4400':'#4a3a20';
   tx(s.name,s.x+7,s.y-5,nameCol,7,'center');
+  // Clickable area for interaction bubble
+  const si=G.staff.indexOf(s);
+  if(si>=0) BTNS['staffClick'+si]={x:s.x-4,y:s.y-10,w:22,h:40};
+  // Interactive speech bubble when clicked
+  if(s.clickBubble&&s.clickBubble>0){
+    s.clickBubble--;
+    const msg1=s.name;
+    const msg2='I love Altadis!!';
+    const bw2=Math.max(msg1.length,msg2.length)*5+12;
+    const bh2=22,bx3=s.x+7-bw2/2,by3=s.y-38;
+    r(bx3,by3,bw2,bh2,'#ffffffee');rx(bx3,by3,bw2,bh2,'#4466cc',1.5);
+    // Triangle pointer
+    cx.fillStyle='#ffffffee';
+    cx.beginPath();cx.moveTo(s.x+4,by3+bh2);cx.lineTo(s.x+10,by3+bh2);cx.lineTo(s.x+7,by3+bh2+5);cx.closePath();cx.fill();
+    tx(msg1,bx3+bw2/2,by3+9,'#4466cc',7,'center');
+    tx(msg2,bx3+bw2/2,by3+18,'#cc4444',6,'center');
+  }
   // Energy bar
   r(s.x-1,s.y+28,16,3,'#c0b8a0');
   r(s.x-1,s.y+28,(16*s.energy/100)|0,3,s.energy>50?P.green:s.energy>25?P.yellow:P.red);
@@ -2448,8 +2526,8 @@ function drawIsoStaff(s){
 
 // ── DRAW CUSTOMERS (ISOMETRIC) ───────────────────────────────
 function drawIsoCust(c){
-  // Same size as staff — use chibi() with customer's color as shirt
-  const shirtIdx=P.shirts.indexOf(c.col)>=0?P.shirts.indexOf(c.col):Math.abs(c.hair)%P.shirts.length;
+  // Customers never wear blue (index 0) — use indices 1-5 only
+  const shirtIdx=1+(Math.abs(c.hair)%(P.shirts.length-1));
   chibi(c.x,c.y,c.dir||1,shirtIdx,c.hair%P.hair.length,c.fr,false,tt);
 }
 
