@@ -2377,8 +2377,8 @@ function drawHUD(){
   cx.beginPath();cx.moveTo(0,hh-0.5);cx.lineTo(W,hh-0.5);cx.stroke();
   // Year/Week (left)
   // Show game clock + year/week
-  const hh=Math.floor(G.gameTime),mm=Math.floor((G.gameTime%1)*60);
-  const timeStr=String(hh).padStart(2,'0')+':'+String(mm).padStart(2,'0');
+  const gh=Math.floor(G.gameTime),gm=Math.floor((G.gameTime%1)*60);
+  const timeStr=String(gh).padStart(2,'0')+':'+String(gm).padStart(2,'0');
   tx(timeStr+' · '+T().yearLbl+G.year+' '+T().weekLbl+G.week,8,19,'#b0a888',11);
   // Week progress dot
   const dotX=108;
