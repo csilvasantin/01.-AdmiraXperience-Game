@@ -61,7 +61,7 @@
 </div>
 <script>
 // ═══════════════════════════════════════════════════════════════
-//  XTANCO DIGITAL TWIN — BETA v1.45
+//  XTANCO DIGITAL TWIN — BETA v1.46
 // ═══════════════════════════════════════════════════════════════
 const cv=document.getElementById('c'), cx=cv.getContext('2d');
 cx.imageSmoothingEnabled=false;
@@ -300,9 +300,9 @@ cv.addEventListener('touchend',e=>{
 },{passive:false});
 function drawMobileControls(){
   if(!isMobile||state!==S.GAME) return;
-  // Small swipe hint at bottom
+  // Small swipe hint above bottom bar
   cx.globalAlpha=0.25;
-  tx(uiOpen?'⬇ swipe to close':'⬆ swipe to open menu',W/2,H-4,'#aaa',7,'center');
+  tx(uiOpen?'⬇ swipe to close':'⬆ swipe to open menu',W/2,H-38,'#aaa',7,'center');
   cx.globalAlpha=1;
   // Weather/holiday badge top-left
   if(G.holiday&&G.holiday.active){
@@ -554,7 +554,7 @@ let activeModel=0;
 // ── I18N ──────────────────────────────────────────────────────
 const LANGS={
   es:{
-    menuTitle:'XTANCO',menuSub:'SIMULADOR DE ESTANCO DIGITAL — BETA v1.45',
+    menuTitle:'XTANCO',menuSub:'SIMULADOR DE ESTANCO DIGITAL — BETA v1.46',
     langPick:'SELECCIONA IDIOMA',startBtn:'PULSA ENTER PARA EMPEZAR',
     langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
     tut:[
@@ -604,7 +604,7 @@ const LANGS={
     modelStart:['€3.500','€2.800','€4.500','€6.000'],
   },
   en:{
-    menuTitle:'XTANCO',menuSub:'DIGITAL TOBACCO SHOP SIMULATOR — BETA v1.45',
+    menuTitle:'XTANCO',menuSub:'DIGITAL TOBACCO SHOP SIMULATOR — BETA v1.46',
     langPick:'SELECT LANGUAGE',startBtn:'PRESS ENTER TO START',
     langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
     tut:[
@@ -1822,7 +1822,7 @@ const nt=(s,x,y,c,sz=12)=>{glow(c,10);tx(s,x,y,c,sz,'center');nog();};
 
 // ── SHOP LAYOUT ───────────────────────────────────────────────
 // SHOP now takes FULL width (like GDS). UI panel is an overlay.
-const SHOP={x:0,y:28,w:W,h:H-28-30}; // between top bar (28px) and bottom bar (30px)
+const SHOP={x:0,y:28,w:W,h:H-28-34}; // between top bar (28px) and bottom bar (34px)
 const UI={x:W-170,w:170}; // overlay panel (shown/hidden)
 let uiOpen=false; // toggle with Menu button
 
@@ -1996,7 +1996,7 @@ function drawMenu(){
   tx('? HELP',hx+30,hy+16,'#44ccaa',9,'center');
   BTNS['menuHelp']={x:hx,y:hy,w:60,h:22};
   // Version tag
-  cx.globalAlpha=0.3;tx('v1.45',W-40,H-8,P.gray,7,'center');cx.globalAlpha=1;
+  cx.globalAlpha=0.3;tx('v1.46',W-40,H-8,P.gray,7,'center');cx.globalAlpha=1;
 }
 
 // ── HELP / MANUAL SCREEN ─────────────────────────────────────
@@ -3735,7 +3735,7 @@ function drawElgatoNotify(){
 // ── DRAW BOTTOM BAR (GDS style: Yr Sales | Yr Profit | Status | Menu) ──
 function drawBottomBar(){
   if(!G||!G.staff||!G.bars) return; // guard: game not ready yet
-  const bh=32, by=H-bh;
+  const bh=34, by=H-bh;
   // Solid dark background — high contrast against game area
   r(0,by,W,bh,'#282030');
   // Bright top border
