@@ -3949,6 +3949,236 @@ function loop(){
   cx.save();try{drawUI();}catch(e){}cx.restore();
 }
 loop();
+
+// ═══════════════════════════════════════════════════════════════
+//  xtAPI — CLI-to-Game bridge for Claude
+//  Allows Claude CLI to query and control the game via Chrome MCP
+// ═══════════════════════════════════════════════════════════════
+window.xtAPI = (function(){
+  const ROLE_NAMES = {0:'cajero',1:'repositor',2:'azafata',3:'manager',4:'dj'};
+  const ROLE_LOOKUP = {};
+  Object.entries(ROLE_NAMES).forEach(([k,v])=>{ ROLE_LOOKUP[v]=+k; });
+  ROLE_LOOKUP['cashier']=0; ROLE_LOOKUP['cajera']=0;
+  ROLE_LOOKUP['stocker']=1; ROLE_LOOKUP['repositora']=1; ROLE_LOOKUP['reponedor']=1;
+  ROLE_LOOKUP['hostess']=2;
+  ROLE_LOOKUP['store manager']=3; ROLE_LOOKUP['encargado']=3;
+
+  function prodName(i){
+    try{ return T().prodLabel[i]||('Producto '+i); }catch(e){ return 'Producto '+i; }
+  }
+
+  const api = {
+    // ── CONSULTAS ──────────────────────────────────────────────
+    status: function(){
+      if(!G) return {ok:false,message:'No hay partida en curso'};
+      return {ok:true, data:{
+        money: G.money,
+        week: G.week,
+        year: G.year,
+        totalYears: CFG.TOTAL_YEARS,
+        yearTarget: CFG.YEAR_TARGETS[G.year-1],
+        yearRevenue: G.yearRevenue,
+        satisfaction: G.satisfaction,
+        fame: G.fame,
+        storeLevel: G.storeLevel,
+        customersToday: G.customersToday,
+        nowPlaying: G.nowPlaying,
+        state: state,
+        staffCount: G.staff?G.staff.filter(s=>s.hired).length:0,
+        staffTotal: G.staff?G.staff.length:0,
+      }};
+    },
+
+    staff: function(){
+      if(!G||!G.staff) return {ok:false,message:'No hay partida en curso'};
+      return {ok:true, data: G.staff.map((s,i)=>({
+        slot: i,
+        name: s.name,
+        role: ROLE_NAMES[s.role]||'desconocido',
+        roleId: s.role,
+        hired: s.hired,
+        level: s.level||0,
+        energy: s.energy||0,
+        morale: s.morale||0,
+        hireCost: CFG.HIRE_COST[s.role],
+        trainCost: CFG.TRAIN_COST[s.role],
+        salary: CFG.SALARY[s.role],
+      }))};
+    },
+
+    stock: function(){
+      if(!G||!G.prods) return {ok:false,message:'No hay partida en curso'};
+      return {ok:true, data: G.prods.map((p,i)=>({
+        slot: i,
+        name: prodName(i),
+        stock: p.stock,
+        max: p.max,
+        price: p.price,
+        pct: Math.round(p.stock/p.max*100),
+      }))};
+    },
+
+    // ── ACCIONES DIRECTAS ─────────────────────────────────────
+    hire: function(slot){
+      if(!G) return {ok:false,message:'No hay partida en curso'};
+      if(slot<0||slot>=G.staff.length) return {ok:false,message:'Slot '+slot+' no existe (0-'+(G.staff.length-1)+')'};
+      const s=G.staff[slot];
+      if(s.hired) return {ok:false,message:s.name+' ya está contratado/a'};
+      if(G.money<CFG.HIRE_COST[s.role]) return {ok:false,message:'No hay dinero suficiente (necesitas '+CFG.HIRE_COST[s.role]+'€, tienes '+Math.floor(G.money)+'€)'};
+      doAction('hire'+slot);
+      return {ok:true,message:'Contratado/a '+s.name+' ('+ROLE_NAMES[s.role]+') por '+CFG.HIRE_COST[s.role]+'€'};
+    },
+
+    train: function(slot){
+      if(!G) return {ok:false,message:'No hay partida en curso'};
+      if(slot<0||slot>=G.staff.length) return {ok:false,message:'Slot '+slot+' no existe'};
+      const s=G.staff[slot];
+      if(!s.hired) return {ok:false,message:s.name+' no está contratado/a'};
+      if(s.level>=5) return {ok:false,message:s.name+' ya está al nivel máximo (5)'};
+      if(G.money<CFG.TRAIN_COST[s.role]) return {ok:false,message:'No hay dinero suficiente (necesitas '+CFG.TRAIN_COST[s.role]+'€)'};
+      doAction('train'+slot);
+      return {ok:true,message:s.name+' entrenado/a a nivel '+(s.level)};
+    },
+
+    fire: function(slot){
+      if(!G) return {ok:false,message:'No hay partida en curso'};
+      if(slot<0||slot>=G.staff.length) return {ok:false,message:'Slot '+slot+' no existe'};
+      if(slot===0) return {ok:false,message:'No puedes despedir al manager principal (slot 0)'};
+      const s=G.staff[slot];
+      if(!s.hired) return {ok:false,message:s.name+' no está contratado/a'};
+      doAction('fire'+slot);
+      return {ok:true,message:s.name+' despedido/a'};
+    },
+
+    restock: function(slot){
+      if(!G) return {ok:false,message:'No hay partida en curso'};
+      if(slot<0||slot>=G.prods.length) return {ok:false,message:'Producto '+slot+' no existe'};
+      const p=G.prods[slot];
+      if(p.stock>=p.max) return {ok:false,message:prodName(slot)+' ya está al máximo ('+p.max+')'};
+      if(G.money<CFG.RESTOCK_COST) return {ok:false,message:'No hay dinero suficiente (necesitas '+CFG.RESTOCK_COST+'€)'};
+      doAction('rest'+slot);
+      return {ok:true,message:prodName(slot)+' repuesto a '+p.max+' unidades por '+CFG.RESTOCK_COST+'€'};
+    },
+
+    advertise: function(tier){
+      if(!G) return {ok:false,message:'No hay partida en curso'};
+      if(tier<0||tier>2) return {ok:false,message:'Tier debe ser 0 (básica), 1 (media) o 2 (premium)'};
+      const ad=CFG.ADVERT[tier];
+      if(G.money<ad.cost) return {ok:false,message:'No hay dinero suficiente (necesitas '+ad.cost+'€)'};
+      doAction('adv'+tier);
+      return {ok:true,message:'Publicidad '+ad.label+' lanzada por '+ad.cost+'€ (+'+ad.fame+' fama)'};
+    },
+
+    upgrade: function(){
+      if(!G) return {ok:false,message:'No hay partida en curso'};
+      if(G.storeLevel>=2) return {ok:false,message:'La tienda ya está al nivel máximo'};
+      if(G.money<CFG.UPGRADE_COST) return {ok:false,message:'No hay dinero suficiente (necesitas '+CFG.UPGRADE_COST+'€)'};
+      doAction('upgrade');
+      return {ok:true,message:'Tienda mejorada a nivel 2 por '+CFG.UPGRADE_COST+'€'};
+    },
+
+    visit: function(type){
+      if(!G) return {ok:false,message:'No hay partida en curso'};
+      const valid=['Com','Tec','Del','GC'];
+      const labels={Com:'Comercial',Tec:'Técnico',Del:'Delegación',GC:'Guardia Civil'};
+      if(!valid.includes(type)) return {ok:false,message:'Tipo de visita no válido. Usa: Com, Tec, Del, GC'};
+      doAction('visit'+type);
+      return {ok:true,message:'Visita '+labels[type]+' activada'};
+    },
+
+    save: function(){
+      doAction('save');
+      return {ok:true,message:'Partida guardada'};
+    },
+
+    toggleMusic: function(){ doAction('musicToggle'); return {ok:true,message:'Música toggled'}; },
+    nextTrack: function(){ doAction('musicNext'); return {ok:true,message:'Siguiente canción: '+(G?G.nowPlaying:'')}; },
+    prevTrack: function(){ doAction('musicPrev'); return {ok:true,message:'Canción anterior: '+(G?G.nowPlaying:'')}; },
+    toggleLamp: function(){ doAction('lampToggle'); return {ok:true,message:'Lámpara toggled'}; },
+
+    // ── HELPERS POR NOMBRE ────────────────────────────────────
+    hireByRole: function(roleName){
+      if(!G) return {ok:false,message:'No hay partida en curso'};
+      const rid = ROLE_LOOKUP[roleName.toLowerCase()];
+      if(rid===undefined) return {ok:false,message:'Rol "'+roleName+'" no reconocido. Roles: cajero, repositor, azafata, manager, dj'};
+      const slot = G.staff.findIndex(s=>!s.hired&&s.role===rid);
+      if(slot===-1) return {ok:false,message:'No hay ningún '+roleName+' disponible para contratar'};
+      return api.hire(slot);
+    },
+
+    hireByName: function(name){
+      if(!G) return {ok:false,message:'No hay partida en curso'};
+      const slot = G.staff.findIndex(s=>!s.hired&&s.name.toLowerCase()===name.toLowerCase());
+      if(slot===-1) return {ok:false,message:'No se encontró a "'+name+'" entre el personal disponible'};
+      return api.hire(slot);
+    },
+
+    restockByName: function(name){
+      if(!G) return {ok:false,message:'No hay partida en curso'};
+      const n=name.toLowerCase();
+      const idx = G.prods.findIndex((_,i)=>prodName(i).toLowerCase().includes(n));
+      if(idx===-1) return {ok:false,message:'Producto "'+name+'" no encontrado'};
+      return api.restock(idx);
+    },
+
+    restockAll: function(){
+      if(!G) return {ok:false,message:'No hay partida en curso'};
+      const results=[];
+      G.prods.forEach((p,i)=>{
+        if(p.stock<p.max && G.money>=CFG.RESTOCK_COST){
+          results.push(api.restock(i));
+        }
+      });
+      if(results.length===0) return {ok:true,message:'No hay productos que reponer (o no hay dinero)'};
+      return {ok:true,message:'Repuestos '+results.length+' productos',data:results};
+    },
+
+    hireAll: function(){
+      if(!G) return {ok:false,message:'No hay partida en curso'};
+      const results=[];
+      G.staff.forEach((s,i)=>{
+        if(!s.hired && G.money>=CFG.HIRE_COST[s.role]){
+          results.push(api.hire(i));
+        }
+      });
+      if(results.length===0) return {ok:true,message:'No hay personal para contratar (o no hay dinero)'};
+      return {ok:true,message:'Contratados '+results.length+' empleados',data:results};
+    },
+
+    trainAll: function(){
+      if(!G) return {ok:false,message:'No hay partida en curso'};
+      const results=[];
+      G.staff.forEach((s,i)=>{
+        if(s.hired && s.level<5 && G.money>=CFG.TRAIN_COST[s.role]){
+          results.push(api.train(i));
+        }
+      });
+      if(results.length===0) return {ok:true,message:'No hay personal para entrenar (o no hay dinero)'};
+      return {ok:true,message:'Entrenados '+results.length+' empleados',data:results};
+    },
+
+    // ── ATAJOS ────────────────────────────────────────────────
+    hireDJ:       function(){ return api.hireByRole('dj'); },
+    hireCashier:  function(){ return api.hireByRole('cajero'); },
+    hireHostess:  function(){ return api.hireByRole('azafata'); },
+    hireManager:  function(){ return api.hireByRole('manager'); },
+    hireStorcker: function(){ return api.hireByRole('repositor'); },
+
+    // ── AYUDA ─────────────────────────────────────────────────
+    help: function(){
+      return {ok:true,message:'xtAPI — Comandos disponibles',data:{
+        consultas: ['status()','staff()','stock()'],
+        acciones: ['hire(slot)','train(slot)','fire(slot)','restock(slot)','advertise(0|1|2)','upgrade()','visit(Com|Tec|Del|GC)','save()'],
+        musica: ['toggleMusic()','nextTrack()','prevTrack()','toggleLamp()'],
+        helpers: ['hireByRole(rol)','hireByName(nombre)','restockByName(nombre)','restockAll()','hireAll()','trainAll()'],
+        atajos: ['hireDJ()','hireCashier()','hireHostess()','hireManager()','hireStorcker()'],
+      }};
+    },
+  };
+
+  console.log('%c🎮 xtAPI loaded — CLI bridge ready','color:#00ffcc;font-size:14px;font-weight:bold');
+  return api;
+})();
 </script>
 </body>
 </html>
