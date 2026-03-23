@@ -61,7 +61,7 @@
 </div>
 <script>
 // ═══════════════════════════════════════════════════════════════
-//  XTANCO DIGITAL TWIN — BETA v1.51
+//  XTANCO DIGITAL TWIN — BETA v1.52
 // ═══════════════════════════════════════════════════════════════
 const cv=document.getElementById('c'), cx=cv.getContext('2d');
 cx.imageSmoothingEnabled=false;
@@ -556,7 +556,7 @@ let activeModel=0;
 // ── I18N ──────────────────────────────────────────────────────
 const LANGS={
   es:{
-    menuTitle:'XTANCO',menuSub:'SIMULADOR DE ESTANCO DIGITAL — BETA v1.51',
+    menuTitle:'XTANCO',menuSub:'SIMULADOR DE ESTANCO DIGITAL — BETA v1.52',
     langPick:'SELECCIONA IDIOMA',startBtn:'PULSA ENTER PARA EMPEZAR',
     langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
     tut:[
@@ -606,7 +606,7 @@ const LANGS={
     modelStart:['€3.500','€2.800','€4.500','€6.000'],
   },
   en:{
-    menuTitle:'XTANCO',menuSub:'DIGITAL TOBACCO SHOP SIMULATOR — BETA v1.51',
+    menuTitle:'XTANCO',menuSub:'DIGITAL TOBACCO SHOP SIMULATOR — BETA v1.52',
     langPick:'SELECT LANGUAGE',startBtn:'PRESS ENTER TO START',
     langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
     tut:[
@@ -676,6 +676,7 @@ for(let i=0;i<80;i++) rainDrops.push({x:Math.random()*W,y:Math.random()*H*0.6,sp
 
 // ── GUIDED TUTORIAL (in-game) ────────────────────────────────
 let guidedTut={active:false,step:0,timer:0};
+let visitorType=0; // 0=VIP, 1=Frecuente, 2=Casual, 3=Desconocido
 const TUT_STEPS=[
   {id:'hire0',msg:'Contrata a tu primera empleada (pestaña Staff)',x:0.85,y:0.15},
   {id:'rest0',msg:'Repone stock (pestaña Stock)',x:0.85,y:0.5},
@@ -1348,6 +1349,16 @@ function doAction(id){
   if(id==='setDurUp'){shopTimeSettings.dayDurationSec=Math.min(600,shopTimeSettings.dayDurationSec+30);return;}
   if(id==='musicToggle'){toggleMusic();return;}
   if(id==='sfxToggle'){G.sfxVolume=G.sfxVolume>0?0:0.7;return;}
+  if(id.startsWith('visitor_')){
+    visitorType=parseInt(id.slice(8));
+    const labels=lang==='es'?['VIP','Frecuente','Casual','Desconocido']:['VIP','Regular','Casual','Unknown'];
+    const icons=['⭐','🔁','👤','❓'];
+    showEv(icons[visitorType]+' '+(lang==='es'?'Perfil: ':'Profile: ')+labels[visitorType],['#ffd700','#44cc88','#6699cc','#aa8866'][visitorType]);
+    // Spawn a customer of this type
+    if(visitorType===0) spawnCust(true); // VIP
+    else spawnCust(false);
+    SFX.eventChime();return;
+  }
   if(id==='time_am'){G.gameTime=9;showEv('🌅 '+(lang==='es'?'Mañana: café y prensa':'Morning: coffee & press'),'#ffbb44');SFX.eventChime();return;}
   if(id==='time_pm'){G.gameTime=14;showEv('☀️ '+(lang==='es'?'Tarde: tabaco y lotería':'Afternoon: tobacco & lottery'),'#ee8833');SFX.eventChime();return;}
   if(id==='time_night'){G.gameTime=19;showEv('🌙 '+(lang==='es'?'Noche: vapes y recargas':'Night: vapes & recharges'),'#8866bb');SFX.eventChime();return;}
@@ -2035,7 +2046,7 @@ function drawMenu(){
   tx('? HELP',hx+30,hy+16,'#44ccaa',9,'center');
   BTNS['menuHelp']={x:hx,y:hy,w:60,h:22};
   // Version tag
-  cx.globalAlpha=0.3;tx('v1.51',W-40,H-8,P.gray,7,'center');cx.globalAlpha=1;
+  cx.globalAlpha=0.3;tx('v1.52',W-40,H-8,P.gray,7,'center');cx.globalAlpha=1;
 }
 
 // ── HELP / MANUAL SCREEN ─────────────────────────────────────
@@ -3225,33 +3236,63 @@ function drawAltadisTFT(){
       cx.fillText('mejor momento',cX,84);
       cx.fillStyle='#ccaa44';cx.font='6px monospace';
       cx.fillText('☀ DISFRUTA ☀',cX,95);
-    } else {
-      // ── DEFAULT: Compra Fortuna (random slogans) ──
-      cx.fillStyle='#002244';cx.fillRect(0,0,vW,vH);
-      cx.globalAlpha=0.08;cx.fillStyle='#4488cc';
-      cx.beginPath();cx.ellipse(cX,cY,40,30,0,0,Math.PI*2);cx.fill();cx.globalAlpha=1;
-      // ADMIRA header
-      cx.fillStyle='#ccaa44';cx.font='bold 6px monospace';
-      cx.fillText('ADMIRA',cX,12);
-      // Fortuna pack
-      cx.fillStyle='#1a4a8a';cx.fillRect(cX-10,18,20,26); // blue pack
-      cx.fillStyle='#ffffff';cx.fillRect(cX-10,18,20,6); // white top
-      cx.fillStyle='#ccaa44';cx.fillRect(cX-8,30,16,2); // gold band
-      cx.fillStyle='#ffffff';cx.font='bold 5px monospace';
-      cx.fillText('FORTUNA',cX,28);
-      // Rotating slogans
-      const slogans=lang==='es'?
-        ['Tu marca de siempre','Sabor auténtico','Calidad Fortuna','Desde 1924','El clásico español']:
-        ['Your classic brand','Authentic flavor','Fortuna quality','Since 1924','The Spanish classic'];
-      const si=Math.floor(tt/180)%slogans.length;
-      cx.fillStyle='#ffffff';cx.font='bold 8px monospace';
-      cx.fillText('FORTUNA',cX,58);
-      cx.fillStyle='#8899bb';cx.font='7px monospace';
-      cx.fillText(slogans[si],cX,72);
-      cx.strokeStyle='#cc9933';cx.lineWidth=0.5;
-      cx.beginPath();cx.moveTo(15,78);cx.lineTo(85,78);cx.stroke();
+    } else if(visitorType===0){
+      // ── VIP AD: Premium exclusive ──
+      cx.fillStyle='#1a1208';cx.fillRect(0,0,vW,vH);
+      cx.fillStyle='#ccaa44';cx.font='bold 6px monospace';cx.fillText('ADMIRA',cX,12);
+      // Gold star
+      cx.fillStyle='#ffd700';cx.font='20px monospace';cx.fillText('⭐',cX,38);
+      // Gold border lines
+      cx.strokeStyle='#ccaa44';cx.lineWidth=0.8;
+      cx.strokeRect(8,4,vW-16,vH-8);
+      cx.fillStyle='#ffd700';cx.font='bold 9px monospace';
+      cx.fillText('CLUB VIP',cX,56);
+      cx.fillStyle='#ffffff';cx.font='7px monospace';
+      cx.fillText(lang==='es'?'Selección premium':'Premium selection',cX,70);
+      cx.fillText(lang==='es'?'Habanos · Reserva':'Cigars · Reserve',cX,82);
       cx.fillStyle='#ccaa44';cx.font='6px monospace';
-      cx.fillText('Compra Fortuna',cX,90);
+      cx.fillText(lang==='es'?'Trato exclusivo':'Exclusive service',cX,94);
+    } else if(visitorType===1){
+      // ── FREQUENT AD: Loyalty program ──
+      cx.fillStyle='#0a1a12';cx.fillRect(0,0,vW,vH);
+      cx.fillStyle='#ccaa44';cx.font='bold 6px monospace';cx.fillText('ADMIRA',cX,12);
+      cx.fillStyle='#44cc88';cx.font='16px monospace';cx.fillText('🔁',cX,34);
+      cx.fillStyle='#44cc88';cx.font='bold 9px monospace';
+      cx.fillText(lang==='es'?'CLIENTE FIEL':'LOYAL CUSTOMER',cX,52);
+      cx.fillStyle='#ffffff';cx.font='7px monospace';
+      cx.fillText(lang==='es'?'Tu marca habitual':'Your regular brand',cX,66);
+      cx.fillText(lang==='es'?'Tabaco · Prensa':'Tobacco · Press',cX,78);
+      // Loyalty dots
+      for(let d=0;d<5;d++){cx.fillStyle=d<3?'#44cc88':'#333';cx.beginPath();cx.arc(30+d*10,88,3,0,Math.PI*2);cx.fill();}
+      cx.fillStyle='#44cc88';cx.font='5px monospace';cx.fillText(lang==='es'?'3/5 puntos':'3/5 points',cX,96);
+    } else if(visitorType===2){
+      // ── CASUAL AD: Impulse buy ──
+      cx.fillStyle='#0a0a1a';cx.fillRect(0,0,vW,vH);
+      cx.fillStyle='#ccaa44';cx.font='bold 6px monospace';cx.fillText('ADMIRA',cX,12);
+      cx.fillStyle='#6699cc';cx.font='16px monospace';cx.fillText('👤',cX,34);
+      cx.fillStyle='#6699cc';cx.font='bold 8px monospace';
+      cx.fillText(lang==='es'?'¡OFERTA HOY!':'TODAY\'S DEAL!',cX,50);
+      cx.fillStyle='#ffffff';cx.font='7px monospace';
+      cx.fillText(lang==='es'?'Lotería · Rasca':'Lottery · Scratch',cX,64);
+      cx.fillText(lang==='es'?'Vapes · Recargas':'Vapes · Recharges',cX,76);
+      // Flashing deal
+      cx.globalAlpha=0.5+0.5*Math.sin(tt*0.1);
+      cx.fillStyle='#ffcc44';cx.font='bold 7px monospace';
+      cx.fillText(lang==='es'?'★ DESCUENTO ★':'★ DISCOUNT ★',cX,92);
+      cx.globalAlpha=1;
+    } else {
+      // ── UNKNOWN AD: Welcome / discover ──
+      cx.fillStyle='#1a1410';cx.fillRect(0,0,vW,vH);
+      cx.fillStyle='#ccaa44';cx.font='bold 6px monospace';cx.fillText('ADMIRA',cX,12);
+      cx.fillStyle='#aa8866';cx.font='16px monospace';cx.fillText('❓',cX,34);
+      cx.fillStyle='#aa8866';cx.font='bold 8px monospace';
+      cx.fillText(lang==='es'?'BIENVENIDO':'WELCOME',cX,50);
+      cx.fillStyle='#ffffff';cx.font='7px monospace';
+      cx.fillText(lang==='es'?'Descubre tu estanco':'Discover your shop',cX,64);
+      cx.fillText(lang==='es'?'Tabaco · Lotería':'Tobacco · Lottery',cX,76);
+      cx.fillText(lang==='es'?'Prensa · Vapes':'Press · Vapes',cX,88);
+      cx.fillStyle='#ccaa44';cx.font='5px monospace';
+      cx.fillText('XTANCO',cX,96);
     }
     cx.textAlign='left';
   }
@@ -4136,16 +4177,48 @@ function tabStock(py){
   const totalRate=baseRate*rushMod*weatherMod*holidayMod;
   const afluencia=Math.min(100,totalRate/0.06*100)|0;
   const afCol=afluencia>70?P.green:afluencia>40?P.yellow:P.red;
-  r(lx,py+74,rw,30,'#1a1a1a');rx(lx,py+74,rw,30,afCol,1);
-  tx((isEs?'Clientes/min':'Customers/min'),lx+4,py+86,P.uiT3,6);
-  r(lx+2,py+90,rw-4,6,'#0a0a0a');r(lx+2,py+90,(rw-4)*afluencia/100|0,6,afCol);
-  tx(afluencia+'%',lx+rw-4,py+96,afCol,7,'right');
-  // Modifiers
-  let modY=py+108;
+  r(lx,py+74,rw,18,'#1a1a1a');rx(lx,py+74,rw,18,afCol,1);
+  tx((isEs?'Clientes/min':'Cust/min'),lx+4,py+86,P.uiT3,6);
+  r(lx+60,py+80,rw-64,5,'#0a0a0a');r(lx+60,py+80,(rw-64)*afluencia/100|0,5,afCol);
+  tx(afluencia+'%',lx+rw-4,py+86,afCol,6,'right');
+  // Visitor type selector
+  const vTypes=[
+    {icon:'⭐',label:'VIP',col:'#ffd700',
+     info:isEs?'Gasta x5 · Exige atención · Premium':'Spends x5 · Demands attention · Premium',
+     desc:isEs?'Producto estrella, trato exclusivo':'Star product, exclusive treatment'},
+    {icon:'🔁',label:isEs?'Frecuente':'Regular',col:'#44cc88',
+     info:isEs?'Compra fijo · Fiel · Descuentos':'Fixed buyer · Loyal · Discounts',
+     desc:isEs?'Tabaco habitual, prensa diaria':'Regular tobacco, daily press'},
+    {icon:'👤',label:'Casual',col:'#6699cc',
+     info:isEs?'Compra puntual · Curioso · Impulsivo':'One-time buy · Curious · Impulsive',
+     desc:isEs?'Lotería, vapes, recargas':'Lottery, vapes, recharges'},
+    {icon:'❓',label:isEs?'Desconocido':'Unknown',col:'#aa8866',
+     info:isEs?'Sin datos · Primera visita · Observa':'No data · First visit · Browsing',
+     desc:isEs?'Solo mira, puede convertirse':'Just browsing, potential convert'},
+  ];
+  const vtIconY=py+96;
+  const vtW=Math.floor(rw/4);
+  vTypes.forEach((vt,idx)=>{
+    const vtx=lx+idx*vtW;
+    const isAct=visitorType===idx;
+    r(vtx,vtIconY,vtW-2,20,isAct?'#2a2a3a':'#0a0a12');
+    rx(vtx,vtIconY,vtW-2,20,isAct?vt.col:'#333',isAct?1.5:0.5);
+    tx(vt.icon,vtx+2,vtIconY+14,vt.col,8);
+    tx(vt.label,vtx+12,vtIconY+14,isAct?'#fff':'#666',5);
+    BTNS['visitor_'+idx]={x:vtx,y:vtIconY,w:vtW-2,h:20};
+  });
+  // Visitor info panel
+  const viY=vtIconY+24;
+  const vSel=vTypes[visitorType];
+  r(lx,viY,rw,28,isEs?'#1a1a2a':'#1a1a2a');rx(lx,viY,rw,28,vSel.col,1);
+  tx(vSel.icon+' '+vSel.info,lx+4,viY+11,vSel.col,6);
+  tx(vSel.desc,lx+4,viY+22,'#bbaa99',6);
+  // Modifiers below
+  let modY=viY+34;
   if(G.rush.active){tx('⚡ Rush x2',lx+4,modY,'#ffaa44',6);modY+=10;}
-  if(wType==='rain'){tx('🌧 Lluvia -50%',lx+4,modY,'#6688aa',6);modY+=10;}
-  if(wType==='sun'){tx('☀ Sol +30%',lx+4,modY,'#ddaa33',6);modY+=10;}
-  if(G.holiday&&G.holiday.active){tx('🎉 '+G.holiday.name+' +50%',lx+4,modY,'#cc8800',6);modY+=10;}
+  if(wType==='rain'){tx('🌧 -50%',lx+4,modY,'#6688aa',6);modY+=10;}
+  if(wType==='sun'){tx('☀ +30%',lx+4,modY,'#ddaa33',6);modY+=10;}
+  if(G.holiday&&G.holiday.active){tx('🎉 +50%',lx+4,modY,'#cc8800',6);modY+=10;}
 
   // ── HORARIO TIENDA (Shop Hours) ──
   tx('— '+(isEs?'HORARIO':'HOURS')+' —',UI.x+UI.w/2,modY+6,P.uiT3,8,'center');
