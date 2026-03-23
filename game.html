@@ -52,6 +52,7 @@
   <div class="spacer"></div>
   <button class="btn-edit" id="btnEdit">✏ Edit</button>
   <button class="btn-menu" id="btnMenu">☰ Menu</button>
+  <button style="border:none;padding:3px 10px;border-radius:3px;font-family:monospace;font-size:10px;font-weight:bold;cursor:pointer;background:#551111;color:#ff6666;border:1px solid #cc4444 !important" id="btnQuit">✕ Quit</button>
 </div>
 <audio id="bgMusic" loop preload="auto"><source src="music/titi.mp3" type="audio/mpeg"></audio>
 <canvas id="c" width="800" height="500"></canvas>
@@ -182,6 +183,7 @@ const bbEl=document.getElementById('topBar');
 document.getElementById('btnSave').onclick=()=>{if(G)doAction('save');};
 document.getElementById('btnEdit').onclick=()=>{if(G)doAction('editor');};
 document.getElementById('btnMenu').onclick=()=>{if(G)doAction('menu');};
+document.getElementById('btnQuit').onclick=()=>{if(G)doAction('quit');};
 function updateHtmlBar(){
   const show=state===S.GAME||state===S.PAUSE||state===S.EDITOR;
   bbEl.classList.toggle('show',show);
@@ -1375,6 +1377,7 @@ function doAction(id){
   if(id==='menu'){uiOpen=!uiOpen;return;}
   if(id==='closeUI'){uiOpen=false;return;}
   if(id==='save'){saveGame();showEv('💾 Saved!','#88aa55');return;}
+  if(id==='quit'){saveGame();guidedTut.active=false;uiOpen=false;startTransition(S.MENU);menuSel=0;return;}
   if(id==='editor'){state=S.EDITOR;edSelIdx=-1;return;}
   // Editor actions
   if(id.startsWith('edsel')){edSelIdx=parseInt(id.slice(5));return;}
