@@ -52,7 +52,7 @@
   <div class="spacer"></div>
   <button class="btn-edit" id="btnEdit">✏ Edit</button>
   <button class="btn-menu" id="btnMenu">☰ Menu</button>
-  <button style="border:none;padding:3px 10px;border-radius:3px;font-family:monospace;font-size:10px;font-weight:bold;cursor:pointer;background:#551111;color:#ff6666;border:1px solid #cc4444 !important" id="btnQuit">✕ Quit</button>
+  <button class="btn-menu" id="btnQuit" style="background:#551111;color:#ff6666;border:1px solid #cc3333 !important">✕ Quit</button>
 </div>
 <audio id="bgMusic" loop preload="auto"><source src="music/titi.mp3" type="audio/mpeg"></audio>
 <canvas id="c" width="800" height="500"></canvas>
@@ -61,13 +61,13 @@
 </div>
 <script>
 // ═══════════════════════════════════════════════════════════════
-//  XTANCO DIGITAL TWIN — BETA v1.40
+//  XTANCO DIGITAL TWIN — BETA v1.41
 // ═══════════════════════════════════════════════════════════════
 const cv=document.getElementById('c'), cx=cv.getContext('2d');
 cx.imageSmoothingEnabled=false;
 const W=800,H=500;
 
-// ── SFX ENGINE (must be early — used throughout) ─────────────
+// ── SFX ENGINE ───────────────────────────────────────────────
 const SFX=(()=>{
   let ac=null;
   const vol=()=>(typeof G!=='undefined'&&G&&G.sfxVolume!==undefined)?G.sfxVolume:0.7;
@@ -109,7 +109,6 @@ function resizeCanvas(){
   cv.style.height=ch+'px';
   const tb=document.getElementById('topBar');
   if(tb) tb.style.maxWidth=cw+'px';
-  if(typeof detectMobile==='function') detectMobile();
 }
 resizeCanvas();
 window.addEventListener('resize',resizeCanvas);
@@ -257,81 +256,69 @@ function updateHtmlBar(){
   }
   resizeCanvas();
 }
-// Mobile touch support
-document.addEventListener('touchmove',e=>e.preventDefault(),{passive:false});
-// ── MOBILE DETECTION & ENHANCED TOUCH ────────────────────────
+// ── MOBILE UX ────────────────────────────────────────────────
 let isMobile=false;
-let touchStart={x:0,y:0,t:0};
-let mobileUI={dpadX:60,dpadY:H-80,dpadR:30,menuX:W-50,menuY:H-55};
-function detectMobile(){isMobile=window.innerWidth<768||('ontouchstart' in window&&window.innerWidth<1024);}
+let touchStart=null;
+let mobileSwipe=null;
+function detectMobile(){isMobile=/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)||('ontouchstart' in window);}
 detectMobile();
-
+document.addEventListener('touchmove',e=>e.preventDefault(),{passive:false});
 cv.addEventListener('touchstart',e=>{
   e.preventDefault();
   const t=e.touches[0];
-  touchStart={x:t.clientX,y:t.clientY,t:Date.now()};
-  // Check virtual D-pad on mobile
-  if(isMobile&&state===S.GAME){
-    const rect=cv.getBoundingClientRect();
-    const sx=(t.clientX-rect.left)/rect.width*W;
-    const sy=(t.clientY-rect.top)/rect.height*H;
-    const dx=sx-mobileUI.dpadX,dy=sy-mobileUI.dpadY;
-    if(Math.sqrt(dx*dx+dy*dy)<mobileUI.dpadR+15){
-      const angle=Math.atan2(dy,dx);
-      if(angle<-Math.PI/4&&angle>-3*Math.PI/4) keys['KeyQ']=true; // up → NW
-      else if(angle>Math.PI/4&&angle<3*Math.PI/4) keys['KeyA']=true; // down → SE
-      else if(angle>=3*Math.PI/4||angle<=-3*Math.PI/4) keys['KeyO']=true; // left → SW
-      else keys['KeyP']=true; // right → NE
-      return;
-    }
-  }
-  cv.dispatchEvent(new MouseEvent('click',{clientX:t.clientX,clientY:t.clientY}));
+  touchStart={x:t.clientX,y:t.clientY,time:Date.now()};
 },{passive:false});
-
 cv.addEventListener('touchend',e=>{
-  // Release D-pad keys
-  keys['KeyQ']=false;keys['KeyA']=false;keys['KeyO']=false;keys['KeyP']=false;
-  // Detect swipe
-  if(e.changedTouches.length>0){
-    const t=e.changedTouches[0];
-    const dx=t.clientX-touchStart.x,dy=t.clientY-touchStart.y;
-    const dt=Date.now()-touchStart.t;
-    if(dt<400&&Math.abs(dx)>50&&Math.abs(dx)>Math.abs(dy)*1.5){
-      // Horizontal swipe → change tab
+  e.preventDefault();
+  if(!touchStart) return;
+  const t=e.changedTouches[0];
+  const dx=t.clientX-touchStart.x,dy=t.clientY-touchStart.y;
+  const dist=Math.sqrt(dx*dx+dy*dy);
+  const elapsed=Date.now()-touchStart.time;
+  if(dist<15){
+    // Tap — simulate click
+    cv.dispatchEvent(new MouseEvent('click',{clientX:t.clientX,clientY:t.clientY}));
+  } else if(dist>40&&elapsed<500){
+    // Swipe
+    if(Math.abs(dx)>Math.abs(dy)){
+      mobileSwipe=dx>0?'right':'left';
+      // Swipe left/right to change tabs
       if(state===S.GAME&&uiOpen){
-        if(dx>0) activeTab=Math.min(3,activeTab+1);
-        else activeTab=Math.max(0,activeTab-1);
+        if(mobileSwipe==='left') activeTab=Math.min(3,activeTab+1);
+        if(mobileSwipe==='right') activeTab=Math.max(0,activeTab-1);
       }
-    }
-    if(dt<400&&Math.abs(dy)>50&&Math.abs(dy)>Math.abs(dx)*1.5){
-      // Vertical swipe → open/close UI
+    } else {
+      mobileSwipe=dy>0?'down':'up';
+      // Swipe up to open UI, swipe down to close
       if(state===S.GAME){
-        if(dy<0&&!uiOpen) uiOpen=true; // swipe up → open
-        if(dy>0&&uiOpen) uiOpen=false; // swipe down → close
+        if(mobileSwipe==='up'&&!uiOpen) uiOpen=true;
+        if(mobileSwipe==='down'&&uiOpen) uiOpen=false;
       }
     }
   }
+  touchStart=null;
 },{passive:false});
-
-// Draw mobile virtual D-pad
 function drawMobileControls(){
-  if(!isMobile||state!==S.GAME)return;
-  cx.globalAlpha=0.3;
-  // D-pad circle
-  const dx=mobileUI.dpadX,dy=mobileUI.dpadY,dr=mobileUI.dpadR;
-  cx.beginPath();cx.arc(dx,dy,dr,0,Math.PI*2);cx.fillStyle='#222';cx.fill();
-  cx.strokeStyle='#666';cx.lineWidth=1.5;cx.stroke();
-  // Arrows
-  cx.fillStyle='#aaa';cx.font='12px monospace';cx.textAlign='center';
-  cx.fillText('Q',dx,dy-dr/2+4);cx.fillText('A',dx,dy+dr/2+4);
-  cx.fillText('O',dx-dr/2,dy+4);cx.fillText('P',dx+dr/2,dy+4);
-  // Menu button
-  const mx=mobileUI.menuX,my=mobileUI.menuY;
-  cx.beginPath();cx.arc(mx,my,18,0,Math.PI*2);cx.fillStyle='#222';cx.fill();
-  cx.strokeStyle='#888';cx.lineWidth=1;cx.stroke();
-  cx.fillStyle='#ccc';cx.fillText('☰',mx,my+4);
-  BTNS['mobileMenu']={x:mx-18,y:my-18,w:36,h:36};
-  cx.globalAlpha=1;cx.textAlign='left';
+  if(!isMobile||state!==S.GAME) return;
+  // Small swipe hint at bottom
+  cx.globalAlpha=0.25;
+  tx(uiOpen?'⬇ swipe to close':'⬆ swipe to open menu',W/2,H-4,'#aaa',7,'center');
+  cx.globalAlpha=1;
+  // Weather/holiday badge top-left
+  if(G.holiday&&G.holiday.active){
+    r(2,30,80,14,'#2a1a0a');rx(2,30,80,14,'#cc8800',1);
+    tx('🎉 '+G.holiday.name,4,41,'#ffcc00',6);
+  }
+  if(G.weather&&G.weather.type){
+    const wy=G.holiday&&G.holiday.active?46:30;
+    r(2,wy,70,14,'#0a1a2a');rx(2,wy,70,14,'#4488cc',1);
+    tx(G.weather.type==='rain'?'🌧 Lluvia':'☀ Sol',4,wy+11,'#88bbee',6);
+  }
+  if(G.supplierDeal&&G.supplierDeal.active){
+    const sy=30+(G.holiday&&G.holiday.active?16:0)+(G.weather&&G.weather.type?16:0);
+    r(2,sy,80,14,'#0a2a1a');rx(2,sy,80,14,'#44cc88',1);
+    tx('📦 -50% restock',4,sy+11,'#66ee88',6);
+  }
 }
 
 // ── ELGATO KEY LIGHT INTEGRATION ─────────────────────────────
@@ -567,7 +554,7 @@ let activeModel=0;
 // ── I18N ──────────────────────────────────────────────────────
 const LANGS={
   es:{
-    menuTitle:'XTANCO',menuSub:'SIMULADOR DE ESTANCO DIGITAL — BETA v1.40',
+    menuTitle:'XTANCO',menuSub:'SIMULADOR DE ESTANCO DIGITAL — BETA v1.41',
     langPick:'SELECCIONA IDIOMA',startBtn:'PULSA ENTER PARA EMPEZAR',
     langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
     tut:[
@@ -617,7 +604,7 @@ const LANGS={
     modelStart:['€3.500','€2.800','€4.500','€6.000'],
   },
   en:{
-    menuTitle:'XTANCO',menuSub:'DIGITAL TOBACCO SHOP SIMULATOR — BETA v1.40',
+    menuTitle:'XTANCO',menuSub:'DIGITAL TOBACCO SHOP SIMULATOR — BETA v1.41',
     langPick:'SELECT LANGUAGE',startBtn:'PRESS ENTER TO START',
     langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
     tut:[
@@ -674,75 +661,53 @@ const T=()=>LANGS[lang];
 const S={MENU:'menu',MODEL_SEL:'modelSel',TUT:'tutorial',GAME:'game',PAUSE:'pause',YEAR_END:'yearEnd',GAME_END:'gameEnd',EDITOR:'editor',SETTINGS:'settings',HELP:'help'};
 let state=S.MENU, menuSel=0, modelSel=0, tutPage=0, helpPage=0;
 let tt=0;
-// ── TRANSITION SYSTEM ────────────────────────────────────────
 let tran={active:false,from:null,to:null,timer:0,dur:30};
-function startTransition(toState){
-  if(tran.active)return;
-  tran={active:true,from:state,to:toState,timer:0,dur:30};
-}
-function updateTransition(){
-  if(!tran.active)return;
-  tran.timer++;
-  if(tran.timer===Math.floor(tran.dur/2)){state=tran.to;} // switch at midpoint
-  if(tran.timer>=tran.dur){tran.active=false;}
-}
-function drawTransition(){
-  if(!tran.active)return;
-  const half=tran.dur/2;
-  const alpha=tran.timer<=half?tran.timer/half:1-(tran.timer-half)/half;
-  cx.globalAlpha=Math.max(0,Math.min(1,alpha));
-  r(0,0,W,H,'#000');
-  cx.globalAlpha=1;
-}
+function startTransition(toState){if(tran.active)return;tran={active:true,from:state,to:toState,timer:0,dur:30};}
+function updateTransition(){if(!tran.active)return;tran.timer++;if(tran.timer===Math.floor(tran.dur/2))state=tran.to;if(tran.timer>=tran.dur)tran.active=false;}
+function drawTransition(){if(!tran.active)return;const half=tran.dur/2;const alpha=tran.timer<=half?tran.timer/half:1-(tran.timer-half)/half;cx.globalAlpha=Math.max(0,Math.min(1,alpha));cx.fillStyle='#000';cx.fillRect(0,0,W,H);cx.globalAlpha=1;}
 let ledOffset=0;
-// ── GUIDED TUTORIAL (interactive overlay during GAME state) ──
+
+// ── GUIDED TUTORIAL (in-game) ────────────────────────────────
 let guidedTut={active:false,step:0,timer:0};
 const TUT_STEPS=[
-  {msg:{es:'¡Bienvenido a tu estanco! Vamos a enseñarte lo básico.',en:'Welcome to your shop! Let\'s learn the basics.'},delay:150,action:null},
-  {msg:{es:'Abre el menú (M) y ve a la pestaña PERSONAL.',en:'Open the menu (M) and go to the STAFF tab.'},action:'openTab1',highlight:'tab'},
-  {msg:{es:'¡Contrata a un cajero! Pulsa CONTRATAR.',en:'Hire a cashier! Click HIRE.'},action:'hire0',highlight:'hire'},
-  {msg:{es:'Ahora ve a la pestaña STOCK.',en:'Now go to the STOCK tab.'},action:'openTab2',highlight:'tab'},
-  {msg:{es:'Repón el primer producto. Pulsa REPONER.',en:'Restock the first product. Click RESTOCK.'},action:'rest0',highlight:'restock'},
-  {msg:{es:'¡Los clientes llegan! Observa las ventas...',en:'Customers are arriving! Watch the sales...'},delay:200,action:null},
-  {msg:{es:'Abre la pestaña VENTAS para ver tu progreso.',en:'Open the SALES tab to see your progress.'},action:'openTab0',highlight:'tab'},
-  {msg:{es:'¡Vigila la barra de OBJETIVO! Llegarás a ella.',en:'Watch the TARGET bar! You\'ll get there.'},delay:120,action:null},
-  {msg:{es:'¡Tutorial completado! ¡Buena suerte!',en:'Tutorial complete! Good luck!'},delay:120,action:null},
+  {id:'hire0',msg:'Contrata a tu primera empleada (pestaña Staff)',x:0.85,y:0.15},
+  {id:'rest0',msg:'Repone stock (pestaña Stock)',x:0.85,y:0.5},
+  {id:'adv0',msg:'Lanza publicidad (pestaña Tienda)',x:0.85,y:0.6},
+  {id:'wait',msg:'Espera a que lleguen clientes...',x:0.5,y:0.5,auto:120},
+  {id:'hire1',msg:'Contrata a otro empleado',x:0.85,y:0.25},
+  {id:'rest1',msg:'Repone de nuevo cuando baje el stock',x:0.85,y:0.5},
+  {id:'train0',msg:'Sube nivel a una empleada (pestaña Staff)',x:0.85,y:0.35},
+  {id:'save',msg:'Guarda la partida con el boton 💾',x:0.1,y:0.02},
+  {id:'done',msg:'Buen trabajo! Ya controlas lo basico.',x:0.5,y:0.4,auto:180},
 ];
 function checkGuidedTut(actionId){
-  if(!guidedTut.active)return;
+  if(!guidedTut.active) return;
   const step=TUT_STEPS[guidedTut.step];
-  if(!step||!step.action)return;
-  // Match actions: 'openTab1' matches tab1, 'hire0' matches hire0, etc
-  if(step.action==='openTab1'&&(actionId==='tab1'||actionId==='toggleUI')){guidedTut.step++;guidedTut.timer=0;SFX.eventChime();}
-  else if(step.action==='openTab2'&&(actionId==='tab2')){guidedTut.step++;guidedTut.timer=0;SFX.eventChime();}
-  else if(step.action==='openTab0'&&(actionId==='tab0')){guidedTut.step++;guidedTut.timer=0;SFX.eventChime();}
-  else if(step.action===actionId){guidedTut.step++;guidedTut.timer=0;SFX.eventChime();}
+  if(!step) return;
+  if(step.id==='wait'||step.id==='done') return; // auto-advance
+  if(actionId.startsWith(step.id)||(step.id==='save'&&actionId==='save')){
+    guidedTut.step++;guidedTut.timer=0;
+    if(guidedTut.step>=TUT_STEPS.length) guidedTut.active=false;
+  }
 }
 function drawGuidedTut(){
-  if(!guidedTut.active)return;
+  if(!guidedTut.active) return;
   const step=TUT_STEPS[guidedTut.step];
-  if(!step){guidedTut.active=false;return;}
-  // Auto-advance delay steps
-  if(!step.action){guidedTut.timer++;if(guidedTut.timer>=step.delay){guidedTut.step++;guidedTut.timer=0;if(guidedTut.step>=TUT_STEPS.length)guidedTut.active=false;return;}}
-  // Draw speech bubble at top
-  const msg=step.msg[lang]||step.msg.es;
-  const bx=W/2-200,by=H-52,bw=400,bh=36;
-  cx.globalAlpha=0.9;r(bx,by,bw,bh,'#06061a');
-  glow(P.neon1,6);rx(bx,by,bw,bh,P.neon1,1.5);nog();
+  if(!step) return;
+  // Auto-advance for wait/done steps
+  if(step.auto){guidedTut.timer++;if(guidedTut.timer>=step.auto){guidedTut.step++;guidedTut.timer=0;if(guidedTut.step>=TUT_STEPS.length){guidedTut.active=false;return;}}}
+  const px2=step.x*W,py2=step.y*H;
+  // Arrow + box
+  cx.globalAlpha=0.85;
+  r(px2-120,py2,240,32,'#0a0a2a');
+  glow(P.neon1,8);rx(px2-120,py2,240,32,P.neon1,2);nog();
   cx.globalAlpha=1;
-  tx(msg,bx+10,by+22,'#eeddcc',9);
-  // Step counter
-  tx((guidedTut.step+1)+'/'+TUT_STEPS.length,bx+bw-40,by+22,P.gray,7);
-  // Pulsing arrow if waiting for action
-  if(step.action){
-    const pulse=Math.sin(tt*0.1)*4;
-    tx('▼',W/2,by-6+pulse,P.neon1,14,'center');
-  }
-  // Skip button
-  const sx=bx+bw-45,sy=by+3;
-  r(sx,sy,38,14,'#1a0a0a');rx(sx,sy,38,14,'#aa4444',0.5);
-  tx('SKIP',sx+19,sy+11,'#cc6666',7,'center');
-  BTNS['skipGuided']={x:sx,y:sy,w:38,h:14};
+  tx(step.msg,px2,py2+20,P.neon1,8,'center');
+  tx('('+(guidedTut.step+1)+'/'+TUT_STEPS.length+')',px2+110,py2+12,'#666',6,'right');
+  // Pulsing dot
+  cx.globalAlpha=0.5+0.5*Math.sin(tt*0.1);
+  cx.beginPath();cx.arc(px2,py2-6,4,0,Math.PI*2);cx.fillStyle=P.neon1;cx.fill();
+  cx.globalAlpha=1;
 }
 
 // ── LAYOUT EDITOR ────────────────────────────────────────────
@@ -895,7 +860,6 @@ function astarPath(sc,sr,ec,er){
       const nc=cur.c+dc,nr=cur.r+dr;
       if(nc<0||nc>=ISO.cols||nr<0||nr>=ISO.rows)continue;
       if(closed.has(key(nc,nr)))continue;
-      // Allow walking on destination even if blocked (for door tile etc)
       if(!(nc===ec&&nr===er)&&walkGrid[nc]&&!walkGrid[nc][nr])continue;
       const g=cur.g+1,h=Math.abs(ec-nc)+Math.abs(er-nr);
       const existing=open.find(o=>o.c===nc&&o.r===nr);
@@ -903,7 +867,7 @@ function astarPath(sc,sr,ec,er){
       else open.push({c:nc,r:nr,g,h,p:cur});
     }
   }
-  return null; // no path found
+  return null;
 }
 
 // ── GAME STATE ────────────────────────────────────────────────
@@ -942,8 +906,8 @@ function initGame(){
     tftParty:0,       // PARTY!! timer when manager touches customer
     tftStockIdx:-1,   // selected product showing on Admira screen (-1=none)
     tftStockTimer:0,  // how long to show product on Admira
-    sfxVolume:0.7,     // SFX volume 0-1
-    weekHistory:[],    // revenue history for charts {w,y,rev,exp,sat}
+    sfxVolume:0.7,
+    weekHistory:[],
     holiday:{active:false,timer:0,name:''},
     supplierDeal:{active:false,timer:0,prodIdx:-1},
     weather:{type:null,timer:0},
@@ -984,7 +948,7 @@ function initGame(){
   G.floats=[];
   // Stat bars
   G.bars=[{val:55,col:P.neon1},{val:40,col:P.neon3},{val:72,col:P.neonB},{val:50,col:P.neon2}];
-  buildWalkGrid(); // compute pathfinding grid
+  buildWalkGrid();
 }
 
 // ── SAVE / LOAD ───────────────────────────────────────────────
@@ -994,54 +958,40 @@ function saveGame(){
 function loadGame(){
   try{
     const d=localStorage.getItem('xtanco_save');
-    if(d){
-      const p=JSON.parse(d);G=p.G;lang=p.lang||'es';
-      // Migrate old saves missing new fields
+    if(d){const p=JSON.parse(d);G=p.G;lang=p.lang||'es';
+      // Migrate old saves — add missing fields
       if(!G.weekHistory) G.weekHistory=[];
       if(!G.holiday) G.holiday={active:false,timer:0,name:''};
       if(!G.supplierDeal) G.supplierDeal={active:false,timer:0,prodIdx:-1};
       if(!G.weather) G.weather={type:null,timer:0};
       if(G.sfxVolume===undefined) G.sfxVolume=0.7;
-      return true;
-    }
+      return true;}
   }catch(e){}
   return false;
 }
 
 // ── LEADERBOARD ──────────────────────────────────────────────
 function loadLeaderboard(){
-  try{const d=localStorage.getItem('xtanco_leaderboard');return d?JSON.parse(d):{0:[],1:[],2:[],3:[]};}catch(e){return{0:[],1:[],2:[],3:[]};}
+  try{const d=localStorage.getItem('xtanco_leaderboard');return d?JSON.parse(d):[];}catch(e){return [];}
 }
-function saveToLeaderboard(modelIdx,entry){
+function saveToLeaderboard(){
+  if(!G) return;
   const lb=loadLeaderboard();
-  if(!lb[modelIdx])lb[modelIdx]=[];
-  lb[modelIdx].push(entry);
-  lb[modelIdx].sort((a,b)=>b.score-a.score);
-  lb[modelIdx]=lb[modelIdx].slice(0,10); // top 10
+  lb.push({score:G.totalScore||0,rev:G.totalRevenue||0,years:G.yearsCompleted||0,date:new Date().toLocaleDateString(),model:activeModel||0});
+  lb.sort((a,b)=>b.score-a.score);
+  while(lb.length>10) lb.pop();
   try{localStorage.setItem('xtanco_leaderboard',JSON.stringify(lb));}catch(e){}
-  return lb;
 }
-function drawLeaderboard(x,y,w,modelIdx){
+function drawLeaderboard(bx,by,bw){
   const lb=loadLeaderboard();
-  const entries=lb[modelIdx]||[];
-  if(entries.length===0){tx(lang==='es'?'Sin partidas registradas':'No games recorded',x,y+12,P.gray,8);return;}
-  const medals=['🥇','🥈','🥉'];
-  const colors=[P.neon3,'#c0c0c0','#cd7f32',P.gray,P.gray];
-  tx(lang==='es'?'RANKING':'LEADERBOARD',x,y,P.uiT3,7);
-  const show=Math.min(entries.length,5);
-  for(let i=0;i<show;i++){
-    const e=entries[i];
-    const medal=i<3?medals[i]:(i+1)+'.';
-    const col=colors[Math.min(i,4)];
-    const date=e.date?new Date(e.date).toLocaleDateString():'';
-    tx(medal,x,y+14+i*13,col,9);
-    tx(e.score.toLocaleString()+' pts',x+24,y+14+i*13,col,8);
-    tx(e.years+'y',x+90,y+14+i*13,P.gray,7);
-    tx(date,x+115,y+14+i*13,P.gray,6);
-    // Highlight current run
-    if(G&&e.score===G.totalScore&&e.date&&Date.now()-e.date<5000){
-      glow(P.neon1,4);rx(x-2,y+5+i*13,w+4,13,P.neon1,0.5);nog();
-    }
+  if(lb.length===0) return;
+  tx('🏆 LEADERBOARD',bx+bw/2,by,P.neon3,10,'center');
+  for(let i=0;i<Math.min(5,lb.length);i++){
+    const e=lb[i];
+    const medal=i===0?'🥇':i===1?'🥈':i===2?'🥉':'  ';
+    const col=i===0?'#ffd700':i===1?'#c0c0c0':i===2?'#cd7f32':P.gray;
+    tx(medal+' '+(i+1)+'. '+e.score.toLocaleString()+' pts',bx+8,by+18+i*16,col,8);
+    tx('€'+e.rev.toLocaleString()+' | Y'+e.years,bx+bw-8,by+18+i*16,P.gray,6,'right');
   }
 }
 
@@ -1076,7 +1026,7 @@ document.addEventListener('keydown',e=>{
   if(state===S.MENU){
     if(e.code==='ArrowLeft'||e.code==='ArrowUp')   menuSel=0;
     if(e.code==='ArrowRight'||e.code==='ArrowDown') menuSel=1;
-    if(e.code==='Enter'||e.code==='Space'){lang=menuSel===0?'es':'en';modelSel=0;startTransition(S.MODEL_SEL);}
+    if(e.code==='Enter'||e.code==='Space'){lang=menuSel===0?'es':'en';modelSel=0;state=S.MODEL_SEL;}
     return;
   }
   if(state===S.SETTINGS){
@@ -1213,9 +1163,7 @@ cv.addEventListener('mousemove',e=>{
 // ── ACTIONS ───────────────────────────────────────────────────
 function doAction(id){
   checkGuidedTut(id);
-  if(id==='skipGuided'){guidedTut.active=false;return;}
-  if(id==='mobileMenu'){uiOpen=!uiOpen;return;}
-  if(id.startsWith('tab')){activeTab=parseInt(id[3]);checkGuidedTut('openTab'+id[3]);return;}
+  if(id.startsWith('tab')){activeTab=parseInt(id[3]);return;}
   if(id.startsWith('hire')){
     const i=parseInt(id[4]);
     const s=G.staff[i];
@@ -1278,7 +1226,7 @@ function doAction(id){
   }
   if(id.startsWith('rest')){
     const i=parseInt(id[4]);const p=G.prods[i];
-    const restCost=(G.supplierDeal&&G.supplierDeal.active&&G.supplierDeal.prodIdx===i)?Math.ceil(CFG.RESTOCK_COST*0.5):CFG.RESTOCK_COST;
+    const restCost=(G.supplierDeal&&G.supplierDeal.active&&G.supplierDeal.prodIdx===i)?Math.floor(CFG.RESTOCK_COST*0.5):CFG.RESTOCK_COST;
     if(G.money>=restCost&&p.stock<p.max){
       G.money-=restCost;G.weekExpenses+=restCost;
       p.stock=p.max;updateBars();showEv(T().events[4],P.neonB);SFX.restockThud();
@@ -1414,8 +1362,8 @@ function doAction(id){
   }
   if(id==='menu'){uiOpen=!uiOpen;return;}
   if(id==='closeUI'){uiOpen=false;return;}
-  if(id==='save'){saveGame();showEv('💾 Saved!','#88aa55');return;}
-  if(id==='quit'){saveGame();guidedTut.active=false;uiOpen=false;startTransition(S.MENU);menuSel=0;return;}
+  if(id==='save'){saveGame();showEv('💾 Saved!','#88aa55');SFX.cashRegister();return;}
+  if(id==='quit'){saveGame();startTransition(S.MENU);menuSel=0;return;}
   if(id==='editor'){state=S.EDITOR;edSelIdx=-1;return;}
   // Editor actions
   if(id.startsWith('edsel')){edSelIdx=parseInt(id.slice(5));return;}
@@ -1479,9 +1427,8 @@ function advanceYear(){
     // Game end
     const hireScore=G.staff.filter(s=>s.hired).reduce((a,s)=>a+s.level*200,0);
     G.totalScore=(G.totalRevenue/100+hireScore+G.fame*50)|0;
-    saveToLeaderboard(activeModel,{score:G.totalScore,rev:G.totalRevenue,years:G.yearsCompleted,date:Date.now()});
-    state=S.GAME_END;
-    saveGame();
+    SFX.gameOver();startTransition(S.GAME_END);
+    saveToLeaderboard();saveGame();
     return;
   }
   G.yearsCompleted++;
@@ -1502,6 +1449,8 @@ function endWeek(){
   }
   // Stock decay
   for(const p of G.prods) p.stock=Math.max(0,p.stock-(2+Math.random()*4|0));
+  // Record week data for charts
+  if(G.weekHistory) G.weekHistory.push({week:G.week,rev:G.weekRevenue,exp:G.weekExpenses,sat:G.satisfaction|0,cust:G.customersToday});
   // Satisfaction decay
   G.satisfaction=Math.max(10,G.satisfaction-1.5);
   // Morale decay for unhired-slots
@@ -1527,9 +1476,8 @@ function endWeek(){
     if(G.yearRevenue<target*CFG.GAMEOVER_THRESHOLD){
       G.gameOverReason='target';
       G.totalScore=(G.totalRevenue/100)|0;
-      saveToLeaderboard(activeModel,{score:G.totalScore,rev:G.totalRevenue,years:G.yearsCompleted,date:Date.now()});
       SFX.gameOver();startTransition(S.GAME_END);
-      saveGame();
+      saveToLeaderboard();saveGame();
       return;
     }
     startTransition(S.YEAR_END);
@@ -1537,63 +1485,56 @@ function endWeek(){
     return;
   }
   if(G.week===1&&Math.random()<0.3) showEv(T().events[6],P.neon3);
-  // Record week history for charts
-  G.weekHistory.push({w:G.week-1,y:G.year,rev:G.weekRevenue,exp:G.weekExpenses,sat:G.satisfaction});
 }
 
-// ── RANDOM EVENTS ENGINE ─────────────────────────────────────
+// ── RANDOM EVENTS ────────────────────────────────────────────
 function checkRandomEvents(){
-  const hired=G.staff.filter(s=>s.hired).length;
-  // Holiday/Festivo
-  if(!G.holiday.active&&Math.random()<0.001){
-    const names=lang==='es'?['Fiesta Local','Feria','San Isidro','Rebajas']:['Local Holiday','Fair Day','Patron Saint','Sale Season'];
-    G.holiday={active:true,timer:200,name:names[Math.random()*names.length|0]};
-    showEv('🎊 '+G.holiday.name+'! '+( lang==='es'?'Ventas x1.8':'Sales x1.8'),P.neon3);
-    SFX.eventChime();
+  // Holiday event
+  if(G.holiday&&G.holiday.active){G.holiday.timer--;if(G.holiday.timer<=0)G.holiday.active=false;}
+  else if(Math.random()<0.001){
+    const names=['Dia del Padre','San Valentín','Navidad','Reyes','Black Friday','Feria'];
+    G.holiday={active:true,timer:200,name:names[Math.floor(Math.random()*names.length)]};
+    showEv('🎉 '+G.holiday.name+'! x1.8 ventas',P.neon3);SFX.eventChime();
   }
-  if(G.holiday.active){G.holiday.timer--;if(G.holiday.timer<=0)G.holiday.active=false;}
-  // Supplier Deal
-  if(!G.supplierDeal.active&&Math.random()<0.0008&&G.prods.length>0){
-    const pi=Math.random()*G.prods.length|0;
+  // Supplier deal
+  if(G.supplierDeal&&G.supplierDeal.active){G.supplierDeal.timer--;if(G.supplierDeal.timer<=0)G.supplierDeal.active=false;}
+  else if(Math.random()<0.0008){
+    const pi=Math.floor(Math.random()*G.prods.length);
     G.supplierDeal={active:true,timer:300,prodIdx:pi};
-    showEv('📦 '+(lang==='es'?'Oferta proveedor: restock -50% ':'Supplier deal: restock -50% ')+G.prods[pi].name+'!','#44aacc');
-    SFX.eventChime();
+    showEv('📦 Oferta proveedor: -50% restock!',P.neonB);SFX.eventChime();
   }
-  if(G.supplierDeal.active){G.supplierDeal.timer--;if(G.supplierDeal.timer<=0)G.supplierDeal.active=false;}
   // Weather
-  if(!G.weather.type&&Math.random()<0.0012){
-    G.weather={type:Math.random()<0.5?'rain':'sun',timer:250};
-    if(G.weather.type==='rain') showEv('🌧 '+(lang==='es'?'Lluvia: menos clientes':'Rain: fewer customers'),'#6688aa');
-    else showEv('☀️ '+(lang==='es'?'Sol: más clientes!':'Sunny: more customers!'),'#ddaa33');
-    SFX.eventChime();
+  if(G.weather&&G.weather.timer>0){G.weather.timer--;if(G.weather.timer<=0)G.weather.type=null;}
+  else if(Math.random()<0.0012){
+    const wt=Math.random()<0.5?'rain':'sun';
+    G.weather={type:wt,timer:300};
+    if(wt==='rain') showEv('🌧 Lluvia: menos clientes',P.gray);
+    else showEv('☀ Sol radiante: más clientes!',P.neon2);
   }
-  if(G.weather.type){G.weather.timer--;if(G.weather.timer<=0)G.weather={type:null,timer:0};}
-  // VIP Customer
-  if(Math.random()<0.0005&&hired>=1){
+  // VIP customer
+  if(Math.random()<0.0005){
     spawnCust(true);
-    showEv('⭐ '+(lang==='es'?'Cliente VIP! Ventas x5':'VIP Customer! Sales x5'),'#ffd700');
-    SFX.levelUp();
+    showEv('⭐ Cliente VIP!','#ffd700');SFX.eventChime();
   }
-  // Theft
-  if(Math.random()<0.0004&&G.prods.length>0){
-    if(hired<3){
-      const pi=Math.random()*G.prods.length|0;
-      const lost=Math.ceil(G.prods[pi].stock*0.3);
-      G.prods[pi].stock=Math.max(0,G.prods[pi].stock-lost);
-      showEv('🦹 '+(lang==='es'?'Robo! -'+lost+' '+G.prods[pi].name:'Theft! -'+lost+' '+G.prods[pi].name),'#cc4444');
-      SFX.inspectionAlarm();
+  // Theft attempt
+  if(Math.random()<0.0004){
+    const hiredCount=G.staff.filter(s=>s.hired).length;
+    if(hiredCount<3){
+      for(const p of G.prods) p.stock=Math.max(0,Math.floor(p.stock*0.7));
+      showEv('🚨 Hurto: -30% stock (pocas empleadas)',P.red);SFX.inspectionAlarm();
     } else {
-      showEv('🛡 '+(lang==='es'?'Intento de robo prevenido!':'Theft attempt prevented!'),'#44aa44');
+      showEv('🛡 Intento de hurto frustrado!',P.green);
     }
   }
-  // Employee of the Month
-  if(Math.random()<0.0003&&hired>=1){
-    const hiredStaff=G.staff.filter(s=>s.hired);
-    const lucky=hiredStaff[Math.random()*hiredStaff.length|0];
-    lucky.morale=Math.min(100,lucky.morale+30);
-    if(lucky.level<5){lucky.level++;addFloat(lucky.x,lucky.y-40,'⭐ LVL '+lucky.level,P.neon3);}
-    showEv('🏆 '+(lang==='es'?'Empleado del mes: ':'Employee of the month: ')+lucky.name+'!','#ffcc00');
-    SFX.levelUp();
+  // Employee of the month
+  if(Math.random()<0.0003){
+    const hired=G.staff.filter(s=>s.hired&&s.level<5);
+    if(hired.length>0){
+      const emp=hired[Math.floor(Math.random()*hired.length)];
+      emp.morale=Math.min(100,emp.morale+30);emp.level=Math.min(5,emp.level+1);
+      showEv('🏆 '+emp.name+' empleado del mes!',P.neon1);SFX.levelUp();
+      addFloat(emp.x,emp.y-40,'⭐ +LVL',P.neon1);
+    }
   }
 }
 
@@ -1726,8 +1667,11 @@ function updateGame(){
     if(G.inspect.timer<=0) G.inspect.active=false;
   }
 
-  // ── RANDOM EVENTS (holiday, supplier, weather, VIP, theft, employee of month) ──
   checkRandomEvents();
+
+  // Decrement event timers
+  if(G.holiday&&G.holiday.active&&G.holiday.timer<=0) G.holiday.active=false;
+  if(G.supplierDeal&&G.supplierDeal.active&&G.supplierDeal.timer<=0) G.supplierDeal.active=false;
 
   // Staff work
   const mult=(G.rush.active?CFG.RUSH_MULT:1)*(G.holiday&&G.holiday.active?1.8:1);
@@ -1755,49 +1699,51 @@ function updateGame(){
   }
 
   // Customers
-  const weatherMod=G.weather.type==='rain'?0.5:G.weather.type==='sun'?1.3:1;
-  const holidayMod=G.holiday&&G.holiday.active?1.5:1;
-  if(Math.random()<0.006*Math.max(1,G.staff.filter(s=>s.hired).length)*(G.rush.active?2:1)*weatherMod*holidayMod) spawnCust();
+  const weatherMod=G.weather&&G.weather.type==='rain'?0.5:G.weather&&G.weather.type==='sun'?1.5:1;
+  const holidaySpawn=G.holiday&&G.holiday.active?1.6:1;
+  if(Math.random()<0.006*Math.max(1,G.staff.filter(s=>s.hired).length)*(G.rush.active?2:1)*weatherMod*holidaySpawn) spawnCust();
   for(let i=G.custs.length-1;i>=0;i--){
     const c=G.custs[i];c.ft++;if(c.ft>10){c.fr=(c.fr+1)%2;c.ft=0;}
     if(c.st==='walk'){
-      // Follow A* path waypoints if available
-      let wtx=c.tx,wty=c.ty;
       if(c.path&&c.pathIdx<c.path.length){
-        const wp=c.path[c.pathIdx];const wiso=toIso(wp.col,wp.row);
-        wtx=wiso.x-7;wty=wiso.y-20;
-      }
-      const dx=wtx-c.x,dy=wty-c.y,d=Math.sqrt(dx*dx+dy*dy);
-      if(d<5){
-        if(c.path&&c.pathIdx<c.path.length-1){c.pathIdx++;} // next waypoint
-        else{c.st='browse';c.timer=60+Math.random()*80;}
-      } else{
-        const nx=c.x+dx/d*1.3, ny=c.y+dy/d*1.3;
-        if(canWalkTo(nx+5,ny+20)){c.x=nx;c.y=ny;c.dir=dx<0?-1:1;}
-        else if(c.path&&c.pathIdx<c.path.length-1){c.pathIdx++;} // skip blocked waypoint
-        else{c.st='browse';c.timer=30+Math.random()*40;}
+        const wp=c.path[c.pathIdx];const wpIso=toIso(wp.col,wp.row);
+        const wtx=wpIso.x-7,wty=wpIso.y-20;
+        const dx=wtx-c.x,dy=wty-c.y,d=Math.sqrt(dx*dx+dy*dy);
+        if(d<3){c.pathIdx++;if(c.pathIdx>=c.path.length){c.st='browse';c.timer=60+Math.random()*80;}}
+        else{c.x+=dx/d*1.3;c.y+=dy/d*1.3;c.dir=dx<0?-1:1;}
+      } else {
+        const dx=c.tx-c.x,dy=c.ty-c.y,d=Math.sqrt(dx*dx+dy*dy);
+        if(d<3){c.st='browse';c.timer=60+Math.random()*80;}
+        else{
+          const nx=c.x+dx/d*1.3,ny=c.y+dy/d*1.3;
+          if(canWalkTo(nx+5,ny+20)){c.x=nx;c.y=ny;c.dir=dx<0?-1:1;}
+          else{c.st='browse';c.timer=30+Math.random()*40;}
+        }
       }
     } else if(c.st==='browse'){
       c.timer--;if(c.timer<=0){
-        // Compute return path to door
+        // Compute return path
         const curTile=screenToIso(c.x+5,c.y+20);
-        c.path=astarPath(curTile.col,curTile.row,ISO.cols-1,3);c.pathIdx=0;
+        c.leavePath=astarPath(Math.max(0,Math.min(ISO.cols-1,curTile.col)),Math.max(0,Math.min(ISO.rows-1,curTile.row)),ISO.cols-1,3);
+        c.leaveIdx=0;
         const dp=toIso(ISO.cols,3);c.st='leave';c.tx=dp.x;c.ty=dp.y-40;G.doorOpen=60;
       }
     } else if(c.st==='leave'){
-      let ltx=c.tx,lty=c.ty;
-      if(c.path&&c.pathIdx<c.path.length){
-        const wp=c.path[c.pathIdx];const wiso=toIso(wp.col,wp.row);
-        ltx=wiso.x-7;lty=wiso.y-20;
-      }
-      const dx=ltx-c.x,dy=lty-c.y,d=Math.sqrt(dx*dx+dy*dy);
-      if(d<30&&G.doorOpen<30) G.doorOpen=40;
-      if(d<5&&(!c.path||c.pathIdx>=c.path.length-1)){G.custOut++;G.custs.splice(i,1);}
-      else if(d<5&&c.path){c.pathIdx++;}
-      else{
-        const nx=c.x+dx/d*1.6, ny=c.y+dy/d*1.6;
-        if(canWalkTo(nx+5,ny+20)){c.x=nx;c.y=ny;c.dir=dx<0?-1:1;}
-        else{c.x+=dx/d*0.5;c.y+=dy/d*0.5;c.dir=dx<0?-1:1;}
+      if(c.leavePath&&c.leaveIdx<c.leavePath.length){
+        const lp=c.leavePath[c.leaveIdx];const lpIso=toIso(lp.col,lp.row);
+        const ltx=lpIso.x-7,lty=lpIso.y-20;
+        const dx=ltx-c.x,dy=lty-c.y,d=Math.sqrt(dx*dx+dy*dy);
+        if(d<3){c.leaveIdx++;} else{c.x+=dx/d*1.6;c.y+=dy/d*1.6;c.dir=dx<0?-1:1;}
+        if(d<30&&G.doorOpen<30) G.doorOpen=40;
+      } else {
+        const dx=c.tx-c.x,dy=c.ty-c.y,d=Math.sqrt(dx*dx+dy*dy);
+        if(d<30&&G.doorOpen<30) G.doorOpen=40;
+        if(d<3){G.custOut++;G.custs.splice(i,1);}
+        else{
+          const nx=c.x+dx/d*1.6,ny=c.y+dy/d*1.6;
+          if(canWalkTo(nx+5,ny+20)){c.x=nx;c.y=ny;c.dir=dx<0?-1:1;}
+          else{c.x+=dx/d*0.5;c.y+=dy/d*0.5;c.dir=dx<0?-1:1;}
+        }
       }
     }
   }
@@ -1839,12 +1785,16 @@ function updateGame(){
 function spawnCust(isVip){
   if(G.custs.length>=7) return;
   const ci=Math.floor(Math.random()*6);
+  // Spawn at door, target a walkable tile
   const doorIso=toIso(ISO.cols,3);
   let tCol,tRow,attempts=0;
-  do{tCol=2+Math.random()*6|0;tRow=1+Math.random()*4|0;attempts++;}while(isTileBlocked(tCol,tRow)&&attempts<20);
-  // Compute A* path from door to target
-  const path=astarPath(ISO.cols-1,3,tCol,tRow);
+  do{
+    tCol=2+Math.random()*6|0;
+    tRow=1+Math.random()*4|0;
+    attempts++;
+  }while(isTileBlocked(tCol,tRow)&&attempts<20);
   const tIso=toIso(tCol,tRow);
+  const path=astarPath(ISO.cols-1,3,tCol,tRow);
   G.custs.push({
     x:doorIso.x,y:doorIso.y-40,
     tx:tIso.x-7,ty:tIso.y-20,
@@ -1853,8 +1803,8 @@ function spawnCust(isVip){
     fr:0,ft:0,dir:-1,
     path:path,pathIdx:0,vip:!!isVip
   });
-  G.doorOpen=60;SFX.doorBell();
-  G.customersToday++;G.totalCustomers++;G.custIn++;
+  G.doorOpen=60;SFX.doorBell(); // open door for customer entering
+  G.customersToday++;G.totalCustomers++;G.custIn++; // count entry
 }
 
 // ── DRAW HELPERS ──────────────────────────────────────────────
@@ -2042,7 +1992,7 @@ function drawMenu(){
   tx('? HELP',hx+30,hy+16,'#44ccaa',9,'center');
   BTNS['menuHelp']={x:hx,y:hy,w:60,h:22};
   // Version tag
-  cx.globalAlpha=0.4;tx('v1.40',W-6,H-6,P.gray,7,'right');cx.globalAlpha=1;
+  cx.globalAlpha=0.3;tx('v1.41',W-40,H-8,P.gray,7,'center');cx.globalAlpha=1;
 }
 
 // ── HELP / MANUAL SCREEN ─────────────────────────────────────
@@ -3913,44 +3863,17 @@ function tabSales(py){
   }
   // Mini revenue chart
   if(G.weekHistory&&G.weekHistory.length>1){
-    const chartY=py+248,chartH=70,chartW=UI.w-14,chartX=UI.x+7;
-    nl(chartX,chartY-2,chartX+chartW,chartY-2,P.gray,0.5);
-    tx(lang==='es'?'Ingresos/Semana':'Revenue/Week',chartX,chartY+8,P.uiT3,6);
-    const yearData=G.weekHistory.filter(h=>h.y===G.year);
-    if(yearData.length>1){
-      const maxR=Math.max(...yearData.map(h=>h.rev),1);
-      const wTarget=CFG.YEAR_TARGETS[G.year-1]/CFG.WEEKS_PER_YEAR;
-      // Background
-      r(chartX,chartY+12,chartW,chartH-14,'rgba(0,0,0,0.3)');
-      // Target line (dashed)
-      const tY=chartY+12+((chartH-14)*(1-Math.min(wTarget/maxR,1)));
-      cx.setLineDash([3,3]);nl(chartX,tY,chartX+chartW,tY,'#cc4444',0.7);cx.setLineDash([]);
-      tx('T',chartX+chartW-6,tY-2,'#cc4444',5);
-      // Area + line
-      cx.beginPath();
-      cx.moveTo(chartX,chartY+12+chartH-14);
-      yearData.forEach((h,i)=>{
-        const x=chartX+i/(yearData.length-1)*chartW;
-        const y=chartY+12+((chartH-14)*(1-h.rev/maxR));
-        if(i===0)cx.lineTo(x,y);else cx.lineTo(x,y);
-      });
-      cx.lineTo(chartX+(yearData.length-1)/(yearData.length-1)*chartW,chartY+12+chartH-14);
-      cx.closePath();cx.fillStyle='rgba(102,238,102,0.15)';cx.fill();
-      // Line
-      cx.beginPath();
-      yearData.forEach((h,i)=>{
-        const x=chartX+i/(yearData.length-1)*chartW;
-        const y=chartY+12+((chartH-14)*(1-h.rev/maxR));
-        if(i===0)cx.moveTo(x,y);else cx.lineTo(x,y);
-      });
-      cx.strokeStyle=P.green;cx.lineWidth=1.5;cx.stroke();
-      // Dots
-      yearData.forEach((h,i)=>{
-        const x=chartX+i/(yearData.length-1)*chartW;
-        const y=chartY+12+((chartH-14)*(1-h.rev/maxR));
-        cx.beginPath();cx.arc(x,y,2,0,Math.PI*2);cx.fillStyle=P.green;cx.fill();
-      });
+    const ch=50,cw=UI.w-14,cx2=UI.x+7,cy2=py+252;
+    nl(UI.x+4,cy2-4,UI.x+UI.w-4,cy2-4,P.gray,1);
+    tx('REVENUE TREND',UI.x+5,cy2+8,P.uiT3,6);
+    const data=G.weekHistory.slice(-12);
+    const maxR=Math.max(...data.map(d=>d.rev),1);
+    const barW=Math.floor(cw/data.length)-1;
+    for(let j=0;j<data.length;j++){
+      const bh2=Math.max(1,(data[j].rev/maxR)*ch|0);
+      r(cx2+j*(barW+1),cy2+12+ch-bh2,barW,bh2,P.green);
     }
+    rx(cx2,cy2+12,cw,ch,P.gray,1);
   }
 }
 
@@ -4198,12 +4121,11 @@ function drawGameEnd(){
   glow(titleCol,10);tx(G.totalScore.toLocaleString(),px2+28,py2+280,titleCol,28);nog();
   // Rank
   const rankIdx=Math.min(G.yearsCompleted,T().gameEndRanks.length-1);
-  nt('"'+T().gameEndRanks[rankIdx]+'"',W/2,py2+305,P.neon3,11);
-  nl(px2+20,py2+314,px2+pw-20,py2+314,P.gray,0.5);
+  nt('"'+T().gameEndRanks[rankIdx]+'"',W/2,py2+315,P.neon3,13);
   // Leaderboard
-  drawLeaderboard(px2+28,py2+320,pw-56,activeModel);
+  try{drawLeaderboard(px2+30,py2+330,pw-60);}catch(e){}
   cx.globalAlpha=.4+.6*Math.abs(Math.sin(tt*.04));
-  nt(T().gameEndRestart,W/2,py2+ph-14,P.neon1,8);cx.globalAlpha=1;
+  nt(T().gameEndRestart,W/2,py2+ph-18,P.neon1,9);cx.globalAlpha=1;
 }
 
 // ── MAIN LOOP ─────────────────────────────────────────────────
@@ -4509,7 +4431,7 @@ function loop(){
     cx.save();try{drawShopChars();}catch(e){}cx.restore();
     cx.save();try{drawHUD();}catch(e){}cx.restore();
     cx.save();try{drawUI();}catch(e){}cx.restore();
-    drawPause();return;
+    drawPause();drawTransition();return;
   }
   // GAME
   if(demoMode) demoUpdate();
@@ -4525,8 +4447,8 @@ function loop(){
   cx.save();try{drawElgatoNotify();}catch(e){}cx.restore();
   cx.save();try{drawDemoBadge();}catch(e){}cx.restore();
   cx.save();try{drawUI();}catch(e){}cx.restore();
-  cx.save();try{drawMobileControls();}catch(e){}cx.restore();
   cx.save();try{drawGuidedTut();}catch(e){}cx.restore();
+  cx.save();try{drawMobileControls();}catch(e){}cx.restore();
   drawTransition();
 }
 loop();
