@@ -79,6 +79,7 @@ function resizeCanvas(){
   cv.style.height=ch+'px';
   const tb=document.getElementById('topBar');
   if(tb) tb.style.maxWidth=cw+'px';
+  if(typeof detectMobile==='function') detectMobile();
 }
 resizeCanvas();
 window.addEventListener('resize',resizeCanvas);
@@ -227,11 +228,80 @@ function updateHtmlBar(){
 }
 // Mobile touch support
 document.addEventListener('touchmove',e=>e.preventDefault(),{passive:false});
+// ── MOBILE DETECTION & ENHANCED TOUCH ────────────────────────
+let isMobile=false;
+let touchStart={x:0,y:0,t:0};
+let mobileUI={dpadX:60,dpadY:H-80,dpadR:30,menuX:W-50,menuY:H-55};
+function detectMobile(){isMobile=window.innerWidth<768||('ontouchstart' in window&&window.innerWidth<1024);}
+detectMobile();
+
 cv.addEventListener('touchstart',e=>{
   e.preventDefault();
   const t=e.touches[0];
+  touchStart={x:t.clientX,y:t.clientY,t:Date.now()};
+  // Check virtual D-pad on mobile
+  if(isMobile&&state===S.GAME){
+    const rect=cv.getBoundingClientRect();
+    const sx=(t.clientX-rect.left)/rect.width*W;
+    const sy=(t.clientY-rect.top)/rect.height*H;
+    const dx=sx-mobileUI.dpadX,dy=sy-mobileUI.dpadY;
+    if(Math.sqrt(dx*dx+dy*dy)<mobileUI.dpadR+15){
+      const angle=Math.atan2(dy,dx);
+      if(angle<-Math.PI/4&&angle>-3*Math.PI/4) keys['KeyQ']=true; // up → NW
+      else if(angle>Math.PI/4&&angle<3*Math.PI/4) keys['KeyA']=true; // down → SE
+      else if(angle>=3*Math.PI/4||angle<=-3*Math.PI/4) keys['KeyO']=true; // left → SW
+      else keys['KeyP']=true; // right → NE
+      return;
+    }
+  }
   cv.dispatchEvent(new MouseEvent('click',{clientX:t.clientX,clientY:t.clientY}));
 },{passive:false});
+
+cv.addEventListener('touchend',e=>{
+  // Release D-pad keys
+  keys['KeyQ']=false;keys['KeyA']=false;keys['KeyO']=false;keys['KeyP']=false;
+  // Detect swipe
+  if(e.changedTouches.length>0){
+    const t=e.changedTouches[0];
+    const dx=t.clientX-touchStart.x,dy=t.clientY-touchStart.y;
+    const dt=Date.now()-touchStart.t;
+    if(dt<400&&Math.abs(dx)>50&&Math.abs(dx)>Math.abs(dy)*1.5){
+      // Horizontal swipe → change tab
+      if(state===S.GAME&&uiOpen){
+        if(dx>0) activeTab=Math.min(3,activeTab+1);
+        else activeTab=Math.max(0,activeTab-1);
+      }
+    }
+    if(dt<400&&Math.abs(dy)>50&&Math.abs(dy)>Math.abs(dx)*1.5){
+      // Vertical swipe → open/close UI
+      if(state===S.GAME){
+        if(dy<0&&!uiOpen) uiOpen=true; // swipe up → open
+        if(dy>0&&uiOpen) uiOpen=false; // swipe down → close
+      }
+    }
+  }
+},{passive:false});
+
+// Draw mobile virtual D-pad
+function drawMobileControls(){
+  if(!isMobile||state!==S.GAME)return;
+  cx.globalAlpha=0.3;
+  // D-pad circle
+  const dx=mobileUI.dpadX,dy=mobileUI.dpadY,dr=mobileUI.dpadR;
+  cx.beginPath();cx.arc(dx,dy,dr,0,Math.PI*2);cx.fillStyle='#222';cx.fill();
+  cx.strokeStyle='#666';cx.lineWidth=1.5;cx.stroke();
+  // Arrows
+  cx.fillStyle='#aaa';cx.font='12px monospace';cx.textAlign='center';
+  cx.fillText('Q',dx,dy-dr/2+4);cx.fillText('A',dx,dy+dr/2+4);
+  cx.fillText('O',dx-dr/2,dy+4);cx.fillText('P',dx+dr/2,dy+4);
+  // Menu button
+  const mx=mobileUI.menuX,my=mobileUI.menuY;
+  cx.beginPath();cx.arc(mx,my,18,0,Math.PI*2);cx.fillStyle='#222';cx.fill();
+  cx.strokeStyle='#888';cx.lineWidth=1;cx.stroke();
+  cx.fillStyle='#ccc';cx.fillText('☰',mx,my+4);
+  BTNS['mobileMenu']={x:mx-18,y:my-18,w:36,h:36};
+  cx.globalAlpha=1;cx.textAlign='left';
+}
 
 // ── ELGATO KEY LIGHT INTEGRATION ─────────────────────────────
 const ELGATO={
@@ -573,7 +643,76 @@ const T=()=>LANGS[lang];
 const S={MENU:'menu',MODEL_SEL:'modelSel',TUT:'tutorial',GAME:'game',PAUSE:'pause',YEAR_END:'yearEnd',GAME_END:'gameEnd',EDITOR:'editor',SETTINGS:'settings',HELP:'help'};
 let state=S.MENU, menuSel=0, modelSel=0, tutPage=0, helpPage=0;
 let tt=0;
+// ── TRANSITION SYSTEM ────────────────────────────────────────
+let tran={active:false,from:null,to:null,timer:0,dur:30};
+function startTransition(toState){
+  if(tran.active)return;
+  tran={active:true,from:state,to:toState,timer:0,dur:30};
+}
+function updateTransition(){
+  if(!tran.active)return;
+  tran.timer++;
+  if(tran.timer===Math.floor(tran.dur/2)){state=tran.to;} // switch at midpoint
+  if(tran.timer>=tran.dur){tran.active=false;}
+}
+function drawTransition(){
+  if(!tran.active)return;
+  const half=tran.dur/2;
+  const alpha=tran.timer<=half?tran.timer/half:1-(tran.timer-half)/half;
+  cx.globalAlpha=Math.max(0,Math.min(1,alpha));
+  r(0,0,W,H,'#000');
+  cx.globalAlpha=1;
+}
 let ledOffset=0;
+// ── GUIDED TUTORIAL (interactive overlay during GAME state) ──
+let guidedTut={active:false,step:0,timer:0};
+const TUT_STEPS=[
+  {msg:{es:'¡Bienvenido a tu estanco! Vamos a enseñarte lo básico.',en:'Welcome to your shop! Let\'s learn the basics.'},delay:150,action:null},
+  {msg:{es:'Abre el menú (M) y ve a la pestaña PERSONAL.',en:'Open the menu (M) and go to the STAFF tab.'},action:'openTab1',highlight:'tab'},
+  {msg:{es:'¡Contrata a un cajero! Pulsa CONTRATAR.',en:'Hire a cashier! Click HIRE.'},action:'hire0',highlight:'hire'},
+  {msg:{es:'Ahora ve a la pestaña STOCK.',en:'Now go to the STOCK tab.'},action:'openTab2',highlight:'tab'},
+  {msg:{es:'Repón el primer producto. Pulsa REPONER.',en:'Restock the first product. Click RESTOCK.'},action:'rest0',highlight:'restock'},
+  {msg:{es:'¡Los clientes llegan! Observa las ventas...',en:'Customers are arriving! Watch the sales...'},delay:200,action:null},
+  {msg:{es:'Abre la pestaña VENTAS para ver tu progreso.',en:'Open the SALES tab to see your progress.'},action:'openTab0',highlight:'tab'},
+  {msg:{es:'¡Vigila la barra de OBJETIVO! Llegarás a ella.',en:'Watch the TARGET bar! You\'ll get there.'},delay:120,action:null},
+  {msg:{es:'¡Tutorial completado! ¡Buena suerte!',en:'Tutorial complete! Good luck!'},delay:120,action:null},
+];
+function checkGuidedTut(actionId){
+  if(!guidedTut.active)return;
+  const step=TUT_STEPS[guidedTut.step];
+  if(!step||!step.action)return;
+  // Match actions: 'openTab1' matches tab1, 'hire0' matches hire0, etc
+  if(step.action==='openTab1'&&(actionId==='tab1'||actionId==='toggleUI')){guidedTut.step++;guidedTut.timer=0;SFX.eventChime();}
+  else if(step.action==='openTab2'&&(actionId==='tab2')){guidedTut.step++;guidedTut.timer=0;SFX.eventChime();}
+  else if(step.action==='openTab0'&&(actionId==='tab0')){guidedTut.step++;guidedTut.timer=0;SFX.eventChime();}
+  else if(step.action===actionId){guidedTut.step++;guidedTut.timer=0;SFX.eventChime();}
+}
+function drawGuidedTut(){
+  if(!guidedTut.active)return;
+  const step=TUT_STEPS[guidedTut.step];
+  if(!step){guidedTut.active=false;return;}
+  // Auto-advance delay steps
+  if(!step.action){guidedTut.timer++;if(guidedTut.timer>=step.delay){guidedTut.step++;guidedTut.timer=0;if(guidedTut.step>=TUT_STEPS.length)guidedTut.active=false;return;}}
+  // Draw speech bubble at top
+  const msg=step.msg[lang]||step.msg.es;
+  const bx=W/2-200,by=H-52,bw=400,bh=36;
+  cx.globalAlpha=0.9;r(bx,by,bw,bh,'#06061a');
+  glow(P.neon1,6);rx(bx,by,bw,bh,P.neon1,1.5);nog();
+  cx.globalAlpha=1;
+  tx(msg,bx+10,by+22,'#eeddcc',9);
+  // Step counter
+  tx((guidedTut.step+1)+'/'+TUT_STEPS.length,bx+bw-40,by+22,P.gray,7);
+  // Pulsing arrow if waiting for action
+  if(step.action){
+    const pulse=Math.sin(tt*0.1)*4;
+    tx('▼',W/2,by-6+pulse,P.neon1,14,'center');
+  }
+  // Skip button
+  const sx=bx+bw-45,sy=by+3;
+  r(sx,sy,38,14,'#1a0a0a');rx(sx,sy,38,14,'#aa4444',0.5);
+  tx('SKIP',sx+19,sy+11,'#cc6666',7,'center');
+  BTNS['skipGuided']={x:sx,y:sy,w:38,h:14};
+}
 
 // ── LAYOUT EDITOR ────────────────────────────────────────────
 // Furniture layout — editable positions
@@ -701,6 +840,41 @@ function canWalkTo(screenX,screenY){
   return true;
 }
 
+// ── A* PATHFINDING ───────────────────────────────────────────
+let walkGrid=null;
+function buildWalkGrid(){
+  walkGrid=[];
+  for(let c=0;c<ISO.cols;c++){walkGrid[c]=[];for(let r=0;r<ISO.rows;r++) walkGrid[c][r]=!isTileBlocked(c,r);}
+}
+function astarPath(sc,sr,ec,er){
+  if(!walkGrid) buildWalkGrid();
+  if(sc<0||sc>=ISO.cols||sr<0||sr>=ISO.rows) return null;
+  if(ec<0||ec>=ISO.cols||er<0||er>=ISO.rows) return null;
+  const key=(c,r)=>c+','+r;
+  const open=[{c:sc,r:sr,g:0,h:Math.abs(ec-sc)+Math.abs(er-sr),p:null}];
+  const closed=new Set();
+  while(open.length>0){
+    open.sort((a,b)=>(a.g+a.h)-(b.g+b.h));
+    const cur=open.shift();
+    if(cur.c===ec&&cur.r===er){
+      const path=[];let n=cur;while(n){path.unshift({col:n.c,row:n.r});n=n.p;}return path;
+    }
+    closed.add(key(cur.c,cur.r));
+    for(const[dc,dr]of[[1,0],[-1,0],[0,1],[0,-1]]){
+      const nc=cur.c+dc,nr=cur.r+dr;
+      if(nc<0||nc>=ISO.cols||nr<0||nr>=ISO.rows)continue;
+      if(closed.has(key(nc,nr)))continue;
+      // Allow walking on destination even if blocked (for door tile etc)
+      if(!(nc===ec&&nr===er)&&walkGrid[nc]&&!walkGrid[nc][nr])continue;
+      const g=cur.g+1,h=Math.abs(ec-nc)+Math.abs(er-nr);
+      const existing=open.find(o=>o.c===nc&&o.r===nr);
+      if(existing){if(g<existing.g){existing.g=g;existing.p=cur;}}
+      else open.push({c:nc,r:nr,g,h,p:cur});
+    }
+  }
+  return null; // no path found
+}
+
 // ── GAME STATE ────────────────────────────────────────────────
 let G={};
 function initGame(){
@@ -737,6 +911,11 @@ function initGame(){
     tftParty:0,       // PARTY!! timer when manager touches customer
     tftStockIdx:-1,   // selected product showing on Admira screen (-1=none)
     tftStockTimer:0,  // how long to show product on Admira
+    sfxVolume:0.7,     // SFX volume 0-1
+    weekHistory:[],    // revenue history for charts {w,y,rev,exp,sat}
+    holiday:{active:false,timer:0,name:''},
+    supplierDeal:{active:false,timer:0,prodIdx:-1},
+    weather:{type:null,timer:0},
   };
   // Staff from model — convert grid positions to isometric screen coords
   // Staff positions on the iso grid based on their role
@@ -774,6 +953,7 @@ function initGame(){
   G.floats=[];
   // Stat bars
   G.bars=[{val:55,col:P.neon1},{val:40,col:P.neon3},{val:72,col:P.neonB},{val:50,col:P.neon2}];
+  buildWalkGrid(); // compute pathfinding grid
 }
 
 // ── SAVE / LOAD ───────────────────────────────────────────────
@@ -786,6 +966,43 @@ function loadGame(){
     if(d){const p=JSON.parse(d);G=p.G;lang=p.lang||'es';return true;}
   }catch(e){}
   return false;
+}
+
+// ── LEADERBOARD ──────────────────────────────────────────────
+function loadLeaderboard(){
+  try{const d=localStorage.getItem('xtanco_leaderboard');return d?JSON.parse(d):{0:[],1:[],2:[],3:[]};}catch(e){return{0:[],1:[],2:[],3:[]};}
+}
+function saveToLeaderboard(modelIdx,entry){
+  const lb=loadLeaderboard();
+  if(!lb[modelIdx])lb[modelIdx]=[];
+  lb[modelIdx].push(entry);
+  lb[modelIdx].sort((a,b)=>b.score-a.score);
+  lb[modelIdx]=lb[modelIdx].slice(0,10); // top 10
+  try{localStorage.setItem('xtanco_leaderboard',JSON.stringify(lb));}catch(e){}
+  return lb;
+}
+function drawLeaderboard(x,y,w,modelIdx){
+  const lb=loadLeaderboard();
+  const entries=lb[modelIdx]||[];
+  if(entries.length===0){tx(lang==='es'?'Sin partidas registradas':'No games recorded',x,y+12,P.gray,8);return;}
+  const medals=['🥇','🥈','🥉'];
+  const colors=[P.neon3,'#c0c0c0','#cd7f32',P.gray,P.gray];
+  tx(lang==='es'?'RANKING':'LEADERBOARD',x,y,P.uiT3,7);
+  const show=Math.min(entries.length,5);
+  for(let i=0;i<show;i++){
+    const e=entries[i];
+    const medal=i<3?medals[i]:(i+1)+'.';
+    const col=colors[Math.min(i,4)];
+    const date=e.date?new Date(e.date).toLocaleDateString():'';
+    tx(medal,x,y+14+i*13,col,9);
+    tx(e.score.toLocaleString()+' pts',x+24,y+14+i*13,col,8);
+    tx(e.years+'y',x+90,y+14+i*13,P.gray,7);
+    tx(date,x+115,y+14+i*13,P.gray,6);
+    // Highlight current run
+    if(G&&e.score===G.totalScore&&e.date&&Date.now()-e.date<5000){
+      glow(P.neon1,4);rx(x-2,y+5+i*13,w+4,13,P.neon1,0.5);nog();
+    }
+  }
 }
 
 // ── INPUT ─────────────────────────────────────────────────────
@@ -819,7 +1036,7 @@ document.addEventListener('keydown',e=>{
   if(state===S.MENU){
     if(e.code==='ArrowLeft'||e.code==='ArrowUp')   menuSel=0;
     if(e.code==='ArrowRight'||e.code==='ArrowDown') menuSel=1;
-    if(e.code==='Enter'||e.code==='Space'){lang=menuSel===0?'es':'en';modelSel=0;state=S.MODEL_SEL;}
+    if(e.code==='Enter'||e.code==='Space'){lang=menuSel===0?'es':'en';modelSel=0;startTransition(S.MODEL_SEL);}
     return;
   }
   if(state===S.SETTINGS){
@@ -921,7 +1138,7 @@ cv.addEventListener('click',e=>{
   if(state===S.TUT){tutPage++;if(tutPage>=T().tut.length){state=S.GAME;startMusic();}return;}
   if(state===S.PAUSE){state=S.GAME;return;}
   if(state===S.YEAR_END&&G.yearEndAnim>80){advanceYear();return;}
-  if(state===S.GAME_END){state=S.MENU;menuSel=0;return;}
+  if(state===S.GAME_END){startTransition(S.MENU);menuSel=0;return;}
   if(state!==S.GAME&&state!==S.EDITOR&&state!==S.SETTINGS&&state!==S.MENU&&state!==S.HELP) return;
   const r2=cv.getBoundingClientRect();
   const mx=(e.clientX-r2.left)*(W/r2.width)|0, my=(e.clientY-r2.top)*(H/r2.height)|0;
@@ -955,7 +1172,10 @@ cv.addEventListener('mousemove',e=>{
 
 // ── ACTIONS ───────────────────────────────────────────────────
 function doAction(id){
-  if(id.startsWith('tab')){activeTab=parseInt(id[3]);return;}
+  checkGuidedTut(id);
+  if(id==='skipGuided'){guidedTut.active=false;return;}
+  if(id==='mobileMenu'){uiOpen=!uiOpen;return;}
+  if(id.startsWith('tab')){activeTab=parseInt(id[3]);checkGuidedTut('openTab'+id[3]);return;}
   if(id.startsWith('hire')){
     const i=parseInt(id[4]);
     const s=G.staff[i];
@@ -972,7 +1192,7 @@ function doAction(id){
         if(s.gridCol!==undefined){s.gridCol=origStaff.col||5;s.gridRow=origStaff.row||3;}
       }
       // Door opens for arrival
-      G.doorOpen=60;
+      G.doorOpen=60;SFX.hireFanfare();
       showEv(T().events[5],P.neon1);addFloat(s.x,s.y-40,'+'+T().staffLabel[s.role],P.neon1);
       // DJ hired → switch to Novah track
       if(s.role===4){
@@ -1018,9 +1238,10 @@ function doAction(id){
   }
   if(id.startsWith('rest')){
     const i=parseInt(id[4]);const p=G.prods[i];
-    if(G.money>=CFG.RESTOCK_COST&&p.stock<p.max){
-      G.money-=CFG.RESTOCK_COST;G.weekExpenses+=CFG.RESTOCK_COST;
-      p.stock=p.max;updateBars();showEv(T().events[4],P.neonB);
+    const restCost=(G.supplierDeal&&G.supplierDeal.active&&G.supplierDeal.prodIdx===i)?Math.ceil(CFG.RESTOCK_COST*0.5):CFG.RESTOCK_COST;
+    if(G.money>=restCost&&p.stock<p.max){
+      G.money-=restCost;G.weekExpenses+=restCost;
+      p.stock=p.max;updateBars();showEv(T().events[4],P.neonB);SFX.restockThud();
     }
   }
   if(id.startsWith('adv')){
@@ -1089,7 +1310,7 @@ function doAction(id){
     return;
   }
   // ── Menu touch/click actions ──
-  if(id==='menuStart'){lang=menuSel===0?'es':'en';modelSel=0;state=S.MODEL_SEL;return;}
+  if(id==='menuStart'){lang=menuSel===0?'es':'en';modelSel=0;startTransition(S.MODEL_SEL);return;}
   if(id==='menuLangEs'){menuSel=0;return;}
   if(id==='menuLangEn'){menuSel=1;return;}
   if(id==='menuSettings'){state=S.SETTINGS;return;}
@@ -1107,8 +1328,8 @@ function doAction(id){
     lang=menuSel===0?'es':'en';initGame(modelSel);tutPage=0;state=S.TUT;return;
   }
   // ── Tutorial touch/click ──
-  if(id==='tutNext'){tutPage++;if(tutPage>=T().tut.length){state=S.GAME;startVideo();startMusic();}return;}
-  if(id==='skipTut'){state=S.GAME;startVideo();startMusic();return;}
+  if(id==='tutNext'){tutPage++;if(tutPage>=T().tut.length){state=S.GAME;startVideo();startMusic();guidedTut={active:true,step:0,timer:0};}return;}
+  if(id==='skipTut'){state=S.GAME;startVideo();startMusic();guidedTut={active:false,step:0,timer:0};return;}
   if(id==='setOpenDown'){shopTimeSettings.openHour=Math.max(0,shopTimeSettings.openHour-1);return;}
   if(id==='setOpenUp'){shopTimeSettings.openHour=Math.min(shopTimeSettings.closeHour-1,shopTimeSettings.openHour+1);return;}
   if(id==='setCloseDown'){shopTimeSettings.closeHour=Math.max(shopTimeSettings.openHour+1,shopTimeSettings.closeHour-1);return;}
@@ -1217,6 +1438,7 @@ function advanceYear(){
     // Game end
     const hireScore=G.staff.filter(s=>s.hired).reduce((a,s)=>a+s.level*200,0);
     G.totalScore=(G.totalRevenue/100+hireScore+G.fame*50)|0;
+    saveToLeaderboard(activeModel,{score:G.totalScore,rev:G.totalRevenue,years:G.yearsCompleted,date:Date.now()});
     state=S.GAME_END;
     saveGame();
     return;
@@ -1264,15 +1486,74 @@ function endWeek(){
     if(G.yearRevenue<target*CFG.GAMEOVER_THRESHOLD){
       G.gameOverReason='target';
       G.totalScore=(G.totalRevenue/100)|0;
-      state=S.GAME_END;
+      saveToLeaderboard(activeModel,{score:G.totalScore,rev:G.totalRevenue,years:G.yearsCompleted,date:Date.now()});
+      SFX.gameOver();startTransition(S.GAME_END);
       saveGame();
       return;
     }
-    state=S.YEAR_END;
+    startTransition(S.YEAR_END);
     saveGame();
     return;
   }
   if(G.week===1&&Math.random()<0.3) showEv(T().events[6],P.neon3);
+  // Record week history for charts
+  G.weekHistory.push({w:G.week-1,y:G.year,rev:G.weekRevenue,exp:G.weekExpenses,sat:G.satisfaction});
+}
+
+// ── RANDOM EVENTS ENGINE ─────────────────────────────────────
+function checkRandomEvents(){
+  const hired=G.staff.filter(s=>s.hired).length;
+  // Holiday/Festivo
+  if(!G.holiday.active&&Math.random()<0.001){
+    const names=lang==='es'?['Fiesta Local','Feria','San Isidro','Rebajas']:['Local Holiday','Fair Day','Patron Saint','Sale Season'];
+    G.holiday={active:true,timer:200,name:names[Math.random()*names.length|0]};
+    showEv('🎊 '+G.holiday.name+'! '+( lang==='es'?'Ventas x1.8':'Sales x1.8'),P.neon3);
+    SFX.eventChime();
+  }
+  if(G.holiday.active){G.holiday.timer--;if(G.holiday.timer<=0)G.holiday.active=false;}
+  // Supplier Deal
+  if(!G.supplierDeal.active&&Math.random()<0.0008&&G.prods.length>0){
+    const pi=Math.random()*G.prods.length|0;
+    G.supplierDeal={active:true,timer:300,prodIdx:pi};
+    showEv('📦 '+(lang==='es'?'Oferta proveedor: restock -50% ':'Supplier deal: restock -50% ')+G.prods[pi].name+'!','#44aacc');
+    SFX.eventChime();
+  }
+  if(G.supplierDeal.active){G.supplierDeal.timer--;if(G.supplierDeal.timer<=0)G.supplierDeal.active=false;}
+  // Weather
+  if(!G.weather.type&&Math.random()<0.0012){
+    G.weather={type:Math.random()<0.5?'rain':'sun',timer:250};
+    if(G.weather.type==='rain') showEv('🌧 '+(lang==='es'?'Lluvia: menos clientes':'Rain: fewer customers'),'#6688aa');
+    else showEv('☀️ '+(lang==='es'?'Sol: más clientes!':'Sunny: more customers!'),'#ddaa33');
+    SFX.eventChime();
+  }
+  if(G.weather.type){G.weather.timer--;if(G.weather.timer<=0)G.weather={type:null,timer:0};}
+  // VIP Customer
+  if(Math.random()<0.0005&&hired>=1){
+    spawnCust(true);
+    showEv('⭐ '+(lang==='es'?'Cliente VIP! Ventas x5':'VIP Customer! Sales x5'),'#ffd700');
+    SFX.levelUp();
+  }
+  // Theft
+  if(Math.random()<0.0004&&G.prods.length>0){
+    if(hired<3){
+      const pi=Math.random()*G.prods.length|0;
+      const lost=Math.ceil(G.prods[pi].stock*0.3);
+      G.prods[pi].stock=Math.max(0,G.prods[pi].stock-lost);
+      showEv('🦹 '+(lang==='es'?'Robo! -'+lost+' '+G.prods[pi].name:'Theft! -'+lost+' '+G.prods[pi].name),'#cc4444');
+      SFX.inspectionAlarm();
+    } else {
+      showEv('🛡 '+(lang==='es'?'Intento de robo prevenido!':'Theft attempt prevented!'),'#44aa44');
+    }
+  }
+  // Employee of the Month
+  if(Math.random()<0.0003&&hired>=1){
+    const hiredStaff=G.staff.filter(s=>s.hired);
+    const lucky=hiredStaff[Math.random()*hiredStaff.length|0];
+    lucky.morale=Math.min(100,lucky.morale+30);
+    if(lucky.level<5){lucky.level++;addFloat(lucky.x,lucky.y-40,'⭐ LVL '+lucky.level,P.neon3);}
+    showEv('🏆 '+(lang==='es'?'Empleado del mes: ':'Employee of the month: ')+lucky.name+'!','#ffcc00');
+    SFX.levelUp();
+  }
 }
 
 function updateGame(){
@@ -1373,7 +1654,7 @@ function updateGame(){
 
   // Rush hour (badge shown in top bar, no floating event)
   if(!G.rush.active&&Math.random()<CFG.RUSH_CHANCE){
-    G.rush.active=true;G.rush.timer=CFG.RUSH_DURATION;
+    G.rush.active=true;G.rush.timer=CFG.RUSH_DURATION;SFX.rushSiren();
   }
   if(G.rush.active){
     G.rush.timer--;
@@ -1382,7 +1663,7 @@ function updateGame(){
 
   // Inspection (badge shown in top bar, no floating event for start)
   if(!G.inspect.active&&Math.random()<CFG.INSPECT_CHANCE){
-    G.inspect.active=true;G.inspect.timer=200;G.inspect.warned=false;
+    G.inspect.active=true;G.inspect.timer=200;G.inspect.warned=false;SFX.inspectionAlarm();
   }
   if(G.inspect.active){
     G.inspect.timer--;
@@ -1404,8 +1685,11 @@ function updateGame(){
     if(G.inspect.timer<=0) G.inspect.active=false;
   }
 
+  // ── RANDOM EVENTS (holiday, supplier, weather, VIP, theft, employee of month) ──
+  checkRandomEvents();
+
   // Staff work
-  const mult=G.rush.active?CFG.RUSH_MULT:1;
+  const mult=(G.rush.active?CFG.RUSH_MULT:1)*(G.holiday&&G.holiday.active?1.8:1);
   for(const s of G.staff){
     if(!s.hired) continue;
     s.aTimer++;if(s.aTimer>10){s.aFrame=(s.aFrame+1)%2;s.aTimer=0;}
@@ -1422,7 +1706,7 @@ function updateGame(){
         const rev=qty*p.price;
         G.money+=rev;G.weekRevenue+=rev;G.yearRevenue+=rev;G.totalRevenue+=rev;
         p.stock=Math.max(0,p.stock-Math.max(1,(qty/p.price)|0));
-        addFloat(s.x+7,s.y-28,'€'+rev,P.green);
+        addFloat(s.x+7,s.y-28,'€'+rev,P.green);SFX.salePop();
         if(G.rush.active) addFloat(s.x+7,s.y-16,'x'+CFG.RUSH_MULT.toFixed(1),P.rushGlow);
         G.satisfaction=Math.min(100,G.satisfaction+0.3);
       }
@@ -1430,27 +1714,49 @@ function updateGame(){
   }
 
   // Customers
-  if(Math.random()<0.006*Math.max(1,G.staff.filter(s=>s.hired).length)*(G.rush.active?2:1)) spawnCust();
+  const weatherMod=G.weather.type==='rain'?0.5:G.weather.type==='sun'?1.3:1;
+  const holidayMod=G.holiday&&G.holiday.active?1.5:1;
+  if(Math.random()<0.006*Math.max(1,G.staff.filter(s=>s.hired).length)*(G.rush.active?2:1)*weatherMod*holidayMod) spawnCust();
   for(let i=G.custs.length-1;i>=0;i--){
     const c=G.custs[i];c.ft++;if(c.ft>10){c.fr=(c.fr+1)%2;c.ft=0;}
     if(c.st==='walk'){
-      const dx=c.tx-c.x,dy=c.ty-c.y,d=Math.sqrt(dx*dx+dy*dy);
-      if(d<3){c.st='browse';c.timer=60+Math.random()*80;}
-      else{
+      // Follow A* path waypoints if available
+      let tx=c.tx,ty=c.ty;
+      if(c.path&&c.pathIdx<c.path.length){
+        const wp=c.path[c.pathIdx];const wiso=toIso(wp.col,wp.row);
+        tx=wiso.x-7;ty=wiso.y-20;
+      }
+      const dx=tx-c.x,dy=ty-c.y,d=Math.sqrt(dx*dx+dy*dy);
+      if(d<5){
+        if(c.path&&c.pathIdx<c.path.length-1){c.pathIdx++;} // next waypoint
+        else{c.st='browse';c.timer=60+Math.random()*80;}
+      } else{
         const nx=c.x+dx/d*1.3, ny=c.y+dy/d*1.3;
         if(canWalkTo(nx+5,ny+20)){c.x=nx;c.y=ny;c.dir=dx<0?-1:1;}
-        else{c.st='browse';c.timer=30+Math.random()*40;} // blocked→stop and browse
+        else if(c.path&&c.pathIdx<c.path.length-1){c.pathIdx++;} // skip blocked waypoint
+        else{c.st='browse';c.timer=30+Math.random()*40;}
       }
     } else if(c.st==='browse'){
-      c.timer--;if(c.timer<=0){const dp=toIso(ISO.cols,3);c.st='leave';c.tx=dp.x;c.ty=dp.y-40;G.doorOpen=60;}
+      c.timer--;if(c.timer<=0){
+        // Compute return path to door
+        const curTile=screenToIso(c.x+5,c.y+20);
+        c.path=astarPath(curTile.col,curTile.row,ISO.cols-1,3);c.pathIdx=0;
+        const dp=toIso(ISO.cols,3);c.st='leave';c.tx=dp.x;c.ty=dp.y-40;G.doorOpen=60;
+      }
     } else if(c.st==='leave'){
-      const dx=c.tx-c.x,dy=c.ty-c.y,d=Math.sqrt(dx*dx+dy*dy);
+      let tx=c.tx,ty=c.ty;
+      if(c.path&&c.pathIdx<c.path.length){
+        const wp=c.path[c.pathIdx];const wiso=toIso(wp.col,wp.row);
+        tx=wiso.x-7;ty=wiso.y-20;
+      }
+      const dx=tx-c.x,dy=ty-c.y,d=Math.sqrt(dx*dx+dy*dy);
       if(d<30&&G.doorOpen<30) G.doorOpen=40;
-      if(d<3){G.custOut++;G.custs.splice(i,1);}
+      if(d<5&&(!c.path||c.pathIdx>=c.path.length-1)){G.custOut++;G.custs.splice(i,1);}
+      else if(d<5&&c.path){c.pathIdx++;}
       else{
         const nx=c.x+dx/d*1.6, ny=c.y+dy/d*1.6;
         if(canWalkTo(nx+5,ny+20)){c.x=nx;c.y=ny;c.dir=dx<0?-1:1;}
-        else{c.x+=dx/d*0.5;c.y+=dy/d*0.5;c.dir=dx<0?-1:1;} // slide around when leaving
+        else{c.x+=dx/d*0.5;c.y+=dy/d*0.5;c.dir=dx<0?-1:1;}
       }
     }
   }
@@ -1485,31 +1791,29 @@ function updateGame(){
   }
 
   // Week end
-  if(G.weekTimer>=CFG.WEEK_TICKS){G.weekTimer=0;endWeek();}
+  if(G.weekTimer>=CFG.WEEK_TICKS){G.weekTimer=0;SFX.weekEnd();endWeek();}
   updateBars();
 }
 
-function spawnCust(){
+function spawnCust(isVip){
   if(G.custs.length>=7) return;
   const ci=Math.floor(Math.random()*6);
-  // Spawn at door, target a walkable tile
   const doorIso=toIso(ISO.cols,3);
   let tCol,tRow,attempts=0;
-  do{
-    tCol=2+Math.random()*6|0;
-    tRow=1+Math.random()*4|0;
-    attempts++;
-  }while(isTileBlocked(tCol,tRow)&&attempts<20);
+  do{tCol=2+Math.random()*6|0;tRow=1+Math.random()*4|0;attempts++;}while(isTileBlocked(tCol,tRow)&&attempts<20);
+  // Compute A* path from door to target
+  const path=astarPath(ISO.cols-1,3,tCol,tRow);
   const tIso=toIso(tCol,tRow);
   G.custs.push({
     x:doorIso.x,y:doorIso.y-40,
     tx:tIso.x-7,ty:tIso.y-20,
     gCol:ISO.cols,gRow:3,
-    st:'walk',timer:0,col:P.prods[ci],hair:Math.floor(Math.random()*6),
-    fr:0,ft:0,dir:-1
+    st:'walk',timer:0,col:isVip?'#ffd700':P.prods[ci],hair:Math.floor(Math.random()*6),
+    fr:0,ft:0,dir:-1,
+    path:path,pathIdx:0,vip:!!isVip
   });
-  G.doorOpen=60; // open door for customer entering
-  G.customersToday++;G.totalCustomers++;G.custIn++; // count entry
+  G.doorOpen=60;SFX.doorBell();
+  G.customersToday++;G.totalCustomers++;G.custIn++;
 }
 
 // ── DRAW HELPERS ──────────────────────────────────────────────
@@ -3564,6 +3868,47 @@ function tabSales(py){
     rx(UI.x+5,py+143+i*26,UI.w-10,7,P.gray,1);
     tx(b.val+'%',UI.x+UI.w-5,py+149+i*26,b.col,7,'right');
   }
+  // Mini revenue chart
+  if(G.weekHistory&&G.weekHistory.length>1){
+    const chartY=py+248,chartH=70,chartW=UI.w-14,chartX=UI.x+7;
+    nl(chartX,chartY-2,chartX+chartW,chartY-2,P.gray,0.5);
+    tx(lang==='es'?'Ingresos/Semana':'Revenue/Week',chartX,chartY+8,P.uiT3,6);
+    const yearData=G.weekHistory.filter(h=>h.y===G.year);
+    if(yearData.length>1){
+      const maxR=Math.max(...yearData.map(h=>h.rev),1);
+      const wTarget=CFG.YEAR_TARGETS[G.year-1]/CFG.WEEKS_PER_YEAR;
+      // Background
+      r(chartX,chartY+12,chartW,chartH-14,'rgba(0,0,0,0.3)');
+      // Target line (dashed)
+      const tY=chartY+12+((chartH-14)*(1-Math.min(wTarget/maxR,1)));
+      cx.setLineDash([3,3]);nl(chartX,tY,chartX+chartW,tY,'#cc4444',0.7);cx.setLineDash([]);
+      tx('T',chartX+chartW-6,tY-2,'#cc4444',5);
+      // Area + line
+      cx.beginPath();
+      cx.moveTo(chartX,chartY+12+chartH-14);
+      yearData.forEach((h,i)=>{
+        const x=chartX+i/(yearData.length-1)*chartW;
+        const y=chartY+12+((chartH-14)*(1-h.rev/maxR));
+        if(i===0)cx.lineTo(x,y);else cx.lineTo(x,y);
+      });
+      cx.lineTo(chartX+(yearData.length-1)/(yearData.length-1)*chartW,chartY+12+chartH-14);
+      cx.closePath();cx.fillStyle='rgba(102,238,102,0.15)';cx.fill();
+      // Line
+      cx.beginPath();
+      yearData.forEach((h,i)=>{
+        const x=chartX+i/(yearData.length-1)*chartW;
+        const y=chartY+12+((chartH-14)*(1-h.rev/maxR));
+        if(i===0)cx.moveTo(x,y);else cx.lineTo(x,y);
+      });
+      cx.strokeStyle=P.green;cx.lineWidth=1.5;cx.stroke();
+      // Dots
+      yearData.forEach((h,i)=>{
+        const x=chartX+i/(yearData.length-1)*chartW;
+        const y=chartY+12+((chartH-14)*(1-h.rev/maxR));
+        cx.beginPath();cx.arc(x,y,2,0,Math.PI*2);cx.fillStyle=P.green;cx.fill();
+      });
+    }
+  }
 }
 
 function tabStaff(py){
@@ -3810,9 +4155,12 @@ function drawGameEnd(){
   glow(titleCol,10);tx(G.totalScore.toLocaleString(),px2+28,py2+280,titleCol,28);nog();
   // Rank
   const rankIdx=Math.min(G.yearsCompleted,T().gameEndRanks.length-1);
-  nt('"'+T().gameEndRanks[rankIdx]+'"',W/2,py2+315,P.neon3,13);
+  nt('"'+T().gameEndRanks[rankIdx]+'"',W/2,py2+305,P.neon3,11);
+  nl(px2+20,py2+314,px2+pw-20,py2+314,P.gray,0.5);
+  // Leaderboard
+  drawLeaderboard(px2+28,py2+320,pw-56,activeModel);
   cx.globalAlpha=.4+.6*Math.abs(Math.sin(tt*.04));
-  nt(T().gameEndRestart,W/2,py2+ph-18,P.neon1,9);cx.globalAlpha=1;
+  nt(T().gameEndRestart,W/2,py2+ph-14,P.neon1,8);cx.globalAlpha=1;
 }
 
 // ── MAIN LOOP ─────────────────────────────────────────────────
@@ -3839,6 +4187,35 @@ function playSaveBeep(){
     o2.start(ac.currentTime+0.12);o2.stop(ac.currentTime+0.3);
   }catch(e){}
 }
+
+// ── SFX ENGINE ───────────────────────────────────────────────
+const SFX=(()=>{
+  let ac=null;
+  const vol=()=>(G&&G.sfxVolume!==undefined)?G.sfxVolume:0.7;
+  function ctx(){if(!ac)try{ac=new(window.AudioContext||window.webkitAudioContext)();}catch(e){}return ac;}
+  function tone(freq,dur,type='sine',gain=0.15,delay=0){
+    const a=ctx();if(!a)return;
+    const o=a.createOscillator(),g=a.createGain();
+    o.type=type;o.frequency.value=freq;
+    g.gain.setValueAtTime(gain*vol(),a.currentTime+delay);
+    g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+delay+dur);
+    o.connect(g);g.connect(a.destination);
+    o.start(a.currentTime+delay);o.stop(a.currentTime+delay+dur);
+  }
+  return{
+    cashRegister(){tone(1200,0.06);tone(1600,0.06,'sine',0.12,0.07);tone(2200,0.1,'sine',0.1,0.14);},
+    doorBell(){tone(659,0.15);tone(784,0.15,'sine',0.12,0.16);},
+    salePop(){tone(500,0.04);tone(800,0.04,'sine',0.1,0.05);},
+    hireFanfare(){tone(523,0.1);tone(659,0.1,'sine',0.12,0.12);tone(784,0.12,'sine',0.14,0.24);},
+    restockThud(){tone(120,0.12,'triangle',0.2);tone(80,0.08,'triangle',0.1,0.1);},
+    rushSiren(){tone(600,0.15,'sawtooth',0.08);tone(800,0.15,'sawtooth',0.08,0.16);tone(600,0.15,'sawtooth',0.08,0.32);},
+    inspectionAlarm(){tone(1000,0.08,'square',0.06);tone(1000,0.08,'square',0.06,0.12);tone(1000,0.08,'square',0.06,0.24);},
+    weekEnd(){tone(523,0.15,'sine',0.1);tone(659,0.12,'sine',0.08,0.16);tone(784,0.2,'sine',0.12,0.3);},
+    gameOver(){tone(400,0.2);tone(300,0.2,'sine',0.12,0.22);tone(200,0.3,'sine',0.14,0.44);},
+    levelUp(){tone(784,0.08);tone(988,0.08,'sine',0.1,0.1);tone(1175,0.12,'sine',0.12,0.2);},
+    eventChime(){tone(880,0.08,'sine',0.08);tone(1100,0.1,'sine',0.1,0.1);},
+  };
+})();
 
 function drawEditor(){
   // Clip entire editor to avoid overlapping outside canvas
@@ -4097,19 +4474,20 @@ function loop(){
   }
 
   cx.clearRect(0,0,W,H);
+  updateTransition();
 
   if(state===S.MENU){
     drawMenu();drawDemoCountdown();drawDemoBadge();
     if(demoMode) demoUpdate();
-    return;
+    drawTransition();return;
   }
-  if(state===S.MODEL_SEL){drawModelSelect();drawDemoBadge();if(demoMode)demoUpdate();return;}
-  if(state===S.TUT){drawTutorial();drawDemoBadge();if(demoMode)demoUpdate();return;}
-  if(state===S.YEAR_END){drawYearEnd();return;}
-  if(state===S.GAME_END){drawGameEnd();return;}
-  if(state===S.EDITOR){drawEditor();return;}
-  if(state===S.SETTINGS){drawSettings();return;}
-  if(state===S.HELP){drawHelp();return;}
+  if(state===S.MODEL_SEL){drawModelSelect();drawDemoBadge();if(demoMode)demoUpdate();drawTransition();return;}
+  if(state===S.TUT){drawTutorial();drawDemoBadge();if(demoMode)demoUpdate();drawTransition();return;}
+  if(state===S.YEAR_END){drawYearEnd();drawTransition();return;}
+  if(state===S.GAME_END){drawGameEnd();drawTransition();return;}
+  if(state===S.EDITOR){drawEditor();drawTransition();return;}
+  if(state===S.SETTINGS){drawSettings();drawTransition();return;}
+  if(state===S.HELP){drawHelp();drawTransition();return;}
   if(state===S.PAUSE){
     r(0,0,W,H,P.bg);
     cx.save();try{drawCityBg();}catch(e){}cx.restore();
@@ -4133,6 +4511,9 @@ function loop(){
   cx.save();try{drawElgatoNotify();}catch(e){}cx.restore();
   cx.save();try{drawDemoBadge();}catch(e){}cx.restore();
   cx.save();try{drawUI();}catch(e){}cx.restore();
+  cx.save();try{drawMobileControls();}catch(e){}cx.restore();
+  cx.save();try{drawGuidedTut();}catch(e){}cx.restore();
+  drawTransition();
 }
 loop();
 
