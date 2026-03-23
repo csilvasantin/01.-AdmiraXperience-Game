@@ -61,7 +61,7 @@
 </div>
 <script>
 // ═══════════════════════════════════════════════════════════════
-//  XTANCO DIGITAL TWIN — BETA v1.54
+//  XTANCO DIGITAL TWIN — BETA v1.55
 // ═══════════════════════════════════════════════════════════════
 const cv=document.getElementById('c'), cx=cv.getContext('2d');
 cx.imageSmoothingEnabled=false;
@@ -419,6 +419,48 @@ async function toggleStudioLight(){
   elgatoState.busy=false;
 }
 
+// ── PHILIPS HUE INTEGRATION ─────────────────────────────────
+const HUE={
+  bridgeIP:'192.168.1.37',
+  apiKey:'fsj2dkVBF0wOtDUvdMnisfdyBZHSqPHULmQ3ehQ0',
+  lights:{despacho:9,comedor:8}, // reachable lights
+  lastSent:0, // throttle: frame of last send
+};
+async function hueSet(lightId,state){
+  if(tt-HUE.lastSent<30) return; // throttle: max every 0.5s
+  HUE.lastSent=tt;
+  try{
+    const url=`http://${HUE.bridgeIP}/api/${HUE.apiKey}/lights/${lightId}/state`;
+    await fetch(url,{method:'PUT',body:JSON.stringify(state),signal:AbortSignal.timeout(2000)});
+  }catch(e){}
+}
+async function hueAll(state){
+  for(const id of Object.values(HUE.lights)) hueSet(id,state);
+}
+// Sync Hue lights with game state (called from updateGame, throttled)
+function hueSyncWithGame(){
+  if(tt%120!==0) return; // every 2 seconds
+  if(!G||!G.gameTime) return;
+  const h=G.gameTime;
+  // Night: warm white, full brightness
+  if(h>=19){
+    hueAll({on:true,bri:254,ct:366});
+  }
+  // Late afternoon: dimmer warm
+  else if(h>=17){
+    const bri=Math.round(100+(h-17)*77); // 100→254
+    hueAll({on:true,bri:bri,ct:340});
+  }
+  // Morning/midday: off
+  else {
+    hueAll({on:true,bri:254,ct:250}); // cool daylight
+  }
+  // Storm: blue flash
+  if(G.weather&&G.weather.type==='rain'&&thunderFlash>4){
+    hueAll({on:true,bri:254,xy:[0.18,0.18],alert:'select'}); // cold blue flash
+  }
+}
+
 // ── CONFIG ────────────────────────────────────────────────────
 const CFG={
   WEEK_TICKS:480, WEEKS_PER_YEAR:8, TOTAL_YEARS:5,
@@ -556,7 +598,7 @@ let activeModel=0;
 // ── I18N ──────────────────────────────────────────────────────
 const LANGS={
   es:{
-    menuTitle:'XTANCO',menuSub:'SIMULADOR DE ESTANCO DIGITAL — BETA v1.54',
+    menuTitle:'XTANCO',menuSub:'SIMULADOR DE ESTANCO DIGITAL — BETA v1.55',
     langPick:'SELECCIONA IDIOMA',startBtn:'PULSA ENTER PARA EMPEZAR',
     langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
     tut:[
@@ -606,7 +648,7 @@ const LANGS={
     modelStart:['€3.500','€2.800','€4.500','€6.000'],
   },
   en:{
-    menuTitle:'XTANCO',menuSub:'DIGITAL TOBACCO SHOP SIMULATOR — BETA v1.54',
+    menuTitle:'XTANCO',menuSub:'DIGITAL TOBACCO SHOP SIMULATOR — BETA v1.55',
     langPick:'SELECT LANGUAGE',startBtn:'PRESS ENTER TO START',
     langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
     tut:[
@@ -1362,20 +1404,24 @@ function doAction(id){
   if(id==='time_am'){
     G.gameTime=9;elgatoState.on=false;G.lampIntensity=0;
     try{elgatoFetch('/elgato/lights',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({numberOfLights:1,lights:[{on:0}]})});}catch(e){}
-    showEv('🌅 '+(lang==='es'?'Mañana: café y prensa':'Morning: coffee & press'),'#ffbb44');SFX.eventChime();return;
+    try{hueAll({on:true,bri:254,ct:250});}catch(e){} // Hue cool daylight
+    showEv('🌅 '+(lang==='es'?'Mañana: luz natural':'Morning: daylight'),'#ffbb44');SFX.eventChime();return;
   }
   if(id==='time_pm'){G.gameTime=14;showEv('☀️ '+(lang==='es'?'Tarde: tabaco y lotería':'Afternoon: tobacco & lottery'),'#ee8833');SFX.eventChime();return;}
   if(id==='time_night'){
     G.gameTime=19;elgatoState.on=true;elgatoState.manualOff=false;G.lampIntensity=100;
     try{elgatoFetch('/elgato/lights',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({numberOfLights:1,lights:[{on:1,brightness:100}]})});}catch(e){}
-    showEv('🌙 '+(lang==='es'?'Noche: lámpara encendida':'Night: lamp on'),'#8866bb');SFX.eventChime();return;
+    try{hueAll({on:true,bri:254,ct:366});}catch(e){} // Hue warm night
+    showEv('🌙 '+(lang==='es'?'Noche: luces encendidas':'Night: lights on'),'#8866bb');SFX.eventChime();return;
   }
   if(id==='weather_0'){G.weather={type:null,timer:0};showEv('🌤 '+(lang==='es'?'Tiempo normal':'Normal weather'),'#aaaaaa');return;}
   if(id==='weather_1'){
     const dH=shopTimeSettings.closeHour-shopTimeSettings.openHour;
     const fp=shopTimeSettings.dayDurationSec*60;
     G.weather={type:'rain',timer:Math.floor(fp/dH*2)};
-    showEv('🌧 '+(lang==='es'?'¡Tormenta activada!':'Storm activated!'),'#6688aa');SFX.thunder();thunderFlash=8;thunderCooldown=300;return;
+    showEv('🌧 '+(lang==='es'?'¡Tormenta activada!':'Storm activated!'),'#6688aa');SFX.thunder();thunderFlash=8;thunderCooldown=300;
+    try{hueAll({on:true,bri:254,xy:[0.18,0.18],alert:'lselect'});}catch(e){} // Hue storm flash
+    return;
   }
   if(id==='weather_2'){
     const dH=shopTimeSettings.closeHour-shopTimeSettings.openHour;
@@ -1609,6 +1655,8 @@ function updateGame(){
   G.gameTime+=hoursPerFrame;
   // Sync weekTimer to gameTime progress (for compatibility with existing systems)
   G.weekTimer=Math.floor(((G.gameTime-shopTimeSettings.openHour)/dayHours)*CFG.WEEK_TICKS);
+  // Sync Hue lights with game time
+  try{hueSyncWithGame();}catch(e){}
   // Progressive lighting: afternoon gradual, night full
   let lampIntensity=0;
   if(G.gameTime>=19&&G.gameTime<shopTimeSettings.closeHour&&!G.dayEnded){
@@ -2055,7 +2103,7 @@ function drawMenu(){
   tx('? HELP',hx+30,hy+16,'#44ccaa',9,'center');
   BTNS['menuHelp']={x:hx,y:hy,w:60,h:22};
   // Version tag
-  cx.globalAlpha=0.3;tx('v1.54',W-40,H-8,P.gray,7,'center');cx.globalAlpha=1;
+  cx.globalAlpha=0.3;tx('v1.55',W-40,H-8,P.gray,7,'center');cx.globalAlpha=1;
 }
 
 // ── HELP / MANUAL SCREEN ─────────────────────────────────────
