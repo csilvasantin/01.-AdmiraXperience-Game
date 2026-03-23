@@ -61,7 +61,7 @@
 </div>
 <script>
 // ═══════════════════════════════════════════════════════════════
-//  XTANCO DIGITAL TWIN — BETA v1.50
+//  XTANCO DIGITAL TWIN — BETA v1.51
 // ═══════════════════════════════════════════════════════════════
 const cv=document.getElementById('c'), cx=cv.getContext('2d');
 cx.imageSmoothingEnabled=false;
@@ -556,7 +556,7 @@ let activeModel=0;
 // ── I18N ──────────────────────────────────────────────────────
 const LANGS={
   es:{
-    menuTitle:'XTANCO',menuSub:'SIMULADOR DE ESTANCO DIGITAL — BETA v1.50',
+    menuTitle:'XTANCO',menuSub:'SIMULADOR DE ESTANCO DIGITAL — BETA v1.51',
     langPick:'SELECCIONA IDIOMA',startBtn:'PULSA ENTER PARA EMPEZAR',
     langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
     tut:[
@@ -606,7 +606,7 @@ const LANGS={
     modelStart:['€3.500','€2.800','€4.500','€6.000'],
   },
   en:{
-    menuTitle:'XTANCO',menuSub:'DIGITAL TOBACCO SHOP SIMULATOR — BETA v1.50',
+    menuTitle:'XTANCO',menuSub:'DIGITAL TOBACCO SHOP SIMULATOR — BETA v1.51',
     langPick:'SELECT LANGUAGE',startBtn:'PRESS ENTER TO START',
     langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
     tut:[
@@ -1348,6 +1348,9 @@ function doAction(id){
   if(id==='setDurUp'){shopTimeSettings.dayDurationSec=Math.min(600,shopTimeSettings.dayDurationSec+30);return;}
   if(id==='musicToggle'){toggleMusic();return;}
   if(id==='sfxToggle'){G.sfxVolume=G.sfxVolume>0?0:0.7;return;}
+  if(id==='time_am'){G.gameTime=9;showEv('🌅 '+(lang==='es'?'Mañana: café y prensa':'Morning: coffee & press'),'#ffbb44');SFX.eventChime();return;}
+  if(id==='time_pm'){G.gameTime=14;showEv('☀️ '+(lang==='es'?'Tarde: tabaco y lotería':'Afternoon: tobacco & lottery'),'#ee8833');SFX.eventChime();return;}
+  if(id==='time_night'){G.gameTime=19;showEv('🌙 '+(lang==='es'?'Noche: vapes y recargas':'Night: vapes & recharges'),'#8866bb');SFX.eventChime();return;}
   if(id==='weather_0'){G.weather={type:null,timer:0};showEv('🌤 '+(lang==='es'?'Tiempo normal':'Normal weather'),'#aaaaaa');return;}
   if(id==='weather_1'){
     const dH=shopTimeSettings.closeHour-shopTimeSettings.openHour;
@@ -2032,7 +2035,7 @@ function drawMenu(){
   tx('? HELP',hx+30,hy+16,'#44ccaa',9,'center');
   BTNS['menuHelp']={x:hx,y:hy,w:60,h:22};
   // Version tag
-  cx.globalAlpha=0.3;tx('v1.50',W-40,H-8,P.gray,7,'center');cx.globalAlpha=1;
+  cx.globalAlpha=0.3;tx('v1.51',W-40,H-8,P.gray,7,'center');cx.globalAlpha=1;
 }
 
 // ── HELP / MANUAL SCREEN ─────────────────────────────────────
@@ -4149,14 +4152,40 @@ function tabStock(py){
   const openH=shopTimeSettings.openHour,closeH=shopTimeSettings.closeHour;
   const gameH=G.gameTime||openH;
   const dayProg=Math.max(0,Math.min(1,(gameH-openH)/(closeH-openH)));
-  r(lx,modY+10,rw,28,'#1a1a1a');rx(lx,modY+10,rw,28,P.gray,1);
+  // Current time + period
+  const period=gameH<13?(isEs?'MAÑANA':'MORNING'):gameH<18?(isEs?'TARDE':'AFTERNOON'):(isEs?'NOCHE':'NIGHT');
+  const periodCol=gameH<13?'#ffbb44':gameH<18?'#ee8833':'#8866bb';
+  r(lx,modY+10,rw,22,'#1a1a1a');rx(lx,modY+10,rw,22,periodCol,1);
   tx('🕐 '+Math.floor(gameH)+':'+(('0'+Math.floor((gameH%1)*60)).slice(-2)),lx+4,modY+24,'#ffdd66',9);
-  tx(openH+':00 — '+closeH+':00',lx+rw-4,modY+24,P.uiT3,6,'right');
-  r(lx+2,modY+30,rw-4,4,'#0a0a0a');r(lx+2,modY+30,(rw-4)*dayProg|0,4,'#ffdd66');
-  tx((isEs?'Semana ':'Week ')+G.week+'/'+CFG.WEEKS_PER_YEAR,lx+4,modY+42,P.uiT3,7);
+  tx(period,lx+rw-4,modY+24,periodCol,8,'right');
+  r(lx+2,modY+29,rw-4,3,'#0a0a0a');r(lx+2,modY+29,(rw-4)*dayProg|0,3,'#ffdd66');
+  // Time period selector icons
+  const tIconY=modY+36;
+  const tIcons=[
+    {id:'time_am',icon:'🌅',label:isEs?'Mañana':'Morning',hour:9,col:'#ffbb44',
+     info:isEs?'9-13h · Café y prensa':'9-13h · Coffee & press'},
+    {id:'time_pm',icon:'☀️',label:isEs?'Tarde':'Afternoon',hour:14,col:'#ee8833',
+     info:isEs?'14-18h · Tabaco y lotería':'14-18h · Tobacco & lottery'},
+    {id:'time_night',icon:'🌙',label:isEs?'Noche':'Night',hour:19,col:'#8866bb',
+     info:isEs?'19-21h · Vapes y recargas':'19-21h · Vapes & recharges'},
+  ];
+  const tIconW=Math.floor(rw/3);
+  const curPeriod=gameH<13?0:gameH<18?1:2;
+  tIcons.forEach((ti,idx)=>{
+    const tix=lx+idx*tIconW;
+    const isAct=curPeriod===idx;
+    r(tix,tIconY,tIconW-2,20,isAct?'#2a2a3a':'#0a0a12');
+    rx(tix,tIconY,tIconW-2,20,isAct?ti.col:'#333',isAct?1.5:0.5);
+    tx(ti.icon,tix+tIconW/2-8,tIconY+14,ti.col,9);
+    tx(ti.label,tix+tIconW/2+4,tIconY+14,isAct?'#fff':'#666',5);
+    BTNS[ti.id]={x:tix,y:tIconY,w:tIconW-2,h:20};
+  });
+  // Period info text
+  tx(tIcons[curPeriod].info,lx+4,tIconY+30,periodCol,6);
+  tx((isEs?'Semana ':'Week ')+G.week+'/'+CFG.WEEKS_PER_YEAR,lx+rw-4,tIconY+30,P.uiT3,6,'right');
 
   // ── FRECUENCIA VISITA (Visit Frequency) ──
-  const vY=modY+52;
+  const vY=modY+78;
   tx('— '+(isEs?'FRECUENCIA VISITA':'VISIT FREQ.')+' —',UI.x+UI.w/2,vY+6,P.uiT3,8,'center');
   r(lx,vY+10,rw,50,'#1a1a1a');rx(lx,vY+10,rw,50,P.gray,1);
   const avgCust=G.customersToday||0;
