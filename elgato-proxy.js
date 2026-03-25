@@ -141,7 +141,8 @@ const server = http.createServer((req, res) => {
         proxyRes.on('end', () => {
           res.writeHead(proxyRes.statusCode, { 'Content-Type': 'application/json' });
           res.end(body);
-          console.log(`[${new Date().toLocaleTimeString()}] 🟣 HUE ${req.method} ${req.url} → ${body.substring(0, 80)}`);
+          const isErr=body.includes('"error"');
+          console.log(`[${new Date().toLocaleTimeString()}] 🟣 HUE ${req.method} ${huePath} ${isErr?'❌':'✅'} ${cleanBody?'← '+cleanBody.substring(0,50):''} → ${body.substring(0, 100)}`);
         });
       });
 

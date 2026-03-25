@@ -1,12 +1,20 @@
 // Service Worker — force fresh content, no CDN cache
-self.addEventListener('install', e => self.skipWaiting());
+// v1.61 — 2026-03-25
+const SW_VERSION = 'v1.61';
+self.addEventListener('install', e => {
+  console.log('[SW] Install ' + SW_VERSION);
+  self.skipWaiting();
+});
 self.addEventListener('activate', e => e.waitUntil(
-  caches.keys().then(keys => Promise.all(keys.map(k => caches.delete(k))))
-    .then(() => self.clients.claim())
+  caches.keys().then(keys => Promise.all(keys.map(k => {
+    console.log('[SW] Purging cache: ' + k);
+    return caches.delete(k);
+  }))).then(() => self.clients.claim())
 ));
 self.addEventListener('fetch', e => {
-  // Only intercept same-origin requests for game files
-  if (e.request.url.includes('game.html') || e.request.url.includes('.mp3')) {
+  // Force no-cache for all same-origin HTML/JS/CSS
+  const url = new URL(e.request.url);
+  if (url.origin === self.location.origin) {
     e.respondWith(
       fetch(e.request, { cache: 'no-store' })
         .catch(() => caches.match(e.request))
