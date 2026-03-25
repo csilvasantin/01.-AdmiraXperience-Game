@@ -69,7 +69,7 @@
 </div>
 <script>
 // ═══════════════════════════════════════════════════════════════
-//  XTANCO DIGITAL TWIN — BETA v1.92 — 2026-03-25
+//  XTANCO DIGITAL TWIN — BETA v1.93 — 2026-03-25
 // ═══════════════════════════════════════════════════════════════
 const cv=document.getElementById('c'), cx=cv.getContext('2d');
 cx.imageSmoothingEnabled=false;
@@ -3495,8 +3495,8 @@ function drawLED(scx,scy){
   const start=0.5+(5-span)/2;
   const lp1=toIso(0,start+span); // bottom (text starts here)
   const lp2=toIso(0,start);      // top (text ends here)
-  // Position above wall top edge (banner sticks out above wall)
-  const ledYoff=-14; // negative = above wall top
+  // Position so bottom edge of LED sits at wall top edge
+  const ledYoff=-16; // LED fully above wall, bottom flush with wall top
   const ledY=lp1.y-ISO.wallH+ledYoff;
   const lh=Math.round(16*scy);
   cx.save();
@@ -3826,7 +3826,7 @@ function drawWallClock(){
   // Position: centered on left wall, just below the LED banner
   const cp=toIso(0,3);
   const clockX=cp.x;
-  const clockY=cp.y-ISO.wallH+36; // just below LED (2 + 16 LED + gap)
+  const clockY=cp.y-ISO.wallH+22; // higher up, closer to wall top edge
   const radius=14;
   cx.save();
   // Clip to left wall
