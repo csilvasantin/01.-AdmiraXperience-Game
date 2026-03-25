@@ -69,7 +69,7 @@
 </div>
 <script>
 // ═══════════════════════════════════════════════════════════════
-//  XTANCO DIGITAL TWIN — BETA v1.99 — 2026-03-25
+//  XTANCO DIGITAL TWIN — BETA v2.00 — 2026-03-25
 // ═══════════════════════════════════════════════════════════════
 const cv=document.getElementById('c'), cx=cv.getContext('2d');
 cx.imageSmoothingEnabled=false;
@@ -3118,15 +3118,15 @@ function drawCityBg(){
     }
     cx.globalAlpha=1;
   }
-  // Grass tiles around the shop exterior (bottom and right sides)
-  for(let c=-3;c<ISO.cols+5;c++){
-    for(let rr=ISO.rows;rr<ISO.rows+4;rr++){
+  // Grass tiles around the shop exterior (bottom, right, and corner)
+  for(let c=-5;c<ISO.cols+8;c++){
+    for(let rr=ISO.rows;rr<ISO.rows+8;rr++){
       const gc=((c+rr)%2===0)?'#6a9a48':'#5e8e42';
       drawIsoTile(c,rr,gc,'#5a8a3810');
     }
   }
-  for(let c=ISO.cols;c<ISO.cols+5;c++){
-    for(let rr=-2;rr<ISO.rows+4;rr++){
+  for(let c=ISO.cols;c<ISO.cols+8;c++){
+    for(let rr=-4;rr<ISO.rows+8;rr++){
       const gc=((c+rr)%2===0)?'#6a9a48':'#5e8e42';
       drawIsoTile(c,rr,gc,'#5a8a3810');
     }
@@ -3157,7 +3157,7 @@ function drawShop(){
 
   // ── BACK WALL (cream/beige, Kairosoft style) ──
   const wallPts=[];
-  for(let c=0;c<=ISO.cols;c++) wallPts.push(toIso(c,0));
+  for(let c=0;c<=ISO.cols+4;c++) wallPts.push(toIso(c,0)); // extend right to cover full view
   // Wall body
   cx.beginPath();
   cx.moveTo(wallPts[0].x,wallPts[0].y);
