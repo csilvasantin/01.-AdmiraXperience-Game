@@ -61,7 +61,7 @@
 </div>
 <script>
 // ═══════════════════════════════════════════════════════════════
-//  XTANCO DIGITAL TWIN — BETA v1.55
+//  XTANCO DIGITAL TWIN — BETA v1.60
 // ═══════════════════════════════════════════════════════════════
 const cv=document.getElementById('c'), cx=cv.getContext('2d');
 cx.imageSmoothingEnabled=false;
@@ -458,20 +458,37 @@ function saveHueSettings(){
 }
 loadHueSettings();
 
+let hueProxyOk=null; // null=unknown, true=working, false=unreachable
 async function hueSend(lightId,state){
   if(!HUE.enabled) return;
+  const isLocal=location.hostname==='localhost'||location.hostname==='127.0.0.1';
+  const isHTTPS=location.protocol==='https:';
   try{
-    const isLocal=location.hostname==='localhost'||location.hostname==='127.0.0.1';
-    const urls=isLocal
-      ? [`${location.origin}/hue/lights/${lightId}/state`]
-      : [`http://localhost:${ELGATO.proxyPort}/hue/lights/${lightId}/state`,
-         `http://${HUE.bridgeIP}/api/${HUE.apiKey}/lights/${lightId}/state`];
-    for(const url of urls){
+    if(isLocal){
+      // Same-origin proxy — no CORS issues
       try{
-        await fetch(url,{method:'PUT',body:JSON.stringify(state),signal:AbortSignal.timeout(2000)});
-        HUE.error=false;
-        return;
-      }catch(e){continue;}
+        await fetch(`${location.origin}/hue/lights/${lightId}/state`,
+          {method:'PUT',body:JSON.stringify(state),signal:AbortSignal.timeout(2000)});
+        HUE.error=false;hueProxyOk=true;return;
+      }catch(e){/* fall through */}
+    }
+    if(!isHTTPS){
+      // HTTP page can reach bridge directly
+      try{
+        await fetch(`http://${HUE.bridgeIP}/api/${HUE.apiKey}/lights/${lightId}/state`,
+          {method:'PUT',body:JSON.stringify(state),signal:AbortSignal.timeout(2000)});
+        HUE.error=false;return;
+      }catch(e){/* fall through */}
+    }
+    // HTTPS page: try proxy on localhost (browser may block mixed content)
+    if(!isLocal){
+      try{
+        await fetch(`http://localhost:${ELGATO.proxyPort}/hue/lights/${lightId}/state`,
+          {method:'PUT',body:JSON.stringify(state),signal:AbortSignal.timeout(1500)});
+        HUE.error=false;hueProxyOk=true;return;
+      }catch(e){
+        hueProxyOk=false;
+      }
     }
     HUE.error=true;
   }catch(e){HUE.error=true;}
@@ -684,7 +701,7 @@ let activeModel=0;
 // ── I18N ──────────────────────────────────────────────────────
 const LANGS={
   es:{
-    menuTitle:'XTANCO',menuSub:'SIMULADOR DE ESTANCO DIGITAL — BETA v1.55',
+    menuTitle:'XTANCO',menuSub:'SIMULADOR DE ESTANCO DIGITAL — BETA v1.60',
     langPick:'SELECCIONA IDIOMA',startBtn:'PULSA ENTER PARA EMPEZAR',
     langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
     tut:[
@@ -734,7 +751,7 @@ const LANGS={
     modelStart:['€3.500','€2.800','€4.500','€6.000'],
   },
   en:{
-    menuTitle:'XTANCO',menuSub:'DIGITAL TOBACCO SHOP SIMULATOR — BETA v1.55',
+    menuTitle:'XTANCO',menuSub:'DIGITAL TOBACCO SHOP SIMULATOR — BETA v1.60',
     langPick:'SELECT LANGUAGE',startBtn:'PRESS ENTER TO START',
     langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
     tut:[
@@ -2234,7 +2251,7 @@ function drawMenu(){
   tx('? HELP',hx+30,hy+16,'#44ccaa',9,'center');
   BTNS['menuHelp']={x:hx,y:hy,w:60,h:22};
   // Version tag
-  cx.globalAlpha=0.3;tx('v1.55',W-40,H-8,P.gray,7,'center');cx.globalAlpha=1;
+  cx.globalAlpha=0.3;tx('v1.60',W-40,H-8,P.gray,7,'center');cx.globalAlpha=1;
 }
 
 // ── HELP / MANUAL SCREEN ─────────────────────────────────────
@@ -2581,9 +2598,16 @@ function drawSettings(){
     // Status info
     ly+=34;
     tx('Las luces se sincronizan con la hora del juego:',bx,ly,'#8a8070',8);
-    tx('  Mañana → luz fría (ct:250)  |  Tarde → cálida (ct:340)',bx,ly+13,'#8a8070',8);
-    tx('  Noche → cálida intensa (ct:366)  |  Tormenta → flash azul',bx,ly+26,'#8a8070',8);
-    tx('  Tecla L → enciende/apaga Elgato + Hue a la vez',bx,ly+39,'#8a8070',8);
+    tx('  Mañana → OFF  |  Tarde → 50%  |  Noche → 100%',bx,ly+13,'#8a8070',8);
+    tx('  Tormenta → flash azul  |  DJ → strobe colores',bx,ly+26,'#8a8070',8);
+    tx('  Tecla L / Click lámpara → toggle Elgato + Hue',bx,ly+39,'#8a8070',8);
+    // HTTPS warning
+    if(location.protocol==='https:'){
+      ly+=50;
+      r(bx,ly,bw,30,'#3a1a0a');rx(bx,ly,bw,30,'#cc6633',1);
+      tx('⚠ Luces reales requieren proxy local:',bx+8,ly+12,'#ffaa66',8);
+      tx('  node elgato-proxy.js → localhost:9124',bx+8,ly+24,'#ffcc88',8);
+    }
   }
 
   // Back button (shared)
@@ -4178,8 +4202,10 @@ function drawElgatoNotify(){
     cx.globalAlpha=alpha;
     const bx=295,by=2,bw=100,bh=24;
     if(HUE.error){
-      r(bx,by,bw,bh,'#3a0a2a');rx(bx,by,bw,bh,'#cc33aa',1.5);
-      tx('⚠ Hue offline',bx+bw/2,by+16,'#ff66cc',8,'center');
+      const isHTTPS=location.protocol==='https:';
+      const errW=isHTTPS?160:100;
+      r(bx,by,errW,bh,'#3a0a2a');rx(bx,by,errW,bh,'#cc33aa',1.5);
+      tx(isHTTPS?'⚠ Hue: usar localhost:9124':'⚠ Hue offline',bx+errW/2,by+16,'#ff66cc',8,'center');
     } else if(HUE.on){
       r(bx,by,bw,bh,'#2a1a3a');rx(bx,by,bw,bh,'#aa66cc',1.5);
       tx('🟣 Hue ON',bx+bw/2,by+16,'#cc99ff',9,'center');
