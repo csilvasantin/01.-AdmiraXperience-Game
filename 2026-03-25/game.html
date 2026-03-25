@@ -69,7 +69,7 @@
 </div>
 <script>
 // ═══════════════════════════════════════════════════════════════
-//  XTANCO DIGITAL TWIN — BETA v2.17 — 2026-03-25
+//  XTANCO DIGITAL TWIN — BETA v2.18 — 2026-03-25
 // ═══════════════════════════════════════════════════════════════
 const cv=document.getElementById('c'), cx=cv.getContext('2d');
 cx.imageSmoothingEnabled=false;
@@ -874,7 +874,7 @@ let activeModel=0;
 // ── I18N ──────────────────────────────────────────────────────
 const LANGS={
   es:{
-    menuTitle:'XTANCO',menuSub:'SIMULADOR DE ESTANCO DIGITAL — BETA v2.17',
+    menuTitle:'XTANCO',menuSub:'SIMULADOR DE ESTANCO DIGITAL — BETA v2.18',
     langPick:'SELECCIONA IDIOMA',startBtn:'PULSA ENTER PARA EMPEZAR',
     langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
     tut:[
@@ -929,7 +929,7 @@ const LANGS={
     modelStart:['€3.500','€2.800','€4.500','€6.000'],
   },
   en:{
-    menuTitle:'XTANCO',menuSub:'DIGITAL TOBACCO SHOP SIMULATOR — BETA v2.17',
+    menuTitle:'XTANCO',menuSub:'DIGITAL TOBACCO SHOP SIMULATOR — BETA v2.18',
     langPick:'SELECT LANGUAGE',startBtn:'PRESS ENTER TO START',
     langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
     tut:[
@@ -2495,7 +2495,7 @@ function drawMenu(){
     }
   }
   // Version tag
-  cx.globalAlpha=0.3;tx('v2.17 · 2026-03-25',W-80,H-8,P.gray,7,'center');cx.globalAlpha=1;
+  cx.globalAlpha=0.3;tx('v2.18 · 2026-03-25',W-80,H-8,P.gray,7,'center');cx.globalAlpha=1;
 }
 
 // ── HELP / MANUAL SCREEN ─────────────────────────────────────
@@ -3175,7 +3175,7 @@ function drawShop(){
 
   // ── BACK WALL (cream/beige, Kairosoft style) ──
   const wallPts=[];
-  for(let c=-2;c<=ISO.cols+4;c++) wallPts.push(toIso(c,0)); // extend left to cover corner + right to cover full view
+  for(let c=0;c<=ISO.cols+4;c++) wallPts.push(toIso(c,0)); // extend right to cover full view
   // Wall body
   cx.beginPath();
   cx.moveTo(wallPts[0].x,wallPts[0].y);
@@ -3337,6 +3337,28 @@ function drawShop(){
       cx.beginPath();cx.arc(birdX+5.8,birdY-1.5,0.4,0,Math.PI*2);cx.fill();
       cx.restore();
     }
+  }
+
+  // ── CORNER FILL (cover sky gap where back wall meets left wall) ──
+  {
+    const cornerPt=toIso(0,0); // where both walls meet
+    const backCeiling=wallPts[0]; // leftmost back wall point (col 0)
+    const leftCeiling=toIso(0,ISO.rows); // bottommost left wall point
+    // Fill triangle: corner ceiling → straight up to top of canvas → left to edge → down along left wall ceiling
+    cx.beginPath();
+    cx.moveTo(cornerPt.x, cornerPt.y-ISO.wallH); // corner at ceiling height
+    cx.lineTo(cornerPt.x, 0); // straight up to top of canvas
+    cx.lineTo(0, 0); // top-left of canvas
+    cx.lineTo(0, leftCeiling.y-ISO.wallH+50); // down left edge
+    cx.lineTo(leftCeiling.x, leftCeiling.y-ISO.wallH); // along left wall ceiling
+    // Back up along left wall ceiling to corner
+    for(let rr=ISO.rows;rr>=0;rr--){
+      const p=toIso(0,rr);
+      cx.lineTo(p.x, p.y-ISO.wallH);
+    }
+    cx.closePath();
+    cx.fillStyle='#d0c4a8'; // left wall color
+    cx.fill();
   }
 
   // ── LEFT WALL (slightly darker, Kairosoft style) ──
