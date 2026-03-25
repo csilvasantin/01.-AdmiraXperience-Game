@@ -69,7 +69,7 @@
 </div>
 <script>
 // ═══════════════════════════════════════════════════════════════
-//  XTANCO DIGITAL TWIN — BETA v1.83 — 2026-03-25
+//  XTANCO DIGITAL TWIN — BETA v1.84 — 2026-03-25
 // ═══════════════════════════════════════════════════════════════
 const cv=document.getElementById('c'), cx=cv.getContext('2d');
 cx.imageSmoothingEnabled=false;
@@ -300,8 +300,8 @@ function updateDSCanvases(){
 // Digital Signage screens on LEFT WALL, flanking Admira TFT (rows 2-4)
 // DS1: rows 0.3–1.8 (above Admira), DS2: rows 4.2–5.7 (below Admira)
 const DS_SCREENS=[
-  {rowT:0.3, rowB:1.8},  // Screen 1: above Admira
-  {rowT:4.2, rowB:5.7},  // Screen 2: below Admira
+  {rowT:0.2, rowB:1.9},  // Screen 1: above Admira (+10%)
+  {rowT:4.1, rowB:5.8},  // Screen 2: below Admira (+10%)
 ];
 
 function positionDSOnLeftWall(el,rowT,rowB){
@@ -311,7 +311,7 @@ function positionDSOnLeftWall(el,rowT,rowB){
   const scaleX=canvasRect.width/W, scaleY=canvasRect.height/H;
   // Vertical band on wall (between LED and baseboard)
   const midWallFrac=0.55; // 55% from top of wall (below LED banner)
-  const screenH=ISO.wallH*0.38;
+  const screenH=ISO.wallH*0.42; // +10% height
   // pT is top-right corner, pB is bottom-left corner (iso left wall)
   const x1=pB.x, y1top=pB.y-ISO.wallH+ISO.wallH*midWallFrac;
   const x2=pT.x, y2top=pT.y-ISO.wallH+ISO.wallH*midWallFrac;
@@ -3548,10 +3548,10 @@ function drawAltadisTFT(){
   for(let i=1;i<wallClipPts.length;i++) cx.lineTo(wallClipPts[i].x,wallClipPts[i].y-ISO.wallH);
   for(let i=wallClipPts.length-1;i>=0;i--) cx.lineTo(wallClipPts[i].x,wallClipPts[i].y);
   cx.closePath();cx.clip();
-  // Screen corners on left wall — SMALLER and centered (row 2→4 instead of 1.5→4.5)
+  // Screen corners on left wall — centered, +10% size
   const ledEndY=ISO.wallH*0.3+20;
-  const pR=toIso(0,2.0); // visually RIGHT (row 2)
-  const pL=toIso(0,4.0); // visually LEFT (row 4)
+  const pR=toIso(0,1.8); // visually RIGHT (+10%)
+  const pL=toIso(0,4.2); // visually LEFT (+10%)
   // Bezel corners (outer frame)
   const bzTL={x:pL.x, y:pL.y-ISO.wallH+ledEndY+14};
   const bzTR={x:pR.x, y:pR.y-ISO.wallH+ledEndY+14};
@@ -3616,13 +3616,14 @@ function drawAltadisTFT(){
     const dashIdx=dsArtist.indexOf(' - ');
     const artistName=dashIdx>0?dsArtist.substring(0,dashIdx):dsArtist;
     const songName=dashIdx>0?dsArtist.substring(dashIdx+3):'';
-    cx.fillStyle='#ffee44';cx.font='bold 8px monospace';
-    cx.fillText('🎵 NOW PLAYING 🎵',cX,20);
+    cx.fillStyle='#ffee44';cx.font='bold 7px monospace';
+    cx.fillText('Este video está',cX,16);
+    cx.fillText('patrocinado por...',cX,26);
     cx.fillStyle='#ffffff';cx.font='bold 14px monospace';
-    cx.fillText(artistName,cX,42);
+    cx.fillText(artistName,cX,46);
     if(songName){
       cx.fillStyle='#ffccee';cx.font='bold 10px monospace';
-      cx.fillText(songName,cX,58);
+      cx.fillText(songName,cX,62);
     }
     cx.fillStyle='#fff';cx.font='8px monospace';
     cx.fillText('🎉🎊🎉',cX,80);
