@@ -69,7 +69,7 @@
 </div>
 <script>
 // ═══════════════════════════════════════════════════════════════
-//  XTANCO DIGITAL TWIN — BETA v1.82 — 2026-03-25
+//  XTANCO DIGITAL TWIN — BETA v1.83 — 2026-03-25
 // ═══════════════════════════════════════════════════════════════
 const cv=document.getElementById('c'), cx=cv.getContext('2d');
 cx.imageSmoothingEnabled=false;
@@ -171,6 +171,7 @@ const VIDEO_LIST=[
   'Dire Straits - Money For Nothing',
   'a-ha - Take On Me',
   'Michael Jackson - Thriller',
+  'Wham! - Last Christmas',
   'Anuncio Tabaco Clásico',
   'Lotería Navidad',
   'Promo Vapes',
@@ -179,6 +180,7 @@ const VIDEO_FILES={
   'Dire Straits - Money For Nothing':'assets/videos/signage_money_for_nothing_160x90.mp4',
   'a-ha - Take On Me':'assets/videos/signage_take_on_me_160x90.mp4',
   'Michael Jackson - Thriller':'assets/videos/signage_thriller_160x90.mp4',
+  'Wham! - Last Christmas':'assets/videos/signage_last_christmas_160x90.mp4',
 };
 // Conditions: map video name → function that returns true when it should auto-play
 const VIDEO_CONDITIONS={
@@ -3599,7 +3601,7 @@ function drawAltadisTFT(){
   const sH=vH;
 
   if(G&&G.tftParty>0){
-    // ── PARTY!! on Admira screen ──
+    // ── PARTY!! on Admira screen — show DS artist ──
     const flash=Math.sin(tt*0.15)>0;
     cx.fillStyle=flash?'#ff22aa':'#aa1188';cx.fillRect(0,0,vW,vH);
     // Confetti
@@ -3609,10 +3611,19 @@ function drawAltadisTFT(){
       cx.fillRect(cx2,cy2,4,4);
     }
     cx.textAlign='center';
-    cx.fillStyle='#ffffff';cx.font='bold 16px monospace';
-    cx.fillText('Fiesta',cX,42);
-    cx.fillStyle='#ffee44';cx.font='bold 14px monospace';
-    cx.fillText('!!',cX,60);
+    // Show current DS video artist name
+    const dsArtist=VIDEO_LIST[dsVideoIdx]||'Fiesta';
+    const dashIdx=dsArtist.indexOf(' - ');
+    const artistName=dashIdx>0?dsArtist.substring(0,dashIdx):dsArtist;
+    const songName=dashIdx>0?dsArtist.substring(dashIdx+3):'';
+    cx.fillStyle='#ffee44';cx.font='bold 8px monospace';
+    cx.fillText('🎵 NOW PLAYING 🎵',cX,20);
+    cx.fillStyle='#ffffff';cx.font='bold 14px monospace';
+    cx.fillText(artistName,cX,42);
+    if(songName){
+      cx.fillStyle='#ffccee';cx.font='bold 10px monospace';
+      cx.fillText(songName,cX,58);
+    }
     cx.fillStyle='#fff';cx.font='8px monospace';
     cx.fillText('🎉🎊🎉',cX,80);
     cx.textAlign='left';
