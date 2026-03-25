@@ -3340,33 +3340,37 @@ function drawShop(){
   }
 
   // ── LEFT WALL (slightly darker, Kairosoft style) ──
+  // Extend beyond ISO.rows and fill up to top of canvas to cover all sky
   const lwPts=[];
-  for(let rr=0;rr<=ISO.rows;rr++) lwPts.push(toIso(0,rr));
+  for(let rr=0;rr<=ISO.rows+4;rr++) lwPts.push(toIso(0,rr));
   cx.beginPath();
   cx.moveTo(lwPts[0].x,lwPts[0].y);
   for(let i=1;i<lwPts.length;i++) cx.lineTo(lwPts[i].x,lwPts[i].y);
-  for(let i=lwPts.length-1;i>=0;i--) cx.lineTo(lwPts[i].x,lwPts[i].y-ISO.wallH);
+  // from last floor point, go straight up to top of canvas, then across
+  cx.lineTo(lwPts[lwPts.length-1].x, 0);
+  cx.lineTo(lwPts[0].x, 0);
   cx.closePath();
   cx.fillStyle='#d0c4a8';cx.fill();
-  // Left wall baseboard
+  // Left wall baseboard (only visible rows 0-8)
+  const lwVisible=[];
+  for(let rr=0;rr<=ISO.rows;rr++) lwVisible.push(toIso(0,rr));
   cx.beginPath();
-  cx.moveTo(lwPts[0].x,lwPts[0].y);
-  for(let i=1;i<lwPts.length;i++) cx.lineTo(lwPts[i].x,lwPts[i].y);
-  for(let i=lwPts.length-1;i>=0;i--) cx.lineTo(lwPts[i].x,lwPts[i].y-8);
+  cx.moveTo(lwVisible[0].x,lwVisible[0].y);
+  for(let i=1;i<lwVisible.length;i++) cx.lineTo(lwVisible[i].x,lwVisible[i].y);
+  for(let i=lwVisible.length-1;i>=0;i--) cx.lineTo(lwVisible[i].x,lwVisible[i].y-8);
   cx.closePath();
   cx.fillStyle='#8a7858';cx.fill();
-  // Ceiling line left
+  // Ceiling line left (only visible rows)
   cx.strokeStyle='#a09070';cx.lineWidth=1.5;cx.beginPath();
-  cx.moveTo(lwPts[0].x,lwPts[0].y-ISO.wallH);
-  for(let i=1;i<lwPts.length;i++) cx.lineTo(lwPts[i].x,lwPts[i].y-ISO.wallH);
+  cx.moveTo(lwVisible[0].x,lwVisible[0].y-ISO.wallH);
+  for(let i=1;i<lwVisible.length;i++) cx.lineTo(lwVisible[i].x,lwVisible[i].y-ISO.wallH);
   cx.stroke();
 
   // ── CORNER FILL (covers sky gap where left wall meets back wall) ──
   {
-    const cP=toIso(0,0);          // corner point
-    const bExt=toIso(-0.5,0);     // back wall extends left
-    const lExt=toIso(0,-0.5);     // left wall extends up
-    // Fill from floor to ceiling at the corner
+    const cP=toIso(0,0);
+    const bExt=toIso(-0.5,0);
+    const lExt=toIso(0,-0.5);
     cx.beginPath();
     cx.moveTo(cP.x, cP.y);
     cx.lineTo(bExt.x, bExt.y);
@@ -3375,7 +3379,7 @@ function drawShop(){
     cx.lineTo(lExt.x, lExt.y);
     cx.lineTo(cP.x, cP.y);
     cx.closePath();
-    cx.fillStyle='#c8bca0'; cx.fill(); // slightly darker corner shade
+    cx.fillStyle='#c8bca0'; cx.fill();
   }
 
   // ── RIGHT WALL door drawn AFTER furniture (see drawGlassDoor below) ──
@@ -3899,10 +3903,10 @@ function drawAltadisTFT(){
 // ── WALL CLOCK (above LED on left wall) ──────────────────────
 // ── AIR CONDITIONING UNIT on left wall ──
 function drawAirConditioning(){
-  // Position: centered on left wall at row 4 (middle), high on wall
-  const acP=toIso(0,4);
+  // Position: top-left area of left wall, at row 7 (screen-left end), near ceiling
+  const acP=toIso(0,7);
   const acX=acP.x;
-  const acY=acP.y-ISO.wallH+30; // near top of wall, below LED
+  const acY=acP.y-ISO.wallH+25; // near top of wall, just below LED
 
   // Clip to left wall
   cx.save();
