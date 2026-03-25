@@ -61,7 +61,7 @@
 </div>
 <script>
 // ═══════════════════════════════════════════════════════════════
-//  XTANCO DIGITAL TWIN — BETA v1.66 — 2026-03-25 12:45
+//  XTANCO DIGITAL TWIN — BETA v1.67 — 2026-03-25 12:45
 // ═══════════════════════════════════════════════════════════════
 const cv=document.getElementById('c'), cx=cv.getContext('2d');
 cx.imageSmoothingEnabled=false;
@@ -701,7 +701,7 @@ let activeModel=0;
 // ── I18N ──────────────────────────────────────────────────────
 const LANGS={
   es:{
-    menuTitle:'XTANCO',menuSub:'SIMULADOR DE ESTANCO DIGITAL — BETA v1.66',
+    menuTitle:'XTANCO',menuSub:'SIMULADOR DE ESTANCO DIGITAL — BETA v1.67',
     langPick:'SELECCIONA IDIOMA',startBtn:'PULSA ENTER PARA EMPEZAR',
     langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
     tut:[
@@ -751,7 +751,7 @@ const LANGS={
     modelStart:['€3.500','€2.800','€4.500','€6.000'],
   },
   en:{
-    menuTitle:'XTANCO',menuSub:'DIGITAL TOBACCO SHOP SIMULATOR — BETA v1.66',
+    menuTitle:'XTANCO',menuSub:'DIGITAL TOBACCO SHOP SIMULATOR — BETA v1.67',
     langPick:'SELECT LANGUAGE',startBtn:'PRESS ENTER TO START',
     langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
     tut:[
@@ -2265,7 +2265,7 @@ function drawMenu(){
     }
   }
   // Version tag
-  cx.globalAlpha=0.3;tx('v1.66 · 2026-03-25 13:20',W-80,H-8,P.gray,7,'center');cx.globalAlpha=1;
+  cx.globalAlpha=0.3;tx('v1.67 · 2026-03-25 13:30',W-80,H-8,P.gray,7,'center');cx.globalAlpha=1;
 }
 
 // ── HELP / MANUAL SCREEN ─────────────────────────────────────
@@ -4180,9 +4180,18 @@ function drawHUD(){
 // ── DRAW EVENT MSG ────────────────────────────────────────────
 function drawEvent(){
   if(!G.eventMsg||G.eventTimer<=0) return;
-  const ew=220,eh=26,ex=W-ew-10,ey=SHOP.y+8;
-  r(ex,ey,ew,eh,'#3a2818ee');rx(ex,ey,ew,eh,'#8a7a50',1);
-  tx('  '+G.eventMsg,ex+ew/2,ey+17,'#f0e8c8',10,'center');
+  // Position: bottom-right, just above EDIT/MENU buttons in the bottom bar
+  const bh=34, by=H-bh;
+  const ew=260,eh=22;
+  const ex=W-ew-4, ey=by-eh-4; // just above the bottom bar
+  const alpha=Math.min(1,G.eventTimer/30);
+  cx.globalAlpha=alpha;
+  r(ex,ey,ew,eh,G.eventColor||'#3a2818');
+  cx.globalAlpha=alpha*0.8;
+  rx(ex,ey,ew,eh,'#f0e8c8',1);
+  cx.globalAlpha=alpha;
+  tx(G.eventMsg,ex+ew/2,ey+15,'#ffffff',9,'center');
+  cx.globalAlpha=1;
 }
 
 // ── LIGHT NOTIFICATIONS (Elgato + Hue) ────────────────────────
