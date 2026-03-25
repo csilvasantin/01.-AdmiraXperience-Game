@@ -1487,14 +1487,24 @@ function doAction(id){
   if(id==='time_am'){
     G.gameTime=9;elgatoState.on=false;G.lampIntensity=0;
     try{elgatoFetch('/elgato/lights',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({numberOfLights:1,lights:[{on:0}]})});}catch(e){}
-    try{hueAll({on:true,bri:254,ct:250});}catch(e){} // Hue cool daylight
+    // Hue: mañana → apagada
+    HUE.on=false;HUE.notify=90;HUE.lastSent=0;hueManualOverride=true;hueManualTimer=180;
+    try{hueAll({on:false});}catch(e){}
     showEv('🌅 '+(lang==='es'?'Mañana: luz natural':'Morning: daylight'),'#ffbb44');SFX.eventChime();return;
   }
-  if(id==='time_pm'){G.gameTime=14;showEv('☀️ '+(lang==='es'?'Tarde: tabaco y lotería':'Afternoon: tobacco & lottery'),'#ee8833');SFX.eventChime();return;}
+  if(id==='time_pm'){
+    G.gameTime=14;
+    // Hue: tarde → 50% cálida
+    HUE.on=true;HUE.notify=90;HUE.lastSent=0;hueManualOverride=true;hueManualTimer=180;
+    try{hueAll({on:true,bri:127,ct:340});}catch(e){}
+    showEv('☀️ '+(lang==='es'?'Tarde: tabaco y lotería':'Afternoon: tobacco & lottery'),'#ee8833');SFX.eventChime();return;
+  }
   if(id==='time_night'){
     G.gameTime=19;elgatoState.on=true;elgatoState.manualOff=false;G.lampIntensity=100;
     try{elgatoFetch('/elgato/lights',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({numberOfLights:1,lights:[{on:1,brightness:100}]})});}catch(e){}
-    try{hueAll({on:true,bri:254,ct:366});}catch(e){} // Hue warm night
+    // Hue: noche → 100% cálida
+    HUE.on=true;HUE.notify=90;HUE.lastSent=0;hueManualOverride=true;hueManualTimer=180;
+    try{hueAll({on:true,bri:254,ct:366});}catch(e){}
     showEv('🌙 '+(lang==='es'?'Noche: luces encendidas':'Night: lights on'),'#8866bb');SFX.eventChime();return;
   }
   if(id==='weather_0'){G.weather={type:null,timer:0};showEv('🌤 '+(lang==='es'?'Tiempo normal':'Normal weather'),'#aaaaaa');return;}
