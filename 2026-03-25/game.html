@@ -59,6 +59,7 @@
   <div id="eventBanner" style="display:none;padding:4px 12px;border-radius:4px;font-family:monospace;font-size:11px;font-weight:bold;color:#fff;text-align:center;white-space:nowrap;transition:opacity 0.3s"></div>
 </div>
 <audio id="bgMusic" loop preload="auto"><source src="music/titi.mp3" type="audio/mpeg"></audio>
+<video id="dsVideo" muted loop preload="auto" playsinline style="display:none"></video>
 <canvas id="c" width="800" height="500"></canvas>
 <div id="videoMonitor" style="display:none;position:absolute;overflow:hidden;border:2px solid #333;border-radius:2px;background:#000;z-index:5;pointer-events:none">
   <canvas id="dsCanvas1" width="160" height="90" style="display:block;width:100%;height:100%"></canvas>
@@ -68,7 +69,7 @@
 </div>
 <script>
 // ═══════════════════════════════════════════════════════════════
-//  XTANCO DIGITAL TWIN — BETA v1.78 — 2026-03-25 12:45
+//  XTANCO DIGITAL TWIN — BETA v1.79 — 2026-03-25
 // ═══════════════════════════════════════════════════════════════
 const cv=document.getElementById('c'), cx=cv.getContext('2d');
 cx.imageSmoothingEnabled=false;
@@ -152,15 +153,67 @@ function toggleMusic(){
   if(bgMusic.paused){bgMusic.play();} else {bgMusic.pause();}
 }
 
-// ── DIGITAL SIGNAGE (animated canvas screens — no YouTube, no ads) ─
+// ── DIGITAL SIGNAGE (video + animated canvas screens) ─────────
 let videoPlaying=false, videoPaused=false, currentVideoId='';
 const videoEl=document.getElementById('videoMonitor');
 const videoEl2=document.getElementById('videoMonitor2');
 const dsC1=document.getElementById('dsCanvas1').getContext('2d');
 const dsC2=document.getElementById('dsCanvas2').getContext('2d');
+const dsVideoEl=document.getElementById('dsVideo');
 let dsFrame=0;
+let dsVideoIdx=0; // current video index
+let dsMode='slides'; // 'slides' | 'video'
 
-// DS content messages that rotate
+// ── VIDEO LIST (like SONG_LIST for music) ──
+const VIDEO_LIST=[
+  'Dire Straits - Money For Nothing',
+  'Anuncio Tabaco Clásico',
+  'Lotería Navidad',
+  'Promo Vapes',
+];
+const VIDEO_FILES={
+  'Dire Straits - Money For Nothing':'assets/videos/signage_money_for_nothing_160x90.mp4',
+};
+// Conditions: map video name → function that returns true when it should auto-play
+const VIDEO_CONDITIONS={
+  'Lotería Navidad': ()=> G && G.month===12,  // December only
+  'Promo Vapes': ()=> G && G.hour>=20,        // Evening promo
+};
+
+function currentDSVideoName(){ return VIDEO_LIST[dsVideoIdx]; }
+
+function switchDSVideo(idx){
+  dsVideoIdx=((idx%VIDEO_LIST.length)+VIDEO_LIST.length)%VIDEO_LIST.length;
+  const name=VIDEO_LIST[dsVideoIdx];
+  const file=VIDEO_FILES[name];
+  if(file){
+    dsMode='video';
+    dsVideoEl.src=file;
+    dsVideoEl.currentTime=0;
+    dsVideoEl.play().catch(()=>{});
+  } else {
+    dsMode='slides';
+    dsVideoEl.pause();
+  }
+}
+
+function nextDSVideo(){ switchDSVideo(dsVideoIdx+1); }
+function prevDSVideo(){ switchDSVideo(dsVideoIdx-1); }
+
+// Auto-select video based on conditions (checked every ~5s of game time)
+let dsConditionCheck=0;
+function checkDSConditions(){
+  if(++dsConditionCheck%300!==0) return; // every ~5s at 60fps
+  for(let i=0;i<VIDEO_LIST.length;i++){
+    const cond=VIDEO_CONDITIONS[VIDEO_LIST[i]];
+    if(cond && cond()){
+      if(dsVideoIdx!==i) switchDSVideo(i);
+      return;
+    }
+  }
+}
+
+// DS content messages that rotate (fallback when no video file)
 const DS_MSGS=[
   {txt:'★ XTANCO ★',sub:'Digital Twin',bg:'#0a1a2a',fg:'#ffaa33'},
   {txt:'ADMIRA',sub:'Red de Estancos',bg:'#1a0a1a',fg:'#cc66ff'},
@@ -171,6 +224,20 @@ const DS_MSGS=[
 ];
 
 function renderDSCanvas(ctx,w,h,frame){
+  // If we have a video file playing, draw the video frame
+  if(dsMode==='video' && dsVideoEl.readyState>=2 && !dsVideoEl.paused){
+    ctx.drawImage(dsVideoEl,0,0,w,h);
+    // Scan line overlay for retro feel
+    ctx.globalAlpha=0.04;
+    for(let y=0;y<h;y+=3){ctx.fillStyle='#fff';ctx.fillRect(0,y,w,1);}
+    ctx.globalAlpha=1;
+    // Video title at bottom
+    ctx.fillStyle='#00000088';ctx.fillRect(0,h-12,w,12);
+    ctx.fillStyle='#ffffff88';ctx.font='7px monospace';ctx.textAlign='center';
+    ctx.fillText('📺 '+VIDEO_LIST[dsVideoIdx],w/2,h-3);
+    return;
+  }
+  // Fallback: animated text slides
   const msgIdx=Math.floor(frame/180)%DS_MSGS.length;
   const m=DS_MSGS[msgIdx];
   const t=frame*0.02;
@@ -209,6 +276,7 @@ function renderDSCanvas(ctx,w,h,frame){
 function updateDSCanvases(){
   if(!videoPlaying||videoPaused) return;
   dsFrame++;
+  checkDSConditions();
   renderDSCanvas(dsC1,160,90,dsFrame);
   renderDSCanvas(dsC2,160,90,dsFrame);
 }
@@ -256,6 +324,8 @@ function updateVideoPosition(){
 
 function startVideo(){
   videoPlaying=true;videoPaused=false;
+  // Auto-load current video file if available
+  switchDSVideo(dsVideoIdx);
   updateVideoPosition();
 }
 
@@ -1626,6 +1696,15 @@ function doAction(id){
     G.weather={type:'sun',timer:Math.floor(fp/dH*2)};
     showEv('☀ '+(lang==='es'?'¡Sol activado!':'Sun activated!'),P.neon2);return;
   }
+  // ── Digital Signage video controls ──
+  if(id==='dsToggle'){
+    toggleVideoPause();
+    const st=videoPlaying&&!videoPaused?'📺 ON':'📺 OFF';
+    addFloat(W/2,40,st,'#44ccff');
+    return;
+  }
+  if(id==='dsPrev'){prevDSVideo();addFloat(W/2,40,'📺 '+VIDEO_LIST[dsVideoIdx],'#44ccff');return;}
+  if(id==='dsNext'){nextDSVideo();addFloat(W/2,40,'📺 '+VIDEO_LIST[dsVideoIdx],'#44ccff');return;}
   if(id==='musicPrev'||id==='musicNext'){
     const songs=SONG_LIST;
     const ci=songs.indexOf(G.nowPlaying);
@@ -4322,6 +4401,19 @@ function drawHUD(){
   tx(sfxOn?'FX':'FX',sfxX,19,sfxOn?'#88ddaa':'#664444',9);
   if(!sfxOn){cx.strokeStyle='#cc4444';cx.lineWidth=1.5;cx.beginPath();cx.moveTo(sfxX-1,10);cx.lineTo(sfxX+15,22);cx.stroke();}
   BTNS['sfxToggle']={x:sfxX-3,y:2,w:20,h:24};
+  // 📺 Digital Signage video selector — ◀ title ▶
+  const dsX=sfxX+28;
+  const dsCol=videoPlaying&&!videoPaused?'#44ccff':'#445566';
+  tx('📺',dsX,19,dsCol,10);
+  BTNS['dsToggle']={x:dsX-3,y:2,w:16,h:24};
+  const dsName=VIDEO_LIST[dsVideoIdx];
+  const dsShort=dsName.length>18?dsName.substring(0,16)+'…':dsName;
+  tx(dsShort,dsX+18,19,dsCol,7);
+  const dsArrowX=dsX+18+dsShort.length*4.5+6;
+  tx('◀',dsArrowX,19,'#4488aa',9);
+  BTNS['dsPrev']={x:dsArrowX-3,y:2,w:12,h:24};
+  tx('▶',dsArrowX+13,19,'#4488aa',9);
+  BTNS['dsNext']={x:dsArrowX+10,y:2,w:12,h:24};
   // Ingresos Día
   const dayInc=G.sales.reduce((s,v)=>s+v,0);
   tx('Ing.',moneyEnd+105,8,'#a09880',6);
