@@ -59,7 +59,7 @@
   <div id="eventBanner" style="display:none;padding:4px 12px;border-radius:4px;font-family:monospace;font-size:11px;font-weight:bold;color:#fff;text-align:center;white-space:nowrap;transition:opacity 0.3s"></div>
 </div>
 <audio id="bgMusic" loop preload="auto"><source src="music/titi.mp3" type="audio/mpeg"></audio>
-<video id="dsVideo" muted loop preload="auto" playsinline style="display:none"></video>
+<video id="dsVideo" loop preload="auto" playsinline style="display:none"></video>
 <canvas id="c" width="800" height="500"></canvas>
 <div id="videoMonitor" style="display:none;position:absolute;overflow:hidden;border:2px solid #333;border-radius:2px;background:#000;z-index:5;pointer-events:none">
   <canvas id="dsCanvas1" width="160" height="90" style="display:block;width:100%;height:100%"></canvas>
@@ -69,7 +69,7 @@
 </div>
 <script>
 // ═══════════════════════════════════════════════════════════════
-//  XTANCO DIGITAL TWIN — BETA v1.79 — 2026-03-25
+//  XTANCO DIGITAL TWIN — BETA v1.80 — 2026-03-25
 // ═══════════════════════════════════════════════════════════════
 const cv=document.getElementById('c'), cx=cv.getContext('2d');
 cx.imageSmoothingEnabled=false;
@@ -163,16 +163,19 @@ const dsVideoEl=document.getElementById('dsVideo');
 let dsFrame=0;
 let dsVideoIdx=0; // current video index
 let dsMode='slides'; // 'slides' | 'video'
+let dsAudioMuted=true; // DS audio starts muted
 
 // ── VIDEO LIST (like SONG_LIST for music) ──
 const VIDEO_LIST=[
   'Dire Straits - Money For Nothing',
+  'a-ha - Take On Me',
   'Anuncio Tabaco Clásico',
   'Lotería Navidad',
   'Promo Vapes',
 ];
 const VIDEO_FILES={
   'Dire Straits - Money For Nothing':'assets/videos/signage_money_for_nothing_160x90.mp4',
+  'a-ha - Take On Me':'assets/videos/signage_take_on_me_160x90.mp4',
 };
 // Conditions: map video name → function that returns true when it should auto-play
 const VIDEO_CONDITIONS={
@@ -189,6 +192,8 @@ function switchDSVideo(idx){
   if(file){
     dsMode='video';
     dsVideoEl.src=file;
+    dsVideoEl.muted=dsAudioMuted;
+    dsVideoEl.volume=0.3;
     dsVideoEl.currentTime=0;
     dsVideoEl.play().catch(()=>{});
   } else {
@@ -199,6 +204,12 @@ function switchDSVideo(idx){
 
 function nextDSVideo(){ switchDSVideo(dsVideoIdx+1); }
 function prevDSVideo(){ switchDSVideo(dsVideoIdx-1); }
+
+function toggleDSAudio(){
+  dsAudioMuted=!dsAudioMuted;
+  dsVideoEl.muted=dsAudioMuted;
+  dsVideoEl.volume=0.3;
+}
 
 // Auto-select video based on conditions (checked every ~5s of game time)
 let dsConditionCheck=0;
@@ -1705,6 +1716,7 @@ function doAction(id){
   }
   if(id==='dsPrev'){prevDSVideo();addFloat(W/2,40,'📺 '+VIDEO_LIST[dsVideoIdx],'#44ccff');return;}
   if(id==='dsNext'){nextDSVideo();addFloat(W/2,40,'📺 '+VIDEO_LIST[dsVideoIdx],'#44ccff');return;}
+  if(id==='dsMute'){toggleDSAudio();addFloat(W/2,40,dsAudioMuted?'🔇 DS Audio OFF':'🔊 DS Audio ON','#44ddaa');return;}
   if(id==='musicPrev'||id==='musicNext'){
     const songs=SONG_LIST;
     const ci=songs.indexOf(G.nowPlaying);
@@ -4414,6 +4426,11 @@ function drawHUD(){
   BTNS['dsPrev']={x:dsArrowX-3,y:2,w:12,h:24};
   tx('▶',dsArrowX+13,19,'#4488aa',9);
   BTNS['dsNext']={x:dsArrowX+10,y:2,w:12,h:24};
+  // DS audio mute/unmute 🔊/🔇
+  const dsMuteX=dsArrowX+28;
+  const dsMuteCol=dsAudioMuted?'#664444':'#44ddaa';
+  tx(dsAudioMuted?'🔇':'🔊',dsMuteX,19,dsMuteCol,9);
+  BTNS['dsMute']={x:dsMuteX-3,y:2,w:16,h:24};
   // Ingresos Día
   const dayInc=G.sales.reduce((s,v)=>s+v,0);
   tx('Ing.',moneyEnd+105,8,'#a09880',6);
