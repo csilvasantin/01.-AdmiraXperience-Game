@@ -416,10 +416,13 @@ async function toggleStudioLight(){
   }catch(e){
     console.log('[Elgato] Real light unavailable (game lamp still works)');
   }
-  // Also toggle Hue lights
+  // Also toggle Hue lights (bypass throttle for manual action)
   try{
     HUE.on=newOn;
     HUE.notify=120;
+    HUE.lastSent=0; // force bypass throttle
+    hueManualOverride=true;
+    hueManualTimer=180; // skip auto-sync for 3 seconds
     if(newOn) await hueAll({on:true,bri:254,ct:300});
     else await hueAll({on:false});
     console.log(`[Hue] Lights: ${newOn?'ON':'OFF'}`);
@@ -493,16 +496,35 @@ async function hueToggle(){
   }
 }
 // Sync Hue lights with game state (called from updateGame, throttled)
+let hueManualOverride=false; // true when user manually toggled — skip auto-sync briefly
+let hueManualTimer=0;
 function hueSyncWithGame(){
   if(!HUE.enabled) return;
-  if(tt%120!==0) return; // every 2 seconds
   if(!G||!G.gameTime) return;
+  // If user just toggled manually, skip auto-sync for 3 seconds
+  if(hueManualOverride){
+    hueManualTimer--;
+    if(hueManualTimer<=0) hueManualOverride=false;
+    else return;
+  }
   const h=G.gameTime;
-  // DJ strobe: sync Hue with strobe effect
+  // DJ strobe: sync Hue with strobe effect (every 30 frames ≈ 0.5s)
   const djOn=G.staff&&G.staff.some(st=>st.hired&&st.role===4);
-  if(djOn&&tt%30===0){
-    const flash=Math.sin(tt*0.3)>0;
-    hueAll({on:true,bri:flash?254:25,xy:[Math.random()*0.3+0.15,Math.random()*0.3+0.1],transitiontime:1});
+  if(djOn){
+    if(elgatoState.manualOff) return; // user turned off lights manually — respect it
+    if(tt%30===0){
+      const flash=Math.sin(tt*0.3)>0;
+      HUE.lastSent=0; // force send, bypass throttle
+      hueAll({on:true,bri:flash?254:25,xy:[Math.random()*0.3+0.15,Math.random()*0.3+0.1],transitiontime:1});
+    }
+    return;
+  }
+  // Normal time-based sync (every 2 seconds)
+  if(tt%120!==0) return;
+  // Storm: blue flash (priority)
+  if(G.weather&&G.weather.type==='rain'&&thunderFlash>4){
+    HUE.lastSent=0;
+    hueAll({on:true,bri:254,xy:[0.18,0.18],alert:'select'});
     return;
   }
   // Night: warm white, full brightness
@@ -519,10 +541,6 @@ function hueSyncWithGame(){
   // Morning/midday: cool daylight
   else {
     hueAll({on:true,bri:254,ct:250});
-  }
-  // Storm: blue flash
-  if(G.weather&&G.weather.type==='rain'&&thunderFlash>4){
-    hueAll({on:true,bri:254,xy:[0.18,0.18],alert:'select'});
   }
 }
 
@@ -1764,10 +1782,12 @@ function updateGame(){
   }
   // If manually turned off, intensity is 0 visually
   if(elgatoState.manualOff) lampIntensity=0;
-  // DJ strobe effect: lamp flashes on/off rapidly
+  // DJ strobe effect: lamp flashes on/off rapidly (visual always, real lights respect manualOff)
   const djOn=G.staff&&G.staff.some(st=>st.hired&&st.role===4);
   if(djOn){
-    elgatoState.on=true;elgatoState.manualOff=false;
+    if(!elgatoState.manualOff){
+      elgatoState.on=true;
+    }
     lampIntensity=Math.sin(tt*0.3)>0?100:10;
   }
   G.lampIntensity=lampIntensity;
