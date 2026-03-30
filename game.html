@@ -1025,8 +1025,11 @@ let lang='es';
 const T=()=>LANGS[lang];
 
 // ── STATE ─────────────────────────────────────────────────────
-const S={MENU:'menu',PLATFORM_SEL:'platformSel',MODEL_SEL:'modelSel',TUT:'tutorial',GAME:'game',PAUSE:'pause',YEAR_END:'yearEnd',GAME_END:'gameEnd',EDITOR:'editor',SETTINGS:'settings',HELP:'help'};
+const S={MENU:'menu',PLATFORM_SEL:'platformSel',MODEL_SEL:'modelSel',TUT:'tutorial',GAME:'game',PAUSE:'pause',YEAR_END:'yearEnd',GAME_END:'gameEnd',EDITOR:'editor',SETTINGS:'settings',HELP:'help',INTRO:'intro'};
 let state=S.MENU, menuSel=0, platformSel=0, renderMode='8bit', modelSel=0, tutPage=0, helpPage=0;
+let introSlide=0, introTimer=0;
+const INTRO_SLIDE_DURATION=260; // frames per slide (~4.3s at 60fps)
+const INTRO_SLIDES=8;
 let tt=0;
 let tran={active:false,from:null,to:null,timer:0,dur:30};
 function startTransition(toState){if(tran.active)return;tran={active:true,from:state,to:toState,timer:0,dur:30};}
@@ -1425,6 +1428,16 @@ document.addEventListener('keydown',e=>{
     if(e.code==='ArrowRight'){helpPage=Math.min(HELP_PAGES.length-1,helpPage+1);}
     return;
   }
+  if(state===S.INTRO){
+    if(e.code==='Escape'){state=S.MENU;return;}
+    if(e.code==='ArrowRight'||e.code==='Space'||e.code==='Enter'){
+      introSlide++;introTimer=0;
+      if(introSlide>=INTRO_SLIDES){state=S.MENU;}
+      return;
+    }
+    if(e.code==='ArrowLeft'){introSlide=Math.max(0,introSlide-1);introTimer=0;return;}
+    return;
+  }
   if(state===S.MODEL_SEL){
     if(e.code==='ArrowLeft')  modelSel=(modelSel+3)%4;
     if(e.code==='ArrowRight') modelSel=(modelSel+1)%4;
@@ -1720,6 +1733,7 @@ function doAction(id){
   if(id==='menuLangEn'){menuSel=1;return;}
   if(id==='menuSettings'){state=S.SETTINGS;return;}
   if(id==='menuHelp'){helpPage=0;state=S.HELP;return;}
+  if(id==='menuIntro'){introSlide=0;introTimer=0;state=S.INTRO;return;}
   // Opciones goes to settings (handled by menuSettings above)
   if(id==='helpBack'){state=S.MENU;return;}
   if(id==='helpPrev'){helpPage=Math.max(0,helpPage-1);return;}
@@ -2799,10 +2813,20 @@ function drawMenu(){
   chibi(mb16x+100,chibY,-1,3,3,Math.floor(tt/12)%2,true,tt);
   renderMode=_rm;
 
-  // Opciones button (opens settings)
-  const optW=120,optH=24,optX=W/2-optW/2,optY=chibY+36;
+  // Bottom buttons row: INTRO + OPCIONES
+  const btnW=118,btnH=26,btnGap=10,btnY=chibY+36;
+  const btnRowX=W/2-(btnW*2+btnGap)/2;
+  // ▶ INTRO button — pulsing neon
+  const ipulse=0.55+0.45*Math.abs(Math.sin(tt*0.06));
+  cx.globalAlpha=ipulse;
+  r(btnRowX,btnY,btnW,btnH,'#001a0a');rx(btnRowX,btnY,btnW,btnH,P.neon1,1);
+  glow(P.neon1,6);tx('▶ CÓMO JUGAR',btnRowX+btnW/2,btnY+18,P.neon1,10,'center');nog();
+  cx.globalAlpha=1;
+  BTNS['menuIntro']={x:btnRowX,y:btnY,w:btnW,h:btnH};
+  // ⚙ OPCIONES button
+  const optX=btnRowX+btnW+btnGap,optY=btnY,optW=btnW,optH=btnH;
   r(optX,optY,optW,optH,'#0a0a18');rx(optX,optY,optW,optH,P.gray,1);
-  tx('⚙ OPCIONES',optX+optW/2,optY+17,P.gray,10,'center');
+  tx('⚙ OPCIONES',optX+optW/2,optY+18,P.gray,10,'center');
   BTNS['menuSettings']={x:optX,y:optY,w:optW,h:optH};
   // Auto-start countdown (5 seconds)
   if(!demoMode){
@@ -2820,6 +2844,287 @@ function drawMenu(){
   }
   // Version tag
   cx.globalAlpha=0.3;tx('v3.0 · 2026-03-30',W-80,H-8,P.gray,7,'center');cx.globalAlpha=1;
+}
+
+// ── INTRO / HOW TO PLAY ───────────────────────────────────────
+function drawIntro(){
+  introTimer++;
+  if(introTimer>=INTRO_SLIDE_DURATION){introTimer=0;introSlide++;if(introSlide>=INTRO_SLIDES){state=S.MENU;return;}}
+  const t=introTimer, sl=introSlide;
+  const fade=Math.min(1,t/18)*Math.min(1,(INTRO_SLIDE_DURATION-t)/12);
+
+  // ── Background
+  r(0,0,W,H,'#0a0c18');
+  cx.globalAlpha=0.07;
+  for(let x=0;x<W;x+=28){cx.strokeStyle='#2244aa';cx.lineWidth=1;cx.beginPath();cx.moveTo(x,0);cx.lineTo(x,H);cx.stroke();}
+  for(let y=0;y<H;y+=28){cx.beginPath();cx.moveTo(0,y);cx.lineTo(W,y);cx.stroke();}
+  cx.globalAlpha=1;
+  nl(0,3,W,3,P.neon2,2);nl(0,H-3,W,H-3,P.neon1,2);
+
+  cx.globalAlpha=fade;
+
+  // ── Slide content
+  if(sl===0){
+    // ── BIENVENIDA ──
+    const pulse=0.7+0.3*Math.abs(Math.sin(tt*0.06));
+    glow(P.neon3,30*pulse);
+    cx.font='bold 78px monospace';cx.textAlign='center';cx.fillStyle=P.neon3;cx.fillText('XTANCO',W/2,H/2-60);nog();
+    nt('SIMULADOR DE ESTANCO DIGITAL',W/2,H/2-8,P.neon1,13);
+    nt('Gestiona tu propio estanco durante 5 años.',W/2,H/2+28,P.uiT3,11);
+    nt('Contrata personal · Repón stock · Fideliza clientes',W/2,H/2+52,P.uiT3,10);
+    nt('Alcanza los objetivos anuales y conviértete en leyenda.',W/2,H/2+74,P.uiT3,10);
+    // Animated neon underline
+    const ulw=280+40*Math.abs(Math.sin(tt*0.04));
+    nl(W/2-ulw/2,H/2-2,W/2+ulw/2,H/2-2,P.neon2,1);
+
+  } else if(sl===1){
+    // ── EL OBJETIVO ──
+    nt('EL OBJETIVO',W/2,44,P.neon3,16);
+    nl(W/2-130,52,W/2+130,52,P.neon3,1);
+    const targets=[2200,5800,12000,23000,40000];
+    const ratings=['S','A','B','C','D'];
+    const cols=['#44ff88','#88eeaa','#ffcc44','#ff8844','#ff4444'];
+    nt('Supera el objetivo de cada año para avanzar.',W/2,80,P.uiT3,10);
+    nt('Al final de año recibes una calificación y un bonus:',W/2,96,P.uiT3,10);
+    for(let i=0;i<5;i++){
+      const bx=W/2-220+i*88,by=130;
+      // Animated progress bar fill
+      const pct=Math.min(1,(t-i*18)/80);
+      r(bx,by,70,10,'#111a22');r(bx,by,Math.max(0,70*pct)|0,10,cols[i]);
+      rx(bx,by,70,10,cols[i],1);
+      cx.font='bold 10px monospace';cx.textAlign='center';cx.fillStyle=cols[i];
+      cx.fillText('AÑO '+(i+1),bx+35,by-4);
+      cx.fillText('€'+(targets[i]>=1000?(targets[i]/1000).toFixed(1)+'k':targets[i]),bx+35,by+22);
+    }
+    // Ratings row
+    const rby=190;
+    nt('CALIFICACIONES  →  BONUS AL FINAL DE AÑO',W/2,rby,P.gray,9);
+    const rData=[['S','LEGENDARIO','#44ff88','€2.500'],['A','EXCELENTE','#88dd88','€1.200'],['B','BIEN','#ffcc44','€400'],['C','MEJORABLE','#ff8844','€0'],['D','INSUFICIENTE','#ff4444','-€600']];
+    rData.forEach((rd,i)=>{
+      const rx2=W/2-190+i*96,ry2=rby+16;
+      r(rx2,ry2,80,36,'#0a1020');rx(rx2,ry2,80,36,rd[2],1);
+      cx.font='bold 18px monospace';cx.textAlign='center';cx.fillStyle=rd[2];cx.fillText(rd[0],rx2+40,ry2+22);
+      cx.font='7px monospace';cx.fillStyle=rd[2];cx.fillText(rd[1],rx2+40,ry2+32);
+    });
+    nt('Si no alcanzas el objetivo 2 veces → FIN DE PARTIDA',W/2,260,P.red,9);
+    nt('Si tienes menos de €1.000 al pagar nóminas → FIN DE PARTIDA',W/2,276,P.red,9);
+
+  } else if(sl===2){
+    // ── LOS CLIENTES ──
+    nt('LOS CLIENTES',W/2,44,P.neon1,16);
+    nl(W/2-130,52,W/2+130,52,P.neon1,1);
+    // Animated customer walking then buying
+    const phase=t<80?'walk':t<160?'browse':'leave';
+    const custX=phase==='walk'?W/2-80+((t/80)*(60)):phase==='browse'?W/2-20:W/2-20+(t-160)*1.2;
+    const custFr=Math.floor(tt/10)%2;
+    const _rm=renderMode;renderMode='16bit';
+    chibi(custX,H/2-10,phase==='leave'?1:-1,3,3,custFr,false,tt);
+    renderMode=_rm;
+    // Stage labels
+    const stages=[{x:W/2-95,label:'ENTRA',active:t<80},{x:W/2-20,label:'BUSCA',active:t>=80&&t<160},{x:W/2+80,label:'SALE',active:t>=160}];
+    stages.forEach(s=>{
+      cx.globalAlpha=s.active?1:0.35;
+      r(s.x-28,H/2+25,56,16,'#111a22');rx(s.x-28,H/2+25,56,16,s.active?P.neon1:P.gray,1);
+      tx(s.label,s.x,H/2+37,s.active?P.neon1:P.gray,8,'center');
+    });
+    cx.globalAlpha=fade;
+    // Money float animation
+    if(t>=100&&t<160){
+      const fy=H/2-30-(t-100)*0.4;
+      cx.globalAlpha=fade*Math.min(1,(160-t)/20);
+      glow(P.green,8);tx('€'+Math.floor(3+t*0.05),custX+10,fy,P.green,14,'center');nog();
+      cx.globalAlpha=fade;
+    }
+    // Info boxes
+    const iby=H/2+58;
+    const boxes=[
+      {x:W/2-240,w:145,col:P.neon1,title:'CON STOCK',desc:['El cliente compra','→ ingresos +€','→ satisfacción +0.5']},
+      {x:W/2-80,w:158,col:P.neon3,title:'STAFF CERCA',desc:['Empleado rescata la venta','→ producto alternativo','→ 🤝 float + ingreso']},
+      {x:W/2+90,w:148,col:P.red,title:'SIN STOCK',desc:['Cliente insatisfecho','→ "SIN STOCK" float','→ satisfacción -2']},
+    ];
+    boxes.forEach(b=>{
+      r(b.x,iby,b.w,62,'#0a1020');rx(b.x,iby,b.w,62,b.col,1);
+      cx.font='bold 9px monospace';cx.textAlign='center';cx.fillStyle=b.col;cx.fillText(b.title,b.x+b.w/2,iby+13);
+      b.desc.forEach((d,i)=>{cx.font='8px monospace';cx.fillStyle='#aabbcc';cx.fillText(d,b.x+b.w/2,iby+26+i*12);});
+    });
+
+  } else if(sl===3){
+    // ── EL STOCK ──
+    nt('EL STOCK',W/2,44,P.neonB,16);
+    nl(W/2-100,52,W/2+100,52,P.neonB,1);
+    nt('Repón el stock antes de que se agote.',W/2,76,P.uiT3,10);
+    nt('Cada producto tiene un nivel de stock independiente.',W/2,92,P.uiT3,10);
+    // Stock bars for 6 products
+    const pNames=['Tabaco','Vapes','Lotería','Prensa','Chuches','Recarga'];
+    const pCols=[P.prods[0],P.prods[1],P.prods[2],P.prods[3],P.prods[4],P.prods[5]];
+    const pLevels=[0.9,0.3,0.75,0.1,0.6,0.45];
+    pNames.forEach((nm,i)=>{
+      const bx=W/2-220+i*75,by=115;
+      const lvl=pLevels[i];
+      const col=lvl<0.25?P.red:lvl<0.5?P.yellow:P.green;
+      // Animated fill
+      const fill=Math.min(lvl,t/120*lvl);
+      r(bx,by,55,80,'#0a1020');rx(bx,by,55,80,pCols[i],1);
+      r(bx+4,by+4+(80-8)*(1-fill),47,(80-8)*fill,col);
+      cx.font='7px monospace';cx.textAlign='center';cx.fillStyle=pCols[i];
+      cx.fillText(nm,bx+27,by+90);
+      if(lvl<0.3){glow(P.red,6);cx.font='bold 9px monospace';cx.fillStyle=P.red;cx.fillText('⚠',bx+27,by+38);nog();}
+    });
+    // Restock info
+    const riby=225;
+    r(W/2-170,riby,340,70,'#0a1020');rx(W/2-170,riby,340,70,P.neonB,1);
+    cx.font='bold 10px monospace';cx.textAlign='center';cx.fillStyle=P.neonB;cx.fillText('CÓMO REPONER',W/2,riby+14);
+    cx.font='9px monospace';cx.fillStyle='#aabbcc';
+    cx.fillText('Pestaña STOCK → botón REPONER (€150 por producto)',W/2,riby+30);
+    cx.fillText('Oferta proveedor: -50% restock cuando aparece 📦',W/2,riby+44);
+    cx.fillText('Inspección: si stock <40% → multa €600-€1000 + -15 sat',W/2,riby+58);
+
+  } else if(sl===4){
+    // ── TU EQUIPO ──
+    nt('TU EQUIPO',W/2,44,P.neon2,16);
+    nl(W/2-100,52,W/2+100,52,P.neon2,1);
+    const roles=[
+      {name:'CAJERO/A',desc:'Ventas + cobro',cost:'€500',salary:'€130/sem',col:P.prods[0],shirt:0,hair:0},
+      {name:'REPOSITOR/A',desc:'Repone stock',cost:'€400',salary:'€105/sem',col:P.prods[2],shirt:2,hair:1},
+      {name:'AZAFATA',desc:'Atención cliente',cost:'€450',salary:'€115/sem',col:P.prods[4],shirt:4,hair:2},
+      {name:'STORE MGR',desc:'Player / rescata ventas',cost:'€1.200',salary:'€210/sem',col:P.neon3,shirt:5,hair:3},
+      {name:'DJ',desc:'Strobe + fiesta',cost:'€800',salary:'€160/sem',col:P.prods[1],shirt:1,hair:5},
+    ];
+    const _rm=renderMode;renderMode='16bit';
+    roles.forEach((ro,i)=>{
+      const rx2=W/2-220+i*110,ry2=90;
+      r(rx2-8,ry2-10,96,110,'#0a1020');rx(rx2-8,ry2-10,96,110,ro.col,1);
+      chibi(rx2+30,ry2+30,1,ro.shirt,ro.hair,Math.floor(tt/12)%2,false,tt);
+      cx.font='bold 8px monospace';cx.textAlign='center';cx.fillStyle=ro.col;cx.fillText(ro.name,rx2+40,ry2+60);
+      cx.font='7px monospace';cx.fillStyle='#aabbcc';cx.fillText(ro.desc,rx2+40,ry2+72);cx.fillText('Contratar: '+ro.cost,rx2+40,ry2+83);cx.fillText('Salario: '+ro.salary,rx2+40,ry2+94);
+    });
+    renderMode=_rm;
+    // Training info
+    const tby=228;
+    r(W/2-200,tby,400,54,'#0a1020');rx(W/2-200,tby,400,54,P.neon1,1);
+    cx.font='bold 9px monospace';cx.textAlign='center';cx.fillStyle=P.neon1;cx.fillText('FORMACIÓN — niveles 1 a 5',W/2,tby+14);
+    cx.font='8px monospace';cx.fillStyle='#aabbcc';
+    cx.fillText('Cada nivel multiplica ventas y sube el salario. Coste: €200-€380.',W/2,tby+28);
+    cx.fillText('Empleado del mes aleatorio: +30 moral, +1 nivel de golpe.',W/2,tby+42);
+
+  } else if(sl===5){
+    // ── LA COMPETENCIA ──
+    nt('LA COMPETENCIA',W/2,44,P.red,16);
+    nl(W/2-140,52,W/2+140,52,P.red,1);
+    nt('Altadis · JTI · PM · BAT compiten contigo activamente.',W/2,76,P.uiT3,10);
+    // Animated comp bars
+    const compNames=['Altadis','JTI','PM','BAT'];
+    const compCols=['#3366cc','#cc2222','#2266aa','#333399'];
+    const compBase=[28,26,25,21];
+    const promoIdx=1; // JTI is doing a promo in this slide
+    compNames.forEach((cn,i)=>{
+      const bx=W/2-190+i*100,by=100;
+      const isPromo=i===promoIdx&&t>60;
+      const share=isPromo?compBase[i]+8*Math.min(1,(t-60)/40):compBase[i];
+      const barH=Math.min(share*2,80);
+      const col=isPromo?P.red:compCols[i];
+      r(bx,by+80-barH,60,barH,col+'44');rx(bx,by,60,80,col,1);
+      // Animated fill
+      const animH=Math.min(barH,(t/100)*barH);
+      r(bx+2,by+80-animH,56,animH,col);
+      cx.font='bold 8px monospace';cx.textAlign='center';cx.fillStyle=col;
+      cx.fillText(cn,bx+30,by+94);cx.fillText(Math.round(share)+'%',bx+30,by+70-animH);
+      if(isPromo){glow(P.red,10);cx.font='bold 9px monospace';cx.fillStyle=P.red;cx.fillText('PROMO!',bx+30,by-6);nog();}
+    });
+    // Effect description
+    const eBy=220;
+    r(W/2-220,eBy,440,70,'#0a1020');rx(W/2-220,eBy,440,70,P.red,1);
+    cx.font='bold 9px monospace';cx.textAlign='center';cx.fillStyle=P.red;cx.fillText('📢 PROMO RIVAL — qué ocurre',W/2,eBy+14);
+    cx.font='8px monospace';cx.fillStyle='#aabbcc';
+    cx.fillText('Un competidor lanza oferta → -35% clientes durante ~280 frames',W/2,eBy+28);
+    cx.fillText('Su barra en el top-bar se pone en ROJO con "PROMO!"',W/2,eBy+40);
+    cx.fillText('Contraataca: Publicidad Básica-2.5pt · Media-2.5pt · PREMIUM cancela la promo',W/2,eBy+54);
+    // Sat influence note
+    nt('Alta satisfacción → competidores pierden cuota poco a poco.',W/2,302,P.neon1,9);
+
+  } else if(sl===6){
+    // ── EVENTOS ESPECIALES ──
+    nt('EVENTOS ESPECIALES',W/2,44,P.neon3,16);
+    nl(W/2-160,52,W/2+160,52,P.neon3,1);
+    const evs=[
+      {icon:'⚡',name:'HORA PUNTA',col:'#ff8800',lines:['Ventas ×2.4','Clientes ×2','Duración: ~160 frames']},
+      {icon:'🔍',name:'INSPECCIÓN',col:'#ff2244',lines:['Stock >40% + 1 empleado → +8 sat','Stock <40% → multa €600-1000','Aviso 100 frames antes']},
+      {icon:'🎉',name:'FESTIVO',col:'#ffcc00',lines:['Clientes ×1.6','Ventas ×1.8','Días: S.Valentín, Navidad…']},
+      {icon:'🌧',name:'TIEMPO',col:'#6688aa',lines:['Lluvia → clientes ×0.5','Sol → clientes ×1.5','Tormenta: flash en Hue']},
+      {icon:'⭐',name:'CLIENTE VIP',col:'#ffd700',lines:['Elige producto más caro','Gasta ×1.5 más','Diálogo especial']},
+      {icon:'🚨',name:'HURTO',col:'#cc3333',lines:['<3 empleados: -30% stock','≥3 empleados: frustrado','Aleatório, sin aviso']},
+    ];
+    evs.forEach((ev,i)=>{
+      const col=i%3,row=Math.floor(i/3);
+      const ex=W/2-210+col*140,ey=88+row*105;
+      r(ex,ey,125,92,'#0a1020');rx(ex,ey,125,92,ev.col,1);
+      cx.font='18px monospace';cx.textAlign='center';cx.fillText(ev.icon,ex+62,ey+22);
+      cx.font='bold 8px monospace';cx.fillStyle=ev.col;cx.fillText(ev.name,ex+62,ey+34);
+      ev.lines.forEach((ln,j)=>{cx.font='7px monospace';cx.fillStyle='#aabbcc';cx.fillText(ln,ex+62,ey+47+j*12);});
+    });
+
+  } else if(sl===7){
+    // ── CONTROLES ──
+    nt('CONTROLES',W/2,44,P.neon1,16);
+    nl(W/2-100,52,W/2+100,52,P.neon1,1);
+    const ctrls=[
+      {key:'Q / A',desc:'Mover manager arriba-izq / abajo-izq',col:P.neon1},
+      {key:'O / P',desc:'Mover manager arriba-der / abajo-der',col:P.neon1},
+      {key:'ESC',desc:'Pausa / volver al menú',col:P.neon3},
+      {key:'CLICK',desc:'Botones UI, tabs, acciones',col:P.neon2},
+      {key:'☰ MENU',desc:'Abrir panel lateral (4 pestañas)',col:P.neon2},
+      {key:'VENTAS',desc:'Resumen ingresos, objetivo anual',col:P.uiT},
+      {key:'PERSONAL',desc:'Contratar, formar, despedir empleados',col:P.uiT},
+      {key:'STOCK',desc:'Reponer productos, publicidad, mejora local',col:P.uiT},
+      {key:'LOCAL',desc:'Visitas, opciones de tienda',col:P.uiT},
+    ];
+    ctrls.forEach((c,i)=>{
+      const row=Math.floor(i/3),col=i%3;
+      const cx2=W/2-220+col*148,cy2=80+row*70;
+      r(cx2,cy2,138,60,'#0a1020');rx(cx2,cy2,138,60,c.col,1);
+      cx.font='bold 11px monospace';cx.textAlign='center';cx.fillStyle=c.col;cx.fillText(c.key,cx2+69,cy2+20);
+      cx.font='8px monospace';cx.fillStyle='#aabbcc';
+      // Word wrap roughly at 22 chars
+      const words=c.desc.split(' ');let line='',lines2=[];
+      words.forEach(w=>{if((line+w).length>20){lines2.push(line.trim());line='';}line+=w+' ';});lines2.push(line.trim());
+      lines2.forEach((ln,j)=>cx.fillText(ln,cx2+69,cy2+34+j*11));
+    });
+    // CTA
+    const ctaY=310;
+    const cpulse=0.6+0.4*Math.abs(Math.sin(tt*0.07));
+    cx.globalAlpha=fade*cpulse;
+    glow(P.neon1,12);
+    cx.font='bold 13px monospace';cx.textAlign='center';cx.fillStyle=P.neon1;
+    cx.fillText('¡YA SABES TODO LO QUE NECESITAS!',W/2,ctaY);
+    cx.font='10px monospace';cx.fillStyle=P.neon2;cx.fillText('Pulsa ESPACIO o → para ir al menú',W/2,ctaY+22);
+    nog();
+    cx.globalAlpha=fade;
+  }
+
+  // ── Navigation UI (always visible) ──
+  cx.globalAlpha=1;
+  // Progress dots
+  for(let i=0;i<INTRO_SLIDES;i++){
+    const dx=W/2+(i-INTRO_SLIDES/2+0.5)*14,dy=H-18;
+    cx.fillStyle=i===sl?P.neon1:'#334';
+    if(i===sl){glow(P.neon1,6);}
+    cx.beginPath();cx.arc(dx,dy,i===sl?4:2.5,0,Math.PI*2);cx.fill();
+    nog();
+  }
+  // Slide counter + hint
+  cx.globalAlpha=0.55;
+  tx((sl+1)+'/'+INTRO_SLIDES,12,H-8,P.gray,8);
+  tx('← → NAVEGAR  |  ESC SALIR',W-8,H-8,P.gray,8,'right');
+  // Auto-advance bar
+  const pct=t/INTRO_SLIDE_DURATION;
+  cx.fillStyle='#1a2030';cx.fillRect(0,H-4,W,4);
+  cx.fillStyle=P.neon1;cx.fillRect(0,H-4,(W*pct)|0,4);
+  cx.globalAlpha=1;
+
+  // ── Slide title badge (top left) ──
+  const slideTitles=['BIENVENIDA','EL OBJETIVO','LOS CLIENTES','EL STOCK','TU EQUIPO','LA COMPETENCIA','EVENTOS','CONTROLES'];
+  r(8,8,170,18,'#0a1020');rx(8,8,170,18,P.neon2,1);
+  cx.font='bold 9px monospace';cx.textAlign='left';cx.fillStyle=P.neon2;cx.fillText('▶  '+slideTitles[sl],14,21);
 }
 
 // ── PLATFORM SELECT SCREEN ────────────────────────────────────
@@ -6159,6 +6464,7 @@ function loop(){
     if(demoMode) demoUpdate();
     drawTransition();return;
   }
+  if(state===S.INTRO){drawIntro();drawTransition();return;}
   if(state===S.PLATFORM_SEL){drawPlatformSelect();drawTransition();return;}
   if(state===S.MODEL_SEL){drawModelSelect();drawDemoBadge();if(demoMode)demoUpdate();drawTransition();return;}
   if(state===S.TUT){drawTutorial();drawDemoBadge();if(demoMode)demoUpdate();drawTransition();return;}
