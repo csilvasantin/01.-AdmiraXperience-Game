@@ -69,7 +69,7 @@
 </div>
 <script>
 // ═══════════════════════════════════════════════════════════════
-//  XTANCO DIGITAL TWIN — v3.3 — 2026-03-30
+//  XTANCO DIGITAL TWIN — v3.4 — 2026-03-30
 // ═══════════════════════════════════════════════════════════════
 const cv=document.getElementById('c'), cx=cv.getContext('2d');
 cx.imageSmoothingEnabled=false;
@@ -510,6 +510,26 @@ function drawMobileControls(){
     r(2,sy,80,14,'#0a2a1a');rx(2,sy,80,14,'#44cc88',1);
     tx('📦 -50% restock',4,sy+11,'#66ee88',6);
   }
+  // ── Reputation badge (bottom-left, above bottom bar) ──
+  if(G.reviews){
+    const rating=reviewRating();
+    const stars=T().reviewBadge[rating];
+    const total=G.reviews.positive+G.reviews.negative;
+    const badgeY=H-48;
+    const starCol=rating>=4?'#ffd700':rating>=3?'#88cc44':rating>=2?'#cc8844':'#cc4444';
+    r(2,badgeY,92,16,'#0a0c18');rx(2,badgeY,92,16,starCol,1);
+    tx(stars,4,badgeY+11,starCol,8);
+    if(total>0){
+      cx.globalAlpha=0.6;
+      tx('('+G.reviews.positive+'✓ '+G.reviews.negative+'✗)',96,badgeY+11,'#aabbcc',7);
+      cx.globalAlpha=1;
+    }
+    // Spawn mod indicator when not neutral
+    if(rating>0&&G.reviews.spawnMod!==1){
+      const modTxt=G.reviews.spawnMod>1?'+'+Math.round((G.reviews.spawnMod-1)*100)+'% cli':Math.round((G.reviews.spawnMod-1)*100)+'% cli';
+      tx(modTxt,96,badgeY+11,G.reviews.spawnMod>1?P.green:P.red,7);
+    }
+  }
 }
 
 // ── ELGATO KEY LIGHT INTEGRATION ─────────────────────────────
@@ -901,7 +921,7 @@ let activeModel=0;
 // ── I18N ──────────────────────────────────────────────────────
 const LANGS={
   es:{
-    menuTitle:'XTANCO',menuSub:'SIMULADOR DE ESTANCO DIGITAL — v3.3',
+    menuTitle:'XTANCO',menuSub:'SIMULADOR DE ESTANCO DIGITAL — v3.4',
     langPick:'SELECCIONA IDIOMA',startBtn:'PULSA ENTER PARA EMPEZAR',
     langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
     tut:[
@@ -935,6 +955,9 @@ const LANGS={
     custBought:['¡Perfecto!','Justo lo que buscaba','Gracias, hasta luego','¡Qué bien!'],
     compPromoMsg:'📢 ¡Promo rival! -{brand} ataca — menos clientes',
     compPromoEnd:'Promo rival terminada. Clientes normalizados.',
+    reviewPos:'⭐ Reseña positiva — +fama',
+    reviewNeg:'👎 Mala reseña — sin stock',
+    reviewBadge:['Sin reseñas','★☆☆☆☆','★★☆☆☆','★★★☆☆','★★★★☆','★★★★★'],
     pauseTitle:'PAUSA — RESUMEN SEMANAL',pauseCont:'ESC / CLICK PARA CONTINUAR',
     yearEndTitle:'FIN DE AÑO',yearOf:'AÑO',yearRev:'INGRESOS DEL AÑO',
     yearTarget:'OBJETIVO',yearBonus:'BONUS',yearCont:'CONTINUAR →',
@@ -961,7 +984,7 @@ const LANGS={
     modelStart:['€3.500','€2.800','€4.500','€6.000'],
   },
   en:{
-    menuTitle:'XTANCO',menuSub:'DIGITAL TOBACCO SHOP SIMULATOR — v3.3',
+    menuTitle:'XTANCO',menuSub:'DIGITAL TOBACCO SHOP SIMULATOR — v3.4',
     langPick:'SELECT LANGUAGE',startBtn:'PRESS ENTER TO START',
     langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
     tut:[
@@ -995,6 +1018,9 @@ const LANGS={
     custBought:['Perfect!','Exactly what I wanted','Thanks, bye!','Lovely!'],
     compPromoMsg:'📢 Rival promo! -{brand} is attacking — fewer customers',
     compPromoEnd:'Rival promo over. Customers back to normal.',
+    reviewPos:'⭐ Positive review — +fame',
+    reviewNeg:'👎 Bad review — out of stock',
+    reviewBadge:['No reviews','★☆☆☆☆','★★☆☆☆','★★★☆☆','★★★★☆','★★★★★'],
     pauseTitle:'PAUSE — WEEKLY SUMMARY',pauseCont:'ESC / CLICK TO CONTINUE',
     yearEndTitle:'YEAR END',yearOf:'YEAR',yearRev:'YEAR REVENUE',
     yearTarget:'TARGET',yearBonus:'BONUS',yearCont:'CONTINUE →',
@@ -1289,6 +1315,7 @@ function initGame(){
     weather:{type:null,timer:0},
     empOfMonth:null,
     comp:{shares:[28,26,25,21],promoTimer:0,promoBrand:-1},
+    reviews:{positive:0,negative:0,spawnMod:1.0},
   };
   // Staff from model — convert grid positions to isometric screen coords
   // Staff positions on the iso grid based on their role
@@ -1314,8 +1341,10 @@ function initGame(){
     return {
       ...s,name:staffName,role:staffRole,x:iso.x-7,y:iso.y-20,
       level:1,energy:100,morale:80,busy:0,dir:1,isWalking:false,
-      shirt:0,hair:3, // Altadis uniform: blue shirt (index 0), black hair (index 3 = #111111)
+      shirt:0,hair:3,
       bTimer:0,bIdx:i%5,aFrame:0,aTimer:0,
+      homeCol:gp.col,homeRow:gp.row,
+      navTarget:null,navPath:null,navPathIdx:0,navTick:0,
     };
   });
   // Products from model
@@ -1343,6 +1372,13 @@ function loadGame(){
       if(!G.supplierDeal) G.supplierDeal={active:false,timer:0,prodIdx:-1};
       if(!G.weather) G.weather={type:null,timer:0};
       if(G.sfxVolume===undefined) G.sfxVolume=0;
+      if(!G.comp) G.comp={shares:[28,26,25,21],promoTimer:0,promoBrand:-1};
+      if(!G.reviews) G.reviews={positive:0,negative:0,spawnMod:1.0};
+      // Restore navTarget fields on staff (lost in save/load)
+      if(G.staff) G.staff.forEach((s,i)=>{
+        if(s.navTarget===undefined){s.navTarget=null;s.navPath=null;s.navPathIdx=0;s.navTick=0;}
+        if(s.homeCol===undefined){const gp=[{col:2,row:1},{col:8,row:3},{col:4,row:1},{col:5,row:4},{col:5,row:2}];const p=gp[i%gp.length];s.homeCol=p.col;s.homeRow=p.row;}
+      });
       return true;}
   }catch(e){}
   return false;
@@ -2106,6 +2142,86 @@ function checkRandomEvents(){
   }
 }
 
+// ── REPUTATION ───────────────────────────────────────────────
+function reviewRating(){
+  if(!G.reviews) return 0;
+  const total=G.reviews.positive+G.reviews.negative;
+  if(total<3) return 0; // not enough reviews yet
+  const ratio=G.reviews.positive/total;
+  if(ratio>=0.90) return 5;
+  if(ratio>=0.70) return 4;
+  if(ratio>=0.50) return 3;
+  if(ratio>=0.30) return 2;
+  return 1;
+}
+function updateReviewMod(){
+  if(!G.reviews) return;
+  const r=reviewRating();
+  const mods=[1.0,0.75,0.88,1.0,1.12,1.25]; // index = rating (0=no reviews)
+  G.reviews.spawnMod=mods[r];
+}
+
+// ── STAFF PATHFINDING ────────────────────────────────────────
+function updateStaffNav(s){
+  if(s.fired||s.role===3) return; // manager is player-controlled
+  s.navTick++;
+
+  // Determine desired grid target based on role
+  let tCol=s.homeCol, tRow=s.homeRow;
+  if(s.role===0){
+    // Cashier: move to counter when customers are browsing
+    if(G.custs.some(c=>c.st==='browse'||c.st==='leave')){
+      const counter=shopLayout.find(f=>f.type==='counter');
+      tCol=(counter?counter.col+1:2); tRow=(counter?counter.row:2);
+    }
+  } else if(s.role===1){
+    // Stocker: go to shelves when any product below 30% stock
+    const hasLow=G.prods.some(p=>p.stock/p.max<0.3);
+    if(hasLow){
+      const shelf=shopLayout.find(f=>f.type==='shelves'||f.type==='wineRack'||f.type==='vending');
+      tCol=(shelf?shelf.col:4); tRow=(shelf?shelf.row+1:2);
+      // Show restock bubble
+      if(s.bTimer===0&&Math.random()<0.002){s.bTimer=60;s.bMsg='Reponiendo...';}
+    }
+  } else if(s.role===2){
+    // Hostess: approach nearest browsing customer
+    const browsing=G.custs.filter(c=>c.st==='browse');
+    if(browsing.length>0){
+      const near=browsing.reduce((a,b)=>Math.hypot(b.x-s.x,b.y-s.y)<Math.hypot(a.x-s.x,a.y-s.y)?b:a);
+      const tile=screenToIso(near.x+5,near.y+20);
+      tCol=Math.max(1,Math.min(ISO.cols-2,Math.round(tile.col)));
+      tRow=Math.max(1,Math.min(ISO.rows-2,Math.round(tile.row)));
+    }
+  }
+  // DJ stays at home (role 4)
+
+  // Recompute path when target changes or every 90 frames for dynamic roles
+  const targetChanged=!s.navTarget||s.navTarget.col!==tCol||s.navTarget.row!==tRow;
+  const shouldRefresh=targetChanged||(s.role===2&&s.navTick%90===0);
+  if(shouldRefresh){
+    const cur=screenToIso(s.x+7,s.y+20);
+    const cCol=Math.max(0,Math.min(ISO.cols-1,Math.round(cur.col)));
+    const cRow=Math.max(0,Math.min(ISO.rows-1,Math.round(cur.row)));
+    s.navPath=astarPath(cCol,cRow,tCol,tRow);
+    s.navPathIdx=0;
+    s.navTarget={col:tCol,row:tRow};
+  }
+
+  // Move one step along path
+  if(s.navPath&&s.navPathIdx<s.navPath.length){
+    const wp=s.navPath[s.navPathIdx];
+    const wIso=toIso(wp.col,wp.row);
+    const dx=(wIso.x-7)-s.x, dy=(wIso.y-20)-s.y;
+    const d=Math.sqrt(dx*dx+dy*dy);
+    if(d<3){ s.navPathIdx++; }
+    else{
+      s.x+=dx/d*1.0; s.y+=dy/d*1.0;
+      s.dir=dx<0?-1:1; s.isWalking=true;
+      s.aTimer++;if(s.aTimer>8){s.aFrame=(s.aFrame+1)%2;s.aTimer=0;}
+    }
+  } else { s.isWalking=false; }
+}
+
 function updateGame(){
   tt++;
   // ── GAME TIME: advance clock (1 day = dayDurationSec real seconds) ──
@@ -2250,7 +2366,8 @@ function updateGame(){
   const mult=(G.rush.active?CFG.RUSH_MULT:1)*(G.holiday&&G.holiday.active?1.8:1);
   for(const s of G.staff){
     if(!s.hired) continue;
-    s.aTimer++;if(s.aTimer>10){s.aFrame=(s.aFrame+1)%2;s.aTimer=0;}
+    updateStaffNav(s);
+    if(!s.isWalking){s.aTimer++;if(s.aTimer>10){s.aFrame=(s.aFrame+1)%2;s.aTimer=0;}}
     if(s.busy>0) s.busy--;
     if(s.bTimer>0) s.bTimer--;
     s.energy=Math.max(15,s.energy-(s.busy>0?0.04:0.01));
@@ -2275,7 +2392,8 @@ function updateGame(){
   const weatherMod=G.weather&&G.weather.type==='rain'?0.5:G.weather&&G.weather.type==='sun'?1.5:1;
   const holidaySpawn=G.holiday&&G.holiday.active?1.6:1;
   const compSteal=G.comp&&G.comp.promoTimer>0?CFG.COMP_PROMO_STEAL:0;
-  if(Math.random()<0.006*Math.max(1,G.staff.filter(s=>s.hired).length)*(G.rush.active?2:1)*weatherMod*holidaySpawn*(1-compSteal)) spawnCust();
+  const repMod=G.reviews?G.reviews.spawnMod:1;
+  if(Math.random()<0.006*Math.max(1,G.staff.filter(s=>s.hired).length)*(G.rush.active?2:1)*weatherMod*holidaySpawn*(1-compSteal)*repMod) spawnCust();
   for(let i=G.custs.length-1;i>=0;i--){
     const c=G.custs[i];c.ft++;if(c.ft>10){c.fr=(c.fr+1)%2;c.ft=0;}
     if(c.bTimer>0) c.bTimer--;
@@ -2313,6 +2431,14 @@ function updateGame(){
           G.satisfaction=Math.min(100,G.satisfaction+0.5);
           c.bought=true;
           const arr=T().custBought;c.bMsg=arr[Math.floor(Math.random()*arr.length)];c.bTimer=70;
+          // Review: VIP 60%, regular 15%
+          if(G.reviews&&Math.random()<(c.vip?0.6:0.15)){
+            G.reviews.positive++;
+            const fameBonus=c.vip?3:1;
+            G.fame=Math.min(100,G.fame+fameBonus);
+            addFloat(c.x+7,c.y-44,T().reviewPos,'#ffd700');
+            updateReviewMod();
+          }
         } else {
           // No stock — check if any hired staff is close enough to rescue the sale
           const nearStaff=G.staff.find(s=>s.hired&&!s.fired&&Math.hypot(s.x-c.x,s.y-c.y)<85);
@@ -2338,6 +2464,13 @@ function updateGame(){
             const arr=T().custNoStock;c.bMsg=arr[Math.floor(Math.random()*arr.length)];c.bTimer=70;
             G.satisfaction=Math.max(0,G.satisfaction-2);
             addFloat(c.x+7,c.y-28,'SIN STOCK',P.red);
+            // Review: 30% chance of negative review
+            if(G.reviews&&Math.random()<0.30){
+              G.reviews.negative++;
+              G.fame=Math.max(0,G.fame-2);
+              addFloat(c.x+7,c.y-44,T().reviewNeg,P.red);
+              updateReviewMod();
+            }
           }
         }
         // Compute return path
@@ -2843,7 +2976,7 @@ function drawMenu(){
     }
   }
   // Version tag
-  cx.globalAlpha=0.3;tx('v3.3 · 2026-03-30',W-80,H-8,P.gray,7,'center');cx.globalAlpha=1;
+  cx.globalAlpha=0.3;tx('v3.4 · 2026-03-30',W-80,H-8,P.gray,7,'center');cx.globalAlpha=1;
 }
 
 // ── INTRO / HOW TO PLAY ───────────────────────────────────────

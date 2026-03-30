@@ -113,19 +113,21 @@ Evento aleatorio que reduce el coste de restock a **€75 (−50%)** para un pro
 
 ---
 
-## 5. Tu equipo
+## 5. Tu equipo (con pathfinding)
 
 Hasta **5 empleados** por tienda (más en modelos BETTER/BEST). Cada uno ocupa un puesto fijo en el espacio isométrico.
 
-### Roles
+### Roles y movimiento automático (v3.4)
 
-| Rol           | Función principal                     | Contratar | Salario/sem |
-|---------------|---------------------------------------|-----------|-------------|
-| CAJERO/A      | Ventas automáticas + cobro            | €500      | €130        |
-| REPOSITOR/A   | Repone stock visualmente              | €400      | €105        |
-| AZAFATA       | Atención al cliente, +ventas          | €450      | €115        |
-| STORE MANAGER | Controlado por el jugador (Q/A/O/P)  | €1.200    | €210        |
-| DJ            | Efecto strobe + fiesta cuando toca a cliente | €800 | €160   |
+| Rol           | Función principal                     | Movimiento automático | Contratar | Salario/sem |
+|---------------|---------------------------------------|----------------------|-----------|-------------|
+| CAJERO/A      | Ventas automáticas + cobro            | Va al mostrador si hay clientes en tienda | €500 | €130 |
+| REPOSITOR/A   | Repone stock visualmente              | Va a las estanterías si algún producto < 30% | €400 | €105 |
+| AZAFATA       | Atención al cliente, +ventas          | Se acerca al cliente más cercano en browse | €450 | €115 |
+| STORE MANAGER | Controlado por el jugador (Q/A/O/P)  | Sin auto-movimiento (jugador) | €1.200 | €210 |
+| DJ            | Efecto strobe + fiesta cuando toca a cliente | Permanece en su sitio | €800 | €160 |
+
+El movimiento usa el mismo algoritmo **A\*** que los clientes. Cada rol recalcula su ruta cuando cambia el objetivo o cada 90 frames (azafata).
 
 ### Formación
 - Niveles 1 a 5. Cada nivel multiplica las ventas y sube el salario.
@@ -141,6 +143,34 @@ El empleado camina hasta la puerta y desaparece. El hueco queda libre para contr
 ### Energía y moral
 - **Energía**: baja con cada venta (−0.04/frame activo) y se recupera sola.
 - **Moral**: baja −2 por semana. Factor multiplicador de ventas: 0.7 (moral=0) a 1.0 (moral=100).
+
+---
+
+## 5b. Reputación online (v3.4)
+
+Los clientes pueden dejar reseñas públicas que afectan al flujo de nuevos clientes.
+
+### Cuándo se genera una reseña
+
+| Situación | Probabilidad | Efecto |
+|-----------|-------------|--------|
+| Compra exitosa (cliente normal) | 15% | Reseña positiva · fama +1 |
+| Compra exitosa (cliente VIP) | 60% | Reseña positiva · fama +3 |
+| Sin stock, sin rescate | 30% | Reseña negativa · fama −2 |
+
+### Rating (1-5 estrellas)
+
+Necesitas al menos **3 reseñas** para que el rating sea válido.
+
+| Ratio positivas/total | Rating | Efecto en spawn de clientes |
+|-----------------------|--------|----------------------------|
+| ≥ 90% | ★★★★★ | +25% clientes |
+| ≥ 70% | ★★★★☆ | +12% clientes |
+| ≥ 50% | ★★★☆☆ | Neutro |
+| ≥ 30% | ★★☆☆☆ | −12% clientes |
+| < 30%  | ★☆☆☆☆ | −25% clientes |
+
+El badge de estrellas aparece en la **esquina inferior izquierda** del canvas durante el juego, con el contador de reseñas positivas/negativas y el modificador activo.
 
 ---
 
@@ -294,6 +324,8 @@ Si no hay input durante **5 segundos** en el menú, comienza la partida automát
 
 | Versión | Fecha | Cambios |
 |---------|-------|---------|
+| v3.4 | 2026-03-30 | Staff con pathfinding A* (cajero→mostrador, repositor→estanterías, azafata→cliente) · Reputación online (reseñas ★, modificador spawn) |
+| v3.3 | 2026-03-30 | Intro animado 8 slides · MANUAL.md |
 | v3.2 | 2026-03-30 | Clientes con compra real (stock awareness + manager rescue) · Competencia activa (promos rivales + shares dinámicos) |
 | v3.1 | 2026-03-29 | Modo 16 bits (Amiga) · Botones home 8/16 bit · Selección de plataforma |
 | v2.50 | 2026-03-25 | Versión base — 5 años, 4 modelos, eventos, HUD completo |
