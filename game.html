@@ -70,7 +70,7 @@
 </div>
 <script>
 // ═══════════════════════════════════════════════════════════════
-//  XTANCO DIGITAL TWIN — v4.3 — 2026-03-30
+//  XTANCO DIGITAL TWIN — v4.4 — 2026-03-30
 // ═══════════════════════════════════════════════════════════════
 const cv=document.getElementById('c'), cx=cv.getContext('2d');
 cx.imageSmoothingEnabled=false;
@@ -920,7 +920,7 @@ let activeModel=0;
 // ── I18N ──────────────────────────────────────────────────────
 const LANGS={
   es:{
-    menuTitle:'XTANCO',menuSub:'SIMULADOR DE ESTANCO DIGITAL — v4.3',
+    menuTitle:'XTANCO',menuSub:'SIMULADOR DE ESTANCO DIGITAL — v4.4',
     langPick:'SELECCIONA IDIOMA',startBtn:'PULSA ENTER PARA EMPEZAR',
     langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
     tut:[
@@ -983,7 +983,7 @@ const LANGS={
     modelStart:['€3.500','€2.800','€4.500','€6.000'],
   },
   en:{
-    menuTitle:'XTANCO',menuSub:'DIGITAL TOBACCO SHOP SIMULATOR — v4.3',
+    menuTitle:'XTANCO',menuSub:'DIGITAL TOBACCO SHOP SIMULATOR — v4.4',
     langPick:'SELECT LANGUAGE',startBtn:'PRESS ENTER TO START',
     langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
     tut:[
@@ -2770,14 +2770,15 @@ function chibi(x,y,dir,shirt,hair,frame,busy,tick,scale=1,isDJ=false){
   r(x+3,y+18,3,7+lk,P.pants);r(x+8,y+18,3,7-lk,P.pants);
   // Shoes
   r(x+2,y+24+lk,4,3,P.shoes);r(x+8,y+24-lk,4,3,P.shoes);
-  // Body (torso)
-  r(x+1,y+8,12,11,P.shirts[shirt%P.shirts.length]);
+  // Body (torso) — gold jersey for DJ
+  const sCol8=isDJ?'#ddaa22':P.shirts[shirt%P.shirts.length];
+  r(x+1,y+8,12,11,sCol8);
   // Shirt highlight
   r(x+4,y+10,5,3,'#ffffff18');
-  // X logo on blue Altadis shirt (shirt index 0) — or "54" for DJ
+  // X logo on blue Altadis shirt — or "54" in black for DJ
   if(isDJ){
     cx.font='bold 5px monospace';cx.textAlign='center';
-    cx.fillStyle='#ffffffcc';cx.fillText('54',x+7,y+17);
+    cx.fillStyle='#1a1a1a';cx.fillText('54',x+7,y+17);
   } else if(shirt===0){
     cx.strokeStyle='#ffffff';cx.lineWidth=1.2;
     cx.beginPath();cx.moveTo(x+4,y+10);cx.lineTo(x+10,y+16);cx.stroke();
@@ -2785,8 +2786,8 @@ function chibi(x,y,dir,shirt,hair,frame,busy,tick,scale=1,isDJ=false){
   }
   // Arms with busy animation
   const ak=busy?(frame===0?-2:2):0;
-  r(x-1,y+9+ak,3,8,P.shirts[shirt%P.shirts.length]);
-  r(x+12,y+9-ak,3,8,P.shirts[shirt%P.shirts.length]);
+  r(x-1,y+9+ak,3,8,sCol8);
+  r(x+12,y+9-ak,3,8,sCol8);
   // Head
   r(x+1,y-1,12,12,P.skin);
   // Hair — replaced by snapback cap for DJ
@@ -2840,23 +2841,25 @@ function chibi16(x,y,dir,shirt,hair,frame,busy,tick,scale=1,isDJ=false){
   // Belt
   cx.fillStyle=cDark(P.pants,8);cx.fillRect(x+1,y+18,12,2);
   cx.globalAlpha=0.5;cx.fillStyle='#ddc080';cx.fillRect(x+5,y+18,4,2);cx.globalAlpha=1;
-  // Body with gradient
+  // Body with gradient — gold jersey for DJ
+  const djGold='#ddaa22';
+  const sCol16=isDJ?djGold:shirtCol;
   const bg=cx.createLinearGradient(x+1,y+8,x+13,y+19);
-  bg.addColorStop(0,cLight(shirtCol,28));bg.addColorStop(0.5,shirtCol);bg.addColorStop(1,cDark(shirtCol,22));
+  bg.addColorStop(0,cLight(sCol16,28));bg.addColorStop(0.5,sCol16);bg.addColorStop(1,cDark(sCol16,22));
   cx.fillStyle=bg;cx.fillRect(x+1,y+8,12,11);
   // Shirt highlight crease
   cx.globalAlpha=0.22;cx.fillStyle='#fff';cx.fillRect(x+4,y+9,4,3);cx.globalAlpha=1;
   // Collar
-  cx.fillStyle=cLight(shirtCol,35);cx.fillRect(x+4,y+8,6,2);
-  // X logo on Altadis shirt — or "54" for DJ
+  cx.fillStyle=cLight(sCol16,35);cx.fillRect(x+4,y+8,6,2);
+  // X logo on Altadis shirt — or "54" in black for DJ
   if(isDJ){
     cx.font='bold 5px monospace';cx.textAlign='center';
-    cx.fillStyle='#ffffffdd';cx.fillText('54',x+7,y+17);
+    cx.fillStyle='#1a1a1a';cx.fillText('54',x+7,y+17);
   } else if(shirt===0){cx.strokeStyle='#ffffff88';cx.lineWidth=1;cx.beginPath();cx.moveTo(x+5,y+11);cx.lineTo(x+9,y+15);cx.stroke();cx.beginPath();cx.moveTo(x+9,y+11);cx.lineTo(x+5,y+15);cx.stroke();}
   // Arms
   const ak=busy?(frame===0?-2:2):0;
   const ag=cx.createLinearGradient(x-1,y+9,x+2,y+17);
-  ag.addColorStop(0,cLight(shirtCol,20));ag.addColorStop(1,cDark(shirtCol,15));
+  ag.addColorStop(0,cLight(sCol16,20));ag.addColorStop(1,cDark(sCol16,15));
   cx.fillStyle=ag;cx.fillRect(x-1,y+9+ak,3,8);cx.fillRect(x+12,y+9-ak,3,8);
   // Wrists
   cx.fillStyle=P.skin;cx.fillRect(x-1,y+15+ak,3,2);cx.fillRect(x+12,y+15-ak,3,2);
@@ -3033,7 +3036,7 @@ function drawMenu(){
     }
   }
   // Version tag
-  cx.globalAlpha=0.3;tx('v4.3 · 2026-03-30',W-80,H-8,P.gray,7,'center');cx.globalAlpha=1;
+  cx.globalAlpha=0.3;tx('v4.4 · 2026-03-30',W-80,H-8,P.gray,7,'center');cx.globalAlpha=1;
 }
 
 // ── INTRO / HOW TO PLAY ───────────────────────────────────────
