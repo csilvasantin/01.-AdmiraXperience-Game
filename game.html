@@ -69,7 +69,7 @@
 </div>
 <script>
 // ═══════════════════════════════════════════════════════════════
-//  XTANCO DIGITAL TWIN — v3.4 — 2026-03-30
+//  XTANCO DIGITAL TWIN — v3.5 — 2026-03-30
 // ═══════════════════════════════════════════════════════════════
 const cv=document.getElementById('c'), cx=cv.getContext('2d');
 cx.imageSmoothingEnabled=false;
@@ -921,7 +921,7 @@ let activeModel=0;
 // ── I18N ──────────────────────────────────────────────────────
 const LANGS={
   es:{
-    menuTitle:'XTANCO',menuSub:'SIMULADOR DE ESTANCO DIGITAL — v3.4',
+    menuTitle:'XTANCO',menuSub:'SIMULADOR DE ESTANCO DIGITAL — v3.5',
     langPick:'SELECCIONA IDIOMA',startBtn:'PULSA ENTER PARA EMPEZAR',
     langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
     tut:[
@@ -984,7 +984,7 @@ const LANGS={
     modelStart:['€3.500','€2.800','€4.500','€6.000'],
   },
   en:{
-    menuTitle:'XTANCO',menuSub:'DIGITAL TOBACCO SHOP SIMULATOR — v3.4',
+    menuTitle:'XTANCO',menuSub:'DIGITAL TOBACCO SHOP SIMULATOR — v3.5',
     langPick:'SELECT LANGUAGE',startBtn:'PRESS ENTER TO START',
     langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
     tut:[
@@ -1126,6 +1126,7 @@ const DEFAULT_LAYOUT=[
   {id:'plant3',type:'plant',col:0,row:5,sx:1,sy:1,label:'Planta 2'},
   {id:'floorLamp',type:'floorLamp',col:10,row:5,sx:1,sy:1,label:'Lámpara pie'},
   {id:'led',type:'led',col:0,row:0,sx:1,sy:1,label:'LED Banner'},
+  {id:'djBooth',type:'djBooth',col:11,row:3,sx:1,sy:1,label:'Mesa DJ'},
 ];
 let shopLayout=JSON.parse(JSON.stringify(DEFAULT_LAYOUT));
 let edSelIdx=-1; // selected furniture index in editor
@@ -1216,7 +1217,7 @@ function screenToIso(sx,sy){
 const FURNITURE_SIZE={
   counter:[1,2], shelves:[1,2], wineRack:[2,1], lottery:[2,1],
   vending:[1,1], magazines:[2,1], manager:[2,1], plant:[1,1],
-  floorLamp:[1,1], rug:[2,2],
+  floorLamp:[1,1], rug:[2,2], djBooth:[2,1],
 };
 
 // Check if a tile is blocked by furniture
@@ -1325,11 +1326,12 @@ function initGame(){
   // [2] Azafata → near estantería (col:3,row:0)
   // [3] Store Manager → behind escritorio (col:9,row:5)
   const staffGridPos=[
-    {col:2,row:1},  // [0] Cajera → next to counter
-    {col:8,row:3},  // [1] Repositor → next to revistero
-    {col:4,row:1},  // [2] Azafata → next to estantería
-    {col:5,row:4},  // [3] Store Manager → center of shop
-    {col:5,row:2},{col:3,row:4},{col:6,row:3},{col:7,row:1},  // extras
+    {col:2,row:1},   // [0] Cajera → next to counter
+    {col:8,row:3},   // [1] Repositor → next to revistero
+    {col:4,row:1},   // [2] Azafata → next to estantería
+    {col:5,row:4},   // [3] Store Manager → center of shop
+    {col:11,row:4},  // [4] DJ → in front of djBooth
+    {col:3,row:4},{col:6,row:3},{col:7,row:1},  // extras
   ];
   G.staff=M.staffInit.map((s,i)=>{
     const gp=staffGridPos[i%staffGridPos.length];
@@ -2976,7 +2978,7 @@ function drawMenu(){
     }
   }
   // Version tag
-  cx.globalAlpha=0.3;tx('v3.4 · 2026-03-30',W-80,H-8,P.gray,7,'center');cx.globalAlpha=1;
+  cx.globalAlpha=0.3;tx('v3.5 · 2026-03-30',W-80,H-8,P.gray,7,'center');cx.globalAlpha=1;
 }
 
 // ── INTRO / HOW TO PLAY ───────────────────────────────────────
@@ -4391,6 +4393,7 @@ function drawShop(){
       case 'wineRack': drawScaled(e,drawIsoWineRack); break;
       case 'magazines': drawScaled(e,drawIsoMagazineRack); break;
       case 'rug': drawScaled(e,drawIsoRug); break;
+      case 'djBooth': drawScaled(e,drawIsoDJBooth); break;
       case 'staff': drawIsoStaff(e.data); break;
       case 'cust': drawIsoCust(e.data); break;
     }
@@ -5354,6 +5357,105 @@ function drawIsoVending(col,row){
   // Brand label
   r(p.x-8,p.y-47,16,5,'#cc3333');
   tx('XT-3K',p.x,p.y-43,'#fff',5,'center');
+}
+
+// ── DJ BOOTH (mesa de DJ) ────────────────────────────────────
+function drawIsoDJBooth(col,row){
+  const boothH=26;
+  const djOn=G&&G.staff&&G.staff.some(s=>s.hired&&s.role===4);
+  const party=G&&G.tftParty>0;
+
+  // Base: matte black with subtle neon edge
+  drawIsoBlock(col,row,2,1,boothH,'#2a2a3a','#14141e','#1e1e2c',null);
+
+  // LED strip along front isometric edge
+  const eFront0=toIso(col,row), eFront1=toIso(col+2,row);
+  const ledCol=party?['#ff44cc','#44ffcc','#ffcc44','#cc44ff'][Math.floor(tt/8)%4]:djOn?'#4466ff':'#333355';
+  if(djOn){glow(ledCol,party?16:6);}
+  cx.strokeStyle=ledCol;cx.lineWidth=2;
+  cx.beginPath();cx.moveTo(eFront0.x,eFront0.y);cx.lineTo(eFront1.x,eFront1.y);cx.stroke();
+  nog();
+
+  // ── Left turntable ──
+  const lt=toIso(col+0.45,row+0.35);
+  const lx=lt.x,ly=lt.y-boothH;
+  cx.save();cx.translate(lx,ly);cx.scale(1,0.38);
+  cx.beginPath();cx.arc(0,0,10,0,Math.PI*2);cx.fillStyle='#111';cx.fill();
+  cx.strokeStyle='#333';cx.lineWidth=1;cx.stroke();
+  // Vinyl grooves
+  [3,5,7].forEach(gr=>{cx.beginPath();cx.arc(0,0,gr,0,Math.PI*2);cx.strokeStyle='#222';cx.lineWidth=0.5;cx.stroke();});
+  // Spinning label
+  cx.save();cx.rotate(djOn?tt*0.05:0);
+  cx.beginPath();cx.arc(0,0,3,0,Math.PI*2);cx.fillStyle='#cc2233';cx.fill();
+  cx.strokeStyle='#ff4455';cx.lineWidth=0.5;cx.stroke();
+  cx.restore();
+  // Tonearm
+  cx.save();cx.rotate(djOn?Math.sin(tt*0.01)*0.15:0);
+  cx.strokeStyle='#99aabb';cx.lineWidth=1;
+  cx.beginPath();cx.moveTo(8,-8);cx.lineTo(1,0);cx.stroke();
+  cx.fillStyle='#aabbcc';cx.beginPath();cx.arc(8,-8,1.5,0,Math.PI*2);cx.fill();
+  cx.restore();
+  cx.restore();
+
+  // ── Right turntable ──
+  const rt=toIso(col+1.55,row+0.35);
+  const rx2=rt.x,ry2=rt.y-boothH;
+  cx.save();cx.translate(rx2,ry2);cx.scale(1,0.38);
+  cx.beginPath();cx.arc(0,0,10,0,Math.PI*2);cx.fillStyle='#111';cx.fill();
+  cx.strokeStyle='#333';cx.lineWidth=1;cx.stroke();
+  [3,5,7].forEach(gr=>{cx.beginPath();cx.arc(0,0,gr,0,Math.PI*2);cx.strokeStyle='#222';cx.lineWidth=0.5;cx.stroke();});
+  cx.save();cx.rotate(djOn?-tt*0.04:0);
+  cx.beginPath();cx.arc(0,0,3,0,Math.PI*2);cx.fillStyle='#2233cc';cx.fill();
+  cx.strokeStyle='#4455ff';cx.lineWidth=0.5;cx.stroke();
+  cx.restore();
+  cx.save();cx.rotate(djOn?Math.sin(tt*0.01+1)*0.15:0);
+  cx.strokeStyle='#99aabb';cx.lineWidth=1;
+  cx.beginPath();cx.moveTo(8,-8);cx.lineTo(1,0);cx.stroke();
+  cx.fillStyle='#aabbcc';cx.beginPath();cx.arc(8,-8,1.5,0,Math.PI*2);cx.fill();
+  cx.restore();
+  cx.restore();
+
+  // ── Central mixer ──
+  const mc=toIso(col+1,row+0.52);
+  const mx2=mc.x,my2=mc.y-boothH;
+  r(mx2-9,my2-7,18,11,'#1a1a24');rx(mx2-9,my2-7,18,11,'#333355',1);
+  // 3 channel faders
+  for(let i=0;i<3;i++){
+    const fx=mx2-5+i*5;
+    r(fx,my2-6,2,9,'#2a2a3a');
+    const faderY=my2-5+Math.sin(tt*0.03+i*1.1)*(djOn?1.5:0);
+    r(fx-1,faderY|0,4,2,'#aabbdd');
+  }
+  // EQ knobs (3 dots top)
+  ['#ff4455','#44ff88','#4488ff'].forEach((kc,i)=>{
+    cx.beginPath();cx.arc(mx2-4+i*4,my2-10,1.5,0,Math.PI*2);
+    cx.fillStyle=djOn?kc:'#333';cx.fill();
+    if(djOn){glow(kc,4);cx.fill();nog();}
+  });
+
+  // ── Headphones on right side ──
+  const hp=toIso(col+2.1,row+0.25);
+  cx.strokeStyle='#778899';cx.lineWidth=1.5;
+  cx.beginPath();cx.arc(hp.x,hp.y-boothH-3,4,Math.PI,0,false);cx.stroke();
+  r(hp.x-5,hp.y-boothH-4,2,4,'#556677');r(hp.x+3,hp.y-boothH-4,2,4,'#556677');
+
+  // ── "DJ" label above booth ──
+  const lp=toIso(col+1,row+0.5);
+  if(djOn){glow('#4466ff',10);}
+  cx.font='bold 7px monospace';cx.textAlign='center';
+  cx.fillStyle=djOn?'#88aaff':'#445566';
+  cx.fillText(T().staffLabel[4],lp.x,lp.y-boothH-18);
+  nog();
+
+  // ── Party light cone ──
+  if(party){
+    const pl=toIso(col+1,row+0.5);
+    const pCol=['#ff44cc','#44ffcc','#ffcc44','#cc44ff'][Math.floor(tt/12)%4];
+    cx.globalAlpha=0.18+0.12*Math.abs(Math.sin(tt*0.15));
+    glow(pCol,20);
+    cx.beginPath();cx.arc(pl.x,pl.y-boothH-30,22,0,Math.PI*2);cx.fillStyle=pCol;cx.fill();
+    nog();cx.globalAlpha=1;
+  }
 }
 
 function drawIsoRug(col,row){
