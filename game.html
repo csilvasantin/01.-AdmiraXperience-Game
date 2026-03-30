@@ -778,6 +778,12 @@ const CFG={
 };
 
 // ── PALETTE (Kairosoft warm style) ────────────────────────────
+// ── COLOR UTILS (16-bit rendering) ────────────────────────────
+function _h2r(h){return[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];}
+function _r2h(r,g,b){return'#'+[r,g,b].map(v=>Math.max(0,Math.min(255,v|0)).toString(16).padStart(2,'0')).join('');}
+function cLight(h,a){const[r,g,b]=_h2r(h);return _r2h(r+a,g+a,b+a);}
+function cDark(h,a){return cLight(h,-a);}
+
 const P={
   bg:'#4a7a38',wall:'#e8dcc0',floor1:'#c8bb98',floor2:'#bfb28a',
   counter:'#8b6e4e',counterT:'#a0845c',shelf:'#7a5c3a',shelfT:'#9a7a52',
@@ -1011,8 +1017,8 @@ let lang='es';
 const T=()=>LANGS[lang];
 
 // ── STATE ─────────────────────────────────────────────────────
-const S={MENU:'menu',MODEL_SEL:'modelSel',TUT:'tutorial',GAME:'game',PAUSE:'pause',YEAR_END:'yearEnd',GAME_END:'gameEnd',EDITOR:'editor',SETTINGS:'settings',HELP:'help'};
-let state=S.MENU, menuSel=0, modelSel=0, tutPage=0, helpPage=0;
+const S={MENU:'menu',PLATFORM_SEL:'platformSel',MODEL_SEL:'modelSel',TUT:'tutorial',GAME:'game',PAUSE:'pause',YEAR_END:'yearEnd',GAME_END:'gameEnd',EDITOR:'editor',SETTINGS:'settings',HELP:'help'};
+let state=S.MENU, menuSel=0, platformSel=0, renderMode='8bit', modelSel=0, tutPage=0, helpPage=0;
 let tt=0;
 let tran={active:false,from:null,to:null,timer:0,dur:30};
 function startTransition(toState){if(tran.active)return;tran={active:true,from:state,to:toState,timer:0,dur:30};}
@@ -1390,7 +1396,14 @@ document.addEventListener('keydown',e=>{
   if(state===S.MENU){
     if(e.code==='ArrowLeft'||e.code==='ArrowUp')   menuSel=0;
     if(e.code==='ArrowRight'||e.code==='ArrowDown') menuSel=1;
-    if(e.code==='Enter'||e.code==='Space'){lang=menuSel===0?'es':'en';modelSel=0;state=S.MODEL_SEL;}
+    if(e.code==='Enter'||e.code==='Space'){lang=menuSel===0?'es':'en';platformSel=0;startTransition(S.PLATFORM_SEL);}
+    return;
+  }
+  if(state===S.PLATFORM_SEL){
+    if(e.code==='ArrowLeft'||e.code==='ArrowUp')   platformSel=0;
+    if(e.code==='ArrowRight'||e.code==='ArrowDown') platformSel=1;
+    if(e.code==='Enter'||e.code==='Space'){renderMode=platformSel===0?'8bit':'16bit';modelSel=0;startTransition(S.MODEL_SEL);}
+    if(e.code==='Escape') startTransition(S.MENU);
     return;
   }
   if(state===S.SETTINGS){
@@ -1683,7 +1696,10 @@ function doAction(id){
     return;
   }
   // ── Menu touch/click actions ──
-  if(id==='menuStart'){lang=menuSel===0?'es':'en';modelSel=0;startTransition(S.MODEL_SEL);return;}
+  if(id==='menuStart'){lang=menuSel===0?'es':'en';platformSel=0;startTransition(S.PLATFORM_SEL);return;}
+  if(id==='platformSel0'){platformSel=0;return;}
+  if(id==='platformSel1'){platformSel=1;return;}
+  if(id==='platformConfirm'){renderMode=platformSel===0?'8bit':'16bit';modelSel=0;startTransition(S.MODEL_SEL);return;}
   if(id==='menuLangEs'){menuSel=0;return;}
   if(id==='menuLangEn'){menuSel=1;return;}
   if(id==='menuSettings'){state=S.SETTINGS;return;}
@@ -2366,6 +2382,7 @@ function toIso(col,row){
 }
 // Draw a flat diamond tile
 function drawIsoTile(col,row,color,strokeColor){
+  if(renderMode==='16bit'){drawIsoTile16(col,row,color,strokeColor);return;}
   const p=toIso(col,row);
   const hw=ISO.tileW/2, hh=ISO.tileH/2;
   cx.beginPath();
@@ -2377,8 +2394,24 @@ function drawIsoTile(col,row,color,strokeColor){
   cx.fillStyle=color;cx.fill();
   if(strokeColor){cx.strokeStyle=strokeColor;cx.lineWidth=0.5;cx.stroke();}
 }
+// 16-bit tile: gradient fill + grout lines + top sheen
+function drawIsoTile16(col,row,color,strokeColor){
+  const p=toIso(col,row);
+  const hw=ISO.tileW/2, hh=ISO.tileH/2;
+  cx.beginPath();
+  cx.moveTo(p.x,p.y);cx.lineTo(p.x+hw,p.y+hh);cx.lineTo(p.x,p.y+ISO.tileH);cx.lineTo(p.x-hw,p.y+hh);
+  cx.closePath();
+  const grd=cx.createLinearGradient(p.x,p.y,p.x,p.y+ISO.tileH);
+  grd.addColorStop(0,cLight(color,20));grd.addColorStop(0.45,color);grd.addColorStop(1,cDark(color,10));
+  cx.fillStyle=grd;cx.fill();
+  if(strokeColor){cx.strokeStyle=cDark(color,15);cx.lineWidth=0.8;cx.stroke();}
+  cx.globalAlpha=0.12;cx.strokeStyle='#fff';cx.lineWidth=1.2;
+  cx.beginPath();cx.moveTo(p.x,p.y+1);cx.lineTo(p.x+hw,p.y+hh+1);cx.stroke();
+  cx.globalAlpha=1;
+}
 // Draw a 3D isometric block (box)
 function drawIsoBlock(col,row,bw,bd,bh,topCol,leftCol,rightCol,neonCol){
+  if(renderMode==='16bit'){drawIsoBlock16(col,row,bw,bd,bh,topCol,leftCol,rightCol,neonCol);return;}
   // bw=width in tiles, bd=depth in tiles, bh=height in px
   const p=toIso(col,row);
   const hw=ISO.tileW/2, hh=ISO.tileH/2;
@@ -2418,6 +2451,50 @@ function drawIsoBlock(col,row,bw,bd,bh,topCol,leftCol,rightCol,neonCol){
     cx.stroke();nog();
   }
 }
+// 16-bit isometric block: gradient faces + edge definition
+function drawIsoBlock16(col,row,bw,bd,bh,topCol,leftCol,rightCol,neonCol){
+  const p=toIso(col,row);
+  const hw=ISO.tileW/2, hh=ISO.tileH/2;
+  const w=bw*hw, d=bd*hw, wh=bw*hh, dh=bd*hh;
+  // Top face — diagonal gradient (light front-left to dark back-right)
+  cx.beginPath();
+  cx.moveTo(p.x,p.y-bh);cx.lineTo(p.x+w,p.y+wh-bh);cx.lineTo(p.x+w-d,p.y+wh+dh-bh);cx.lineTo(p.x-d,p.y+dh-bh);
+  cx.closePath();
+  const tg=cx.createLinearGradient(p.x-d,p.y+dh-bh,p.x+w,p.y+wh-bh);
+  tg.addColorStop(0,cLight(topCol,22));tg.addColorStop(1,topCol);
+  cx.fillStyle=tg;cx.fill();
+  // Left face — vertical gradient
+  cx.beginPath();
+  cx.moveTo(p.x-d,p.y+dh-bh);cx.lineTo(p.x+w-d,p.y+wh+dh-bh);cx.lineTo(p.x+w-d,p.y+wh+dh);cx.lineTo(p.x-d,p.y+dh);
+  cx.closePath();
+  const lg=cx.createLinearGradient(p.x-d,p.y+dh-bh,p.x-d,p.y+dh);
+  lg.addColorStop(0,cLight(leftCol,10));lg.addColorStop(1,cDark(leftCol,12));
+  cx.fillStyle=lg;cx.fill();
+  // Right face — vertical gradient (darker)
+  cx.beginPath();
+  cx.moveTo(p.x+w-d,p.y+wh+dh-bh);cx.lineTo(p.x+w,p.y+wh-bh);cx.lineTo(p.x+w,p.y+wh);cx.lineTo(p.x+w-d,p.y+wh+dh);
+  cx.closePath();
+  const rg=cx.createLinearGradient(p.x+w-d,p.y+wh+dh-bh,p.x+w-d,p.y+wh+dh);
+  rg.addColorStop(0,rightCol);rg.addColorStop(1,cDark(rightCol,18));
+  cx.fillStyle=rg;cx.fill();
+  // Edge lines for crispness
+  cx.strokeStyle='rgba(0,0,0,0.18)';cx.lineWidth=0.6;
+  cx.beginPath();
+  cx.moveTo(p.x,p.y-bh);cx.lineTo(p.x+w,p.y+wh-bh);cx.lineTo(p.x+w-d,p.y+wh+dh-bh);
+  cx.moveTo(p.x-d,p.y+dh-bh);cx.lineTo(p.x+w-d,p.y+wh+dh-bh);
+  cx.moveTo(p.x+w-d,p.y+wh+dh-bh);cx.lineTo(p.x+w-d,p.y+wh+dh);
+  cx.stroke();
+  // Top edge highlight
+  cx.globalAlpha=0.2;cx.strokeStyle='#fff';cx.lineWidth=1;
+  cx.beginPath();cx.moveTo(p.x,p.y-bh);cx.lineTo(p.x-d,p.y+dh-bh);cx.stroke();
+  cx.globalAlpha=1;
+  if(neonCol){
+    glow(neonCol,6);cx.strokeStyle=neonCol;cx.lineWidth=1.5;
+    cx.beginPath();cx.moveTo(p.x,p.y-bh);cx.lineTo(p.x+w,p.y+wh-bh);
+    cx.moveTo(p.x,p.y-bh);cx.lineTo(p.x-d,p.y+dh-bh);
+    cx.stroke();nog();
+  }
+}
 // Draw isometric shadow ellipse
 function drawIsoShadow(sx,sy,rw,rh){
   cx.save();cx.globalAlpha=0.18;
@@ -2428,6 +2505,7 @@ function drawIsoShadow(sx,sy,rw,rh){
 
 // ── DRAW CHIBI (ISOMETRIC) ────────────────────────────────────
 function chibi(x,y,dir,shirt,hair,frame,busy,tick,scale=1){
+  if(renderMode==='16bit'){chibi16(x,y,dir,shirt,hair,frame,busy,tick,scale);return;}
   cx.save();
   if(scale!==1){cx.translate(x,y);cx.scale(scale,scale);cx.translate(-x,-y);}
   const flip=dir===-1;
@@ -2466,6 +2544,82 @@ function chibi(x,y,dir,shirt,hair,frame,busy,tick,scale=1){
   if(!blink){r(x+4,y+4,1,1,P.white);r(x+10,y+4,1,1,P.white);}
   // Nose hint
   r(x+6,y+7,2,1,'#eebb99');
+  cx.restore();
+}
+
+// 16-bit chibi: gradient fills, iris eyes, collar, belt, hair sheen
+function chibi16(x,y,dir,shirt,hair,frame,busy,tick,scale=1){
+  cx.save();
+  if(scale!==1){cx.translate(x,y);cx.scale(scale,scale);cx.translate(-x,-y);}
+  const flip=dir===-1;
+  if(flip){cx.translate(x+14,0);cx.scale(-1,1);cx.translate(-x,0);}
+  // Radial shadow
+  cx.save();
+  const sg=cx.createRadialGradient(x+7,y+28,0,x+7,y+28,11);
+  sg.addColorStop(0,'rgba(0,0,0,0.32)');sg.addColorStop(1,'rgba(0,0,0,0)');
+  cx.fillStyle=sg;cx.beginPath();cx.ellipse(x+7,y+29,11,4,0,0,Math.PI*2);cx.fill();
+  cx.restore();
+  // Legs with gradient
+  const lk=frame===0?0:2;
+  const shirtCol=P.shirts[shirt%P.shirts.length];
+  cx.fillStyle=cLight(P.pants,12);cx.fillRect(x+3,y+18,3,7+lk);
+  cx.fillStyle=P.pants;cx.fillRect(x+4,y+20,2,5+lk);
+  cx.fillStyle=cLight(P.pants,12);cx.fillRect(x+8,y+18,3,7-lk);
+  cx.fillStyle=P.pants;cx.fillRect(x+9,y+20,2,5-lk);
+  // Knee highlight
+  cx.globalAlpha=0.18;cx.fillStyle='#fff';cx.fillRect(x+3,y+18,1,3);cx.fillRect(x+8,y+18,1,3);cx.globalAlpha=1;
+  // Shoes with sole
+  cx.fillStyle=P.shoes;cx.fillRect(x+2,y+24+lk,4,3);cx.fillRect(x+8,y+24-lk,4,3);
+  cx.globalAlpha=0.28;cx.fillStyle='#fff';cx.fillRect(x+2,y+26+lk,4,1);cx.fillRect(x+8,y+26-lk,4,1);cx.globalAlpha=1;
+  // Belt
+  cx.fillStyle=cDark(P.pants,8);cx.fillRect(x+1,y+18,12,2);
+  cx.globalAlpha=0.5;cx.fillStyle='#ddc080';cx.fillRect(x+5,y+18,4,2);cx.globalAlpha=1;
+  // Body with gradient
+  const bg=cx.createLinearGradient(x+1,y+8,x+13,y+19);
+  bg.addColorStop(0,cLight(shirtCol,28));bg.addColorStop(0.5,shirtCol);bg.addColorStop(1,cDark(shirtCol,22));
+  cx.fillStyle=bg;cx.fillRect(x+1,y+8,12,11);
+  // Shirt highlight crease
+  cx.globalAlpha=0.22;cx.fillStyle='#fff';cx.fillRect(x+4,y+9,4,3);cx.globalAlpha=1;
+  // Collar
+  cx.fillStyle=cLight(shirtCol,35);cx.fillRect(x+4,y+8,6,2);
+  // X logo on Altadis shirt
+  if(shirt===0){cx.strokeStyle='#ffffff88';cx.lineWidth=1;cx.beginPath();cx.moveTo(x+5,y+11);cx.lineTo(x+9,y+15);cx.stroke();cx.beginPath();cx.moveTo(x+9,y+11);cx.lineTo(x+5,y+15);cx.stroke();}
+  // Arms
+  const ak=busy?(frame===0?-2:2):0;
+  const ag=cx.createLinearGradient(x-1,y+9,x+2,y+17);
+  ag.addColorStop(0,cLight(shirtCol,20));ag.addColorStop(1,cDark(shirtCol,15));
+  cx.fillStyle=ag;cx.fillRect(x-1,y+9+ak,3,8);cx.fillRect(x+12,y+9-ak,3,8);
+  // Wrists
+  cx.fillStyle=P.skin;cx.fillRect(x-1,y+15+ak,3,2);cx.fillRect(x+12,y+15-ak,3,2);
+  // Head with skin gradient
+  const hg=cx.createLinearGradient(x+1,y-1,x+13,y+11);
+  hg.addColorStop(0,cLight(P.skin,18));hg.addColorStop(0.6,P.skin);hg.addColorStop(1,cDark(P.skin,14));
+  cx.fillStyle=hg;cx.fillRect(x+1,y-1,12,12);
+  // Cheek blush
+  cx.globalAlpha=0.13;cx.fillStyle='#ff8888';cx.fillRect(x+1,y+5,3,3);cx.fillRect(x+10,y+5,3,3);cx.globalAlpha=1;
+  // Hair with gradient + sheen
+  const hairCol=P.hair[hair%P.hair.length];
+  const haiG=cx.createLinearGradient(x,y-4,x+14,y+3);
+  haiG.addColorStop(0,cLight(hairCol,32));haiG.addColorStop(0.5,hairCol);haiG.addColorStop(1,cDark(hairCol,14));
+  cx.fillStyle=haiG;
+  cx.fillRect(x+0,y-4,14,7);cx.fillRect(x-1,y-3,2,9);cx.fillRect(x+13,y-3,2,9);
+  cx.globalAlpha=0.18;cx.fillStyle='#fff';cx.fillRect(x+2,y-3,5,2);cx.globalAlpha=1;
+  // Eyes: white + iris + pupil + highlight
+  const blink=Math.floor(tick/90)%9===0;
+  if(blink){
+    cx.fillStyle='#1a1a2e';cx.fillRect(x+3,y+3,3,1);cx.fillRect(x+9,y+3,3,1);
+  } else {
+    cx.fillStyle='#eeeeff';cx.fillRect(x+3,y+3,3,3);cx.fillRect(x+9,y+3,3,3);
+    cx.fillStyle='#3a5aaa';cx.fillRect(x+4,y+3,2,3);cx.fillRect(x+10,y+3,2,3);
+    cx.fillStyle='#1a1a2e';cx.fillRect(x+4,y+4,1,2);cx.fillRect(x+10,y+4,1,2);
+    cx.fillStyle='#fff';cx.fillRect(x+4,y+3,1,1);cx.fillRect(x+10,y+3,1,1);
+  }
+  // Eyebrows
+  cx.fillStyle=cDark(hairCol,8);cx.fillRect(x+3,y+1,3,1);cx.fillRect(x+9,y+1,3,1);
+  // Nose + mouth
+  cx.fillStyle=cDark(P.skin,16);cx.fillRect(x+6,y+7,2,1);
+  cx.fillStyle=cDark(P.skin,25);cx.fillRect(x+4,y+9,5,1);
+  cx.globalAlpha=0.35;cx.fillStyle='#ff8888';cx.fillRect(x+4,y+9,5,1);cx.globalAlpha=1;
   cx.restore();
 }
 
@@ -2524,7 +2678,141 @@ function drawMenu(){
     }
   }
   // Version tag
-  cx.globalAlpha=0.3;tx('v2.50 · 2026-03-26 12:45',W-80,H-8,P.gray,7,'center');cx.globalAlpha=1;
+  cx.globalAlpha=0.3;tx('v3.0 · 2026-03-30',W-80,H-8,P.gray,7,'center');cx.globalAlpha=1;
+}
+
+// ── PLATFORM SELECT SCREEN ────────────────────────────────────
+function _miniIsoTile(mx,my,s,c1,c2,gradient){
+  // Draw a tiny isometric tile centered at mx,my
+  const tw=14*s,th=5*s;
+  cx.beginPath();cx.moveTo(mx,my);cx.lineTo(mx+tw/2,my+th/2);cx.lineTo(mx,my+th);cx.lineTo(mx-tw/2,my+th/2);cx.closePath();
+  if(gradient){
+    const g=cx.createLinearGradient(mx,my,mx,my+th);g.addColorStop(0,c1);g.addColorStop(1,c2);cx.fillStyle=g;
+  } else {cx.fillStyle=c1;}
+  cx.fill();cx.strokeStyle=c2;cx.lineWidth=0.5;cx.stroke();
+}
+function _drawMiniStore8bit(cx2,cy){
+  const s=0.42;
+  for(let i=0;i<4;i++) for(let j=0;j<2;j++){
+    const tx3=cx2+(i-j)*14*s,ty2=cy+(i+j)*5*s-8;
+    _miniIsoTile(tx3,ty2,s,(i+j)%2===0?'#c0b8a0':'#b4ac96','#a09078',false);
+  }
+  // Flat shelf block
+  r(cx2-20,cy-28,12,20,P.furnitureLight);r(cx2-8,cy-26,5,18,P.furniture);
+  // Flat products
+  const pc=['#dd4444','#4488dd','#ddaa22'];
+  for(let i=0;i<3;i++){r(cx2-18+i*5,cy-20,4,5,pc[i]);}
+  // Flat chibi
+  r(cx2+4,cy-30,7,6,P.skin);r(cx2+2,cy-36,9,7,P.hair[0]);
+  r(cx2+3,cy-24,9,8,P.shirts[0]);r(cx2+3,cy-16,3,6,P.pants);r(cx2+8,cy-16,3,6,P.pants);
+}
+function _drawMiniStore16bit(cx2,cy){
+  const s=0.42;
+  for(let i=0;i<4;i++) for(let j=0;j<2;j++){
+    const tx3=cx2+(i-j)*14*s,ty2=cy+(i+j)*5*s-8;
+    _miniIsoTile(tx3,ty2,s,'#d4c8a8','#b0a480',true);
+  }
+  // Gradient shelf
+  const tg=cx.createLinearGradient(cx2-20,cy-28,cx2-8,cy-8);tg.addColorStop(0,cLight(P.furnitureLight,18));tg.addColorStop(1,P.furnitureLight);
+  cx.fillStyle=tg;cx.fillRect(cx2-20,cy-28,12,20);
+  const sg=cx.createLinearGradient(cx2-8,cy-26,cx2-3,cy-8);sg.addColorStop(0,P.furniture);sg.addColorStop(1,cDark(P.furniture,15));
+  cx.fillStyle=sg;cx.fillRect(cx2-8,cy-26,5,18);
+  // Products with highlight
+  const pc=['#dd4444','#4488dd','#ddaa22'];
+  for(let i=0;i<3;i++){cx.fillStyle=pc[i];cx.fillRect(cx2-18+i*5,cy-20,4,5);cx.globalAlpha=0.35;cx.fillStyle='#fff';cx.fillRect(cx2-18+i*5,cy-20,4,2);cx.globalAlpha=1;}
+  // 16-bit chibi head+body
+  const hg2=cx.createLinearGradient(cx2+3,cy-30,cx2+10,cy-22);hg2.addColorStop(0,cLight(P.skin,18));hg2.addColorStop(1,P.skin);cx.fillStyle=hg2;cx.fillRect(cx2+4,cy-30,7,6);
+  const hairG=cx.createLinearGradient(cx2+2,cy-37,cx2+11,cy-29);hairG.addColorStop(0,cLight(P.hair[0],30));hairG.addColorStop(1,P.hair[0]);cx.fillStyle=hairG;cx.fillRect(cx2+2,cy-37,9,8);
+  const shG=cx.createLinearGradient(cx2+3,cy-24,cx2+12,cy-16);shG.addColorStop(0,cLight(P.shirts[0],25));shG.addColorStop(1,cDark(P.shirts[0],15));cx.fillStyle=shG;cx.fillRect(cx2+3,cy-24,9,8);
+  // Eyes
+  cx.fillStyle='#eeeeff';cx.fillRect(cx2+5,cy-28,2,2);cx.fillRect(cx2+9,cy-28,2,2);cx.fillStyle='#1a1a2e';cx.fillRect(cx2+5,cy-27,1,1);cx.fillRect(cx2+9,cy-27,1,1);
+  cx.fillStyle=cLight(P.pants,12);cx.fillRect(cx2+3,cy-16,3,6);cx.fillRect(cx2+8,cy-16,3,6);
+  // Shadow under chibi
+  cx.globalAlpha=0.18;const shd=cx.createRadialGradient(cx2+8,cy-10,0,cx2+8,cy-10,8);shd.addColorStop(0,'rgba(0,0,0,0.4)');shd.addColorStop(1,'rgba(0,0,0,0)');cx.fillStyle=shd;cx.beginPath();cx.ellipse(cx2+8,cy-10,8,3,0,0,Math.PI*2);cx.fill();cx.globalAlpha=1;
+}
+
+function drawPlatformSelect(){
+  // Background with scanlines
+  r(0,0,W,H,'#080812');
+  cx.globalAlpha=0.06;for(let y=0;y<H;y+=2){cx.fillStyle='#aaccff';cx.fillRect(0,y,W,1);}cx.globalAlpha=1;
+  nl(0,5,W,5,P.neon2,2);nl(0,H-5,W,H-5,P.neon1,2);
+  // Title
+  glow(P.neon3,18);tx('ELIGE TU PLATAFORMA',W/2,52,P.neon3,24,'center');nog();
+  cx.globalAlpha=0.55;tx('Selecciona el modo gráfico y pulsa CONFIRMAR',W/2,72,'#9a8a6a',9,'center');cx.globalAlpha=1;
+
+  const pw=270,ph=270,gap=36,py=92;
+  const px0=W/2-pw-gap/2, px1=W/2+gap/2;
+
+  // ── PANEL IZQUIERDO: ZX SPECTRUM 8-BIT ──
+  const sel0=platformSel===0;
+  r(px0,py,pw,ph,sel0?'#050f05':'#06060e');
+  rx(px0,py,pw,ph,sel0?P.neon1:'#222233',sel0?2:1);
+  if(sel0){glow(P.neon1,14);}
+  // Rainbow stripe (Spectrum style)
+  const sc=['#cc2222','#cc8822','#cccc22','#22cc22','#2222cc','#8822cc','#cc22cc'];
+  for(let i=0;i<sc.length;i++) r(px0+10,py+10+i*7,pw-20,7,sc[i]);
+  nog();
+  // Label
+  cx.globalAlpha=sel0?1:0.55;
+  glow('#44ff44',sel0?12:0);
+  cx.font='bold 17px monospace';cx.textAlign='center';cx.fillStyle='#44ff44';cx.fillText('ZX SPECTRUM',px0+pw/2,py+84);
+  nog();
+  tx('8 BITS',px0+pw/2,py+102,'#ccffcc',13,'center');
+  cx.globalAlpha=1;
+  // Mini store preview
+  cx.save();cx.beginPath();cx.rect(px0+8,py+108,pw-16,ph-150);cx.clip();
+  _drawMiniStore8bit(px0+pw/2,py+165);
+  cx.restore();
+  // Specs
+  cx.globalAlpha=sel0?0.75:0.4;
+  tx('Paleta fija · 15 colores',px0+pw/2,py+222,'#88cc88',8,'center');
+  tx('Sprites bloques · Estilo clásico',px0+pw/2,py+234,'#88cc88',8,'center');
+  cx.globalAlpha=1;
+  if(sel0){cx.globalAlpha=0.7+0.3*Math.abs(Math.sin(tt*0.06));tx('▶ SELECCIONADO',px0+pw/2,py+254,P.neon1,9,'center');cx.globalAlpha=1;}
+  BTNS['platformSel0']={x:px0,y:py,w:pw,h:ph};
+
+  // ── PANEL DERECHO: COMMODORE AMIGA 16-BIT ──
+  const sel1=platformSel===1;
+  r(px1,py,pw,ph,sel1?'#100814':'#06060e');
+  rx(px1,py,pw,ph,sel1?P.neon2:'#222233',sel1?2:1);
+  if(sel1){glow(P.neon2,14);}
+  // Copper bar (Amiga style) — animated horizontal gradient
+  const shift=(tt*0.5)%400;
+  for(let row=0;row<7;row++){
+    const cg=cx.createLinearGradient(px1+10-shift,py+10+row*7,px1+10-shift+pw+200,py+10+row*7);
+    cg.addColorStop(0,'#cc2222');cg.addColorStop(0.17,'#cc8822');cg.addColorStop(0.33,'#cccc22');
+    cg.addColorStop(0.5,'#22cc22');cg.addColorStop(0.67,'#2222cc');cg.addColorStop(0.83,'#8822cc');cg.addColorStop(1,'#cc2222');
+    cx.save();cx.beginPath();cx.rect(px1+10,py+10+row*7,pw-20,7);cx.clip();cx.fillStyle=cg;cx.fillRect(px1+10,py+10+row*7,pw-20,7);cx.restore();
+  }
+  nog();
+  // Label with gradient text
+  cx.globalAlpha=sel1?1:0.55;
+  const ag=cx.createLinearGradient(px1+20,py+84,px1+pw-20,py+84);
+  ag.addColorStop(0,'#ff4466');ag.addColorStop(0.33,'#ff9944');ag.addColorStop(0.66,'#44aaff');ag.addColorStop(1,'#cc44ff');
+  cx.font='bold 17px monospace';cx.textAlign='center';cx.fillStyle=ag;cx.fillText('COMMODORE AMIGA',px1+pw/2,py+84);
+  tx('16 BITS',px1+pw/2,py+102,'#ddccff',13,'center');
+  cx.globalAlpha=1;
+  // Mini store preview
+  cx.save();cx.beginPath();cx.rect(px1+8,py+108,pw-16,ph-150);cx.clip();
+  _drawMiniStore16bit(px1+pw/2,py+165);
+  cx.restore();
+  // Specs
+  cx.globalAlpha=sel1?0.75:0.4;
+  tx('4096 colores · Gradientes',px1+pw/2,py+222,'#cc88ff',8,'center');
+  tx('Iluminación dinámica · Sprites HD',px1+pw/2,py+234,'#cc88ff',8,'center');
+  cx.globalAlpha=1;
+  if(sel1){cx.globalAlpha=0.7+0.3*Math.abs(Math.sin(tt*0.06));tx('▶ SELECCIONADO',px1+pw/2,py+254,P.neon2,9,'center');cx.globalAlpha=1;}
+  BTNS['platformSel1']={x:px1,y:py,w:pw,h:ph};
+
+  // Confirm button
+  const cbCol=platformSel===0?P.neon1:P.neon2;
+  const cbW=240,cbH=36,cbX=W/2-120,cbY=py+ph+16;
+  r(cbX,cbY,cbW,cbH,'#08080f');glow(cbCol,12);rx(cbX,cbY,cbW,cbH,cbCol,2);nog();
+  cx.globalAlpha=0.75+0.25*Math.abs(Math.sin(tt*0.05));
+  tx('CONFIRMAR  →',W/2,cbY+24,cbCol,13,'center');cx.globalAlpha=1;
+  BTNS['platformConfirm']={x:cbX,y:cbY,w:cbW,h:cbH};
+  // Hint
+  cx.globalAlpha=0.35;tx('← → para elegir   ·   ENTER para confirmar',W/2,cbY+cbH+18,'#666677',8,'center');cx.globalAlpha=1;
 }
 
 // ── HELP / MANUAL SCREEN ─────────────────────────────────────
@@ -5730,6 +6018,7 @@ function loop(){
     if(demoMode) demoUpdate();
     drawTransition();return;
   }
+  if(state===S.PLATFORM_SEL){drawPlatformSelect();drawTransition();return;}
   if(state===S.MODEL_SEL){drawModelSelect();drawDemoBadge();if(demoMode)demoUpdate();drawTransition();return;}
   if(state===S.TUT){drawTutorial();drawDemoBadge();if(demoMode)demoUpdate();drawTransition();return;}
   if(state===S.YEAR_END){drawYearEnd();drawTransition();return;}
