@@ -421,22 +421,15 @@ function updateHtmlBar(){
   const now=new Date();
   document.getElementById('bbDate').textContent=String(now.getDate()).padStart(2,'0')+'/'+String(now.getMonth()+1).padStart(2,'0')+'/'+now.getFullYear();
   // ── Competitor market share (simulated, fluctuates with game time) ──
-  if(G.gameTime){
-    const t=G.gameTime+G.week*12+G.year*52;
-    // Base shares: Altadis ~28%, JTI ~26%, PM ~25%, BAT ~21%
-    const a=28+3*Math.sin(t*0.13)+G.fame*0.05;
-    const j=26+2*Math.sin(t*0.17+1);
-    const p=25+2.5*Math.sin(t*0.11+2);
-    const b=21+2*Math.sin(t*0.15+3);
-    const total=a+j+p+b;
-    document.getElementById('compAlt').textContent=Math.round(a/total*100)+'%';
-    document.getElementById('compJTI').textContent=Math.round(j/total*100)+'%';
-    document.getElementById('compPM').textContent=Math.round(p/total*100)+'%';
-    document.getElementById('compBAT').textContent=Math.round(b/total*100)+'%';
-    // Highlight leader
-    const vals=[a,j,p,b];const maxV=Math.max(...vals);
+  if(G.gameTime&&G.comp){
+    const shares=G.comp.shares;
+    const total=shares.reduce((a,b)=>a+b,0);
     ['compAlt','compJTI','compPM','compBAT'].forEach((id,i)=>{
-      document.getElementById(id).style.color=vals[i]===maxV?'#44ff88':'#cccccc';
+      const el=document.getElementById(id);
+      el.textContent=Math.round(shares[i]/total*100)+'%';
+      const isPromo=G.comp.promoBrand===i;
+      el.style.color=isPromo?'#ff4444':shares[i]===Math.max(...shares)?'#44ff88':'#cccccc';
+      el.style.fontWeight=isPromo?'bold':'normal';
     });
   }
   // Employee of the Month badge + sub-bar visibility
@@ -775,6 +768,11 @@ const CFG={
   UPGRADE_COST:4500,
   START_MONEY:3500,
   GAMEOVER_THRESHOLD:0.55,
+  COMP_NAMES:['Altadis','JTI','PM','BAT'],
+  COMP_BASE:[28,26,25,21],
+  COMP_PROMO_CHANCE:0.0005,
+  COMP_PROMO_DURATION:280,
+  COMP_PROMO_STEAL:0.35,
 };
 
 // ── PALETTE (Kairosoft warm style) ────────────────────────────
@@ -932,6 +930,11 @@ const LANGS={
     custHappy:['¡Gracias!','Buen servicio','Volveré','¡Perfecto!','Muy amables','¡Genial!','Hasta luego'],
     custUnhappy:['Mucha cola...','No hay stock...','Qué lento...','Menuda espera...','Vaya...'],
     custVip:['Quiero lo mejor','Soy cliente habitual','¿Hay novedades premium?','Lo de siempre','¿Qué me recomiendas?'],
+    custNoStock:['No hay stock...','¡Sin existencias!','Qué pena, no queda...','Me voy a otro sitio','No tienen lo que busco...'],
+    custSaved:['¡Ah, gracias!','Menos mal que viniste','¡Eres un crack!','Genial, me llevo esto'],
+    custBought:['¡Perfecto!','Justo lo que buscaba','Gracias, hasta luego','¡Qué bien!'],
+    compPromoMsg:'📢 ¡Promo rival! -{brand} ataca — menos clientes',
+    compPromoEnd:'Promo rival terminada. Clientes normalizados.',
     pauseTitle:'PAUSA — RESUMEN SEMANAL',pauseCont:'ESC / CLICK PARA CONTINUAR',
     yearEndTitle:'FIN DE AÑO',yearOf:'AÑO',yearRev:'INGRESOS DEL AÑO',
     yearTarget:'OBJETIVO',yearBonus:'BONUS',yearCont:'CONTINUAR →',
@@ -987,6 +990,11 @@ const LANGS={
     custHappy:['Thanks!','Great service','I\'ll be back','Perfect!','Very kind','Awesome!','See you'],
     custUnhappy:['Long queue...','Out of stock...','So slow...','What a wait...','Ugh...'],
     custVip:['I want the best','I\'m a regular','Any premium items?','The usual','What do you recommend?'],
+    custNoStock:['Out of stock...','Nothing left!','Such a shame...','I\'ll go elsewhere','They don\'t have what I need...'],
+    custSaved:['Oh, thanks!','Good thing you came','You\'re a star!','Great, I\'ll take this'],
+    custBought:['Perfect!','Exactly what I wanted','Thanks, bye!','Lovely!'],
+    compPromoMsg:'📢 Rival promo! -{brand} is attacking — fewer customers',
+    compPromoEnd:'Rival promo over. Customers back to normal.',
     pauseTitle:'PAUSE — WEEKLY SUMMARY',pauseCont:'ESC / CLICK TO CONTINUE',
     yearEndTitle:'YEAR END',yearOf:'YEAR',yearRev:'YEAR REVENUE',
     yearTarget:'TARGET',yearBonus:'BONUS',yearCont:'CONTINUE →',
@@ -1277,6 +1285,7 @@ function initGame(){
     supplierDeal:{active:false,timer:0,prodIdx:-1},
     weather:{type:null,timer:0},
     empOfMonth:null,
+    comp:{shares:[28,26,25,21],promoTimer:0,promoBrand:-1},
   };
   // Staff from model — convert grid positions to isometric screen coords
   // Staff positions on the iso grid based on their role
@@ -1634,7 +1643,12 @@ function doAction(id){
       G.money-=a.cost;G.weekExpenses+=a.cost;
       G.fame=Math.min(100,G.fame+a.fame);
       G.satisfaction=Math.min(100,G.satisfaction+5);
-      showEv(T().events[7],P.neon2);addFloat(W/2,H/2-40,'+FAMA',P.neon2);
+      // Advertising pressures competitors — bigger campaign, bigger dent
+      if(G.comp){const pressure=i===0?1:i===1?2.5:5;for(let ci=0;ci<4;ci++) G.comp.shares[ci]=Math.max(15,G.comp.shares[ci]-pressure);}
+      // Cancel active rival promo with premium campaign
+      if(i===2&&G.comp&&G.comp.promoTimer>0){G.comp.promoTimer=0;G.comp.promoBrand=-1;showEv('📣 Campaña premium: promo rival cancelada!',P.neon2);}
+      else{showEv(T().events[7],P.neon2);}
+      addFloat(W/2,H/2-40,'+FAMA',P.neon2);
     }
   }
   if(id==='upgrade'){
@@ -2042,6 +2056,29 @@ function checkRandomEvents(){
       showEv('🛡 Intento de hurto frustrado!',P.green);
     }
   }
+  // Competitor promo — steals customers for a while
+  if(G.comp.promoTimer>0){
+    G.comp.promoTimer--;
+    if(G.comp.promoTimer===0){
+      G.comp.promoBrand=-1;
+      showEv(T().compPromoEnd,P.neonB);
+    }
+  } else if(Math.random()<CFG.COMP_PROMO_CHANCE){
+    const bi=Math.floor(Math.random()*4);
+    G.comp.promoBrand=bi;G.comp.promoTimer=CFG.COMP_PROMO_DURATION;
+    // Boost that competitor's share
+    G.comp.shares[bi]=Math.min(45,G.comp.shares[bi]+8);
+    const msg=T().compPromoMsg.replace('{brand}',CFG.COMP_NAMES[bi]);
+    showEv(msg,P.red);SFX.inspectionAlarm();
+    addFloat(W/2,H/2-40,'PROMO RIVAL',P.red);
+  }
+  // Satisfaction slowly shifts comp shares — high sat pulls customers back
+  if(tt%120===0){
+    const satFactor=(G.satisfaction-50)/50; // -1 to +1
+    for(let i=0;i<4;i++){
+      G.comp.shares[i]=Math.max(15,Math.min(45,G.comp.shares[i]-satFactor*0.4+( Math.random()-0.5)*0.3));
+    }
+  }
   // Employee of the month
   if(Math.random()<0.0003){
     const hired=G.staff.filter(s=>s.hired&&s.level<5);
@@ -2223,7 +2260,8 @@ function updateGame(){
   // Customers
   const weatherMod=G.weather&&G.weather.type==='rain'?0.5:G.weather&&G.weather.type==='sun'?1.5:1;
   const holidaySpawn=G.holiday&&G.holiday.active?1.6:1;
-  if(Math.random()<0.006*Math.max(1,G.staff.filter(s=>s.hired).length)*(G.rush.active?2:1)*weatherMod*holidaySpawn) spawnCust();
+  const compSteal=G.comp&&G.comp.promoTimer>0?CFG.COMP_PROMO_STEAL:0;
+  if(Math.random()<0.006*Math.max(1,G.staff.filter(s=>s.hired).length)*(G.rush.active?2:1)*weatherMod*holidaySpawn*(1-compSteal)) spawnCust();
   for(let i=G.custs.length-1;i>=0;i--){
     const c=G.custs[i];c.ft++;if(c.ft>10){c.fr=(c.fr+1)%2;c.ft=0;}
     if(c.bTimer>0) c.bTimer--;
@@ -2249,10 +2287,44 @@ function updateGame(){
         const arr=T().custBrowse;c.bMsg=arr[Math.floor(Math.random()*arr.length)];c.bTimer=80;c.bShown=true;
       }
       c.timer--;if(c.timer<=0){
-        // Leave dialogue: 50% chance, happy if satisfaction>60
-        if(Math.random()<0.5){
-          const arr=G.satisfaction>60?T().custHappy:T().custUnhappy;
-          c.bMsg=arr[Math.floor(Math.random()*arr.length)];c.bTimer=70;
+        // ── REAL PURCHASE LOGIC ──────────────────────────────────
+        const wp=c.wantsProdIdx>=0?G.prods[c.wantsProdIdx]:null;
+        const inStock=wp&&wp.stock>0;
+        if(inStock){
+          // Purchase: decrement stock, add revenue, show float
+          wp.stock=Math.max(0,wp.stock-1);
+          const rev=Math.max(1,Math.round(wp.price*(0.8+Math.random()*0.4)*(c.vip?1.5:1)));
+          G.money+=rev;G.weekRevenue+=rev;G.yearRevenue+=rev;G.totalRevenue+=rev;
+          addFloat(c.x+7,c.y-28,'€'+rev,c.vip?'#ffd700':P.green);SFX.cashRegister();
+          G.satisfaction=Math.min(100,G.satisfaction+0.5);
+          c.bought=true;
+          const arr=T().custBought;c.bMsg=arr[Math.floor(Math.random()*arr.length)];c.bTimer=70;
+        } else {
+          // No stock — check if any hired staff is close enough to rescue the sale
+          const nearStaff=G.staff.find(s=>s.hired&&!s.fired&&Math.hypot(s.x-c.x,s.y-c.y)<85);
+          if(nearStaff){
+            // Staff rescues: find any in-stock product as substitute
+            const alt=G.prods.find(p=>p.stock>0);
+            if(alt){
+              alt.stock=Math.max(0,alt.stock-1);
+              const rev=Math.max(1,Math.round(alt.price*(0.7+Math.random()*0.3)));
+              G.money+=rev;G.weekRevenue+=rev;G.yearRevenue+=rev;G.totalRevenue+=rev;
+              addFloat(c.x+7,c.y-28,'€'+rev,P.neonB);SFX.cashRegister();
+              addFloat(nearStaff.x+7,nearStaff.y-36,'🤝',P.neon1);
+              G.satisfaction=Math.min(100,G.satisfaction+0.2);
+              c.bought=true;
+              const arr=T().custSaved;c.bMsg=arr[Math.floor(Math.random()*arr.length)];c.bTimer=70;
+            } else {
+              // Nothing in stock at all
+              const arr=T().custNoStock;c.bMsg=arr[Math.floor(Math.random()*arr.length)];c.bTimer=70;
+              G.satisfaction=Math.max(0,G.satisfaction-2);
+            }
+          } else {
+            // No staff nearby — customer leaves empty-handed
+            const arr=T().custNoStock;c.bMsg=arr[Math.floor(Math.random()*arr.length)];c.bTimer=70;
+            G.satisfaction=Math.max(0,G.satisfaction-2);
+            addFloat(c.x+7,c.y-28,'SIN STOCK',P.red);
+          }
         }
         // Compute return path
         const curTile=screenToIso(c.x+5,c.y+20);
@@ -2335,6 +2407,14 @@ function spawnCust(isVip){
   } else if(Math.random()<0.4){
     const arr=T().custEnter;cBMsg=arr[Math.floor(Math.random()*arr.length)];cBTimer=90;
   }
+  // Pick wanted product — prefer stocked ones (70% chance), VIPs prefer high-price items
+  let wantsProdIdx=-1;
+  if(G.prods&&G.prods.length){
+    const stocked=G.prods.map((p,i)=>({i,p})).filter(({p})=>p.stock>0);
+    const pool=stocked.length>0&&Math.random()<0.7?stocked:G.prods.map((p,i)=>({i,p}));
+    const pick=isV?pool.reduce((a,b)=>a.p.price>=b.p.price?a:b):pool[Math.floor(Math.random()*pool.length)];
+    wantsProdIdx=pick.i;
+  }
   G.custs.push({
     x:doorIso.x,y:doorIso.y-40,
     tx:tIso.x-7,ty:tIso.y-20,
@@ -2342,7 +2422,8 @@ function spawnCust(isVip){
     st:'walk',timer:0,col:isVip?'#ffd700':P.prods[ci],hair:Math.floor(Math.random()*6),
     fr:0,ft:0,dir:-1,
     path:path,pathIdx:0,vip:isV,
-    bTimer:cBTimer,bMsg:cBMsg,bShown:false
+    bTimer:cBTimer,bMsg:cBMsg,bShown:false,
+    wantsProdIdx:wantsProdIdx,bought:false
   });
   G.doorOpen=60;SFX.doorBell(); // open door for customer entering
   G.customersToday++;G.totalCustomers++;G.custIn++; // count entry
