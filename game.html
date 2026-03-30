@@ -69,7 +69,7 @@
 </div>
 <script>
 // ═══════════════════════════════════════════════════════════════
-//  XTANCO DIGITAL TWIN — v3.7 — 2026-03-30
+//  XTANCO DIGITAL TWIN — v3.8 — 2026-03-30
 // ═══════════════════════════════════════════════════════════════
 const cv=document.getElementById('c'), cx=cv.getContext('2d');
 cx.imageSmoothingEnabled=false;
@@ -921,7 +921,7 @@ let activeModel=0;
 // ── I18N ──────────────────────────────────────────────────────
 const LANGS={
   es:{
-    menuTitle:'XTANCO',menuSub:'SIMULADOR DE ESTANCO DIGITAL — v3.7',
+    menuTitle:'XTANCO',menuSub:'SIMULADOR DE ESTANCO DIGITAL — v3.8',
     langPick:'SELECCIONA IDIOMA',startBtn:'PULSA ENTER PARA EMPEZAR',
     langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
     tut:[
@@ -984,7 +984,7 @@ const LANGS={
     modelStart:['€3.500','€2.800','€4.500','€6.000'],
   },
   en:{
-    menuTitle:'XTANCO',menuSub:'DIGITAL TOBACCO SHOP SIMULATOR — v3.7',
+    menuTitle:'XTANCO',menuSub:'DIGITAL TOBACCO SHOP SIMULATOR — v3.8',
     langPick:'SELECT LANGUAGE',startBtn:'PRESS ENTER TO START',
     langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
     tut:[
@@ -2978,7 +2978,7 @@ function drawMenu(){
     }
   }
   // Version tag
-  cx.globalAlpha=0.3;tx('v3.7 · 2026-03-30',W-80,H-8,P.gray,7,'center');cx.globalAlpha=1;
+  cx.globalAlpha=0.3;tx('v3.8 · 2026-03-30',W-80,H-8,P.gray,7,'center');cx.globalAlpha=1;
 }
 
 // ── INTRO / HOW TO PLAY ───────────────────────────────────────
@@ -5452,12 +5452,13 @@ function drawIsoDJBooth(col,row){
   cx.beginPath();cx.arc(hp.x,hp.y-boothH-3,4,Math.PI,0,false);cx.stroke();
   r(hp.x-5,hp.y-boothH-4,2,4,'#556677');r(hp.x+3,hp.y-boothH-4,2,4,'#556677');
 
-  // ── "DJ" label above booth ──
-  const lp=toIso(col+1,row+0.5);
-  if(djOn){glow('#4466ff',10);}
-  cx.font='bold 7px monospace';cx.textAlign='center';
-  cx.fillStyle=djOn?'#88aaff':'#445566';
-  cx.fillText(T().staffLabel[4],lp.x,lp.y-boothH-18);
+  // ── "DJ" on front face (grey letters centered on the visible panel) ──
+  const fmx=(eFront0.x+eFront1.x)/2;
+  const fmy=(eFront0.y+eFront1.y)/2-boothH/2+3;
+  if(djOn){glow('#4466ff',8);}
+  cx.font='bold 9px monospace';cx.textAlign='center';
+  cx.fillStyle=djOn?'#99aacc':'#778899';
+  cx.fillText('DJ',fmx,fmy);
   nog();
 
   // ── Party light cone ──
@@ -6493,16 +6494,19 @@ function drawEditor(){
   r(0,H-panH,W,panH,'#2a1e10e8');
   cx.strokeStyle='#4a3820';cx.lineWidth=1;
   cx.beginPath();cx.moveTo(0,H-panH+0.5);cx.lineTo(W,H-panH+0.5);cx.stroke();
-  // Item list (scrollable row)
+  // Item list (wall-mounted items led/tft are excluded — not movable)
   const itemW=62;
+  let edVisPos=0;
   for(let i=0;i<shopLayout.length;i++){
-    const ix=8+i*(itemW+4);
+    if(shopLayout[i].type==='led'||shopLayout[i].type==='tft') continue;
+    const ix=8+edVisPos*(itemW+4);
+    edVisPos++;
     if(ix>W-100) break;
     const sel=i===edSelIdx;
     r(ix,H-panH+6,itemW,34,sel?'#4a3a20':'#3a2a18');
     rx(ix,H-panH+6,itemW,34,sel?'#ffcc00':'#5a4830',sel?2:1);
     tx(shopLayout[i].label,ix+itemW/2,H-panH+18,sel?'#ffcc00':'#c0b898',7,'center');
-    tx('('+shopLayout[i].col+','+shopLayout[i].row+') X'+(((shopLayout[i].sx||1)*100)|0)+' Y'+(((shopLayout[i].sy||1)*100)|0),ix+itemW/2,H-panH+32,sel?'#ffdd88':'#8a7a60',5,'center');
+    tx('('+shopLayout[i].col+','+shopLayout[i].row+')',ix+itemW/2,H-panH+32,sel?'#ffdd88':'#8a7a60',5,'center');
     BTNS['edsel'+i]={x:ix,y:H-panH+6,w:itemW,h:34};
   }
   // Buttons
