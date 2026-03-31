@@ -2,6 +2,32 @@
 
 ---
 
+## [v4.4] — 2026-03-31
+
+### DJ look, booth interactivo, layout persistente y UX fixes
+
+| v | Cambio |
+|---|--------|
+| 3.6 | DJ detrás del booth + vinilos más grandes y giratorios |
+| 3.7 | Empleados bailan idle al ritmo de la música |
+| 3.8 | "DJ" en letras en cara frontal de la mesa + editor sin LED Banner |
+| 3.9 | Layout Base guardable — se carga en cada nueva partida |
+| 4.0 | Botón Quit movido a esquina inferior izquierda |
+| 4.1 | Quit reposicionado arriba a la izquierda, antes del reloj |
+| 4.2 | DJ camina al booth al contratar (A*) + gestos de scratch periódicos |
+| 4.3 | DJ con gorra snapback azul marino y número 54 en el pecho |
+| 4.4 | Jersey dorado + "54" en negro — 8-bit y 16-bit |
+
+**Detalles destacados:**
+- `initGame()` llama `loadLayout()` — cada nueva partida respeta la Base guardada
+- `resetLayout()` corregido: ahora sí resetea a DEFAULT_LAYOUT
+- Editor: botones renombrados "💾 Guardar Base" / "↺ Por defecto"
+- `chibi()` / `chibi16()`: nuevo parámetro `isDJ` — jersey dorado, gorra navy, "54" negro
+- DJ scratch timer: cada 1.5–4.5 s lanza gesto de lean + arco de brazo + nota flotante
+- Idle dance: amplitud y velocidad escalan con si el DJ está activo o no
+
+---
+
 ## [v2.12] — 2026-03-25
 
 ### Correcciones finales + Video evolución + Diario completo
