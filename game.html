@@ -70,7 +70,7 @@
 </div>
 <script>
 // ═══════════════════════════════════════════════════════════════
-//  XTANCO DIGITAL TWIN — v4.8 — 2026-03-31
+//  XTANCO DIGITAL TWIN — v4.9 — 2026-03-31
 // ═══════════════════════════════════════════════════════════════
 const cv=document.getElementById('c'), cx=cv.getContext('2d');
 cx.imageSmoothingEnabled=false;
@@ -920,7 +920,7 @@ let activeModel=0;
 // ── I18N ──────────────────────────────────────────────────────
 const LANGS={
   es:{
-    menuTitle:'XTANCO',menuSub:'SIMULADOR DE ESTANCO DIGITAL — v4.8',
+    menuTitle:'XTANCO',menuSub:'SIMULADOR DE ESTANCO DIGITAL — v4.9',
     langPick:'SELECCIONA IDIOMA',startBtn:'PULSA ENTER PARA EMPEZAR',
     langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
     tut:[
@@ -983,7 +983,7 @@ const LANGS={
     modelStart:['€3.500','€2.800','€4.500','€6.000'],
   },
   en:{
-    menuTitle:'XTANCO',menuSub:'DIGITAL TOBACCO SHOP SIMULATOR — v4.8',
+    menuTitle:'XTANCO',menuSub:'DIGITAL TOBACCO SHOP SIMULATOR — v4.9',
     langPick:'SELECT LANGUAGE',startBtn:'PRESS ENTER TO START',
     langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
     tut:[
@@ -1871,7 +1871,8 @@ function doAction(id){
     const dH=shopTimeSettings.closeHour-shopTimeSettings.openHour;
     const fp=shopTimeSettings.dayDurationSec*60;
     G.weather={type:'sun',timer:Math.floor(fp/dH*2)};
-    showEv('☀ '+(lang==='es'?'¡Sol activado!':'Sun activated!'),P.neon2);return;
+    acOn=true; // AC auto-on when sunny
+    showEv('☀ '+(lang==='es'?'¡Sol activado! AC encendido':'Sun activated! AC on'),'#ddaa33');return;
   }
   // ── Digital Signage video controls ──
   if(id==='dsToggle'){
@@ -2119,8 +2120,8 @@ function checkRandomEvents(){
     const fpd=shopTimeSettings.dayDurationSec*60;
     const twoHourFrames=Math.floor(fpd/dayH*2); // ~3000 frames at default settings
     G.weather={type:wt,timer:twoHourFrames};
-    if(wt==='rain'){showEv('🌧 ¡Tormenta! Menos clientes','#6688aa');SFX.thunder();thunderFlash=8;thunderCooldown=300;}
-    else showEv('☀ Sol radiante: más clientes!',P.neon2);
+    if(wt==='rain'){showEv('🌧 ¡Lluvia! Se refugian dentro','#6688aa');SFX.thunder();thunderFlash=8;thunderCooldown=300;}
+    else{showEv('☀ Sol radiante: más clientes!','#ddaa33');acOn=true;} // AC auto-on when sunny
   }
   // VIP customer
   if(Math.random()<0.0005){
@@ -2432,7 +2433,8 @@ function updateGame(){
   }
 
   // Customers
-  const weatherMod=G.weather&&G.weather.type==='rain'?0.5:G.weather&&G.weather.type==='sun'?1.5:1;
+  // Rain → +40% spawn (people seek shelter inside); Sun → +50% spawn (people stroll out)
+  const weatherMod=G.weather&&G.weather.type==='rain'?1.4:G.weather&&G.weather.type==='sun'?1.5:1;
   const holidaySpawn=G.holiday&&G.holiday.active?1.6:1;
   const compSteal=G.comp&&G.comp.promoTimer>0?CFG.COMP_PROMO_STEAL:0;
   const repMod=G.reviews?G.reviews.spawnMod:1;
@@ -2441,19 +2443,23 @@ function updateGame(){
     const c=G.custs[i];c.ft++;if(c.ft>10){c.fr=(c.fr+1)%2;c.ft=0;}
     if(c.bTimer>0) c.bTimer--;
     if(c.st==='walk'){
+      // Sun → customers walk 65% speed (too hot); Rain → normal speed (rushing in)
+      const wSpd=G.weather&&G.weather.type==='sun'?0.85:1.3;
+      // Rain → customers linger longer (took shelter); base browse timer scaled up
+      const browseBase=G.weather&&G.weather.type==='rain'?1.7:1.0;
       if(c.path&&c.pathIdx<c.path.length){
         const wp=c.path[c.pathIdx];const wpIso=toIso(wp.col,wp.row);
         const wtx=wpIso.x-7,wty=wpIso.y-20;
         const dx=wtx-c.x,dy=wty-c.y,d=Math.sqrt(dx*dx+dy*dy);
-        if(d<3){c.pathIdx++;if(c.pathIdx>=c.path.length){c.st='browse';c.timer=60+Math.random()*80;}}
-        else{c.x+=dx/d*1.3;c.y+=dy/d*1.3;c.dir=dx<0?-1:1;}
+        if(d<3){c.pathIdx++;if(c.pathIdx>=c.path.length){c.st='browse';c.timer=Math.round((60+Math.random()*80)*browseBase);}}
+        else{c.x+=dx/d*wSpd;c.y+=dy/d*wSpd;c.dir=dx<0?-1:1;}
       } else {
         const dx=c.tx-c.x,dy=c.ty-c.y,d=Math.sqrt(dx*dx+dy*dy);
-        if(d<3){c.st='browse';c.timer=60+Math.random()*80;}
+        if(d<3){c.st='browse';c.timer=Math.round((60+Math.random()*80)*browseBase);}
         else{
-          const nx=c.x+dx/d*1.3,ny=c.y+dy/d*1.3;
+          const nx=c.x+dx/d*wSpd,ny=c.y+dy/d*wSpd;
           if(canWalkTo(nx+5,ny+20)){c.x=nx;c.y=ny;c.dir=dx<0?-1:1;}
-          else{c.st='browse';c.timer=30+Math.random()*40;}
+          else{c.st='browse';c.timer=Math.round((30+Math.random()*40)*browseBase);}
         }
       }
     } else if(c.st==='browse'){
@@ -3056,7 +3062,7 @@ function drawMenu(){
     }
   }
   // Version tag
-  cx.globalAlpha=0.3;tx('v4.8 · 2026-03-31',W-80,H-8,P.gray,7,'center');cx.globalAlpha=1;
+  cx.globalAlpha=0.3;tx('v4.9 · 2026-03-31',W-80,H-8,P.gray,7,'center');cx.globalAlpha=1;
 }
 
 // ── INTRO / HOW TO PLAY ───────────────────────────────────────
@@ -4204,6 +4210,32 @@ function drawShop(){
     }
   }
 
+  // ── WEATHER FLOOR EFFECTS ──
+  const weatherFloor=G&&G.weather&&G.weather.type;
+  if(weatherFloor==='rain'){
+    // Wet puddle near entrance door — ripples outward
+    const dp=toIso(ISO.cols-1,3);
+    cx.globalAlpha=0.22+Math.abs(Math.sin(tt*0.05))*0.06;
+    cx.fillStyle='#7aaacc';
+    cx.beginPath();cx.ellipse(dp.x-8,dp.y+10,24,9,0,0,Math.PI*2);cx.fill();
+    // Expanding ripple ring
+    const ripT=(tt%50)/50;
+    cx.strokeStyle='#aaccdd';cx.lineWidth=0.8;
+    cx.globalAlpha=0.25*(1-ripT);
+    cx.beginPath();cx.ellipse(dp.x-8,dp.y+10,4+ripT*20,(4+ripT*20)*0.38,0,0,Math.PI*2);cx.stroke();
+    // Second ripple offset
+    const ripT2=((tt+25)%50)/50;
+    cx.globalAlpha=0.2*(1-ripT2);
+    cx.beginPath();cx.ellipse(dp.x-8,dp.y+10,4+ripT2*16,(4+ripT2*16)*0.38,0,0,Math.PI*2);cx.stroke();
+    cx.globalAlpha=1;
+  } else if(weatherFloor==='sun'){
+    // Warm golden tint washes across the floor
+    cx.globalAlpha=0.07;
+    cx.fillStyle='#ddaa44';
+    cx.fillRect(0,28,W,H-28);
+    cx.globalAlpha=1;
+  }
+
   // ── BACK WALL (cream/beige, Kairosoft style) ──
   const wallPts=[];
   for(let c=0;c<=ISO.cols+4;c++) wallPts.push(toIso(c,0)); // extend right to cover full view
@@ -4290,6 +4322,31 @@ function drawShop(){
         }
       }
     }
+    // ── RAIN: condensation fog + drip trails (inside clip) ──
+    if(G&&G.weather&&G.weather.type==='rain'){
+      cx.globalAlpha=0.30+Math.abs(Math.sin(tt*0.015))*0.06;
+      cx.fillStyle='#b0c8d8';
+      cx.fillRect(wp1.x,wy,wwid,whei);
+      cx.globalAlpha=1;
+      // Drip trails running down the glass
+      cx.strokeStyle='rgba(140,185,215,0.55)';cx.lineWidth=1.2;
+      for(let d=0;d<7;d++){
+        const dripX=wp1.x+3+d*((wwid-6)/6);
+        const dripStart=wy+((tt*0.3+d*19)%whei);
+        const dripLen=5+Math.abs(Math.sin(tt*0.025+d*1.1))*10;
+        cx.beginPath();
+        cx.moveTo(dripX+Math.sin(d*2.3)*1.5,dripStart);
+        cx.lineTo(dripX+Math.sin(d*2.3+0.4)*1.5,Math.min(wy+whei,dripStart+dripLen));
+        cx.stroke();
+      }
+    }
+    // ── SUN: warm interior glow through glass ──
+    if(G&&G.weather&&G.weather.type==='sun'){
+      const sunGlow=cx.createLinearGradient(wp1.x,wy,wp1.x+wwid,wy+whei);
+      sunGlow.addColorStop(0,'rgba(255,230,140,0.18)');
+      sunGlow.addColorStop(1,'rgba(255,200,80,0.06)');
+      cx.fillStyle=sunGlow;cx.fillRect(wp1.x,wy,wwid,whei);
+    }
     cx.restore();
     // Crossbars
     cx.strokeStyle='#d0ccbc';cx.lineWidth=2.5;
@@ -4301,6 +4358,21 @@ function drawShop(){
     rx(wp1.x-3,wy-3,wwid+6,whei+6,'#9a8a68',1.5);
     // Window sill
     r(wp1.x-5,wy+whei+3,wwid+10,5,'#c8c0a8');
+    // ── SUN: light shaft projecting from window into shop floor ──
+    if(G&&G.weather&&G.weather.type==='sun'){
+      const shaftPulse=0.05+Math.abs(Math.sin(tt*0.018+wc))*0.03;
+      cx.globalAlpha=shaftPulse;
+      cx.fillStyle='#fffacc';
+      const shaftTopL=wp1.x+wwid*0.1, shaftTopR=wp1.x+wwid*0.9;
+      const shaftBotL=wp1.x-30, shaftBotR=wp1.x+wwid+30;
+      const shaftTopY=wy+whei;
+      const shaftBotY=wy+whei+110;
+      cx.beginPath();
+      cx.moveTo(shaftTopL,shaftTopY);cx.lineTo(shaftTopR,shaftTopY);
+      cx.lineTo(shaftBotR,shaftBotY);cx.lineTo(shaftBotL,shaftBotY);
+      cx.closePath();cx.fill();
+      cx.globalAlpha=1;
+    }
   }
 
   // ── BIRDS flying past windows (different color each pass) ──
