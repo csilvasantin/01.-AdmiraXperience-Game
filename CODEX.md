@@ -1,4 +1,4 @@
-# CODEX.md -- XTANCO Digital Twin Game
+# Proyecto 11 — xtanco-game
 
 > Machine-readable project reference for AI agents (Codex, GPT, Claude, etc.).
 > Single-file HTML5 Canvas game. No build step, no dependencies.
