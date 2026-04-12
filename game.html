@@ -42,11 +42,14 @@
     .tg-line.out{border-left-color:#5bc9ff;color:#dff6ff}
     .tg-line.bot{border-left-color:#f0cc5b;color:#fff3c4}
     .tg-line.err{border-left-color:#f05b5b;color:#ffd0d0}
+    #mobileSkipBtn{display:none;position:fixed;left:50%;bottom:12px;transform:translateX(-50%);z-index:40;border:2px solid #55ffcc;border-radius:6px;background:#06110f;color:#d9fff5;font-family:monospace;font-size:13px;font-weight:bold;letter-spacing:0;padding:10px 18px;box-shadow:0 0 14px rgba(85,255,204,.45);cursor:pointer;touch-action:manipulation}
+    #mobileSkipBtn.show{display:block}
     @media (max-width:700px){
       #telegramDock{height:142px;gap:5px;padding:5px}
       #telegramComposer{font-size:11px}
       .tg-head{font-size:8px}
       #telegramLog{font-size:9px}
+      #mobileSkipBtn{bottom:10px;font-size:12px;padding:9px 16px}
     }
   </style>
 </head>
@@ -85,6 +88,7 @@
 <video id="dsVideo" preload="auto" playsinline style="display:none"></video>
 <video id="bootVideo" preload="auto" playsinline webkit-playsinline style="display:none"></video>
 <canvas id="c" width="800" height="500"></canvas>
+<button id="mobileSkipBtn" type="button" aria-label="Saltar al juego">SKIP AL JUEGO</button>
 <div id="telegramDock" aria-label="Telegram AdmiraXPBot">
   <div class="tg-pane">
     <div class="tg-head"><span>Enviar a Telegram</span><span class="tg-status" id="telegramSendStatus">AdmiraXPBot</span></div>
@@ -112,10 +116,11 @@
 <script src="xtanco-runtime-config.js"></script>
 <script>
 // ═══════════════════════════════════════════════════════════════
-//  ADMIRA XP // THE XPACE OS — XTANCO — v9.14 — 2026-04-12
+//  ADMIRA XP // THE XPACE OS — XTANCO — v9.15 — 2026-04-12
 // ═══════════════════════════════════════════════════════════════
 const cv=document.getElementById('c'), cx=cv.getContext('2d');
 cx.imageSmoothingEnabled=false;
+const mobileSkipBtn=document.getElementById('mobileSkipBtn');
 const W=800,H=500;
 const bootVideoEl=document.getElementById('bootVideo');
 const PRELOAD_VIDEO_SRC='assets/videos/precarga_xpace.mp4';
@@ -1201,7 +1206,7 @@ function getClientLaunchLabel(client,index){
 // ── I18N ──────────────────────────────────────────────────────
 const LANGS={
   es:{
-    menuEyebrow:'THE XPACE OS',menuTitle:'ADMIRA XP',menuSub:'PLATAFORMA OPERATIVA MULTICLIENTE — v9.14',
+    menuEyebrow:'THE XPACE OS',menuTitle:'ADMIRA XP',menuSub:'PLATAFORMA OPERATIVA MULTICLIENTE — v9.15',
     menuDeck:'Catalogo vivo de experiencias por cliente',
     langPick:'SELECCIONA IDIOMA',menuStartBtn:'ABRIR CATALOGO XP',menuHint:'Xtanco ya esta en vivo. Loterias y Retail avanzan en la hoja de lanzamiento.',
     menuGuideBtn:'▶ MANUAL XP',menuSettingsBtn:'⚙ XPACE CONFIG',
@@ -1282,7 +1287,7 @@ const LANGS={
     modelStart:['€3.500','€2.800','€4.500','€6.000'],
   },
   en:{
-    menuEyebrow:'THE XPACE OS',menuTitle:'ADMIRA XP',menuSub:'MULTI-CLIENT OPERATIONS PLATFORM — v9.14',
+    menuEyebrow:'THE XPACE OS',menuTitle:'ADMIRA XP',menuSub:'MULTI-CLIENT OPERATIONS PLATFORM — v9.15',
     menuDeck:'Living catalog of client-based experiences',
     langPick:'SELECT LANGUAGE',menuStartBtn:'OPEN XP CATALOG',menuHint:'Xtanco is live. Lottery and Retail are moving through the launch pipeline.',
     menuGuideBtn:'▶ XP MANUAL',menuSettingsBtn:'⚙ XPACE CONFIG',
@@ -1377,6 +1382,11 @@ let tran={active:false,from:null,to:null,timer:0,dur:30};
 function startTransition(toState){if(tran.active)return;tran={active:true,from:state,to:toState,timer:0,dur:30};}
 function updateTransition(){if(!tran.active)return;tran.timer++;if(tran.timer===Math.floor(tran.dur/2))state=tran.to;if(tran.timer>=tran.dur)tran.active=false;}
 function drawTransition(){if(!tran.active)return;const half=tran.dur/2;const alpha=tran.timer<=half?tran.timer/half:1-(tran.timer-half)/half;cx.globalAlpha=Math.max(0,Math.min(1,alpha));cx.fillStyle='#000';cx.fillRect(0,0,W,H);cx.globalAlpha=1;}
+function updateMobileSkipButton(){
+  if(!mobileSkipBtn) return;
+  const show=[S.ERA_SEL,S.PRELOAD,S.MENU,S.CLIENT_SEL,S.MODEL_SEL,S.INTRO].includes(state);
+  mobileSkipBtn.classList.toggle('show',show);
+}
 const ERAS=[
   {id:'spectrum',title:'ZX Spectrum',bits:'8 bits',years:'1982-1987',route:'INTERFAZ SPECTRUM',desc:'LOAD"" y cinta digital',accent:'#5bd8ff',available:true},
   {id:'amiga',title:'Commodore Amiga',bits:'16 bits',years:'1987-1992',route:'INTERFAZ ADMIRA',desc:'Workbench, pagina 0 y arranque visual',accent:'#ff9a1f',available:true},
@@ -1908,6 +1918,16 @@ function quickStartLoteriasGame(){
     G.eventTimer=120;
     G.eventColor='#44ddaa';
   }
+}
+if(mobileSkipBtn){
+  ['keydown','keyup','keypress','mousedown','mouseup','click','touchstart','touchend','wheel'].forEach(ev=>{
+    mobileSkipBtn.addEventListener(ev,e=>e.stopPropagation(),{passive:false});
+  });
+  mobileSkipBtn.addEventListener('click',e=>{
+    e.preventDefault();
+    quickStartLoteriasGame();
+    updateMobileSkipButton();
+  });
 }
 
 // ── SAVE / LOAD ───────────────────────────────────────────────
@@ -4936,7 +4956,7 @@ function drawMenu(){
       r(pbX,pbY,pbW,pbH,'#1a1a2a');r(pbX,pbY,(pbW*pct)|0,pbH,P.neon1);
     }
   }
-  cx.globalAlpha=0.3;tx('Admira XP // The Xpace OS · v9.14 · 2026-04-12',W/2,H-8,P.gray,6,'center');cx.globalAlpha=1;
+  cx.globalAlpha=0.3;tx('Admira XP // The Xpace OS · v9.15 · 2026-04-12',W/2,H-8,P.gray,6,'center');cx.globalAlpha=1;
 }
 
 // ── INTRO / HOW TO PLAY ───────────────────────────────────────
@@ -10042,6 +10062,7 @@ function loop(){
 
   // Always update HTML bar + video position first
   try{updateHtmlBar();}catch(e){}
+  try{updateMobileSkipButton();}catch(e){}
   try{if(videoPlaying){updateVideoPosition();updateDSCanvases();}}catch(e){}
 
   // Auto-start game after 5 seconds idle on MENU — skip straight to game
@@ -11047,7 +11068,7 @@ window.xtAPI = (function(){
   setInterval(pollTelegramCommands,2500);
   setInterval(monitorGameForTelegram,3000);
   if(TELEGRAM.enabled){
-    telegramSend('Admira XP v9.14 online. Usa /help para ver comandos.').then(res=>{
+    telegramSend('Admira XP v9.15 online. Usa /help para ver comandos.').then(res=>{
       appendTelegramLog(res.ok?'bot':'err','AdmiraXPBot',res.ok?'Online enviado a Telegram':res.message);
     });
   }

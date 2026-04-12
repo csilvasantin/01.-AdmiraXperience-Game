@@ -68,7 +68,7 @@ Archivos de apoyo:
 
 ## Telegram
 
-Admira XP v9.14 incluye puente bidireccional con Telegram via Cloudflare Worker o proxy local, Grok publico via Cloudflare Worker y una consola inferior 50/50:
+Admira XP v9.15 incluye puente bidireccional con Telegram via Cloudflare Worker o proxy local, Grok publico via Cloudflare Worker y una consola inferior 50/50:
 
 - el juego envia mensajes a Telegram via `POST /telegram/send`;
 - el bot lee mensajes con polling de la Bot API;
@@ -172,7 +172,7 @@ Comandos soportados desde Telegram:
 
 ## Personajes y escenas en vivo
 
-La v9.14 convierte Telegram y la consola local/publica en una consola de dirección de escena. Los personajes entran y salen por la puerta del local, respetan el canvas isométrico y actualizan los paneles del juego.
+La v9.15 convierte Telegram y la consola local/publica en una consola de dirección de escena. Los personajes entran y salen por la puerta del local, respetan el canvas isométrico y actualizan los paneles del juego.
 
 | Comando | Personaje / escena | Efecto |
 |---------|--------------------|--------|
