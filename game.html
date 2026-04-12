@@ -116,7 +116,7 @@
 <script src="xtanco-runtime-config.js"></script>
 <script>
 // ═══════════════════════════════════════════════════════════════
-//  ADMIRA XP // THE XPACE OS — XTANCO — v9.15 — 2026-04-12
+//  ADMIRA XP // THE XPACE OS — XTANCO — v9.16 — 2026-04-12
 // ═══════════════════════════════════════════════════════════════
 const cv=document.getElementById('c'), cx=cv.getContext('2d');
 cx.imageSmoothingEnabled=false;
@@ -1206,7 +1206,7 @@ function getClientLaunchLabel(client,index){
 // ── I18N ──────────────────────────────────────────────────────
 const LANGS={
   es:{
-    menuEyebrow:'THE XPACE OS',menuTitle:'ADMIRA XP',menuSub:'PLATAFORMA OPERATIVA MULTICLIENTE — v9.15',
+    menuEyebrow:'THE XPACE OS',menuTitle:'ADMIRA XP',menuSub:'PLATAFORMA OPERATIVA MULTICLIENTE — v9.16',
     menuDeck:'Catalogo vivo de experiencias por cliente',
     langPick:'SELECCIONA IDIOMA',menuStartBtn:'ABRIR CATALOGO XP',menuHint:'Xtanco ya esta en vivo. Loterias y Retail avanzan en la hoja de lanzamiento.',
     menuGuideBtn:'▶ MANUAL XP',menuSettingsBtn:'⚙ XPACE CONFIG',
@@ -1287,7 +1287,7 @@ const LANGS={
     modelStart:['€3.500','€2.800','€4.500','€6.000'],
   },
   en:{
-    menuEyebrow:'THE XPACE OS',menuTitle:'ADMIRA XP',menuSub:'MULTI-CLIENT OPERATIONS PLATFORM — v9.15',
+    menuEyebrow:'THE XPACE OS',menuTitle:'ADMIRA XP',menuSub:'MULTI-CLIENT OPERATIONS PLATFORM — v9.16',
     menuDeck:'Living catalog of client-based experiences',
     langPick:'SELECT LANGUAGE',menuStartBtn:'OPEN XP CATALOG',menuHint:'Xtanco is live. Lottery and Retail are moving through the launch pipeline.',
     menuGuideBtn:'▶ XP MANUAL',menuSettingsBtn:'⚙ XPACE CONFIG',
@@ -1605,6 +1605,7 @@ const DEFAULT_LAYOUT=[
   {id:'tablet',type:'tablet',col:13,row:5,sx:1,sy:1,label:'Tablet Satisfacción'},
 ];
 let shopLayout=JSON.parse(JSON.stringify(DEFAULT_LAYOUT));
+let shopFurnitureVisible=true;
 let edSelIdx=-1;       // selected furniture index in editor
 let edHoverTile=null;  // {col,row} under mouse
 let edMode='furniture';    // 'furniture' | 'staff'
@@ -1692,6 +1693,23 @@ function saveLayout(){
     console.log('[Layout] ✓ Saved ('+shopLayout.length+' items) → localStorage + DEFAULT_LAYOUT updated');
   }catch(e){console.warn('[Layout] Save error:',e);}
 }
+function restoreSavedFurnitureLayout(){
+  loadLayout();
+  shopFurnitureVisible=true;
+  edSelIdx=-1;
+  try{buildWalkGrid();}catch(e){}
+}
+function setFurnitureVisibility(value){
+  const visible=value!==false;
+  if(visible){
+    restoreSavedFurnitureLayout();
+    return 'Mobiliario ON: restaurado en la última posición guardada.';
+  }
+  shopFurnitureVisible=false;
+  edSelIdx=-1;
+  try{buildWalkGrid();}catch(e){}
+  return 'Mobiliario OFF: muebles ocultos.';
+}
 function resetLayout(){
   // Reset to DEFAULT_LAYOUT and save it as the base for new games
   shopLayout=JSON.parse(JSON.stringify(DEFAULT_LAYOUT));
@@ -1744,6 +1762,7 @@ const FURNITURE_SIZE={
 
 // Check if a tile is blocked by furniture
 function isTileBlocked(col,row){
+  if(!shopFurnitureVisible) return false;
   const c=Math.round(col), r=Math.round(row);
   for(const item of shopLayout){
     if(item.type==='rug'||item.type==='led'||item.type==='tft') continue; // walkable
@@ -4956,7 +4975,7 @@ function drawMenu(){
       r(pbX,pbY,pbW,pbH,'#1a1a2a');r(pbX,pbY,(pbW*pct)|0,pbH,P.neon1);
     }
   }
-  cx.globalAlpha=0.3;tx('Admira XP // The Xpace OS · v9.15 · 2026-04-12',W/2,H-8,P.gray,6,'center');cx.globalAlpha=1;
+  cx.globalAlpha=0.3;tx('Admira XP // The Xpace OS · v9.16 · 2026-04-12',W/2,H-8,P.gray,6,'center');cx.globalAlpha=1;
 }
 
 // ── INTRO / HOW TO PLAY ───────────────────────────────────────
@@ -6389,10 +6408,12 @@ function drawShop(){
   }
 
   // Furniture from editable layout (skip wall-mounted: led, tft)
-  for(const item of shopLayout){
-    if(item.type==='led'||item.type==='tft') continue;
-    const d=item.type==='rug'?-999:isoDepth(item.col,item.row+1);
-    entities.push({type:item.type,col:item.col,row:item.row,depth:d,layoutId:item.id,sx:item.sx||1,sy:item.sy||1,flipX:item.flipX||false,rot:item.rot||0});
+  if(shopFurnitureVisible||editorSceneActive){
+    for(const item of shopLayout){
+      if(item.type==='led'||item.type==='tft') continue;
+      const d=item.type==='rug'?-999:isoDepth(item.col,item.row+1);
+      entities.push({type:item.type,col:item.col,row:item.row,depth:d,layoutId:item.id,sx:item.sx||1,sy:item.sy||1,flipX:item.flipX||false,rot:item.rot||0});
+    }
   }
 
   if(!editorSceneActive){
@@ -6994,7 +7015,7 @@ function drawIsoTabletKiosk(col,row){
 
 // Helper: find tablet position from layout for vote floats
 function getTabletPos(){
-  const t=shopLayout.find(i=>i.type==='tablet');
+  const t=shopFurnitureVisible?shopLayout.find(i=>i.type==='tablet'):null;
   if(t) return toIso(t.col+0.5,t.row+0.5);
   return toIso(ISO.cols-0.3,4.8); // fallback
 }
@@ -10884,6 +10905,7 @@ window.xtAPI = (function(){
       '/pause | /resume | /menu',
       '/dj on | /dj off',
       '/opinador on | /opinador off',
+      '/mobiliario on | /mobiliario off',
       '/ladron on | /ladron off',
       '/guardiacivil on | /guardiacivil off',
       '/door open | /door close | /door auto',
@@ -10922,6 +10944,12 @@ window.xtAPI = (function(){
       if(cmd==='song'||cmd==='track') return setSong(arg);
       if(cmd==='dj'||cmd==='djnovah'||cmd==='novah') return setDJCommand(arg);
       if(cmd==='opinador'||cmd==='opinion'||cmd==='opinión') return setOpinadorCommand(arg);
+      if(cmd==='mobiliario'||cmd==='furniture'||cmd==='muebles'){
+        const clean=arg.toLowerCase().trim();
+        if(['on','show','mostrar','visible','restore','restaurar'].includes(clean)) return setFurnitureVisibility(true);
+        if(['off','hide','ocultar','invisible','none','desaparecer'].includes(clean)) return setFurnitureVisibility(false);
+        return 'Uso: /mobiliario on | /mobiliario off';
+      }
       if(cmd==='reloj'||cmd==='clock') return setClockTime(arg);
       if(cmd==='ladron'||cmd==='ladrón'||cmd==='thief') return setThiefCommand(arg);
       if(cmd==='guardiacivil'||cmd==='guardia-civil'||cmd==='gc') return setGuardiaCivilCommand(arg);
@@ -11068,7 +11096,7 @@ window.xtAPI = (function(){
   setInterval(pollTelegramCommands,2500);
   setInterval(monitorGameForTelegram,3000);
   if(TELEGRAM.enabled){
-    telegramSend('Admira XP v9.15 online. Usa /help para ver comandos.').then(res=>{
+    telegramSend('Admira XP v9.16 online. Usa /help para ver comandos.').then(res=>{
       appendTelegramLog(res.ok?'bot':'err','AdmiraXPBot',res.ok?'Online enviado a Telegram':res.message);
     });
   }

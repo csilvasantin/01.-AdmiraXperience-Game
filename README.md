@@ -68,7 +68,7 @@ Archivos de apoyo:
 
 ## Telegram
 
-Admira XP v9.15 incluye puente bidireccional con Telegram via Cloudflare Worker o proxy local, Grok publico via Cloudflare Worker y una consola inferior 50/50:
+Admira XP v9.16 incluye puente bidireccional con Telegram via Cloudflare Worker o proxy local, Grok publico via Cloudflare Worker y una consola inferior 50/50:
 
 - el juego envia mensajes a Telegram via `POST /telegram/send`;
 - el bot lee mensajes con polling de la Bot API;
@@ -160,6 +160,7 @@ Comandos soportados desde Telegram:
 - `/pause`, `/resume`, `/menu`
 - `/dj on`, `/dj off` activa o desactiva la figura del DJ como cuando se contrata desde el menu.
 - `/opinador on`, `/opinador off` hace entrar un personaje que deja su opinion en el totem y se marcha; tambien acepta `happy`, `neutral` o `sad`.
+- `/mobiliario on`, `/mobiliario off` restaura el mobiliario a la ultima posicion guardada o lo oculta temporalmente.
 - `/ladron on`, `/ladron off` fuerza la entrada y salida del ladron; al activarse, la camara CCTV muestra la puerta en la pantalla principal.
 - `/guardiacivil on`, `/guardiacivil off` fuerza la entrada y salida del Guardia Civil; si hay ladron activo, lo intercepta.
 - `/door open`, `/door close`, `/door auto`
@@ -172,7 +173,7 @@ Comandos soportados desde Telegram:
 
 ## Personajes y escenas en vivo
 
-La v9.15 convierte Telegram y la consola local/publica en una consola de dirección de escena. Los personajes entran y salen por la puerta del local, respetan el canvas isométrico y actualizan los paneles del juego.
+La v9.16 convierte Telegram y la consola local/publica en una consola de dirección de escena. Los personajes entran y salen por la puerta del local, respetan el canvas isométrico y actualizan los paneles del juego.
 
 | Comando | Personaje / escena | Efecto |
 |---------|--------------------|--------|
@@ -186,6 +187,8 @@ La v9.15 convierte Telegram y la consola local/publica en una consola de direcci
 | `/opinador happy` | Opinador | Fuerza opinión positiva. |
 | `/opinador neutral` | Opinador | Fuerza opinión neutra. |
 | `/opinador sad` | Opinador | Fuerza opinión negativa. |
+| `/mobiliario on` | Mobiliario | Restaura los muebles a la ultima posicion guardada. |
+| `/mobiliario off` | Mobiliario | Oculta temporalmente los muebles de la tienda. |
 | `/door open` / `/door close` | Puerta | Abre o cierra manualmente la puerta. |
 
 ## Pantallas conectadas
