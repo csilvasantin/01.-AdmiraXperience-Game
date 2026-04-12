@@ -56,7 +56,7 @@ Hoy el simulador activo es **Xtanco**, centrado en estancos.
 ## Configuracion local
 
 1. copia `xtanco.config.example.json` a `xtanco.config.local.json`;
-2. rellena ahi Elgato y Hue o usa variables `XTANCO_*`;
+2. rellena ahi Elgato, Hue y Telegram o usa variables `XTANCO_*`;
 3. arranca `node elgato-proxy.js`;
 4. abre `http://localhost:9124`.
 
@@ -65,6 +65,85 @@ Archivos de apoyo:
 - `xtanco-version.js` define `version` y `build` para `index.html` y `sw.js`.
 - `xtanco-runtime-config.js` es la configuracion segura para publicacion; el proxy local la sobreescribe en runtime.
 - `xtanco.config.local.json` queda fuera de git y evita exponer claves en Pages.
+
+## Telegram
+
+Admira XP v9.2 incluye puente bidireccional con Telegram desde el proxy local y una consola inferior 50/50:
+
+- el juego envia mensajes a Telegram via `POST /telegram/send`;
+- el bot lee mensajes con polling de la Bot API;
+- el juego consume instrucciones via `GET /telegram/commands` y responde con `/telegram/reply`.
+- la mitad izquierda de la franja inferior envia texto al bot;
+- la mitad derecha muestra enviados, recibidos y respuestas de AdmiraXPBot.
+- `/grok` y `/ask` conectan AdmiraXPBot con Grok via el proxy local, sin exponer la API key al navegador.
+
+Configuracion local:
+
+1. En Telegram abre `@BotFather`.
+2. Ejecuta `/newbot`, elige nombre y username, y copia el token.
+3. Escribe al bot desde el chat o grupo donde lo usaras.
+4. Copia `xtanco.config.example.json` a `xtanco.config.local.json`.
+5. Rellena:
+
+```json
+"telegram": {
+  "botToken": "TOKEN_DE_BOTFATHER",
+  "chatId": "CHAT_ID_O_GRUPO",
+  "allowedChatIds": ["CHAT_ID_O_GRUPO"],
+  "polling": true
+}
+```
+
+Tambien se puede configurar con variables:
+
+```bash
+export XTANCO_TELEGRAM_BOT_TOKEN="TOKEN_DE_BOTFATHER"
+export XTANCO_TELEGRAM_CHAT_ID="CHAT_ID_O_GRUPO"
+export XTANCO_TELEGRAM_ALLOWED_CHAT_IDS="CHAT_ID_O_GRUPO"
+node elgato-proxy.js
+```
+
+Para activar Grok añade tambien:
+
+```json
+"grok": {
+  "apiKey": "XAI_API_KEY",
+  "baseUrl": "https://api.x.ai/v1",
+  "model": "grok-4-latest"
+}
+```
+
+O usa variable de entorno:
+
+```bash
+export XAI_API_KEY="tu-api-key-de-xai"
+```
+
+Comandos soportados desde Telegram:
+
+- `/status`, `/staff`, `/stock`
+- `/hire 1`, `/hire dj`, `/hire all`
+- `/train 1`, `/train all`
+- `/restock 2`, `/restock all`, `/restock nombre`
+- `/ad 0`, `/ad 1`, `/ad 2`
+- `/visit com`, `/visit tec`, `/visit del`, `/visit gc`
+- `/weather normal`, `/weather rain`, `/weather sun`
+- `/time am`, `/time pm`, `/time night`
+- `/set money 12000`, `/money 12000`
+- `/set sat 90`, `/sat 90`
+- `/set fame 80`, `/fame 80`
+- `/set week 12`, `/set year 2`
+- `/set revenue 5000`
+- `/set storeLevel 2`
+- `/set customers 30`
+- `/song 1`, `/song bad bunny`
+- `/pause`, `/resume`, `/menu`
+- `/door open`, `/door close`, `/door auto`
+- `/lamp`, `/music`, `/next`, `/prev`, `/save`
+- `/say texto` muestra el texto como bocadillo del Store Manager en la tienda.
+- `/grok pregunta`, `/ask pregunta` consulta a Grok y muestra la respuesta en el panel del juego.
+- `/draw dibujo`, `/dibuja dibujo` pide a Grok un pixel art y lo pinta en la pantalla principal de la pared larga.
+- `/AdmiraLive texto` publica un mensaje en tiempo real en la pantalla LED de la pared larga; `/AdmiraLive off` lo limpia.
 
 ## Roadmap
 

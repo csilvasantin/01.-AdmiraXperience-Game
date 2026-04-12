@@ -16,5 +16,16 @@
       },
       enabled: true,
     },
+    telegram: {
+      proxyPort: 9124,
+      enabled: false,
+      polling: true,
+      defaultChatId: '',
+    },
+    grok: {
+      proxyPort: 9124,
+      enabled: false,
+      model: 'grok-4-latest',
+    },
   };
 })();

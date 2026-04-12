@@ -26,6 +26,28 @@
     .btn-save{background:#225522;color:#66ff66;border:1px solid #44cc44 !important}
     .btn-edit{background:#332255;color:#bb88ff;border:1px solid #8866cc !important}
     .btn-menu{background:#553311;color:#ffcc66;border:1px solid #cc9933 !important}
+    #telegramDock{display:none;position:fixed;left:0;bottom:0;height:116px;background:#030b12;border:2px solid #163c4a;border-bottom:none;color:#d9f7ff;font-family:monospace;z-index:30;gap:8px;padding:8px}
+    #telegramDock.show{display:flex}
+    .tg-pane{min-width:0;flex:1;display:flex;flex-direction:column;border:1px solid #1d5260;border-radius:6px;background:#06131d;overflow:hidden}
+    .tg-head{height:20px;flex:0 0 20px;display:flex;align-items:center;justify-content:space-between;padding:0 8px;background:#0b2230;color:#8defff;font-size:9px;font-weight:bold;text-transform:uppercase}
+    .tg-status{color:#9ec7d0;font-size:8px;font-weight:normal;text-transform:none}
+    #telegramComposer{flex:1;width:100%;resize:none;border:none;outline:none;background:#02080d;color:#e6fbff;padding:8px;font-family:monospace;font-size:12px;line-height:1.35}
+    #telegramComposer::placeholder{color:#57747c}
+    .tg-actions{height:28px;display:flex;gap:6px;padding:5px 6px;background:#071720;border-top:1px solid #14323c}
+    .tg-actions button{border:1px solid #2a7585;border-radius:6px;background:#0c2a35;color:#bff7ff;font-family:monospace;font-size:10px;font-weight:bold;padding:2px 8px;cursor:pointer}
+    .tg-actions button.primary{background:#14525f;color:#ffffff;border-color:#4ac6d8}
+    #telegramLog{flex:1;overflow:auto;padding:7px 8px;background:#02080d;font-size:10px;line-height:1.35;color:#cceef5;white-space:pre-wrap}
+    .tg-line{margin:0 0 5px 0;border-left:2px solid #25515b;padding-left:6px}
+    .tg-line.in{border-left-color:#52d37c;color:#dcffe6}
+    .tg-line.out{border-left-color:#5bc9ff;color:#dff6ff}
+    .tg-line.bot{border-left-color:#f0cc5b;color:#fff3c4}
+    .tg-line.err{border-left-color:#f05b5b;color:#ffd0d0}
+    @media (max-width:700px){
+      #telegramDock{height:142px;gap:5px;padding:5px}
+      #telegramComposer{font-size:11px}
+      .tg-head{font-size:8px}
+      #telegramLog{font-size:9px}
+    }
   </style>
 </head>
 <body>
@@ -63,17 +85,34 @@
 <video id="dsVideo" preload="auto" playsinline style="display:none"></video>
 <video id="bootVideo" preload="auto" playsinline webkit-playsinline style="display:none"></video>
 <canvas id="c" width="800" height="500"></canvas>
+<div id="telegramDock" aria-label="Telegram AdmiraXPBot">
+  <div class="tg-pane">
+    <div class="tg-head"><span>Enviar a Telegram</span><span class="tg-status" id="telegramSendStatus">AdmiraXPBot</span></div>
+    <textarea id="telegramComposer" placeholder="Escribe para @AdmiraXPBot... Enter envia, Shift+Enter salto"></textarea>
+    <div class="tg-actions">
+      <button class="primary" id="telegramSendBtn">Enviar</button>
+      <button id="telegramHelpBtn">/help</button>
+      <button id="telegramStatusBtn">/status</button>
+    </div>
+  </div>
+  <div class="tg-pane">
+    <div class="tg-head"><span>Conversacion</span><span class="tg-status" id="telegramConnStatus">conectando</span></div>
+    <div id="telegramLog"></div>
+  </div>
+</div>
 <div id="videoMonitor" style="display:none;position:absolute;overflow:hidden;border:2px solid #333;border-radius:2px;background:#000;z-index:5;pointer-events:none">
   <canvas id="dsCanvas1" width="160" height="90" style="display:block;width:100%;height:100%"></canvas>
+  <iframe id="admiraTube1" title="AdmiraTube 1" allow="autoplay; encrypted-media; picture-in-picture" referrerpolicy="strict-origin-when-cross-origin" style="display:none;position:absolute;inset:0;width:100%;height:100%;border:0"></iframe>
 </div>
 <div id="videoMonitor2" style="display:none;position:absolute;overflow:hidden;border:2px solid #333;border-radius:2px;background:#000;z-index:5;pointer-events:none">
   <canvas id="dsCanvas2" width="160" height="90" style="display:block;width:100%;height:100%"></canvas>
+  <iframe id="admiraTube2" title="AdmiraTube 2" allow="autoplay; encrypted-media; picture-in-picture" referrerpolicy="strict-origin-when-cross-origin" style="display:none;position:absolute;inset:0;width:100%;height:100%;border:0"></iframe>
 </div>
 <script src="xtanco-version.js"></script>
 <script src="xtanco-runtime-config.js"></script>
 <script>
 // ═══════════════════════════════════════════════════════════════
-//  ADMIRA XP // THE XPACE OS — XTANCO — v8.4 — 2026-04-12
+//  ADMIRA XP // THE XPACE OS — XTANCO — v9.3 — 2026-04-12
 // ═══════════════════════════════════════════════════════════════
 const cv=document.getElementById('c'), cx=cv.getContext('2d');
 cx.imageSmoothingEnabled=false;
@@ -136,13 +175,21 @@ const SFX=(()=>{
 function resizeCanvas(){
   const vw=window.innerWidth, vh=window.innerHeight;
   const barH=document.getElementById('topBar').classList.contains('show')?34:0;
-  const availH=vh-barH;
+  const dock=document.getElementById('telegramDock');
+  const telegramEnabled=!!(window.XTANCO_RUNTIME_CONFIG&&window.XTANCO_RUNTIME_CONFIG.telegram&&window.XTANCO_RUNTIME_CONFIG.telegram.enabled);
+  if(dock) dock.classList.toggle('show',telegramEnabled);
+  const dockH=(telegramEnabled&&dock)?dock.offsetHeight:0;
+  const availH=vh-barH-dockH;
   const ratio=W/H;
   let cw,ch;
   if(vw/availH > ratio){ ch=availH; cw=Math.floor(ch*ratio); }
   else { cw=vw; ch=Math.floor(cw/ratio); }
   cv.style.width=cw+'px';
   cv.style.height=ch+'px';
+  if(dock){
+    dock.style.width=cw+'px';
+    dock.style.left=Math.max(0,Math.floor((vw-cw)/2))+'px';
+  }
   const tb=document.getElementById('topBar');
   if(tb) tb.style.maxWidth=cw+'px';
   if(typeof repositionTopBarSub==='function') repositionTopBarSub();
@@ -197,6 +244,10 @@ function toggleMusic(){
 let videoPlaying=false, videoPaused=false, currentVideoId='';
 const videoEl=document.getElementById('videoMonitor');
 const videoEl2=document.getElementById('videoMonitor2');
+const admiraTube1=document.getElementById('admiraTube1');
+const admiraTube2=document.getElementById('admiraTube2');
+const dsCanvasEl1=document.getElementById('dsCanvas1');
+const dsCanvasEl2=document.getElementById('dsCanvas2');
 const dsC1=document.getElementById('dsCanvas1').getContext('2d');
 const dsC2=document.getElementById('dsCanvas2').getContext('2d');
 const dsVideoEl=document.getElementById('dsVideo');
@@ -207,6 +258,7 @@ let dsMode='slides'; // 'slides' | 'video'
 let dsAudioMuted=true; // DS audio starts muted
 let mgrDanceTimer=0; // Store Manager dances at start of each new video
 let mgrSongBubbleTimer=0; // Timer for "La canción que me gusta !!" bubble
+let managerSayBubble={text:'',timer:0}; // Telegram /say message for Store Manager
 
 // ── VIDEO LIST (like SONG_LIST for music) ──
 const VIDEO_LIST=[
@@ -274,6 +326,63 @@ function switchDSVideo(idx){
 
 function nextDSVideo(){ switchDSVideo(dsVideoIdx+1); }
 function prevDSVideo(){ switchDSVideo(dsVideoIdx-1); }
+
+function setManagerSayBubble(text){
+  const clean=String(text||'').replace(/\s+/g,' ').trim().slice(0,120);
+  if(!clean) return '';
+  managerSayBubble={text:clean,timer:420};
+  showEv('Store Manager: '+clean,'#55ccff');
+  return clean;
+}
+
+function extractYouTubeId(input){
+  const raw=String(input||'').trim();
+  if(/^[a-zA-Z0-9_-]{11}$/.test(raw)) return raw;
+  try{
+    const u=new URL(raw);
+    if(u.hostname.includes('youtu.be')) return u.pathname.split('/').filter(Boolean)[0]||'';
+    if(u.hostname.includes('youtube.com')||u.hostname.includes('youtube-nocookie.com')){
+      if(u.searchParams.get('v')) return u.searchParams.get('v');
+      const parts=u.pathname.split('/').filter(Boolean);
+      const marker=['embed','shorts','live'].find(m=>parts.includes(m));
+      if(marker) return parts[parts.indexOf(marker)+1]||'';
+    }
+  }catch(e){}
+  const m=raw.match(/(?:v=|youtu\.be\/|embed\/|shorts\/|live\/)([a-zA-Z0-9_-]{11})/);
+  return m?m[1]:'';
+}
+
+function admiraTubeEmbedUrl(videoId){
+  const params=new URLSearchParams({
+    autoplay:'1',
+    mute:'1',
+    loop:'1',
+    playlist:videoId,
+    playsinline:'1',
+    controls:'0',
+    rel:'0',
+    modestbranding:'1',
+  });
+  return 'https://www.youtube.com/embed/'+videoId+'?'+params.toString();
+}
+
+function syncAdmiraTubeFrames(){
+  const active=G&&G.admiraTube&&G.admiraTube.active&&G.admiraTube.videoId;
+  const src=active?admiraTubeEmbedUrl(G.admiraTube.videoId):'';
+  [admiraTube1,admiraTube2].forEach(frame=>{
+    if(!frame) return;
+    if(active){
+      if(frame.src!==src) frame.src=src;
+      frame.style.display='block';
+    } else {
+      frame.style.display='none';
+      if(frame.src) frame.src='';
+    }
+  });
+  [dsCanvasEl1,dsCanvasEl2].forEach(canvas=>{
+    if(canvas) canvas.style.display=active?'none':'block';
+  });
+}
 
 dsVideoEl.addEventListener('ended', ()=>{
   if(dsMode==='video' && videoPlaying && !videoPaused){
@@ -405,14 +514,18 @@ function positionDSOnLeftWall(el,rowT,rowB){
 }
 
 function updateVideoPosition(){
-  if(!videoPlaying||!G||state!==S.GAME){
-    videoEl.style.display='none';videoEl2.style.display='none';return;
+  const tubeActive=G&&G.admiraTube&&G.admiraTube.active;
+  if((!videoPlaying&&!tubeActive)||!G||state!==S.GAME){
+    videoEl.style.display='none';videoEl2.style.display='none';
+    syncAdmiraTubeFrames();
+    return;
   }
   positionDSOnLeftWall(videoEl, DS_SCREENS[0].rowT, DS_SCREENS[0].rowB);
   positionDSOnLeftWall(videoEl2,DS_SCREENS[1].rowT, DS_SCREENS[1].rowB);
   // Keep screens readable; the NPC dock now lives on the grass and no longer needs global dimming.
   const op='1';
   videoEl.style.opacity=op;videoEl2.style.opacity=op;
+  syncAdmiraTubeFrames();
 }
 
 function startVideo(){
@@ -606,10 +719,27 @@ function drawMobileControls(){
 const RUNTIME_CONFIG=(window.XTANCO_RUNTIME_CONFIG&&typeof window.XTANCO_RUNTIME_CONFIG==='object')?window.XTANCO_RUNTIME_CONFIG:{};
 const ELGATO_CONFIG=(RUNTIME_CONFIG.elgato&&typeof RUNTIME_CONFIG.elgato==='object')?RUNTIME_CONFIG.elgato:{};
 const HUE_CONFIG=(RUNTIME_CONFIG.hue&&typeof RUNTIME_CONFIG.hue==='object')?RUNTIME_CONFIG.hue:{};
+const TELEGRAM_CONFIG=(RUNTIME_CONFIG.telegram&&typeof RUNTIME_CONFIG.telegram==='object')?RUNTIME_CONFIG.telegram:{};
+const GROK_CONFIG=(RUNTIME_CONFIG.grok&&typeof RUNTIME_CONFIG.grok==='object')?RUNTIME_CONFIG.grok:{};
 const ELGATO={
   ip:typeof ELGATO_CONFIG.directIp==='string'?ELGATO_CONFIG.directIp:'',
   port:Number(ELGATO_CONFIG.directPort)||9123,
   proxyPort:Number(ELGATO_CONFIG.proxyPort)||9124,
+};
+const TELEGRAM={
+  enabled:!!TELEGRAM_CONFIG.enabled,
+  proxyPort:Number(TELEGRAM_CONFIG.proxyPort)||9124,
+  polling:TELEGRAM_CONFIG.polling!==false,
+  lastCommandId:0,
+  notify:0,
+  lastError:'',
+  lastState:'',
+  announcedGame:false,
+};
+const GROK={
+  enabled:!!GROK_CONFIG.enabled,
+  proxyPort:Number(GROK_CONFIG.proxyPort)||9124,
+  model:typeof GROK_CONFIG.model==='string'?GROK_CONFIG.model:'grok-4-latest',
 };
 let elgatoState={on:false,busy:false,notify:0,error:false,skyRed:false,manualOff:false}; // lamp starts OFF (auto-on at dusk)
 let monitorAlert={active:false,timer:0,msg:'',color:''};
@@ -1030,7 +1160,7 @@ function getClientLaunchLabel(client,index){
 // ── I18N ──────────────────────────────────────────────────────
 const LANGS={
   es:{
-    menuEyebrow:'THE XPACE OS',menuTitle:'ADMIRA XP',menuSub:'PLATAFORMA OPERATIVA MULTICLIENTE — v8.4',
+    menuEyebrow:'THE XPACE OS',menuTitle:'ADMIRA XP',menuSub:'PLATAFORMA OPERATIVA MULTICLIENTE — v9.2',
     menuDeck:'Catalogo vivo de experiencias por cliente',
     langPick:'SELECCIONA IDIOMA',menuStartBtn:'ABRIR CATALOGO XP',menuHint:'Xtanco ya esta en vivo. Loterias y Retail avanzan en la hoja de lanzamiento.',
     menuGuideBtn:'▶ MANUAL XP',menuSettingsBtn:'⚙ XPACE CONFIG',
@@ -1111,7 +1241,7 @@ const LANGS={
     modelStart:['€3.500','€2.800','€4.500','€6.000'],
   },
   en:{
-    menuEyebrow:'THE XPACE OS',menuTitle:'ADMIRA XP',menuSub:'MULTI-CLIENT OPERATIONS PLATFORM — v8.4',
+    menuEyebrow:'THE XPACE OS',menuTitle:'ADMIRA XP',menuSub:'MULTI-CLIENT OPERATIONS PLATFORM — v9.2',
     menuDeck:'Living catalog of client-based experiences',
     langPick:'SELECT LANGUAGE',menuStartBtn:'OPEN XP CATALOG',menuHint:'Xtanco is live. Lottery and Retail are moving through the launch pipeline.',
     menuGuideBtn:'▶ XP MANUAL',menuSettingsBtn:'⚙ XPACE CONFIG',
@@ -1651,6 +1781,7 @@ function initGame(){
     pauseData:null,
     doorOpen:0,
     doorAnim:0,
+    doorMode:'auto',
     gameTime:shopTimeSettings.openHour,
     dayEnded:false,
     lampIntensity:0,
@@ -1658,6 +1789,9 @@ function initGame(){
     tftParty:0,       // PARTY!! timer when manager touches customer
     tftStockIdx:-1,   // selected product showing on Admira screen (-1=none)
     tftStockTimer:0,  // how long to show product on Admira
+    tftGrokArt:null,  // Grok-generated pixel art for the main wall screen
+    admiraLiveMsg:'',
+    admiraTube:null,
     sfxVolume:0,
     weekHistory:[],
     holiday:{active:false,timer:0,name:''},
@@ -3287,6 +3421,8 @@ function updateGame(){
   else monitorAlert.active=false;
   if(G.tftOgre>0) G.tftOgre--;
   if(G.tftStockTimer>0){G.tftStockTimer--;}else{G.tftStockIdx=-1;}
+  if(G.tftGrokArt&&G.tftGrokArt.timer>0) G.tftGrokArt.timer--;
+  if(G.tftGrokArt&&G.tftGrokArt.timer<=0) G.tftGrokArt=null;
   // Fired staff walks to door and leaves
   for(const s of G.staff){
     if(!s.fired) continue;
@@ -3378,11 +3514,37 @@ function isNearDoorSensor(x,y,padX=72,padY=60){
 
 function shouldDoorBeOpen(){
   if(!G) return false;
+  if(G.doorMode==='open') return true;
+  if(G.doorMode==='close') return false;
   if(G.custs&&G.custs.some(c=>isNearDoorSensor(c.x,c.y))) return true;
   if(G.staff&&G.staff.some(s=>(s.fired||(s.hired&&s.isWalking))&&isNearDoorSensor(s.x,s.y))) return true;
   if(G.saca&&G.saca.phase!=='idle'&&isNearDoorSensor(G.saca.x,G.saca.y,96,72)) return true;
   if(G.thief&&G.thief.phase!=='idle'&&isNearDoorSensor(G.thief.x,G.thief.y,84,64)) return true;
   return false;
+}
+
+function setDoorMode(mode){
+  if(!G) return 'No hay partida en curso. Entra en una partida y vuelve a mandar el comando.';
+  const clean=String(mode||'').trim().toLowerCase();
+  if(['open','abrir','abierta','on'].includes(clean)){
+    G.doorMode='open';
+    G.doorOpen=9999;
+    SFX.doorBell();
+    showEv('Puerta abierta','#55ccff');
+    return 'Puerta abierta';
+  }
+  if(['close','cerrar','cerrada','off'].includes(clean)){
+    G.doorMode='close';
+    G.doorOpen=0;
+    showEv('Puerta cerrada','#55ccff');
+    return 'Puerta cerrada';
+  }
+  if(['auto','sensor','automatic','automatica','automática'].includes(clean)){
+    G.doorMode='auto';
+    showEv('Puerta en modo sensor','#55ccff');
+    return 'Puerta en modo sensor automático';
+  }
+  return 'Uso: /door open | /door close | /door auto';
 }
 
 function updateDoorAnimation(){
@@ -4584,7 +4746,7 @@ function drawMenu(){
       r(pbX,pbY,pbW,pbH,'#1a1a2a');r(pbX,pbY,(pbW*pct)|0,pbH,P.neon1);
     }
   }
-  cx.globalAlpha=0.3;tx('Admira XP // The Xpace OS · v8.4 · 2026-04-12',W/2,H-8,P.gray,6,'center');cx.globalAlpha=1;
+  cx.globalAlpha=0.3;tx('Admira XP // The Xpace OS · v9.2 · 2026-04-12',W/2,H-8,P.gray,6,'center');cx.globalAlpha=1;
 }
 
 // ── INTRO / HOW TO PLAY ───────────────────────────────────────
@@ -6623,13 +6785,16 @@ let ledUnifiedOffset=0;
 
 function _getLedParams(){
   const msgs=T().ledMsgs;
+  const admiraLive=(G&&G.admiraLiveMsg)
+    ? `  ◆  ADMIRA LIVE: ${G.admiraLiveMsg.toUpperCase()}  ◆  `
+    : '';
   const currentVideoMsg=(dsMode==='video' && videoPlaying && !videoPaused)
     ? (VIDEO_LED_MESSAGES[VIDEO_LIST[dsVideoIdx]] || `  ◆  VISITAS: AHORA SUENA ${VIDEO_LIST[dsVideoIdx].toUpperCase()}  ◆  `)
     : '';
   const liveData=(state===S.GAME||state===S.PAUSE)
     ? `  ◈  ${T().customers}: ${G?G.customersToday:0}  ◈  ${T().satisfaction}: ${G?(G.satisfaction|0):0}%  ◈  ${T().fame}: ${G?(G.fame|0):0}%  ◈  `
     : '  ◈  ';
-  const fullMsg=currentVideoMsg+msgs.join('   ◆   ')+liveData;
+  const fullMsg=admiraLive+currentVideoMsg+msgs.join('   ◆   ')+liveData;
   cx.font='bold 9px monospace';
   const msgW=cx.measureText(fullMsg).width;
   return {fullMsg, msgW};
@@ -6704,6 +6869,91 @@ function drawBackWallLED(){
   // Now handled inside drawLED() as unified banner — this is a no-op
 }
 
+function setTftGrokArt(art){
+  if(!G) return 'No hay partida en curso. Entra en una partida y vuelve a mandar el comando.';
+  if(!art||!Array.isArray(art.palette)||!Array.isArray(art.pixels)) return 'Grok no devolvió un dibujo válido.';
+  const palette=art.palette.map(c=>String(c||'').trim()).filter(c=>/^#[0-9a-fA-F]{6}$/.test(c)).slice(0,16);
+  const pixels=art.pixels.map(row=>String(row||'').trim()).filter(Boolean).slice(0,18);
+  if(!palette.length||pixels.length<8) return 'Grok no devolvió suficientes píxeles.';
+  const width=Math.min(32,Math.max(...pixels.map(r=>r.length)));
+  const normalized=pixels.map(row=>row.padEnd(width,'0').slice(0,width));
+  const ink=normalized.join('').split('').filter(ch=>ch!=='0').length;
+  if(ink<40) return 'Grok devolvió un dibujo demasiado vacío. Prueba otra descripción.';
+  G.tftGrokArt={
+    title:String(art.title||'GROK ART').replace(/\s+/g,' ').trim().slice(0,28),
+    prompt:String(art.prompt||'').replace(/\s+/g,' ').trim().slice(0,80),
+    palette,
+    pixels:normalized,
+    width,
+    height:normalized.length,
+    timer:1800,
+  };
+  showEv('Grok pinta la pantalla principal','#55ccff');
+  return 'Dibujo pintado en la pantalla principal: '+G.tftGrokArt.title;
+}
+
+function makeFallbackGrokArt(prompt,title){
+  const p=String(prompt||'').toLowerCase();
+  const rows=Array.from({length:18},()=>Array(32).fill('0'));
+  function box(x,y,w,h,ch){
+    for(let yy=Math.max(0,y);yy<Math.min(18,y+h);yy++)
+      for(let xx=Math.max(0,x);xx<Math.min(32,x+w);xx++) rows[yy][xx]=ch;
+  }
+  function pix(x,y,ch){if(x>=0&&x<32&&y>=0&&y<18) rows[y][x]=ch;}
+  // Neon store base
+  box(3,12,26,4,'3');box(5,10,22,2,'4');box(7,8,18,2,'5');box(13,12,6,4,'1');
+  for(let x=4;x<28;x+=3) pix(x,11,'6');
+  for(let x=2;x<30;x++) pix(x,16,'2');
+  if(p.includes('cohete')||p.includes('rocket')){
+    box(15,2,2,7,'1');box(14,4,4,3,'2');pix(15,1,'1');pix(16,1,'1');pix(14,8,'7');pix(17,8,'7');
+    box(14,9,4,2,'8');pix(13,10,'8');pix(18,10,'8');
+  } else if(p.includes('robot')){
+    box(13,3,6,5,'2');box(12,8,8,5,'1');pix(14,5,'8');pix(17,5,'8');box(15,10,2,1,'8');
+  } else if(p.includes('corazon')||p.includes('corazón')||p.includes('heart')){
+    box(12,4,3,3,'8');box(17,4,3,3,'8');box(11,6,10,3,'8');box(13,9,6,2,'8');box(15,11,2,1,'8');
+  } else {
+    box(11,3,10,6,'2');box(13,5,6,2,'1');box(10,8,12,2,'8');
+  }
+  return {
+    title:String(title||'GROK ART').slice(0,24),
+    prompt:String(prompt||'fallback').slice(0,80),
+    palette:['#02040a','#ffffff','#1d8cff','#263238','#ffcc33','#ff3b6b','#55e6c1','#ff7a1a','#ff2bd6'],
+    pixels:rows.map(r=>r.join('')),
+  };
+}
+
+function drawTftGrokArt(art,vW,vH){
+  cx.fillStyle='#030711';cx.fillRect(0,0,vW,vH);
+  const grd=cx.createLinearGradient(0,0,vW,vH);
+  grd.addColorStop(0,'rgba(85,204,255,0.18)');
+  grd.addColorStop(0.55,'rgba(255,255,255,0.02)');
+  grd.addColorStop(1,'rgba(255,120,180,0.13)');
+  cx.fillStyle=grd;cx.fillRect(0,0,vW,vH);
+  const pxW=art.width||32,pxH=art.height||18;
+  const marginX=8,marginTop=12,marginBottom=15;
+  const cell=Math.max(1,Math.floor(Math.min((vW-marginX*2)/pxW,(vH-marginTop-marginBottom)/pxH)));
+  const artW=cell*pxW,artH=cell*pxH;
+  const startX=Math.floor((vW-artW)/2),startY=marginTop+Math.floor((vH-marginTop-marginBottom-artH)/2);
+  for(let y=0;y<pxH;y++){
+    const row=art.pixels[y]||'';
+    for(let x=0;x<pxW;x++){
+      const idx=parseInt(row[x]||'0',36);
+      const col=art.palette[idx%art.palette.length]||'#000000';
+      cx.fillStyle=col;
+      cx.fillRect(startX+x*cell,startY+y*cell,cell,cell);
+    }
+  }
+  cx.globalAlpha=0.12;
+  for(let y=0;y<vH;y+=3){cx.fillStyle='#ffffff';cx.fillRect(0,y,vW,1);}
+  cx.globalAlpha=1;
+  cx.textAlign='center';
+  cx.fillStyle='#8defff';cx.font='bold 7px monospace';
+  cx.fillText('GROK LIVE DRAW',vW/2,8);
+  cx.fillStyle='#ffffff';cx.font='bold 8px monospace';
+  cx.fillText(art.title||'GROK ART',vW/2,vH-5);
+  cx.textAlign='left';
+}
+
 // ── ALTADIS TFT (big screen below LED, centered on left wall) ─
 function drawAltadisTFT(){
   // Draw as a flat parallelogram on the BACK WALL (row=0), above 2nd window (col~6), 16:9
@@ -6774,7 +7024,9 @@ function drawAltadisTFT(){
   const cX=vW/2, cY=vH/2;
   const sH=vH;
 
-  if(G&&G.tftParty>0){
+  if(G&&G.tftGrokArt){
+    drawTftGrokArt(G.tftGrokArt,vW,vH);
+  } else if(G&&G.tftParty>0){
     // ── PARTY!! on Admira screen — show DS artist ──
     const flash=Math.sin(tt*0.15)>0;
     cx.fillStyle=flash?'#ff22aa':'#aa1188';cx.fillRect(0,0,vW,vH);
@@ -7871,7 +8123,30 @@ function drawIsoStaff(s){
   for(let i=0;i<s.level;i++){tx('★',s.x-3+i*8,s.y+38,'#cc9900',7);}
   // Speech bubble
   const djActive=G&&G.staff&&G.staff.some(st=>st.hired&&st.role===4);
-  if(djActive){
+  if(isPlayer&&managerSayBubble.timer>0){
+    managerSayBubble.timer--;
+    const words=managerSayBubble.text.split(/\s+/);
+    const lines=[];
+    let line='';
+    words.forEach(w=>{
+      const next=line?line+' '+w:w;
+      if(next.length>24&&line){lines.push(line);line=w;}
+      else line=next;
+    });
+    if(line) lines.push(line);
+    const shown=lines.slice(0,4);
+    if(lines.length>4) shown[3]=shown[3].slice(0,21)+'...';
+    const maxLen=Math.max(12,...shown.map(l=>l.length));
+    const bw=Math.min(230,maxLen*5+22),bh=12+shown.length*9;
+    const bx2=Math.max(4,Math.min(W-bw-4,s.x+7-bw/2));
+    const by2=Math.max(6,s.y-32-bh);
+    const tailX=Math.max(bx2+8,Math.min(bx2+bw-12,s.x+7));
+    r(bx2,by2,bw,bh,'#f7fbffee');rx(bx2,by2,bw,bh,'#55ccff',1.5);
+    cx.fillStyle='#f7fbffee';
+    cx.beginPath();cx.moveTo(tailX-4,by2+bh);cx.lineTo(tailX+6,by2+bh);cx.lineTo(s.x+7,by2+bh+7);cx.closePath();cx.fill();
+    rx(bx2,by2,bw,bh,'#55ccff',1.5);
+    shown.forEach((l,i)=>tx(l,bx2+bw/2,by2+10+i*9,'#12313a',7,'center'));
+  } else if(djActive){
     // DJ mode: always show "Altadis Party!!" bubble
     const msg='Altadis Party!!';
     const bw=msg.length*6+8,bh=14,bx2=s.x+7-bw/2,by2=s.y-24;
@@ -9743,6 +10018,501 @@ window.xtAPI = (function(){
 
   console.log('%c🎮 xtAPI loaded — CLI bridge ready','color:#00ffcc;font-size:14px;font-weight:bold');
   return api;
+})();
+
+// ═══════════════════════════════════════════════════════════════
+//  Telegram bridge — bidirectional local bot control
+// ═══════════════════════════════════════════════════════════════
+(function(){
+  const dock=document.getElementById('telegramDock');
+  const composer=document.getElementById('telegramComposer');
+  const sendBtn=document.getElementById('telegramSendBtn');
+  const helpBtn=document.getElementById('telegramHelpBtn');
+  const statusBtn=document.getElementById('telegramStatusBtn');
+  const logEl=document.getElementById('telegramLog');
+  const sendStatus=document.getElementById('telegramSendStatus');
+  const connStatus=document.getElementById('telegramConnStatus');
+
+  function setTelegramUiStatus(text,isError){
+    if(sendStatus) sendStatus.textContent=text;
+    if(connStatus){
+      connStatus.textContent=text;
+      connStatus.style.color=isError?'#ffb6b6':'#9ec7d0';
+    }
+  }
+
+  function appendTelegramLog(kind,label,text){
+    if(!logEl) return;
+    const row=document.createElement('div');
+    row.className='tg-line '+kind;
+    const time=new Date().toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});
+    row.textContent='['+time+'] '+label+'\n'+String(text||'');
+    logEl.appendChild(row);
+    while(logEl.children.length>80) logEl.removeChild(logEl.firstChild);
+    logEl.scrollTop=logEl.scrollHeight;
+  }
+
+  if(dock){
+    ['keydown','keyup','keypress','mousedown','mouseup','click','touchstart','touchend','wheel'].forEach(ev=>{
+      dock.addEventListener(ev,e=>e.stopPropagation(),{passive:false});
+    });
+  }
+
+  if(!TELEGRAM.enabled){
+    setTelegramUiStatus('sin configurar',true);
+    appendTelegramLog('err','Sistema','Telegram no esta configurado en xtanco.config.local.json');
+    console.log('%cTelegram bridge disabled — configure XTANCO_TELEGRAM_BOT_TOKEN','color:#8899aa');
+    return;
+  }
+  setTelegramUiStatus('conectado',false);
+  appendTelegramLog('bot','AdmiraXPBot','Puente local conectado. Escribe /help o /status.');
+
+  function telegramUrl(path){
+    return `http://localhost:${TELEGRAM.proxyPort}${path}`;
+  }
+
+  async function telegramFetch(path,opts){
+    const res=await fetch(telegramUrl(path),opts);
+    const json=await res.json().catch(()=>({ok:false,error:'Invalid JSON'}));
+    if(!res.ok||json.error) throw new Error(json.message||json.error||('HTTP '+res.status));
+    return json;
+  }
+
+  async function telegramSend(text){
+    if(!text) return {ok:false,message:'Mensaje vacio'};
+    try{
+      const out=await telegramFetch('/telegram/send',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({text:String(text).slice(0,3900)})
+      });
+      TELEGRAM.notify=120;TELEGRAM.lastError='';
+      setTelegramUiStatus('enviado #'+(out.data&&out.data.messageId?out.data.messageId:out.messageId||''),false);
+      return {ok:true,message:'Enviado a Telegram',data:out};
+    }catch(e){
+      TELEGRAM.notify=120;TELEGRAM.lastError=e.message;
+      setTelegramUiStatus('error',true);
+      appendTelegramLog('err','Error',e.message);
+      return {ok:false,message:e.message};
+    }
+  }
+
+  async function telegramReply(cmd,text){
+    try{
+      await telegramFetch('/telegram/reply',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          chatId:cmd.chatId,
+          replyToMessageId:cmd.telegramMessageId,
+          text:String(text).slice(0,3900)
+        })
+      });
+      TELEGRAM.notify=120;TELEGRAM.lastError='';
+      setTelegramUiStatus('respondido',false);
+    }catch(e){
+      TELEGRAM.notify=120;TELEGRAM.lastError=e.message;
+      setTelegramUiStatus('error',true);
+      appendTelegramLog('err','Error',e.message);
+    }
+  }
+
+  async function grokAsk(prompt){
+    const clean=String(prompt||'').trim();
+    if(!clean) return 'Uso: /grok pregunta';
+    if(!GROK.enabled) return 'Grok no está configurado. Añade XAI_API_KEY o grok.apiKey en xtanco.config.local.json y reinicia el proxy.';
+    try{
+      const out=await telegramFetch('/grok/ask',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          prompt:clean,
+          context:formatStatus()
+        })
+      });
+      const answer=String(out.text||'').trim();
+      if(answer) setManagerSayBubble(answer);
+      return 'Grok ('+(out.model||GROK.model)+'):\n'+(answer||'Sin respuesta');
+    }catch(e){
+      return 'Error Grok: '+e.message;
+    }
+  }
+
+  function parseGrokArtJson(text){
+    const raw=String(text||'').trim();
+    const fenced=raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    const candidate=fenced?fenced[1]:raw;
+    const start=candidate.indexOf('{');
+    const end=candidate.lastIndexOf('}');
+    if(start<0||end<=start) throw new Error('Grok no devolvió JSON de dibujo');
+    return JSON.parse(candidate.slice(start,end+1));
+  }
+
+  async function grokDraw(prompt){
+    const clean=String(prompt||'').trim();
+    if(!clean) return 'Uso: /draw describe el dibujo';
+    if(!GROK.enabled) return 'Grok no está configurado. Añade XAI_API_KEY o grok.apiKey en xtanco.config.local.json y reinicia el proxy.';
+    const artPrompt=[
+      'Crea un pixel art para la pantalla principal de una tienda retro.',
+      'Devuelve SOLO JSON válido, sin markdown, sin explicación.',
+      'Formato exacto: {"title":"max 24 chars","prompt":"resumen","palette":["#000000","#ffffff"],"pixels":["000111..."]}.',
+      'Usa una paleta de 2 a 10 colores hex #RRGGBB.',
+      'pixels debe tener exactamente 18 strings de exactamente 32 caracteres.',
+      'Cada caracter es un índice base36 de la paleta: 0-9,A-Z.',
+      'El índice 0 es fondo. Debe haber al menos 140 caracteres diferentes de 0.',
+      'No dejes filas completamente vacías salvo las dos primeras o las dos últimas.',
+      'Usa silueta clara, bordes y relleno. El dibujo debe reconocerse en tamaño pequeño.',
+      'Dibujo pedido: '+clean
+    ].join('\n');
+    try{
+      const out=await telegramFetch('/grok/ask',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          prompt:artPrompt,
+          context:'Genera solamente JSON para renderizar pixel art en un canvas 32x18.'
+        })
+      });
+      const art=parseGrokArtJson(out.text);
+      let result=setTftGrokArt(art);
+      if(result.includes('demasiado vacío')){
+        result=setTftGrokArt(makeFallbackGrokArt(clean,art.title||clean));
+        result+=' (Grok envió poco pixel; he usado interpretación visible.)';
+      }
+      setManagerSayBubble('He pintado: '+((G&&G.tftGrokArt&&G.tftGrokArt.title)||clean));
+      return result;
+    }catch(e){
+      return 'Error dibujando con Grok: '+e.message;
+    }
+  }
+
+  function fmtMoney(n){return Math.round(Number(n)||0).toLocaleString('es-ES')+'€';}
+
+  function formatStatus(){
+    const s=window.xtAPI.status();
+    if(!s.ok) return s.message;
+    const d=s.data;
+    const weather=(G&&G.weather&&G.weather.type)?G.weather.type:'normal';
+    const hour=G&&G.gameTime!=null?(Math.floor(G.gameTime)+':'+String(Math.floor((G.gameTime%1)*60)).padStart(2,'0')):'n/a';
+    return [
+      'Admira XP',
+      'Estado: '+d.state,
+      'Caja: '+fmtMoney(d.money),
+      'Semana: '+d.week+' / Año '+d.year+'/'+d.totalYears,
+      'Ingresos año: '+fmtMoney(d.yearRevenue)+' / '+fmtMoney(d.yearTarget),
+      'Satisfacción: '+Math.round(d.satisfaction)+'%',
+      'Fama: '+Math.round(d.fame)+'%',
+      'Nivel tienda: '+d.storeLevel,
+      'Clientes hoy: '+d.customersToday,
+      'Hora tienda: '+hour,
+      'Clima: '+weather,
+      'Puerta: '+(G&&G.doorMode?G.doorMode:'auto'),
+      'AdmiraLive: '+(G&&G.admiraLiveMsg?G.admiraLiveMsg:'off'),
+      'Lámpara: '+(elgatoState.on?'ON':'OFF'),
+      'AC: '+(acOn?'ON':'OFF'),
+      'Aroma: '+(aromaOn?'ON':'OFF'),
+      'Equipo: '+d.staffCount+'/'+d.staffTotal,
+      'Música: '+d.nowPlaying
+    ].join('\n');
+  }
+
+  function needsGame(){
+    if(!G) return 'No hay partida en curso. Entra en una partida y vuelve a mandar el comando.';
+    return '';
+  }
+
+  function parseNumberArg(value){
+    const n=Number(String(value||'').replace('%','').replace('€','').replace(',','.').trim());
+    return Number.isFinite(n)?n:null;
+  }
+
+  function clampNumber(n,min,max){
+    return Math.max(min,Math.min(max,n));
+  }
+
+  function setSong(arg){
+    const err=needsGame();if(err)return err;
+    const raw=String(arg||'').trim();
+    if(!raw) return 'Uso: /song numero o /song nombre';
+    let idx=-1;
+    if(/^\d+$/.test(raw)) idx=Number(raw);
+    else idx=SONG_LIST.findIndex(s=>s.toLowerCase().includes(raw.toLowerCase()));
+    if(idx<0||idx>=SONG_LIST.length) return 'Canción no encontrada. Opciones: '+SONG_LIST.map((s,i)=>i+': '+s).join(' | ');
+    const song=SONG_LIST[idx];
+    G.nowPlaying=song;shopTimeSettings.nowPlaying=song;
+    if(SONG_FILES[song]){bgMusic.src=SONG_FILES[song];bgMusic.play().catch(()=>{});}
+    showEv('♪ '+song,'#cc99dd');
+    return 'Música cambiada: '+song;
+  }
+
+  function setAdmiraLive(arg){
+    const err=needsGame();if(err)return err;
+    const clean=String(arg||'').replace(/\s+/g,' ').trim();
+    if(!clean) return 'Uso: /AdmiraLive texto o /AdmiraLive off';
+    if(['off','stop','clear','limpiar','borrar'].includes(clean.toLowerCase())){
+      G.admiraLiveMsg='';
+      showEv('AdmiraLive desactivado','#55ccff');
+      return 'AdmiraLive desactivado';
+    }
+    G.admiraLiveMsg=clean.slice(0,120);
+    ledUnifiedOffset=0;
+    showEv('AdmiraLive en LED','#55ccff');
+    setManagerSayBubble('AdmiraLive: '+G.admiraLiveMsg);
+    return 'AdmiraLive en pantalla LED: '+G.admiraLiveMsg;
+  }
+
+  function setGameField(field,value){
+    const err=needsGame();if(err)return err;
+    const key=String(field||'').toLowerCase();
+    const n=parseNumberArg(value);
+    if(n===null) return 'Valor no válido para '+field;
+    if(key==='money'||key==='cash'||key==='caja'){
+      G.money=Math.max(0,Math.round(n));updateBars();return 'Caja actualizada: '+fmtMoney(G.money);
+    }
+    if(key==='yearrevenue'||key==='revenue'||key==='ingresos'){
+      G.yearRevenue=Math.max(0,Math.round(n));return 'Ingresos año actualizados: '+fmtMoney(G.yearRevenue);
+    }
+    if(key==='satisfaction'||key==='sat'||key==='satisfaccion'){
+      G.satisfaction=clampNumber(n,0,100);updateBars();return 'Satisfacción actualizada: '+Math.round(G.satisfaction)+'%';
+    }
+    if(key==='fame'||key==='fama'){
+      G.fame=clampNumber(n,0,100);return 'Fama actualizada: '+Math.round(G.fame)+'%';
+    }
+    if(key==='week'||key==='semana'){
+      G.week=clampNumber(Math.round(n),1,52);return 'Semana actualizada: '+G.week;
+    }
+    if(key==='year'||key==='ano'||key==='año'){
+      G.year=clampNumber(Math.round(n),1,CFG.TOTAL_YEARS);return 'Año actualizado: '+G.year;
+    }
+    if(key==='storelevel'||key==='level'||key==='nivel'){
+      G.storeLevel=clampNumber(Math.round(n),1,2);return 'Nivel de tienda actualizado: '+G.storeLevel;
+    }
+    if(key==='customerstoday'||key==='customers'||key==='clientes'){
+      G.customersToday=Math.max(0,Math.round(n));updateBars();return 'Clientes hoy actualizado: '+G.customersToday;
+    }
+    if(key==='time'||key==='hora'){
+      G.gameTime=clampNumber(n,0,24);return 'Hora de tienda actualizada: '+G.gameTime.toFixed(2);
+    }
+    return 'Campo no reconocido: '+field+'. Usa money, revenue, sat, fame, week, year, storeLevel, customers, time.';
+  }
+
+  function formatStaff(){
+    const res=window.xtAPI.staff();
+    if(!res.ok) return res.message;
+    return res.data.map(s=>[
+      '#'+s.slot,
+      s.name,
+      s.role,
+      s.hired?'ON':'libre',
+      'LVL '+s.level,
+      'E '+Math.round(s.energy)+'%',
+      'M '+Math.round(s.morale)+'%'
+    ].join(' · ')).join('\n');
+  }
+
+  function formatStock(){
+    const res=window.xtAPI.stock();
+    if(!res.ok) return res.message;
+    return res.data.map(p=>'#'+p.slot+' '+p.name+': '+p.stock+'/'+p.max+' ('+p.pct+'%)').join('\n');
+  }
+
+  function commandHelp(){
+    return [
+      'Comandos Admira XP:',
+      '/status',
+      '/staff',
+      '/stock',
+      '/hire 1 | /hire dj | /hire all',
+      '/train 1 | /train all',
+      '/restock 2 | /restock all | /restock nombre',
+      '/ad 0|1|2',
+      '/visit com|tec|del|gc',
+      '/weather normal|rain|sun',
+      '/time am|pm|night',
+      '/set money 12000 | /money 12000',
+      '/set sat 90 | /sat 90',
+      '/set fame 80 | /fame 80',
+      '/set week 12 | /set year 2',
+      '/set revenue 5000',
+      '/set storeLevel 2',
+      '/set customers 30',
+      '/song 1 | /song bad bunny',
+      '/pause | /resume | /menu',
+      '/door open | /door close | /door auto',
+      '/lamp',
+      '/music | /next | /prev',
+      '/save',
+      '/say texto',
+      '/grok pregunta | /ask pregunta',
+      '/draw dibujo | /dibuja dibujo',
+      '/AdmiraLive texto | /AdmiraLive off'
+    ].join('\n');
+  }
+
+  async function executeTelegramText(rawText){
+    const text=String(rawText||'').trim();
+    if(!text) return 'Comando vacio';
+    const parts=text.replace(/^\/([a-zA-Z0-9_]+)@\w+/,'/$1').split(/\s+/);
+    const cmd=parts.shift().replace(/^\//,'').toLowerCase();
+    const arg=parts.join(' ').trim();
+    const api=window.xtAPI;
+
+    try{
+      if(cmd==='start'||cmd==='help') return commandHelp();
+      if(cmd==='status') return formatStatus();
+      if(cmd==='staff') return formatStaff();
+      if(cmd==='stock') return formatStock();
+      if(cmd==='set'){
+        const setParts=arg.split(/\s+/);
+        const field=setParts.shift();
+        return setGameField(field,setParts.join(' '));
+      }
+      if(['money','cash','caja','revenue','ingresos','sat','satisfaction','satisfaccion','fame','fama','week','semana','year','ano','año','storelevel','level','nivel','customers','clientes','time','hora'].includes(cmd)){
+        return setGameField(cmd,arg);
+      }
+      if(cmd==='song'||cmd==='track') return setSong(arg);
+      if(cmd==='admiralive'||cmd==='live'||cmd==='led') return setAdmiraLive(arg);
+      if(cmd==='pause'){
+        const err=needsGame();if(err)return err;
+        state=S.PAUSE;return 'Juego pausado';
+      }
+      if(cmd==='resume'||cmd==='game'){
+        const err=needsGame();if(err)return err;
+        state=S.GAME;return 'Juego reanudado';
+      }
+      if(cmd==='menu'){
+        startTransition(S.MENU);return 'Volviendo al menú';
+      }
+      if(cmd==='hire'){
+        if(arg==='all') return api.hireAll().message;
+        if(/^\d+$/.test(arg)) return api.hire(Number(arg)).message;
+        return api.hireByRole(arg||'dj').message;
+      }
+      if(cmd==='train'){
+        if(arg==='all') return api.trainAll().message;
+        return api.train(Number(arg||0)).message;
+      }
+      if(cmd==='restock'||cmd==='rest'){
+        if(arg==='all') return api.restockAll().message;
+        if(/^\d+$/.test(arg)) return api.restock(Number(arg)).message;
+        return api.restockByName(arg).message;
+      }
+      if(cmd==='ad'||cmd==='advertise') return api.advertise(Number(arg||0)).message;
+      if(cmd==='upgrade') return api.upgrade().message;
+      if(cmd==='visit'){
+        const map={com:'Com',tec:'Tec',del:'Del',gc:'GC'};
+        return api.visit(map[arg.toLowerCase()]||arg).message;
+      }
+      if(cmd==='weather'){
+        const err=needsGame();if(err)return err;
+        const map={normal:'weather_0',rain:'weather_1',lluvia:'weather_1',storm:'weather_1',sun:'weather_2',sol:'weather_2'};
+        const id=map[arg.toLowerCase()]||'weather_0';
+        doAction(id);
+        return 'Tiempo actualizado: '+(arg||'normal');
+      }
+      if(cmd==='time'||cmd==='hora'){
+        const err=needsGame();if(err)return err;
+        const map={am:'time_am',morning:'time_am',mañana:'time_am',pm:'time_pm',tarde:'time_pm',night:'time_night',noche:'time_night'};
+        const normalized=arg.toLowerCase();
+        if(map[normalized]){
+          doAction(map[normalized]);
+          return 'Hora de tienda actualizada: '+(arg||'pm');
+        }
+        return setGameField('time',arg);
+      }
+      if(cmd==='door'||cmd==='puerta') return setDoorMode(arg);
+      if(cmd==='lamp'||cmd==='luz') return api.toggleLamp().message;
+      if(cmd==='music'||cmd==='musica') return api.toggleMusic().message;
+      if(cmd==='next') return api.nextTrack().message;
+      if(cmd==='prev') return api.prevTrack().message;
+      if(cmd==='save') return api.save().message;
+      if(cmd==='say'){
+        if(!arg) return 'Uso: /say texto';
+        const err=needsGame();if(err)return err;
+        const said=setManagerSayBubble(arg);
+        return 'Bocadillo del Store Manager: '+said;
+      }
+      if(cmd==='grok'||cmd==='ask'||cmd==='pregunta') return await grokAsk(arg);
+      if(cmd==='draw'||cmd==='dibuja'||cmd==='paint'||cmd==='pinta') return await grokDraw(arg);
+      return 'No entiendo "'+cmd+'". Usa /help';
+    }catch(e){
+      return 'Error ejecutando comando: '+e.message;
+    }
+  }
+
+  async function pollTelegramCommands(){
+    if(!TELEGRAM.polling) return;
+    try{
+      const data=await telegramFetch('/telegram/commands?since='+TELEGRAM.lastCommandId+'&limit=10');
+      if(Array.isArray(data.commands)){
+        for(const cmd of data.commands){
+          TELEGRAM.lastCommandId=Math.max(TELEGRAM.lastCommandId,cmd.id);
+          appendTelegramLog('in',(cmd.from||'Telegram'),cmd.text);
+          const answer=await executeTelegramText(cmd.text);
+          appendTelegramLog('bot','AdmiraXPBot',answer);
+          await telegramReply(cmd,answer);
+          if(typeof showEv==='function') showEv('Telegram: '+cmd.text,'#55ccff');
+        }
+      }
+      TELEGRAM.lastError='';
+    }catch(e){
+      TELEGRAM.lastError=e.message;
+      setTelegramUiStatus('error',true);
+    }
+  }
+
+  function monitorGameForTelegram(){
+    const current=state;
+    const prev=TELEGRAM.lastState;
+    if(current!==TELEGRAM.lastState){
+      TELEGRAM.lastState=current;
+      if(current!==S.GAME) TELEGRAM.announcedGame=false;
+    }
+    if(current===S.GAME&&G&&!TELEGRAM.announcedGame){
+      TELEGRAM.announcedGame=true;
+      telegramSend('Admira XP conectada.\n'+formatStatus());
+    }
+    if(current===S.GAME_END&&G&&prev!==S.GAME_END){
+      telegramSend('Admira XP ha terminado.\n'+formatStatus());
+    }
+  }
+
+  window.xtAPI.telegramSend=telegramSend;
+  window.xtAPI.telegramStatus=function(){return {ok:true,message:'Telegram bridge',data:{enabled:TELEGRAM.enabled,lastCommandId:TELEGRAM.lastCommandId,lastError:TELEGRAM.lastError}};};
+
+  async function sendComposerText(text){
+    const clean=String(text||'').trim();
+    if(!clean) return;
+    appendTelegramLog('out','Juego',clean);
+    if(clean.startsWith('/')){
+      const answer=await executeTelegramText(clean);
+      appendTelegramLog('bot','AdmiraXPBot',answer);
+      await telegramSend('Juego: '+clean+'\nAdmiraXPBot: '+answer);
+      if(composer) composer.value='';
+      return;
+    }
+    const result=await telegramSend(clean);
+    if(result.ok&&composer) composer.value='';
+  }
+
+  if(sendBtn) sendBtn.addEventListener('click',()=>sendComposerText(composer&&composer.value));
+  if(helpBtn) helpBtn.addEventListener('click',()=>sendComposerText('/help'));
+  if(statusBtn) statusBtn.addEventListener('click',()=>sendComposerText('/status'));
+  if(composer){
+    composer.addEventListener('keydown',e=>{
+      if(e.key==='Enter'&&!e.shiftKey){
+        e.preventDefault();
+        sendComposerText(composer.value);
+      }
+    });
+  }
+
+  setInterval(pollTelegramCommands,2500);
+  setInterval(monitorGameForTelegram,3000);
+  telegramSend('Admira XP v9.2 online. Usa /help para ver comandos.').then(res=>{
+    appendTelegramLog(res.ok?'bot':'err','AdmiraXPBot',res.ok?'Online enviado a Telegram':res.message);
+  });
+  console.log('%cTelegram bridge ready — game <-> bot','color:#55ccff;font-size:14px;font-weight:bold');
 })();
 </script>
 </body>

@@ -12,5 +12,17 @@
       "comedor": 8
     },
     "enabled": true
+  },
+  "telegram": {
+    "botToken": "replace-with-botfather-token",
+    "chatId": "replace-with-chat-id",
+    "allowedChatIds": ["replace-with-chat-id"],
+    "polling": true
+  },
+  "grok": {
+    "apiKey": "replace-with-xai-api-key",
+    "baseUrl": "https://api.x.ai/v1",
+    "model": "grok-4-latest",
+    "systemPrompt": "Eres AdmiraXPBot dentro del juego Admira XP. Responde en español, de forma útil y breve. Si recibes estado del juego, úsalo como contexto."
   }
 }
