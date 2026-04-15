@@ -271,9 +271,14 @@ let dsFrame=0;
 let dsVideoIdx=0; // current video index
 let dsMode='slides'; // 'slides' | 'video'
 let dsAudioMuted=true; // DS audio starts muted
+let dsAudioOwner=0; // 0 or 1: which screen owns audio when enabled
 let mgrDanceTimer=0; // Store Manager dances at start of each new video
 let mgrSongBubbleTimer=0; // Timer for "La canción que me gusta !!" bubble
 let managerSayBubble={text:'',timer:0}; // Telegram /say message for Store Manager
+const DS_DISPLAYS=[
+  {monitorEl:videoEl, frameEl:admiraTube1, canvasEl:dsCanvasEl1, ctx:dsC1, paused:false},
+  {monitorEl:videoEl2,frameEl:admiraTube2,canvasEl:dsCanvasEl2,ctx:dsC2,paused:false},
+];
 
 // ── VIDEO LIST (like SONG_LIST for music) ──
 const VIDEO_LIST=[
@@ -320,14 +325,41 @@ const VIDEO_CONDITIONS={
 
 function currentDSVideoName(){ return VIDEO_LIST[dsVideoIdx]; }
 
+function syncGlobalVideoPaused(){
+  videoPaused=DS_DISPLAYS.every(display=>display.paused);
+}
+
+function resetDSDisplayPause(){
+  DS_DISPLAYS.forEach(display=>display.paused=false);
+  syncGlobalVideoPaused();
+}
+
+function getVisibleDSDisplayIndexes(){
+  const tubeActive=G&&G.admiraTube&&G.admiraTube.active&&G.admiraTube.videoId;
+  if(tubeActive){
+    const screens=Math.max(1,Math.min(2,Number(G.admiraTube.screens)||2));
+    return DS_DISPLAYS.map((_,idx)=>idx).filter(idx=>idx<screens);
+  }
+  return videoPlaying?[0,1]:[];
+}
+
+function resolveDSAudioOwner(){
+  const visible=getVisibleDSDisplayIndexes();
+  if(dsAudioMuted||!visible.length) return -1;
+  if(visible.includes(dsAudioOwner)) return dsAudioOwner;
+  dsAudioOwner=visible[0];
+  return dsAudioOwner;
+}
+
 function switchDSVideo(idx){
   dsVideoIdx=((idx%VIDEO_LIST.length)+VIDEO_LIST.length)%VIDEO_LIST.length;
   const name=VIDEO_LIST[dsVideoIdx];
   const file=VIDEO_FILES[name];
+  resetDSDisplayPause();
   if(file){
     dsMode='video';
     dsVideoEl.src=file;
-    dsVideoEl.muted=dsAudioMuted;
+    dsVideoEl.muted=true;
     dsVideoEl.volume=0.3;
     dsVideoEl.currentTime=0;
     dsVideoEl.play().catch(()=>{});
@@ -337,6 +369,7 @@ function switchDSVideo(idx){
     dsMode='slides';
     dsVideoEl.pause();
   }
+  applyDSAudioRouting();
 }
 
 function nextDSVideo(){ switchDSVideo(dsVideoIdx+1); }
@@ -375,9 +408,11 @@ function admiraTubeEmbedUrl(videoId,audioOn){
     playlist:videoId,
     playsinline:'1',
     controls:'0',
+    enablejsapi:'1',
     rel:'0',
     modestbranding:'1',
   });
+  if(location&&/^https?:/.test(location.protocol)) params.set('origin',location.origin);
   return 'https://www.youtube.com/embed/'+videoId+'?'+params.toString();
 }
 
@@ -420,11 +455,13 @@ function parseAdmiraTubeArg(arg){
 
 function syncAdmiraTubeFrames(){
   const active=G&&G.admiraTube&&G.admiraTube.active&&G.admiraTube.videoId;
-  const src=active?admiraTubeEmbedUrl(G.admiraTube.videoId,G.admiraTube.audio!==false):'';
   const screens=active?Math.max(1,Math.min(2,Number(G.admiraTube.screens)||2)):0;
-  [admiraTube1,admiraTube2].forEach((frame,idx)=>{
+  DS_DISPLAYS.forEach((display,idx)=>{
+    const frame=display.frameEl;
     if(!frame) return;
     if(active&&idx<screens){
+      const shouldUnmute=(G.admiraTube.audio!==false)&&resolveDSAudioOwner()===idx&&!display.paused;
+      const src=admiraTubeEmbedUrl(G.admiraTube.videoId,shouldUnmute);
       if(frame.src!==src) frame.src=src;
       frame.style.display='block';
     } else {
@@ -432,9 +469,10 @@ function syncAdmiraTubeFrames(){
       if(frame.src) frame.src='';
     }
   });
-  [dsCanvasEl1,dsCanvasEl2].forEach((canvas,idx)=>{
-    if(canvas) canvas.style.display=(active&&idx<screens)?'none':'block';
+  DS_DISPLAYS.forEach((display,idx)=>{
+    if(display.canvasEl) display.canvasEl.style.display=(active&&idx<screens)?'none':'block';
   });
+  if(active) applyDSAudioRouting();
 }
 
 dsVideoEl.addEventListener('ended', ()=>{
@@ -448,8 +486,7 @@ dsVideoEl.addEventListener('ended', ()=>{
 
 function toggleDSAudio(){
   dsAudioMuted=!dsAudioMuted;
-  dsVideoEl.muted=dsAudioMuted;
-  dsVideoEl.volume=0.3;
+  applyDSAudioRouting();
 }
 
 // Auto-select video based on conditions (checked every ~5s of game time)
@@ -475,7 +512,8 @@ const DS_MSGS=[
   {txt:'PRENSA',sub:'Diarios y Revistas',bg:'#1a0a0a',fg:'#ff6644'},
 ];
 
-function renderDSCanvas(ctx,w,h,frame){
+function renderDSCanvas(ctx,w,h,frame,displayIdx){
+  const display=DS_DISPLAYS[displayIdx];
   // If we have a video file playing, draw the video frame
   if(dsMode==='video' && dsVideoEl.readyState>=2 && !dsVideoEl.paused){
     ctx.drawImage(dsVideoEl,0,0,w,h);
@@ -487,6 +525,11 @@ function renderDSCanvas(ctx,w,h,frame){
     ctx.fillStyle='#00000088';ctx.fillRect(0,h-12,w,12);
     ctx.fillStyle='#ffffff88';ctx.font='7px monospace';ctx.textAlign='center';
     ctx.fillText('📺 '+VIDEO_LIST[dsVideoIdx],w/2,h-3);
+    if(display&&display.paused){
+      ctx.fillStyle='#00000088';ctx.fillRect(0,0,w,h);
+      ctx.fillStyle='#ffffff';ctx.font='bold 14px monospace';ctx.textAlign='center';
+      ctx.fillText('PAUSA',w/2,h/2+5);
+    }
     return;
   }
   // Fallback: animated text slides
@@ -526,11 +569,13 @@ function renderDSCanvas(ctx,w,h,frame){
 }
 
 function updateDSCanvases(){
-  if(!videoPlaying||videoPaused) return;
+  if(!videoPlaying) return;
   dsFrame++;
   checkDSConditions();
-  renderDSCanvas(dsC1,160,90,dsFrame);
-  renderDSCanvas(dsC2,160,90,dsFrame);
+  DS_DISPLAYS.forEach((display,idx)=>{
+    if(display.paused&&display.canvasEl&&display.canvasEl.style.display!=='none') return;
+    renderDSCanvas(display.ctx,160,90,dsFrame,idx);
+  });
 }
 
 // Digital Signage screens on LEFT WALL, flanking Admira TFT (rows 2-4)
@@ -581,8 +626,95 @@ function updateVideoPosition(){
   syncAdmiraTubeFrames();
 }
 
+function isDigitalSignageVisible(display){
+  const el=display&&display.monitorEl;
+  return !!(el&&el.style.display!=='none'&&el.offsetWidth>0&&el.offsetHeight>0);
+}
+
+function getDigitalSignageHitIndex(clientX,clientY){
+  if(state!==S.GAME) return -1;
+  for(let idx=0;idx<DS_DISPLAYS.length;idx++){
+    const display=DS_DISPLAYS[idx];
+    if(!isDigitalSignageVisible(display)) continue;
+    const rect=display.monitorEl.getBoundingClientRect();
+    if(clientX>=rect.left&&clientX<=rect.right&&clientY>=rect.top&&clientY<=rect.bottom) return idx;
+  }
+  return -1;
+}
+
+function sendAdmiraTubeCommand(displayIdx,func){
+  const display=DS_DISPLAYS[displayIdx];
+  const frame=display&&display.frameEl;
+  if(!frame||frame.style.display==='none'||!frame.contentWindow) return;
+  frame.contentWindow.postMessage(JSON.stringify({
+    event:'command',
+    func,
+    args:[]
+  }),'*');
+}
+
+function setAdmiraTubePaused(displayIdx,paused){
+  sendAdmiraTubeCommand(displayIdx,paused?'pauseVideo':'playVideo');
+}
+
+function applyDSAudioRouting(){
+  const activeOwner=resolveDSAudioOwner();
+  const tubeActive=G&&G.admiraTube&&G.admiraTube.active&&G.admiraTube.videoId;
+  if(dsMode==='video'){
+    const videoAudioOn=videoPlaying&&activeOwner!==-1&&!DS_DISPLAYS[activeOwner].paused;
+    dsVideoEl.muted=!videoAudioOn;
+    dsVideoEl.volume=videoAudioOn?0.3:0;
+  } else {
+    dsVideoEl.muted=true;
+    dsVideoEl.volume=0;
+  }
+  if(tubeActive){
+    DS_DISPLAYS.forEach((display,idx)=>{
+      if(display.frameEl.style.display==='none') return;
+      if(G.admiraTube.audio===false||display.paused||activeOwner!==idx) sendAdmiraTubeCommand(idx,'mute');
+      else sendAdmiraTubeCommand(idx,'unMute');
+    });
+  }
+}
+
+function setDigitalSignagePaused(displayIdx,paused){
+  const display=DS_DISPLAYS[displayIdx];
+  if(!display) return false;
+  display.paused=paused;
+  if(dsMode==='video'){
+    if(!DS_DISPLAYS.some(item=>!item.paused)&&!dsVideoEl.paused) dsVideoEl.pause();
+    else if(DS_DISPLAYS.some(item=>!item.paused)&&dsVideoEl.paused&&dsVideoEl.src) dsVideoEl.play().catch(()=>{});
+  }
+  if(G&&G.admiraTube&&G.admiraTube.active) setAdmiraTubePaused(displayIdx,paused);
+  syncGlobalVideoPaused();
+  applyDSAudioRouting();
+  return true;
+}
+
+function toggleDigitalSignageDisplay(displayIdx){
+  const display=DS_DISPLAYS[displayIdx];
+  if(!display) return false;
+  if(!videoPlaying&&!(G&&G.admiraTube&&G.admiraTube.active)) return false;
+  setDigitalSignagePaused(displayIdx,!display.paused);
+  const label='Pantalla '+(displayIdx+1);
+  addFloat(W/2,40,display.paused?'⏸ '+label:'▶ '+label,'#44ccff');
+  showEv(display.paused?label+' en pausa':label+' reanudada','#44ccff');
+  return true;
+}
+
+function selectDigitalSignageAudio(displayIdx){
+  if(displayIdx<0||displayIdx>=DS_DISPLAYS.length) return false;
+  dsAudioMuted=false;
+  dsAudioOwner=displayIdx;
+  applyDSAudioRouting();
+  addFloat(W/2,40,'🔊 AUDIO '+(displayIdx+1),'#44ddaa');
+  showEv('Audio en pantalla '+(displayIdx+1),'#44ddaa');
+  return true;
+}
+
 function startVideo(){
-  videoPlaying=true;videoPaused=false;
+  videoPlaying=true;
+  resetDSDisplayPause();
   // Auto-load current video file if available
   switchDSVideo(dsVideoIdx);
   updateVideoPosition();
@@ -590,7 +722,16 @@ function startVideo(){
 
 function toggleVideoPause(){
   if(!videoPlaying){startVideo();return;}
-  videoPaused=!videoPaused;
+  const targetPaused=!videoPaused;
+  DS_DISPLAYS.forEach((_,idx)=>setDigitalSignagePaused(idx,targetPaused));
+}
+
+function toggleDigitalSignagePlayback(){
+  if(!videoPlaying&&!(G&&G.admiraTube&&G.admiraTube.active)) return false;
+  toggleVideoPause();
+  addFloat(W/2,40,videoPaused?'⏸ PANTALLAS':'▶ PANTALLAS','#44ccff');
+  showEv(videoPaused?'Pantallas en pausa':'Pantallas reanudadas','#44ccff');
+  return true;
 }
 
 // ── HTML BOTTOM BAR — wiring ─────────────────────────────────
@@ -2263,6 +2404,10 @@ cv.addEventListener('click',e=>{
   if(state===S.YEAR_END&&G.yearEndAnim>80){advanceYear();return;}
   if(state===S.GAME_END){startTransition(S.MENU);menuSel=0;return;}
   if(state!==S.GAME&&state!==S.EDITOR&&state!==S.SETTINGS&&state!==S.MENU&&state!==S.HELP&&state!==S.CLIENT_SEL&&state!==S.MODEL_SEL&&state!==S.ERA_SEL) return;
+  if(state===S.GAME){
+    const displayHit=getDigitalSignageHitIndex(e.clientX,e.clientY);
+    if(displayHit!==-1&&toggleDigitalSignageDisplay(displayHit)) return;
+  }
   const r2=cv.getBoundingClientRect();
   const mx=(e.clientX-r2.left)*(W/r2.width)|0, my=(e.clientY-r2.top)*(H/r2.height)|0;
   // Check buttons first
@@ -2300,12 +2445,18 @@ cv.addEventListener('click',e=>{
     return;
   }
 });
+cv.addEventListener('contextmenu',e=>{
+  const displayHit=getDigitalSignageHitIndex(e.clientX,e.clientY);
+  if(displayHit===-1) return;
+  e.preventDefault();
+  selectDigitalSignageAudio(displayHit);
+});
 // Mouse move for editor hover
 cv.addEventListener('mousemove',e=>{
   const r2=cv.getBoundingClientRect();
   const mx=(e.clientX-r2.left)*(W/r2.width)|0, my=(e.clientY-r2.top)*(H/r2.height)|0;
   // Cursor: pointer over any clickable button
-  let overBtn=false;
+  let overBtn=state===S.GAME&&getDigitalSignageHitIndex(e.clientX,e.clientY)!==-1;
   for(const id in BTNS){const b=BTNS[id];if(mx>=b.x&&mx<=b.x+b.w&&my>=b.y&&my<=b.y+b.h){overBtn=true;break;}}
   cv.style.cursor=overBtn?'pointer':'default';
   if(state===S.EDITOR) edHoverTile=screenToIso(mx,my);
@@ -2353,10 +2504,11 @@ function doAction(id){
         bgMusic.src='music/dj-novah.mp3';
         bgMusic.play().catch(()=>{});
         // Mute DS video audio so only DJ track plays
-        if(dsVideoEl&&!dsVideoEl.muted){dsVideoEl._wasMuted=dsVideoEl.muted;dsVideoEl.muted=true;}
+        if(dsVideoEl){dsVideoEl._wasAudioMuted=dsAudioMuted;dsAudioMuted=true;}
         // Switch DS to DJ Novah live set video
         const djVidIdx=VIDEO_LIST.indexOf('DJ Novah - Live Set');
-        if(djVidIdx>=0){dsVideoEl._prevIdx=dsVideoIdx;switchDSVideo(djVidIdx);dsVideoEl.muted=true;dsVideoEl.loop=true;}
+        if(djVidIdx>=0){dsVideoEl._prevIdx=dsVideoIdx;switchDSVideo(djVidIdx);dsVideoEl.loop=true;}
+        applyDSAudioRouting();
         addFloat(W/2,40,'🎧 DJ Novah ON!','#cc44aa');
       }
     }
@@ -2388,7 +2540,8 @@ function doAction(id){
         // Restore DS video to previous + unmute
         dsVideoEl.loop=false;
         if(dsVideoEl._prevIdx!=null){switchDSVideo(dsVideoEl._prevIdx);delete dsVideoEl._prevIdx;}
-        if(dsVideoEl._wasMuted!==undefined){dsVideoEl.muted=dsVideoEl._wasMuted;delete dsVideoEl._wasMuted;}
+        if(dsVideoEl._wasAudioMuted!==undefined){dsAudioMuted=dsVideoEl._wasAudioMuted;delete dsVideoEl._wasAudioMuted;}
+        applyDSAudioRouting();
         addFloat(W/2,40,'🎧 DJ OFF','#886688');
       }
     }
@@ -10735,6 +10888,7 @@ window.xtAPI = (function(){
     if(!clean) return 'Uso: /AdmiraTube URL [1|2] [audio|mute] o /AdmiraTube off';
     if(['off','stop','clear','limpiar','borrar'].includes(clean.toLowerCase())){
       G.admiraTube=null;
+      resetDSDisplayPause();
       syncAdmiraTubeFrames();
       updateVideoPosition();
       showEv('AdmiraTube desactivado','#55ccff');
@@ -10745,9 +10899,12 @@ window.xtAPI = (function(){
     if(!videoId) return 'No reconozco ese vídeo de YouTube. Usa una URL de YouTube o un ID de 11 caracteres.';
     G.admiraTube={active:true,videoId,url:parsed.url,screens:parsed.screens,audio:parsed.audio};
     videoPlaying=true;
-    videoPaused=false;
+    resetDSDisplayPause();
+    dsAudioMuted=parsed.audio===false;
+    if(parsed.screens===1) dsAudioOwner=0;
     dsVideoEl.pause();
     syncAdmiraTubeFrames();
+    applyDSAudioRouting();
     updateVideoPosition();
     showEv('AdmiraTube en pantallas','#55ccff');
     setManagerSayBubble('AdmiraTube listo');
