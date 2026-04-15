@@ -31,10 +31,17 @@
     #telegramDock{display:none;position:fixed;left:0;bottom:0;height:164px;background:#030b12;border:2px solid #163c4a;border-bottom:none;color:#d9f7ff;font-family:monospace;z-index:30;gap:8px;padding:8px}
     #telegramDock.show{display:flex}
     #telegramDock.hide-dock{display:none}
+    #telegramDock.compose-start{display:flex}
+    #telegramDock.compose-start .tg-pane.conversation{display:none}
+    #telegramDock.compose-start .tg-pane.send{display:flex;flex:1 1 100%;width:100%;max-width:none;height:100%}
+    #telegramDock.focus-send{display:block}
     #telegramDock.focus-send .tg-pane.conversation{display:none}
-    #telegramDock.focus-send .tg-pane.send{flex:1 1 100%}
+    #telegramDock.focus-send .tg-pane.send{display:flex;flex:1 1 100%;width:100%;max-width:none;height:100%}
     #characterDock{display:none;position:fixed;left:0;bottom:164px;height:64px;color:#d9f7ff;font-family:monospace;z-index:29;gap:8px}
     #characterDock.show{display:flex}
+    #characterDock.compose-start{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-rows:64px 164px;height:236px;bottom:0}
+    #characterDock.compose-start .char-pane.team{grid-column:1;grid-row:1}
+    #characterDock.compose-start .char-pane.clients{grid-column:2;grid-row:1 / span 2}
     #characterDock.hide-telegram{bottom:0;height:228px}
     #characterDock.expand-clients .char-pane.team{display:none}
     #characterDock.expand-clients .char-pane.clients{flex:1 1 100%}
@@ -48,7 +55,7 @@
     .char-status{color:#9ec7d0;font-size:7px;font-weight:normal;text-transform:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:70%}
     .char-toggle-btn{border:1px solid #2a7585;border-radius:4px;background:#0c2a35;color:#bff7ff;font-family:monospace;font-size:8px;font-weight:bold;padding:1px 6px;cursor:pointer}
     .char-body{flex:1;padding:6px 8px;background:#02080d;font-size:10px;line-height:1.3;color:#cceef5;display:flex;flex-direction:column;gap:4px}
-    .char-row{display:grid;grid-template-columns:minmax(58px,1fr) minmax(72px,1fr) minmax(68px,1fr) auto;gap:8px;align-items:center}
+    .char-row{display:grid;grid-template-columns:minmax(58px,1fr) minmax(72px,1fr) minmax(68px,1fr) minmax(54px,1fr) minmax(54px,1fr) minmax(64px,1fr) auto;gap:8px;align-items:center}
     .char-row span{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .char-row .ok{color:#88ee88}
     .char-row .muted{color:#6c94a1}
@@ -206,6 +213,7 @@ let amigaPage0Todo=AMIGA_PAGE0_TODO.slice();
 let amigaPage0TodoLoaded=false;
 let telegramDockHidden=false;
 let characterDockFocus='split';
+let telegramComposeStart=true;
 bootVideoEl.src=PRELOAD_VIDEO_SRC;
 bootVideoEl.loop=false;
 bootVideoEl.preload='auto';
@@ -260,7 +268,10 @@ function resizeCanvas(){
   }
   if(characterDock) characterDock.classList.toggle('show',telegramInGame);
   if(characterDock) characterDock.classList.toggle('hide-telegram',telegramDockHidden&&telegramInGame);
-  const dockH=(telegramInGame&&dock&&!telegramDockHidden)?dock.offsetHeight:0;
+  const composeStart=telegramInGame&&!telegramDockHidden&&telegramComposeStart;
+  if(dock) dock.classList.toggle('compose-start',composeStart);
+  if(characterDock) characterDock.classList.toggle('compose-start',composeStart);
+  const dockH=(telegramInGame&&dock&&!telegramDockHidden&&!composeStart)?dock.offsetHeight:0;
   const characterDockH=(telegramInGame&&characterDock)?characterDock.offsetHeight:0;
   const availH=vh-barH-dockH-characterDockH;
   const ratio=W/H;
@@ -273,13 +284,14 @@ function resizeCanvas(){
   const dockLeft=Math.max(0,Math.round(canvasRect.left));
   const dockWidth=Math.max(0,Math.round(canvasRect.width));
   if(dock){
-    dock.style.width=dockWidth+'px';
+    dock.style.width=(composeStart?Math.max(0,Math.floor((dockWidth-8)/2)):dockWidth)+'px';
     dock.style.left=dockLeft+'px';
+    dock.style.bottom='0px';
   }
   if(characterDock){
     characterDock.style.width=dockWidth+'px';
     characterDock.style.left=dockLeft+'px';
-    characterDock.style.bottom=dockH+'px';
+    characterDock.style.bottom=composeStart?'0px':dockH+'px';
   }
   const tb=document.getElementById('topBar');
   if(tb) tb.style.maxWidth=cw+'px';
@@ -1875,6 +1887,7 @@ const DEFAULT_LAYOUT=[
   {id:'led',type:'led',col:0,row:0,sx:1,sy:1,label:'LED Banner'},
   {id:'djBooth',type:'djBooth',col:11,row:3,sx:1,sy:1,label:'Mesa DJ'},
   {id:'tablet',type:'tablet',col:13,row:5,sx:1,sy:1,label:'Tablet Satisfacción'},
+  {id:'turnKiosk',type:'turnKiosk',col:12,row:6,sx:1,sy:1,label:'Gestor Turnos'},
 ];
 let shopLayout=JSON.parse(JSON.stringify(DEFAULT_LAYOUT));
 let shopFurnitureVisible=true;
@@ -1924,8 +1937,9 @@ function loadLayout(){
   // NOTE: ISO is not yet defined when this runs at page-start (line 1203).
   // Do NOT reference ISO here — use raw numbers or simple checks only.
   try{
-    // Try primary key, then backup key
+    // Try primary key, then explicit initial snapshot, then backup key
     let d=localStorage.getItem('xtanco_layout_user');
+    if(!d) d=localStorage.getItem('xtanco_layout_initial');
     if(!d) d=localStorage.getItem('xtanco_layout_backup');
     if(d){
       const saved=JSON.parse(d);
@@ -1964,6 +1978,7 @@ function saveLayout(){
   const data=JSON.stringify(shopLayout);
   try{
     localStorage.setItem('xtanco_layout_user',data);
+    localStorage.setItem('xtanco_layout_initial',data);
     localStorage.setItem('xtanco_layout_backup',data);
     // Also mirror into DEFAULT_LAYOUT so that if localStorage ever fails,
     // the in-session fallback already has the user's layout (not factory positions).
@@ -2081,7 +2096,7 @@ function screenToIso(sx,sy){
 const FURNITURE_SIZE={
   counter:[1,2], shelves:[1,2], wineRack:[2,1], lottery:[2,1],
   vending:[1,1], magazines:[2,1], manager:[2,1], plant:[1,1],
-  floorLamp:[1,1], rug:[2,2], djBooth:[2,1], tablet:[1,1],
+  floorLamp:[1,1], rug:[2,2], djBooth:[2,1], tablet:[1,1], turnKiosk:[1,1],
 };
 
 // Check if a tile is blocked by furniture
@@ -2098,9 +2113,17 @@ function isTileBlocked(col,row){
 
 // Full walkability check: on floor grid AND not blocked by furniture
 function canWalkTo(screenX,screenY){
-  const tile=screenToIso(screenX,screenY);
-  if(tile.col<0||tile.col>=ISO.cols||tile.row<0||tile.row>=ISO.rows) return false;
-  if(isTileBlocked(tile.col,tile.row)) return false;
+  const samples=[
+    [0,0],
+    [-8,0],[8,0],
+    [0,-6],[0,6],
+    [-5,-4],[5,-4],[-5,4],[5,4]
+  ];
+  for(const [ox,oy] of samples){
+    const tile=screenToIso(screenX+ox,screenY+oy);
+    if(tile.col<0||tile.col>=ISO.cols||tile.row<0||tile.row>=ISO.rows) return false;
+    if(isTileBlocked(tile.col,tile.row)) return false;
+  }
   return true;
 }
 
@@ -2168,6 +2191,7 @@ function initGame(){
     nowPlaying:shopTimeSettings.nowPlaying||'Titi Me Preguntó - Bad Bunny',
     totalRevenue:0, totalScore:0, yearsCompleted:0,
     loyaltyCard:{pending:false,targetId:null,nextId:1},
+    turns:{next:1,current:0,servingId:null,issued:0},
     rush:{active:false,timer:0}, inspect:{active:false,timer:0,warned:false},
     storeLevel:1,
     eventMsg:null, eventTimer:0, eventColor:M.neon,
@@ -2178,6 +2202,7 @@ function initGame(){
     doorOpen:0,
     doorAnim:0,
     doorMode:'auto',
+    customerSpawnDelay:900,
     gameTime:shopTimeSettings.openHour,
     dayEnded:false,
     lampIntensity:0,
@@ -2295,9 +2320,12 @@ function loadGame(){
       if(!G.supplierDeal) G.supplierDeal={active:false,timer:0,prodIdx:-1};
       if(!G.weather) G.weather={type:null,timer:0};
       if(G.sfxVolume===undefined) G.sfxVolume=0;
+      if(!G.turns) G.turns={next:1,current:0,servingId:null,issued:0};
+      if(G.turns.issued===undefined) G.turns.issued=0;
       if(!G.comp) G.comp={shares:[28,26,25,21],promoTimer:0,promoBrand:-1};
       if(!G.reviews) G.reviews={positive:0,negative:0,spawnMod:1.0};
       if(!G.loyaltyCard) G.loyaltyCard={pending:false,targetId:null,nextId:1};
+      if(G.customerSpawnDelay===undefined) G.customerSpawnDelay=0;
       if(!G.escaparate) G.escaparate={active:true,phase:0,boost:0,smTimer:900};
       if(!G.saca) G.saca={phase:'idle',cooldown:1800,x:820,y:0,dir:-1,aFrame:0,aTimer:0,unloadTimer:0,boxes:6};
       if(!G.thief) G.thief={phase:'idle',cooldown:3600,x:820,y:0,dir:-1,aFrame:0,aTimer:0,targetCol:5,targetRow:3,path:null,pathIdx:0,lootTimer:0,caught:false};
@@ -3766,28 +3794,96 @@ function updateGame(){
   const compSteal=G.comp&&G.comp.promoTimer>0?CFG.COMP_PROMO_STEAL:0;
   const repMod=G.reviews?G.reviews.spawnMod:1;
   const escapMod=G.escaparate&&G.escaparate.active?(G.escaparate.boost>0?1.35:1.15):1;
-  if(Math.random()<0.006*Math.max(1,G.staff.filter(s=>s.hired).length)*(G.rush.active?2:1)*weatherMod*holidaySpawn*(1-compSteal)*repMod*escapMod) spawnCust();
+  if(G.customerSpawnDelay>0) G.customerSpawnDelay--;
+  else if(Math.random()<0.006*Math.max(1,G.staff.filter(s=>s.hired).length)*(G.rush.active?2:1)*weatherMod*holidaySpawn*(1-compSteal)*repMod*escapMod) spawnCust();
   for(let i=G.custs.length-1;i>=0;i--){
     const c=G.custs[i];c.ft++;if(c.ft>10){c.fr=(c.fr+1)%2;c.ft=0;}
+    c.dwellTicks=(c.dwellTicks|0)+1;
+    if(!Number.isFinite(c.stayTargetTicks)) c.stayTargetTicks=Math.round((60+Math.random()*240)*60);
     if(c.bTimer>0) c.bTimer--;
     if(c.st==='walk'){
       // Sun → customers walk 65% speed (too hot); Rain → normal speed (rushing in)
       const wSpd=G.weather&&G.weather.type==='sun'?0.85:1.3;
       // Rain → customers linger longer (took shelter); base browse timer scaled up
       const browseBase=G.weather&&G.weather.type==='rain'?1.7:1.0;
+      if(isNearDoorSensor(c.x,c.y,140,96)) G.doorOpen=Math.max(G.doorOpen||0,85);
       if(c.path&&c.pathIdx<c.path.length){
         const wp=c.path[c.pathIdx];const wpIso=toIso(wp.col,wp.row);
         const wtx=wpIso.x-7,wty=wpIso.y-20;
         const dx=wtx-c.x,dy=wty-c.y,d=Math.sqrt(dx*dx+dy*dy);
-        if(d<3){c.pathIdx++;if(c.pathIdx>=c.path.length){c.st='browse';c.timer=Math.round((60+Math.random()*80)*browseBase);}}
+        if(d<3){
+          c.pathIdx++;
+          if(c.pathIdx>=c.path.length){
+            if(c.wantsTurn&&!c.ticketPicked){
+              assignCustomerTurn(c);
+              c.ticketPicked=true;
+              c.bMsg='Turno '+String(c.queueNumber).padStart(3,'0');c.bTimer=170;
+              const queueTarget=getQueueTarget(0);
+              c.path=astarPath(wp.col,wp.row,queueTarget.col,queueTarget.row)||[];
+              c.pathIdx=0;
+            }else if(c.wantsTurn){
+              c.st='queue';
+            }else{
+              c.st='browse';c.timer=Math.round((60+Math.random()*80)*browseBase);
+            }
+          }
+        }
         else{c.x+=dx/d*wSpd;c.y+=dy/d*wSpd;c.dir=dx<0?-1:1;}
       } else {
         const dx=c.tx-c.x,dy=c.ty-c.y,d=Math.sqrt(dx*dx+dy*dy);
-        if(d<3){c.st='browse';c.timer=Math.round((60+Math.random()*80)*browseBase);}
+        if(d<3){
+          if(c.wantsTurn&&!c.ticketPicked){
+            assignCustomerTurn(c);
+            c.ticketPicked=true;
+            c.bMsg='Turno '+String(c.queueNumber).padStart(3,'0');c.bTimer=170;
+            const curTile=screenToIso(c.x+5,c.y+20);
+            const queueTarget=getQueueTarget(0);
+            c.path=astarPath(
+              Math.max(0,Math.min(ISO.cols-1,Math.round(curTile.col))),
+              Math.max(0,Math.min(ISO.rows-1,Math.round(curTile.row))),
+              queueTarget.col,
+              queueTarget.row
+            )||[];
+            c.pathIdx=0;
+          }else if(c.wantsTurn){
+            c.st='queue';
+          }else{
+            c.st='browse';c.timer=Math.round((60+Math.random()*80)*browseBase);
+          }
+        }
         else{
           const nx=c.x+dx/d*wSpd,ny=c.y+dy/d*wSpd;
           if(canWalkTo(nx+5,ny+20)){c.x=nx;c.y=ny;c.dir=dx<0?-1:1;}
           else{c.st='browse';c.timer=Math.round((30+Math.random()*40)*browseBase);}
+        }
+      }
+    } else if(c.st==='queue'){
+      const queueOrder=(G.custs||[]).filter(x=>x.st==='queue'||x.st==='buy').sort((a,b)=>(a.queueNumber||9999)-(b.queueNumber||9999));
+      const idx=Math.max(0,queueOrder.findIndex(x=>x.id===c.id));
+      const spot=getQueueTarget(idx);
+      const targetIso=toIso(spot.col,spot.row);
+      const qtx=targetIso.x-7, qty=targetIso.y-20;
+      const dx=qtx-c.x,dy=qty-c.y,d=Math.sqrt(dx*dx+dy*dy);
+      if(d>3){
+        c.x+=dx/d*1.05;c.y+=dy/d*1.05;c.dir=dx<0?-1:1;
+      }else if(idx===0&&G.turns&&(G.turns.servingId===null||G.turns.servingId===c.id)){
+        G.turns.current=c.queueNumber||0;
+        G.turns.servingId=c.id;
+        c.st='buy';
+        c.serviceTimer=130+Math.floor(Math.random()*70);
+        c.bMsg='Turno '+String(c.queueNumber).padStart(3,'0')+' en caja';c.bTimer=110;
+      }
+    } else if(c.st==='buy'){
+      const spot=getQueueTarget(0);
+      const targetIso=toIso(spot.col,spot.row);
+      const btx=targetIso.x-7,bty=targetIso.y-20;
+      const dx=btx-c.x,dy=bty-c.y,d=Math.sqrt(dx*dx+dy*dy);
+      if(d>3){
+        c.x+=dx/d*1.1;c.y+=dy/d*1.1;c.dir=dx<0?-1:1;
+      }else{
+        c.serviceTimer=(c.serviceTimer|0)-1;
+        if(c.serviceTimer<=0){
+          resolveCustomerCheckout(c);
         }
       }
     } else if(c.st==='browse'){
@@ -3795,75 +3891,44 @@ function updateGame(){
       if(!c.bShown&&c.bTimer<=0&&Math.random()<0.005){
         const arr=T().custBrowse;c.bMsg=arr[Math.floor(Math.random()*arr.length)];c.bTimer=200;c.bShown=true;
       }
-      c.timer--;if(c.timer<=0){
-        // ── REAL PURCHASE LOGIC ──────────────────────────────────
-        const wp=c.wantsProdIdx>=0?G.prods[c.wantsProdIdx]:null;
-        const inStock=wp&&wp.stock>0;
-        if(inStock){
-          // Purchase: decrement stock, add revenue, show float
-          wp.stock=Math.max(0,wp.stock-1);
-          const baseRev=Math.max(1,Math.round(wp.price*(0.8+Math.random()*0.4)*(c.vip?1.5:1)));
-          const rev=c.loyaltyFree?0:baseRev;
-          if(rev>0){
-            G.money+=rev;G.weekRevenue+=rev;G.yearRevenue+=rev;G.totalRevenue+=rev;
-            addFloat(c.x+7,c.y-28,'€'+rev,c.vip?'#ffd700':P.green);SFX.cashRegister();
-          }else{
-            addFloat(c.x+7,c.y-28,'GRATIS','#55ccff');SFX.cashRegister();
-            showEv('Tarjeta Fidelidad: compra gratis','#55ccff');
-            if(G.loyaltyCard) G.loyaltyCard.targetId=null;
+      if(c.roamPath&&c.roamIdx<c.roamPath.length){
+        const rp=c.roamPath[c.roamIdx];
+        const rpIso=toIso(rp.col,rp.row);
+        const rtx=rpIso.x-7,rty=rpIso.y-20;
+        const dx=rtx-c.x,dy=rty-c.y,d=Math.sqrt(dx*dx+dy*dy);
+        if(d<3){
+          c.roamIdx++;
+          if(c.roamIdx>=c.roamPath.length){
+            c.roamPath=null;
+            c.roamIdx=0;
+            c.roamCooldown=70+Math.floor(Math.random()*120);
           }
-          G.satisfaction=Math.min(100,G.satisfaction+0.5);
-          c.bought=true;
-          c.loyaltyFree=false;
-          const arr=T().custBought;c.bMsg=arr[Math.floor(Math.random()*arr.length)];c.bTimer=190;
-          // Review: VIP 60%, regular 15%
-          if(G.reviews&&Math.random()<(c.vip?0.6:0.15)){
-            G.reviews.positive++;
-            const fameBonus=c.vip?3:1;
-            G.fame=Math.min(100,G.fame+fameBonus);
-            addFloat(c.x+7,c.y-44,T().reviewPos,'#ffd700');
-            updateReviewMod();
-          }
-        } else {
-          // No stock — check if any hired staff is close enough to rescue the sale
-          const nearStaff=G.staff.find(s=>s.hired&&!s.fired&&Math.hypot(s.x-c.x,s.y-c.y)<85);
-          if(nearStaff){
-            // Staff rescues: find any in-stock product as substitute
-            const alt=G.prods.find(p=>p.stock>0);
-            if(alt){
-              alt.stock=Math.max(0,alt.stock-1);
-              const rev=Math.max(1,Math.round(alt.price*(0.7+Math.random()*0.3)));
-              G.money+=rev;G.weekRevenue+=rev;G.yearRevenue+=rev;G.totalRevenue+=rev;
-              addFloat(c.x+7,c.y-28,'€'+rev,P.neonB);SFX.cashRegister();
-              addFloat(nearStaff.x+7,nearStaff.y-36,'🤝',P.neon1);
-              G.satisfaction=Math.min(100,G.satisfaction+0.2);
-              c.bought=true;
-              const arr=T().custSaved;c.bMsg=arr[Math.floor(Math.random()*arr.length)];c.bTimer=190;
-            } else {
-              // Nothing in stock at all
-              const arr=T().custNoStock;c.bMsg=arr[Math.floor(Math.random()*arr.length)];c.bTimer=190;
-              G.satisfaction=Math.max(0,G.satisfaction-2);
-            }
-          } else {
-            // No staff nearby — customer leaves empty-handed
-            const arr=T().custNoStock;c.bMsg=arr[Math.floor(Math.random()*arr.length)];c.bTimer=190;
-            G.satisfaction=Math.max(0,G.satisfaction-2);
-            addFloat(c.x+7,c.y-28,'SIN STOCK',P.red);
-            // Review: 30% chance of negative review
-            if(G.reviews&&Math.random()<0.30){
-              G.reviews.negative++;
-              G.fame=Math.max(0,G.fame-2);
-              addFloat(c.x+7,c.y-44,T().reviewNeg,P.red);
-              updateReviewMod();
-            }
-          }
+        }else{
+          const roamSpd=(G.weather&&G.weather.type==='sun'?0.7:0.95);
+          c.x+=dx/d*roamSpd;c.y+=dy/d*roamSpd;c.dir=dx<0?-1:1;
         }
-        // Compute return path
+      }else if((c.roamCooldown=(c.roamCooldown|0)-1)<=0){
         const curTile=screenToIso(c.x+5,c.y+20);
-        c.leavePath=astarPath(Math.max(0,Math.min(ISO.cols-1,curTile.col)),Math.max(0,Math.min(ISO.rows-1,curTile.row)),ISO.cols-1,3);
-        c.leaveIdx=0;
-        const dp=getDoorThresholdPos(), outsideDp=getDoorOutsidePos();
-        c.st='leave';c.tx=dp.x;c.ty=dp.y;c.exitTx=outsideDp.x;c.exitTy=outsideDp.y;c.exitLeg=false;G.doorOpen=60;
+        const roamTarget=getCustomerRoamAnchor(c);
+        if(roamTarget){
+          c.roamPath=astarPath(
+            Math.max(0,Math.min(ISO.cols-1,Math.round(curTile.col))),
+            Math.max(0,Math.min(ISO.rows-1,Math.round(curTile.row))),
+            roamTarget.col,
+            roamTarget.row
+          );
+          c.roamIdx=0;
+        }
+        c.roamCooldown=90+Math.floor(Math.random()*150);
+      }
+      c.timer--;if(c.timer<=0){
+        const stayRemaining=(c.stayTargetTicks|0)-(c.dwellTicks|0);
+        if(stayRemaining>0){
+          const browseChunk=Math.round((45+Math.random()*120)*(G.weather&&G.weather.type==='rain'?1.25:1));
+          c.timer=Math.max(30,Math.min(stayRemaining,browseChunk));
+          continue;
+        }
+        resolveCustomerCheckout(c);
       }
     } else if(c.st==='leave'){
       if(c.leavePath&&c.leaveIdx<c.leavePath.length){
@@ -3871,10 +3936,10 @@ function updateGame(){
         const ltx=lpIso.x-7,lty=lpIso.y-20;
         const dx=ltx-c.x,dy=lty-c.y,d=Math.sqrt(dx*dx+dy*dy);
         if(d<3){c.leaveIdx++;} else{c.x+=dx/d*1.6;c.y+=dy/d*1.6;c.dir=dx<0?-1:1;}
-        if(d<30&&G.doorOpen<30) G.doorOpen=40;
+        if(d<42&&G.doorOpen<70) G.doorOpen=90;
       } else {
         const dx=c.tx-c.x,dy=c.ty-c.y,d=Math.sqrt(dx*dx+dy*dy);
-        if(d<30&&G.doorOpen<30) G.doorOpen=40;
+        if(d<54&&G.doorOpen<70) G.doorOpen=90;
         if(d<3){
           // Satisfaction tablet vote — customer stops at kiosk before leaving
           if(!c.voted){
@@ -4074,6 +4139,13 @@ function updateGame(){
 function spawnCust(isVip){
   if(G.custs.length>=7) return;
   const ci=Math.floor(Math.random()*6);
+  const isV=!!isVip;
+  const avgTicket=isV
+    ? 30+Math.round(Math.random()*20)
+    : (Math.random()<0.45
+        ? 12+Math.round(Math.random()*13)
+        : 5+Math.round(Math.random()*10));
+  const wantsTurn=Math.random()<(isV?0.7:0.4);
   // Spawn at door, target a walkable tile
   const doorStart=getDoorOutsidePos();
   let tCol,tRow,attempts=0;
@@ -4084,8 +4156,9 @@ function spawnCust(isVip){
   }while(isTileBlocked(tCol,tRow)&&attempts<20);
   const tIso=toIso(tCol,tRow);
   const path=astarPath(ISO.cols-1,3,tCol,tRow);
+  const turnTarget=wantsTurn?getTurnKioskTarget():null;
+  const entryPath=wantsTurn&&turnTarget?astarPath(ISO.cols-1,3,turnTarget.col,turnTarget.row):path;
   // Pick an entry dialogue
-  const isV=!!isVip;
   let cBMsg='',cBTimer=0;
   if(isV){
     const arr=T().custVip;cBMsg=arr[Math.floor(Math.random()*arr.length)];cBTimer=210;
@@ -4116,9 +4189,13 @@ function spawnCust(isVip){
     st:'walk',timer:0,col:isVip?'#ffd700':P.prods[ci],hair:cLook.hair,
     look:cLook,
     fr:0,ft:0,dir:-1,
-    path:path,pathIdx:0,vip:isV,
+    path:entryPath,pathIdx:0,vip:isV,
+    roamPath:null,roamIdx:0,roamCooldown:45+Math.floor(Math.random()*60),
+    wantsTurn:wantsTurn,queueNumber:0,serviceTimer:0,ticketPicked:false,
     bTimer:cBTimer,bMsg:cBMsg,bShown:false,
-    wantsProdIdx:wantsProdIdx,bought:false,loyaltyFree:false
+    wantsProdIdx:wantsProdIdx,bought:false,loyaltyFree:false,dwellTicks:0,
+    stayTargetTicks:Math.round((60+Math.random()*240)*60),
+    avgTicket:avgTicket
   });
   const newCust=G.custs[G.custs.length-1];
   if(G.loyaltyCard&&G.loyaltyCard.pending){
@@ -4141,6 +4218,123 @@ function getDoorOutsidePos(){
   return {x:outsideIso.x-7,y:outsideIso.y-20};
 }
 
+function getCustomerRoamAnchor(c){
+  const roamables=(shopLayout||[]).filter(item=>['counter','shelves','wineRack','magazines','vending','lottery'].includes(item.type));
+  if(roamables.length===0) return null;
+  const weighted=roamables.map(item=>{
+    let score=1;
+    if(c&&c.wantsProdIdx>=0){
+      const wanted=String(prodName(c.wantsProdIdx)||'').toLowerCase();
+      if(item.type==='magazines'&&(wanted.includes('prensa')||wanted.includes('press'))) score+=4;
+      if(item.type==='wineRack'&&(wanted.includes('vino')||wanted.includes('wine'))) score+=4;
+      if(item.type==='vending'&&(wanted.includes('bebida')||wanted.includes('drink')||wanted.includes('refresco'))) score+=4;
+      if(item.type==='counter') score+=1;
+      if(item.type==='shelves') score+=2;
+    }
+    return {item,score};
+  });
+  const total=weighted.reduce((sum,entry)=>sum+entry.score,0);
+  let pick=Math.random()*Math.max(1,total);
+  for(const entry of weighted){
+    pick-=entry.score;
+    if(pick<=0){
+      const baseCol=entry.item.col+(entry.item.type==='counter'||entry.item.type==='shelves'?1:0);
+      const baseRow=entry.item.row+(entry.item.type==='counter'?1:entry.item.type==='shelves'?1:0);
+      return {
+        col:clampGridCol(baseCol+(Math.random()<0.5?0:(Math.random()<0.5?-1:1))),
+        row:clampGridRow(baseRow+(Math.random()<0.5?0:(Math.random()<0.5?-1:1)))
+      };
+    }
+  }
+  return null;
+}
+
+function getQueueTarget(index=0){
+  const counter=shopLayout.find(item=>item.type==='counter');
+  const baseCol=counter?counter.col+1:2;
+  const baseRow=counter?counter.row+2:4;
+  return {
+    col:clampGridCol(baseCol),
+    row:clampGridRow(baseRow+Math.min(index,3))
+  };
+}
+
+function getTurnKioskTarget(){
+  const kiosk=shopLayout.find(item=>item.type==='turnKiosk');
+  const baseCol=kiosk?kiosk.col-1:11;
+  const baseRow=kiosk?kiosk.row:6;
+  return {col:clampGridCol(baseCol),row:clampGridRow(baseRow)};
+}
+
+function startCustomerLeave(c){
+  const curTile=screenToIso(c.x+5,c.y+20);
+  c.leavePath=astarPath(Math.max(0,Math.min(ISO.cols-1,curTile.col)),Math.max(0,Math.min(ISO.rows-1,curTile.row)),ISO.cols-1,3);
+  c.leaveIdx=0;
+  const dp=getDoorThresholdPos(), outsideDp=getDoorOutsidePos();
+  c.st='leave';c.tx=dp.x;c.ty=dp.y;c.exitTx=outsideDp.x;c.exitTy=outsideDp.y;c.exitLeg=false;c.roamPath=null;c.roamIdx=0;
+  c.queueNumber=0;
+  if(G&&G.turns&&G.turns.servingId===c.id) G.turns.servingId=null;
+  G.doorOpen=90;
+}
+
+function resolveCustomerCheckout(c){
+  const wp=c.wantsProdIdx>=0?G.prods[c.wantsProdIdx]:null;
+  const inStock=wp&&wp.stock>0;
+  if(inStock){
+    wp.stock=Math.max(0,wp.stock-1);
+    const baseRev=Math.max(1,Math.round(wp.price*(0.8+Math.random()*0.4)*(c.vip?1.5:1)));
+    const rev=c.loyaltyFree?0:baseRev;
+    if(rev>0){
+      G.money+=rev;G.weekRevenue+=rev;G.yearRevenue+=rev;G.totalRevenue+=rev;
+      addFloat(c.x+7,c.y-28,'€'+rev,c.vip?'#ffd700':P.green);SFX.cashRegister();
+    }else{
+      addFloat(c.x+7,c.y-28,'GRATIS','#55ccff');SFX.cashRegister();
+      showEv('Tarjeta Fidelidad: compra gratis','#55ccff');
+      if(G.loyaltyCard) G.loyaltyCard.targetId=null;
+    }
+    G.satisfaction=Math.min(100,G.satisfaction+0.5);
+    c.bought=true;
+    c.loyaltyFree=false;
+    const arr=T().custBought;c.bMsg=arr[Math.floor(Math.random()*arr.length)];c.bTimer=190;
+    if(G.reviews&&Math.random()<(c.vip?0.6:0.15)){
+      G.reviews.positive++;
+      const fameBonus=c.vip?3:1;
+      G.fame=Math.min(100,G.fame+fameBonus);
+      addFloat(c.x+7,c.y-44,T().reviewPos,'#ffd700');
+      updateReviewMod();
+    }
+  } else {
+    const nearStaff=G.staff.find(s=>s.hired&&!s.fired&&Math.hypot(s.x-c.x,s.y-c.y)<85);
+    if(nearStaff){
+      const alt=G.prods.find(p=>p.stock>0);
+      if(alt){
+        alt.stock=Math.max(0,alt.stock-1);
+        const rev=Math.max(1,Math.round(alt.price*(0.7+Math.random()*0.3)));
+        G.money+=rev;G.weekRevenue+=rev;G.yearRevenue+=rev;G.totalRevenue+=rev;
+        addFloat(c.x+7,c.y-28,'€'+rev,P.neonB);SFX.cashRegister();
+        addFloat(nearStaff.x+7,nearStaff.y-36,'🤝',P.neon1);
+        G.satisfaction=Math.min(100,G.satisfaction+0.2);
+        c.bought=true;
+        const arr=T().custSaved;c.bMsg=arr[Math.floor(Math.random()*arr.length)];c.bTimer=190;
+      } else {
+        const arr=T().custNoStock;c.bMsg=arr[Math.floor(Math.random()*arr.length)];c.bTimer=190;
+        G.satisfaction=Math.max(0,G.satisfaction-2);
+      }
+    } else {
+      const arr=T().custNoStock;c.bMsg=arr[Math.floor(Math.random()*arr.length)];c.bTimer=190;
+      G.satisfaction=Math.max(0,G.satisfaction-2);
+      addFloat(c.x+7,c.y-28,'SIN STOCK',P.red);
+      if(G.reviews&&Math.random()<0.30){
+        G.reviews.negative++;
+        G.fame=Math.max(0,G.fame-2);
+        addFloat(c.x+7,c.y-44,T().reviewNeg,P.red);
+        updateReviewMod();
+      }
+    }
+  }
+  startCustomerLeave(c);
+}
+
 function isNearDoorSensor(x,y,padX=72,padY=60){
   const doorPos=getDoorThresholdPos();
   return Math.abs(x-doorPos.x)<=padX&&Math.abs(y-doorPos.y)<=padY;
@@ -4150,7 +4344,12 @@ function shouldDoorBeOpen(){
   if(!G) return false;
   if(G.doorMode==='open') return true;
   if(G.doorMode==='close') return false;
-  if(G.custs&&G.custs.some(c=>isNearDoorSensor(c.x,c.y))) return true;
+  if(G.custs&&G.custs.some(c=>{
+    const traffic=c.st==='walk'||c.st==='leave';
+    return isNearDoorSensor(c.x,c.y,traffic?138:92,traffic?96:72)
+      || isNearDoorSensor(c.tx||c.x,c.ty||c.y,traffic?138:92,traffic?96:72)
+      || isNearDoorSensor(c.exitTx||c.x,c.exitTy||c.y,traffic?138:92,traffic?96:72);
+  })) return true;
   if(G.staff&&G.staff.some(s=>(s.fired||(s.hired&&s.isWalking))&&isNearDoorSensor(s.x,s.y))) return true;
   if(G.saca&&G.saca.phase!=='idle'&&isNearDoorSensor(G.saca.x,G.saca.y,96,72)) return true;
   if(G.thief&&G.thief.phase!=='idle'&&isNearDoorSensor(G.thief.x,G.thief.y,84,64)) return true;
@@ -6835,6 +7034,8 @@ function drawShop(){
   drawAirConditioning();
   // ── AROMATIZER on back wall (right side, low) ──
   drawAromatizer();
+  // ── TURN MANAGER between the back-wall displays/windows ──
+  drawTurnManager();
   // ── SECURITY CAMERA in the corner, aimed at the entrance ──
   drawCornerSecurityCamera();
   // ── TFT ALTADIS (16:9 screen on back wall, above 2nd window) ──
@@ -6926,6 +7127,7 @@ function drawShop(){
       case 'rug': drawScaled(e,drawIsoRug); break;
       case 'djBooth': drawScaled(e,drawIsoDJBooth); break;
       case 'tablet': drawScaled(e,drawIsoTabletKiosk); break;
+      case 'turnKiosk': drawScaled(e,drawIsoTurnKiosk); break;
       case 'staff': drawIsoStaff(e.data); break;
       case 'cust': drawIsoCust(e.data); break;
       case 'saca': drawIsoSaca(e.data); break;
@@ -7452,6 +7654,26 @@ function drawIsoTabletKiosk(col,row){
   cx.textAlign='left';
 
   if(tabletVote.timer>0) tabletVote.timer--;
+}
+
+function drawIsoTurnKiosk(col,row){
+  const kp=toIso(col,row);
+  drawIsoShadow(kp.x,kp.y+5,12,5);
+  drawIsoBlock(col+0.18,row+0.18,0.64,0.64,7,'#6e7076','#494c52','#5b5f66',null);
+  const baseCenter=toIso(col+0.5,row+0.5);
+  const poleCX=baseCenter.x, poleCY=baseCenter.y-7;
+  const poleH=34;
+  r(poleCX-2,poleCY-poleH,4,poleH,'#5d6670');
+  r(poleCX-1,poleCY-poleH,1,poleH,'#8fa1b2');
+  const tabW=22, tabH=18;
+  const tabX=poleCX-tabW/2, tabY=poleCY-poleH-tabH+2;
+  r(tabX-1,tabY-1,tabW+2,tabH+2,'#191d22');
+  r(tabX,tabY,tabW,tabH,'#e9f3ff');
+  r(tabX+2,tabY+2,tabW-4,8,'#0c2433');
+  tx('TURNO',tabX+tabW/2,tabY+8,'#8defff',6,'center');
+  tx(String(currentTurnNumber()).padStart(3,'0'),tabX+tabW/2,tabY+16,'#d9a83f',8,'center');
+  r(tabX+5,tabY+tabH+1,12,3,'#d7b45b');
+  tx('ticket',tabX+tabW/2,tabY+tabH+11,'#f3dc9e',5,'center');
 }
 
 // Helper: find tablet position from layout for vote floats
@@ -8034,6 +8256,39 @@ function drawAltadisTFT(){
   // Mount bracket (centered on bezel top edge)
   const mountX=(bzTL.x+bzTR.x)/2, mountY=(bzTL.y+bzTR.y)/2-3;
   cx.fillStyle='#444';cx.fillRect(mountX-4,mountY,8,3);
+  cx.restore();
+}
+
+function drawTurnManager(){
+  const left=toIso(3.45,0);
+  const right=toIso(4.75,0);
+  const topY=left.y-ISO.wallH+36;
+  const slopeY=right.y-left.y;
+  const frameTL={x:left.x,y:topY};
+  const frameTR={x:right.x,y:topY+slopeY};
+  const frameBL={x:left.x,y:topY+54};
+  const frameBR={x:right.x,y:topY+54+slopeY};
+  cx.save();
+  cx.beginPath();
+  cx.moveTo(frameTL.x,frameTL.y);cx.lineTo(frameTR.x,frameTR.y);
+  cx.lineTo(frameBR.x,frameBR.y);cx.lineTo(frameBL.x,frameBL.y);
+  cx.closePath();cx.fillStyle='#15181c';cx.fill();
+  cx.strokeStyle='#6f5531';cx.lineWidth=2;cx.stroke();
+  const innerPad=5;
+  const tl={x:frameTL.x+innerPad,y:frameTL.y+innerPad};
+  const tr={x:frameTR.x-innerPad,y:frameTR.y+innerPad};
+  const bl={x:frameBL.x+innerPad,y:frameBL.y-innerPad};
+  const br={x:frameBR.x-innerPad,y:frameBR.y-innerPad};
+  cx.beginPath();
+  cx.moveTo(tl.x,tl.y);cx.lineTo(tr.x,tr.y);
+  cx.lineTo(br.x,br.y);cx.lineTo(bl.x,bl.y);
+  cx.closePath();cx.fillStyle='#031316';cx.fill();
+  const num=String(currentTurnNumber()).padStart(3,'0');
+  const cxm=(tl.x+tr.x+bl.x+br.x)/4;
+  const cym=(tl.y+tr.y+bl.y+br.y)/4;
+  tx('TURNO',cxm,cym-10,'#8defff',7,'center');
+  tx(num,cxm,cym+12,'#ffd86b',16,'center');
+  tx('CAJA',cxm,cym+26,'#8defff',6,'center');
   cx.restore();
 }
 
@@ -9382,7 +9637,7 @@ function roleShortLabel(role){
 }
 
 function customerStateLabel(c){
-  const map={walk:'entra',browse:'mira',queue:'cola',buy:'compra',leave:'sale',tablet:'vota'};
+  const map={walk:'entra',browse:'mira',queue:'cola',buy:'atencion',leave:'sale',tablet:'vota'};
   return map[c&&c.st]||'shop';
 }
 
@@ -9400,6 +9655,58 @@ function customerUpsellingLabel(c){
   if(wanted.includes('vino')||wanted.includes('wine')) return 'Vinos';
   if(wanted.includes('bebida')||wanted.includes('drink')||wanted.includes('refresco')) return 'Bebida';
   return '-';
+}
+
+function customerNearbyFixtureLabel(c){
+  if(!c) return '-';
+  const feet=screenToIso(c.x+5,c.y+20);
+  const fixtures=(shopLayout||[]).filter(item=>['wineRack','magazines','vending','lottery','shelves','counter'].includes(item.type));
+  let best=null;
+  for(const item of fixtures){
+    const cx=item.col+((FURNITURE_SIZE[item.type]||[1,1])[0]-1)/2;
+    const cy=item.row+((FURNITURE_SIZE[item.type]||[1,1])[1]-1)/2;
+    const dist=Math.abs(cx-feet.col)+Math.abs(cy-feet.row);
+    if(!best||dist<best.dist) best={item,dist};
+  }
+  if(!best||best.dist>3) return '-';
+  const map={
+    wineRack:'Vinos',
+    magazines:'Prensa',
+    vending:'Bebidas',
+    lottery:'Loteria',
+    shelves:'Souvenirs',
+    counter:'Souvenirs'
+  };
+  return map[best.item.type]||'-';
+}
+
+function currentTurnNumber(){
+  if(!G) return 0;
+  if(G.turns&&G.turns.current) return G.turns.current;
+  if(!G.custs) return 0;
+  const active=G.custs.find(c=>c.queueNumber)||G.custs.find(c=>c.st==='browse');
+  if(!active) return 0;
+  return active.queueNumber||(((active.id||1)-1)%999+1);
+}
+
+function assignCustomerTurn(c){
+  if(!c||c.queueNumber||!G||!G.turns) return c&&c.queueNumber?c.queueNumber:0;
+  c.queueNumber=G.turns.next++;
+  G.turns.issued=(G.turns.issued||0)+1;
+  return c.queueNumber;
+}
+
+function customerDwellLabel(c){
+  const ticks=Math.max(0,Math.floor((c&&c.dwellTicks)||0));
+  const totalSeconds=Math.floor(ticks/60);
+  const mins=Math.floor(totalSeconds/60);
+  const secs=totalSeconds%60;
+  return mins+':'+String(secs).padStart(2,'0');
+}
+
+function customerTicketLabel(c){
+  const value=Math.max(5,Math.min(50,Math.round((c&&c.avgTicket)||0)||5));
+  return value+'€';
 }
 
 function customerMiniAvatar(c){
@@ -9473,6 +9780,7 @@ function drawCharacterGroupsPanel(){
   const vipCount=clients.filter(c=>c.vip).length;
   const queueCount=clients.filter(c=>c.st==='queue').length;
   const browsingCount=clients.filter(c=>c.st==='browse').length;
+  const issuedTurns=G&&G.turns?(G.turns.issued||0):0;
   const roleCounts=[0,0,0,0,0];
   hired.forEach(s=>{
     if(Number.isInteger(s.role)&&roleCounts[s.role]!==undefined) roleCounts[s.role]++;
@@ -9496,21 +9804,29 @@ function drawCharacterGroupsPanel(){
     teamBody.innerHTML+='<div class="char-row"><span class="muted">+'+(hired.length-teamMaxRows)+' más</span><span></span><span></span><span></span></div>';
   }
 
-  clientBody.innerHTML='<div class="char-row"><span class="muted">Tipo</span><span class="muted">Que hace</span><span class="muted">Upselling</span><span class="muted"></span></div>'
+  clientBody.innerHTML='<div class="char-row"><span class="muted">Tipo</span><span class="muted">Que hace</span><span class="muted">Mira</span><span class="muted">Upselling</span><span class="muted">Turno</span><span class="muted">Tiempo</span><span class="muted">Ticket</span><span class="muted"></span></div>'
     +clients.slice(0,clientMaxRows).map(c=>{
     const typeLabel=customerTypeLabel(c);
+    const looking=customerNearbyFixtureLabel(c);
     const upselling=customerUpsellingLabel(c);
+    const turn=c.queueNumber?String(c.queueNumber).padStart(3,'0'):'-';
+    const dwell=customerDwellLabel(c);
+    const ticket=customerTicketLabel(c);
     return '<div class="char-row">'
       +customerMiniAvatar(c)+'<span style="color:'+customerTone(c)+'">'+typeLabel+'</span></span>'
       +'<span>'+customerStateLabel(c)+'</span>'
+      +'<span>'+looking+'</span>'
       +'<span>'+upselling+'</span>'
+      +'<span>'+turn+'</span>'
+      +'<span>'+dwell+'</span>'
+      +'<span>'+ticket+'</span>'
       +'<span class="'+(c.bought?'ok':'muted')+'">'+(c.bought?'ok':'')+'</span>'
       +'</div>';
   }).join('');
   if(clients.length>clientMaxRows){
-    clientBody.innerHTML+='<div class="char-row"><span class="muted">+'+(clients.length-clientMaxRows)+' más</span><span class="muted">VIP '+vipCount+'</span><span class="muted">Cola '+queueCount+'</span><span class="muted">Mira '+browsingCount+'</span></div>';
+    clientBody.innerHTML+='<div class="char-row"><span class="muted">+'+(clients.length-clientMaxRows)+' más</span><span class="muted">VIP '+vipCount+'</span><span class="muted">Cola '+queueCount+'</span><span class="muted">Mira '+browsingCount+'</span><span class="muted">Turnos '+issuedTurns+'</span><span></span><span></span><span></span></div>';
   }else{
-    clientBody.innerHTML+='<div class="char-row"><span class="muted">VIP '+vipCount+'</span><span class="muted">Cola '+queueCount+'</span><span class="muted">Mira '+browsingCount+'</span><span></span></div>';
+    clientBody.innerHTML+='<div class="char-row"><span class="muted">VIP '+vipCount+'</span><span class="muted">Cola '+queueCount+'</span><span class="muted">Mira '+browsingCount+'</span><span class="muted">Turnos '+issuedTurns+'</span><span></span><span></span><span></span><span></span></div>';
   }
 }
 
@@ -12015,9 +12331,10 @@ window.xtAPI = (function(){
     return true;
   }
 
-  function setTelegramFocusMode(active){
+  function setTelegramFocusMode(active,expandClients){
+    const shouldExpand=expandClients===undefined?!!active:!!expandClients;
     if(dock) dock.classList.toggle('focus-send',!!active);
-    if(characterDock) characterDock.classList.toggle('expand-clients',!!active);
+    if(characterDock) characterDock.classList.toggle('expand-clients',shouldExpand);
   }
 
   function setTelegramDockHidden(active){
@@ -12036,7 +12353,8 @@ window.xtAPI = (function(){
 
   async function sendComposerText(text){
     const clean=String(text||'').trim();
-    setTelegramFocusMode(true);
+    telegramComposeStart=false;
+    setTelegramFocusMode(true,true);
     if(!clean) return;
     rememberMemory('dialog','Consola local: '+clean);
     appendTelegramLog('out','Juego',clean);
@@ -12080,6 +12398,7 @@ window.xtAPI = (function(){
     telegramBtn.textContent=telegramDockHidden?'Telegram OFF':'Telegram ON';
     window.toggleTelegramDock=()=>setTelegramDockHidden(!telegramDockHidden);
   }
+  setTelegramFocusMode(true,false);
   if(composer){
     composer.addEventListener('keydown',e=>{
       if(e.key==='Enter'&&!e.shiftKey){
