@@ -28,6 +28,18 @@
     .btn-menu{background:#553311;color:#ffcc66;border:1px solid #cc9933 !important}
     #telegramDock{display:none;position:fixed;left:0;bottom:0;height:164px;background:#030b12;border:2px solid #163c4a;border-bottom:none;color:#d9f7ff;font-family:monospace;z-index:30;gap:8px;padding:8px}
     #telegramDock.show{display:flex}
+    #characterDock{display:none;position:fixed;left:0;bottom:164px;height:64px;color:#d9f7ff;font-family:monospace;z-index:29;gap:8px}
+    #characterDock.show{display:flex}
+    .char-pane{min-width:0;flex:1;display:flex;flex-direction:column;border:1px solid #1d5260;border-radius:0;background:#06131d;overflow:hidden}
+    .char-head{height:20px;flex:0 0 20px;display:flex;align-items:center;justify-content:space-between;padding:0 8px;background:#0b2230;font-size:9px;font-weight:bold;text-transform:uppercase}
+    .char-head.team{color:#8defff}
+    .char-head.clients{color:#ffd86b}
+    .char-status{color:#9ec7d0;font-size:7px;font-weight:normal;text-transform:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:70%}
+    .char-body{flex:1;padding:6px 8px;background:#02080d;font-size:10px;line-height:1.3;color:#cceef5;display:flex;flex-direction:column;gap:4px}
+    .char-row{display:grid;grid-template-columns:minmax(58px,1fr) minmax(72px,1fr) minmax(68px,1fr) auto;gap:8px;align-items:center}
+    .char-row span{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .char-row .ok{color:#88ee88}
+    .char-row .muted{color:#6c94a1}
     .tg-pane{min-width:0;flex:1;display:flex;flex-direction:column;border:1px solid #1d5260;border-radius:6px;background:#06131d;overflow:hidden}
     .tg-head{height:20px;flex:0 0 20px;display:flex;align-items:center;justify-content:space-between;padding:0 8px;background:#0b2230;color:#8defff;font-size:9px;font-weight:bold;text-transform:uppercase}
     .tg-status{color:#9ec7d0;font-size:8px;font-weight:normal;text-transform:none}
@@ -52,6 +64,7 @@
     #mobileSkipBtn.show{display:block}
     @media (max-width:700px){
       #telegramDock{height:192px;gap:5px;padding:5px}
+      #characterDock{bottom:192px;height:72px;gap:5px}
       #telegramComposer{font-size:11px}
       .tg-head{font-size:8px}
       #telegramLog{font-size:9px}
@@ -95,6 +108,16 @@
 <video id="bootVideo" preload="auto" playsinline webkit-playsinline style="display:none"></video>
 <canvas id="c" width="800" height="500"></canvas>
 <button id="mobileSkipBtn" type="button" aria-label="Saltar al juego">SKIP AL JUEGO</button>
+<div id="characterDock" aria-label="Equipo y clientes">
+  <div class="char-pane">
+    <div class="char-head team"><span>Equipo</span><span class="char-status" id="characterTeamStatus">0 activos</span></div>
+    <div class="char-body" id="characterTeamBody"></div>
+  </div>
+  <div class="char-pane">
+    <div class="char-head clients"><span>Clientes</span><span class="char-status" id="characterClientStatus">0 dentro</span></div>
+    <div class="char-body" id="characterClientBody"></div>
+  </div>
+</div>
 <div id="telegramDock" aria-label="Telegram AdmiraXPBot">
   <div class="tg-pane">
     <div class="tg-head"><span>Enviar a Telegram</span><span class="tg-status" id="telegramSendStatus">AdmiraXPBot</span></div>
@@ -207,11 +230,14 @@ function resizeCanvas(){
   const vw=window.innerWidth, vh=window.innerHeight;
   const barH=document.getElementById('topBar').classList.contains('show')?34:0;
   const dock=document.getElementById('telegramDock');
+  const characterDock=document.getElementById('characterDock');
   let telegramInGame=false;
   try{telegramInGame=state==='game';}catch(e){telegramInGame=false;}
   if(dock) dock.classList.toggle('show',telegramInGame);
+  if(characterDock) characterDock.classList.toggle('show',telegramInGame);
   const dockH=(telegramInGame&&dock)?dock.offsetHeight:0;
-  const availH=vh-barH-dockH;
+  const characterDockH=(telegramInGame&&characterDock)?characterDock.offsetHeight:0;
+  const availH=vh-barH-dockH-characterDockH;
   const ratio=W/H;
   let cw,ch;
   if(vw/availH > ratio){ ch=availH; cw=Math.floor(ch*ratio); }
@@ -221,6 +247,11 @@ function resizeCanvas(){
   if(dock){
     dock.style.width=cw+'px';
     dock.style.left=Math.max(0,Math.floor((vw-cw)/2))+'px';
+  }
+  if(characterDock){
+    characterDock.style.width=cw+'px';
+    characterDock.style.left=Math.max(0,Math.floor((vw-cw)/2))+'px';
+    characterDock.style.bottom=dockH+'px';
   }
   const tb=document.getElementById('topBar');
   if(tb) tb.style.maxWidth=cw+'px';
@@ -730,11 +761,18 @@ function selectDigitalSignageAudio(displayIdx){
 }
 
 function startVideo(){
+  stopAllMedia();
   videoPlaying=true;
   resetDSDisplayPause();
-  // Auto-load current video file if available
-  switchDSVideo(dsVideoIdx);
+  dsMode='slides';
+  dsFrame=0;
+  dsAudioMuted=true;
+  dsAudioOwner=0;
+  try{dsVideoEl.pause();}catch(e){}
+  try{dsVideoEl.currentTime=0;}catch(e){}
+  try{dsVideoEl.removeAttribute('src');dsVideoEl.load();}catch(e){}
   updateVideoPosition();
+  updateDSCanvases();
 }
 
 function toggleVideoPause(){
@@ -749,6 +787,34 @@ function toggleDigitalSignagePlayback(){
   addFloat(W/2,40,videoPaused?'⏸ PANTALLAS':'▶ PANTALLAS','#44ccff');
   showEv(videoPaused?'Pantallas en pausa':'Pantallas reanudadas','#44ccff');
   return true;
+}
+
+function stopAllMedia(){
+  try{bgMusic.pause();}catch(e){}
+  try{dsVideoEl.pause();}catch(e){}
+  try{dsVideoEl.currentTime=0;}catch(e){}
+  try{dsVideoEl.removeAttribute('src');dsVideoEl.load();}catch(e){}
+  try{bootVideoEl.pause();}catch(e){}
+  try{bootVideoEl.currentTime=0;}catch(e){}
+  videoPlaying=false;
+  dsMode='slides';
+  dsFrame=0;
+  dsAudioMuted=true;
+  dsAudioOwner=0;
+  resetDSDisplayPause();
+  [videoEl,videoEl2].forEach(el=>{if(el) el.style.display='none';});
+  [admiraTube1,admiraTube2].forEach(frame=>{
+    try{
+      if(frame&&frame.contentWindow){
+        frame.contentWindow.postMessage(JSON.stringify({event:'command',func:'pauseVideo',args:[]}), '*');
+      }
+    }catch(e){}
+    if(frame){
+      frame.style.display='none';
+      if(frame.src) frame.src='';
+    }
+  });
+  G&& (G.admiraTube=null);
 }
 
 // ── HTML BOTTOM BAR — wiring ─────────────────────────────────
@@ -1795,12 +1861,15 @@ let npcEdDraft=null;       // working copy of NPC data {name,role,look:{...},lev
 let npcEdNameEdit=false;   // is name field in edit mode
 let npcEdNameBuf='';       // name buffer while editing
 let npcEdDockSide='left';  // 'left' | 'right' — open opposite to clicked NPC when possible
+let npcEdKind='staff';     // 'staff' | 'customer' | 'special'
+let npcPlacementDirty=false;
 let custTemplates=[];      // customer appearance templates [{look:{shirt,hair,skin,pants,shoes,accessory}}]
 let custTplSelIdx=-1;      // selected customer template index
 
 // ── SATISFACTION TABLET (next to door) ──────────────────────
 let tabletVote={face:-1,timer:0}; // face: 0=😊, 1=😐, 2=😡
 let shopStaffPos=null;     // saved staff positions (null = use DEFAULT_STAFF_POS)
+let shopStaffZones=null;   // saved staff influence zones (null = use home-based defaults)
 
 // Default staff home positions (used when no custom positions saved)
 const DEFAULT_STAFF_POS=[
@@ -1813,6 +1882,8 @@ const DEFAULT_STAFF_POS=[
   {col:6, row:3, label:'Extra 2',     color:'#ffaa88'},
   {col:7, row:1, label:'Extra 3',     color:'#aabbcc'},
 ];
+
+const DEFAULT_STAFF_ZONE_RADIUS=[1,2,2,2,1,2,2,2];
 
 // ── LAYOUT PERSISTENCE ───────────────────────────────────────
 // Always load from localStorage. If nothing saved, use DEFAULT_LAYOUT.
@@ -1849,11 +1920,14 @@ function loadLayout(){
         console.log('[Layout] ✓ Loaded saved layout ('+shopLayout.length+' items)');
         // Also load staff positions
         try{const sp=localStorage.getItem('xtanco_staff_pos');if(sp) shopStaffPos=JSON.parse(sp);}catch(e){}
+        try{const sz=localStorage.getItem('xtanco_staff_zones');if(sz) shopStaffZones=JSON.parse(sz);}catch(e){}
         return;
       }
     }
   }catch(e){console.warn('[Layout] Load failed, using DEFAULT_LAYOUT:',e);}
   shopLayout=JSON.parse(JSON.stringify(DEFAULT_LAYOUT));
+  shopStaffPos=null;
+  shopStaffZones=null;
   console.log('[Layout] Using DEFAULT_LAYOUT (no saved data)');
 }
 function saveLayout(){
@@ -1866,6 +1940,7 @@ function saveLayout(){
     DEFAULT_LAYOUT.length=0;
     for(const it of shopLayout) DEFAULT_LAYOUT.push(JSON.parse(JSON.stringify(it)));
     if(shopStaffPos) localStorage.setItem('xtanco_staff_pos',JSON.stringify(shopStaffPos));
+    if(shopStaffZones) localStorage.setItem('xtanco_staff_zones',JSON.stringify(shopStaffZones));
     console.log('[Layout] ✓ Saved ('+shopLayout.length+' items) → localStorage + DEFAULT_LAYOUT updated');
   }catch(e){console.warn('[Layout] Save error:',e);}
 }
@@ -1885,6 +1960,49 @@ function setFurnitureVisibility(value){
   edSelIdx=-1;
   try{buildWalkGrid();}catch(e){}
   return 'Mobiliario OFF: muebles ocultos.';
+}
+
+function clampGridCol(col){return Math.max(0,Math.min(ISO.cols-1,Math.round(col)));}
+function clampGridRow(row){return Math.max(0,Math.min(ISO.rows-1,Math.round(row)));}
+function clampZoneRadius(radius){return Math.max(0,Math.min(6,Math.round(radius)));}
+function prodName(i){
+  try{return T().prodLabel[i]||('Producto '+i);}catch(e){return 'Producto '+i;}
+}
+function moveStaffToTile(staff,col,row){
+  const iso=toIso(col,row);
+  staff.x=iso.x-7;
+  staff.y=iso.y-20;
+  staff.isWalking=false;
+  staff.navTarget=null;
+  staff.navPath=null;
+  staff.navPathIdx=0;
+}
+function saveStaffPlacementByIndex(index){
+  if(index<0||!G||!G.staff||!G.staff[index]) return false;
+  const s=G.staff[index];
+  if(!shopStaffPos) shopStaffPos=DEFAULT_STAFF_POS.map(p=>({...p}));
+  while(shopStaffPos.length<=index) shopStaffPos.push({col:s.homeCol,row:s.homeRow,label:'Extra',color:'#88ffcc'});
+  shopStaffPos[index]={...(shopStaffPos[index]||{}),col:clampGridCol(s.homeCol),row:clampGridRow(s.homeRow)};
+  if(!shopStaffZones) shopStaffZones=[];
+  while(shopStaffZones.length<=index) shopStaffZones.push(null);
+  shopStaffZones[index]={col:clampGridCol(s.zoneCol),row:clampGridRow(s.zoneRow),radius:clampZoneRadius(s.zoneRadius)};
+  saveLayout();
+  return true;
+}
+function getStaffZoneConfig(index,homeCol,homeRow){
+  const saved=shopStaffZones&&shopStaffZones[index];
+  if(saved&&Number.isFinite(saved.col)&&Number.isFinite(saved.row)){
+    return {
+      col:clampGridCol(saved.col),
+      row:clampGridRow(saved.row),
+      radius:clampZoneRadius(saved.radius===undefined?DEFAULT_STAFF_ZONE_RADIUS[index%DEFAULT_STAFF_ZONE_RADIUS.length]:saved.radius),
+    };
+  }
+  return {
+    col:clampGridCol(homeCol),
+    row:clampGridRow(homeRow),
+    radius:clampZoneRadius(DEFAULT_STAFF_ZONE_RADIUS[index%DEFAULT_STAFF_ZONE_RADIUS.length]),
+  };
 }
 function resetLayout(){
   // Reset to DEFAULT_LAYOUT and save it as the base for new games
@@ -1993,6 +2111,7 @@ function astarPath(sc,sr,ec,er){
 // ── GAME STATE ────────────────────────────────────────────────
 let G={};
 function initGame(){
+  stopAllMedia();
   // shopLayout is already authoritative in memory (loaded at page start
   // via loadLayout() at line 1203, or updated live by the editor).
   // Do NOT call loadLayout() here — it would overwrite the in-memory
@@ -2064,6 +2183,7 @@ function initGame(){
   const staffGridPos=(shopStaffPos&&shopStaffPos.length>0)?shopStaffPos:DEFAULT_STAFF_POS;
   G.staff=M.staffInit.map((s,i)=>{
     const gp=staffGridPos[i%staffGridPos.length];
+    const zone=getStaffZoneConfig(i,gp.col,gp.row);
     const iso=toIso(gp.col,gp.row);
     // Apply custom names/roles from settings
     const custom=shopTimeSettings.staff&&shopTimeSettings.staff[i];
@@ -2076,6 +2196,7 @@ function initGame(){
       look:{shirt:0,hair:3,skin:1,pants:0,shoes:0,accessory:0},
       bTimer:0,bIdx:i%5,aFrame:0,aTimer:0,
       homeCol:gp.col,homeRow:gp.row,
+      zoneCol:zone.col,zoneRow:zone.row,zoneRadius:zone.radius,
       navTarget:null,navPath:null,navPathIdx:0,navTick:0,
       djScratch:0,djScratchNext:Math.floor(Math.random()*120)+90,
     };
@@ -2152,6 +2273,14 @@ function loadGame(){
       if(G.staff) G.staff.forEach((s,i)=>{
         if(s.navTarget===undefined){s.navTarget=null;s.navPath=null;s.navPathIdx=0;s.navTick=0;}
         if(s.homeCol===undefined){const gp=[{col:2,row:1},{col:8,row:3},{col:4,row:1},{col:5,row:4},{col:5,row:2}];const p=gp[i%gp.length];s.homeCol=p.col;s.homeRow=p.row;}
+        if(s.zoneCol===undefined||s.zoneRow===undefined){
+          const zone=getStaffZoneConfig(i,s.homeCol,s.homeRow);
+          s.zoneCol=zone.col;s.zoneRow=zone.row;s.zoneRadius=zone.radius;
+        }else{
+          s.zoneCol=clampGridCol(s.zoneCol);
+          s.zoneRow=clampGridRow(s.zoneRow);
+          s.zoneRadius=clampZoneRadius(s.zoneRadius===undefined?DEFAULT_STAFF_ZONE_RADIUS[i%DEFAULT_STAFF_ZONE_RADIUS.length]:s.zoneRadius);
+        }
         if(!s.look) s.look={shirt:s.shirt||0,hair:s.hair||3,skin:1,pants:0,shoes:0,accessory:0};
       });
       loadNPCCustoms();
@@ -2395,6 +2524,11 @@ document.addEventListener('keydown',e=>{
   }
   if(state===S.GAME){
     if(e.code==='Escape'){if(uiOpen)uiOpen=false;else openPause();}
+    if(e.code==='KeyS'&&npcEdOpen&&npcEdKind==='staff'&&npcPlacementDirty){
+      e.preventDefault();
+      persistSelectedStaffPlacement();
+      return;
+    }
     if(e.code==='KeyM'){uiOpen=!uiOpen;}
     if(e.code==='KeyE'){state=S.EDITOR;edSelIdx=-1;}
     if(e.code==='Digit1'){activeTab=0;uiOpen=true;}
@@ -2434,6 +2568,23 @@ cv.addEventListener('click',e=>{
   const mx=(e.clientX-r2.left)*(W/r2.width)|0, my=(e.clientY-r2.top)*(H/r2.height)|0;
   // Check buttons first
   for(const[id,b] of Object.entries(BTNS)){if(mx>=b.x&&mx<b.x+b.w&&my>=b.y&&my<b.y+b.h){doAction(id);return;}}
+  if(state===S.GAME&&npcEdOpen&&npcEdKind==='staff'&&npcEdIdx>=0&&G&&G.staff&&G.staff[npcEdIdx]){
+    const box=getNPCEditorBounds();
+    if(mx>=box.x&&mx<=box.x+box.w&&my>=box.y&&my<=box.y+box.h) return;
+    const tile=screenToIso(mx,my);
+    if(tile.col>=0&&tile.col<ISO.cols&&tile.row>=0&&tile.row<ISO.rows){
+      const s=G.staff[npcEdIdx];
+      s.homeCol=clampGridCol(tile.col);
+      s.homeRow=clampGridRow(tile.row);
+      s.zoneCol=s.homeCol;
+      s.zoneRow=s.homeRow;
+      if(s.zoneRadius===undefined) s.zoneRadius=clampZoneRadius(DEFAULT_STAFF_ZONE_RADIUS[npcEdIdx%DEFAULT_STAFF_ZONE_RADIUS.length]);
+      moveStaffToTile(s,s.homeCol,s.homeRow);
+      npcPlacementDirty=true;
+      showEv(s.name+' movido a '+s.zoneCol+','+s.zoneRow+' | pulsa S','#55ccff');
+      return;
+    }
+  }
   // Editor: click on tile to move selected item/staff, or select
   if(state===S.EDITOR){
     const tile=screenToIso(mx,my);
@@ -2665,6 +2816,43 @@ function doAction(id){
     }
     return;
   }
+  if(id.startsWith('custClick')){
+    const ci=parseInt(id.slice(9));
+    if(G.custs&&G.custs[ci]) openCustomerEditor(ci);
+    return;
+  }
+  if(id==='specialClick_saca'&&G.saca&&G.saca.phase!=='idle'){
+    openSpecialEditor('saca','LA SACA',[
+      'Fase: '+G.saca.phase,
+      'Cajas: '+(G.saca.boxes||0),
+      'Entrega activa en tienda'
+    ]);
+    return;
+  }
+  if(id==='specialClick_thief'&&G.thief&&G.thief.phase!=='idle'){
+    openSpecialEditor('thief','LADRON',[
+      'Fase: '+G.thief.phase,
+      'Detectado: '+(G.thief.caught?'si':'no'),
+      'Objetivo: '+G.thief.targetCol+','+G.thief.targetRow
+    ]);
+    return;
+  }
+  if(id==='specialClick_guardia'&&G.guardiaCivil&&G.guardiaCivil.phase!=='idle'){
+    openSpecialEditor('guardia','GUARDIA CIVIL',[
+      'Fase: '+G.guardiaCivil.phase,
+      'Patrulla: '+(G.guardiaCivil.patrolTimer||0),
+      'Supervision activa'
+    ]);
+    return;
+  }
+  if(id==='specialClick_opinador'&&G.opinador&&G.opinador.phase!=='idle'){
+    openSpecialEditor('opinador','OPINADOR',[
+      'Fase: '+G.opinador.phase,
+      'Opinion: '+(G.opinador.opinion||'-'),
+      'Voto: '+(['feliz','neutral','enfadado'][G.opinador.voteFace||0]||'-')
+    ]);
+    return;
+  }
   // ── Menu touch/click actions ──
   if(id==='start'||id==='menuStart'||id==='menuStart8'||id==='menuStart16'){lang=menuSel===0?'es':'en';clientSel=0;modelSel=0;startTransition(S.CLIENT_SEL);return;}
   if(id.startsWith('clientSel')){
@@ -2836,7 +3024,7 @@ function doAction(id){
   if(id==='menu'){uiOpen=!uiOpen;return;}
   if(id==='closeUI'){uiOpen=false;return;}
   if(id==='save'){saveGame();showEv('💾 Saved!','#88aa55');SFX.cashRegister();return;}
-  if(id==='quit'){saveGame();bgMusic.pause();videoPlaying=false;videoEl.style.display='none';videoEl2.style.display='none';startTransition(S.MENU);menuSel=0;return;}
+  if(id==='quit'){saveGame();stopAllMedia();startTransition(S.MENU);menuSel=0;return;}
   if(id==='editor'){state=S.EDITOR;edSelIdx=-1;edStaffSelIdx=-1;edMode='furniture';return;}
   // ── Editor actions ──
   if(id==='edSave'){saveLayout();edSaveNotify=90;playSaveBeep();return;}
@@ -2883,7 +3071,9 @@ function doAction(id){
   if(id.startsWith('edsst')){edStaffSelIdx=parseInt(id.slice(5));return;}
   if(id==='edStReset'){
     shopStaffPos=null;
+    shopStaffZones=null;
     try{localStorage.removeItem('xtanco_staff_pos');}catch(e){}
+    try{localStorage.removeItem('xtanco_staff_zones');}catch(e){}
     edStaffSelIdx=-1;edSaveNotify=90;playSaveBeep();return;
   }
   if(edStaffSelIdx>=0){
@@ -3137,6 +3327,21 @@ function updateStaffNav(s){
   if(s.role===4){
     const booth=shopLayout.find(f=>f.type==='djBooth');
     if(booth){tCol=booth.col+1;tRow=booth.row+1;} // in front of booth (1 row down, facing booth)
+  }
+
+  const zoneCol=Number.isFinite(s.zoneCol)?s.zoneCol:s.homeCol;
+  const zoneRow=Number.isFinite(s.zoneRow)?s.zoneRow:s.homeRow;
+  const zoneRadius=clampZoneRadius(s.zoneRadius===undefined?1:s.zoneRadius);
+  tCol=Math.max(0,Math.min(ISO.cols-1,tCol));
+  tRow=Math.max(0,Math.min(ISO.rows-1,tRow));
+  if(zoneRadius===0){
+    tCol=zoneCol;
+    tRow=zoneRow;
+  }else{
+    tCol=Math.max(zoneCol-zoneRadius,Math.min(zoneCol+zoneRadius,tCol));
+    tRow=Math.max(zoneRow-zoneRadius,Math.min(zoneRow+zoneRadius,tRow));
+    tCol=clampGridCol(tCol);
+    tRow=clampGridRow(tRow);
   }
 
   // Recompute path when target changes or every 90 frames for dynamic roles
@@ -8697,6 +8902,8 @@ function drawIsoCust(c){
   } else {
     chibi(c.x,c.y,c.dir||1,shirtIdx,hairIdx,c.fr,false,tt,1,false,cLook);
   }
+  const ci=G&&G.custs?G.custs.indexOf(c):-1;
+  if(ci>=0) BTNS['custClick'+ci]={x:c.x-3,y:c.y-10,w:18,h:36};
   // ── Mood icon (satisfaction) — only after voting at tablet ──
   if(c.voted&&c.voteFace!=null){
     const faces2=['😊','😐','😡'];
@@ -8825,12 +9032,14 @@ function drawIsoSaca(saca){
     cx.fillStyle='#ffcc44';cx.font='9px monospace';cx.textAlign='center';
     cx.fillText(dots,x+7,y-38);cx.textAlign='left';
   }
+  BTNS['specialClick_saca']={x:x-6,y:y-14,w:34,h:46};
 }
 
 // ── THIEF — caco con antifaz ────────────────────────────────
 function drawIsoThief(th){
   if(!th||th.phase==='idle') return;
   const x=th.x, y=th.y;
+  BTNS['specialClick_thief']={x:x-6,y:y-14,w:30,h:44};
   // Draw the thief sprite
   drawThief(x,y,th.dir||1,th.aFrame||0,tt);
   // Danger indicator — pulsing red exclamation
@@ -8874,6 +9083,7 @@ function drawIsoThief(th){
 function drawIsoGuardiaCivil(gc){
   if(!gc||gc.phase==='idle') return;
   const x=gc.x,y=gc.y;
+  BTNS['specialClick_guardia']={x:x-6,y:y-14,w:30,h:44};
   drawGuardiaCivil(x,y,gc.dir||1,gc.aFrame||0,tt);
   if(gc.phase==='entering'){
     const fadeA=Math.min(1,(820-gc.x)/150);
@@ -8899,6 +9109,7 @@ function drawIsoGuardiaCivil(gc){
 function drawIsoOpinador(op){
   if(!op||op.phase==='idle') return;
   const x=op.x,y=op.y;
+  BTNS['specialClick_opinador']={x:x-6,y:y-14,w:24,h:42};
   const look=op.look||{shirt:4,hair:2,skin:1,pants:1,shoes:0,accessory:1};
   chibi(x,y,op.dir||1,look.shirt||4,look.hair||2,op.aFrame||0,op.phase==='voting',tt,1,false,look);
   if(op.phase==='entering'){
@@ -9077,6 +9288,104 @@ function drawElgatoNotify(){
       tx('💡 Elgato OFF',bx+bw/2,by+16,'#8899cc',9,'center');
     }
     cx.globalAlpha=1;
+  }
+}
+
+function roleShortLabel(role){
+  return ['Caja','Repo','Aza','Mgr','DJ'][role]||'Eq';
+}
+
+function customerStateLabel(c){
+  const map={walk:'entra',browse:'mira',queue:'cola',buy:'compra',leave:'sale',tablet:'vota'};
+  return map[c&&c.st]||'shop';
+}
+
+function customerTypeLabel(c){
+  if(!c) return 'Anonimo';
+  if(c.vip) return 'VIP';
+  if(c.bought||c.st==='queue'||c.st==='buy') return 'Habitual';
+  return 'Anonimo';
+}
+
+function customerUpsellingLabel(c){
+  if(!c||c.wantsProdIdx<0) return '-';
+  const wanted=String(prodName(c.wantsProdIdx)||'').toLowerCase();
+  if(wanted.includes('prensa')||wanted.includes('press')) return 'Prensa';
+  if(wanted.includes('vino')||wanted.includes('wine')) return 'Vinos';
+  if(wanted.includes('bebida')||wanted.includes('drink')||wanted.includes('refresco')) return 'Bebida';
+  return '-';
+}
+
+function customerTone(c){
+  if(!c) return '#b9d8e5';
+  if(c.vip) return '#ffd86b';
+  if(c.st==='queue') return '#ffb36b';
+  if(c.st==='leave') return '#9fb4c4';
+  return '#8defff';
+}
+
+function drawCharacterGroupsPanel(){
+  const dock=document.getElementById('characterDock');
+  const teamStatus=document.getElementById('characterTeamStatus');
+  const clientStatus=document.getElementById('characterClientStatus');
+  const teamBody=document.getElementById('characterTeamBody');
+  const clientBody=document.getElementById('characterClientBody');
+  if(!dock||!teamStatus||!clientStatus||!teamBody||!clientBody) return;
+  if(!G||state!==S.GAME){
+    dock.classList.remove('show');
+    teamStatus.textContent='0 total | Caja 0 Repo 0 Aza 0 Mgr 0 DJ 0';
+    clientStatus.textContent='0 total | Entr 0 Sal 0 Dentro 0';
+    teamBody.innerHTML='';
+    clientBody.innerHTML='';
+    return;
+  }
+  dock.classList.add('show');
+  const hired=(G.staff||[]).filter(s=>s.hired&&!s.fired);
+  const clients=(G.custs||[]).slice().sort((a,b)=>{
+    const av=a.vip?0:1, bv=b.vip?0:1;
+    if(av!==bv) return av-bv;
+    return String(a.st||'').localeCompare(String(b.st||''));
+  });
+  const vipCount=clients.filter(c=>c.vip).length;
+  const queueCount=clients.filter(c=>c.st==='queue').length;
+  const browsingCount=clients.filter(c=>c.st==='browse').length;
+  const roleCounts=[0,0,0,0,0];
+  hired.forEach(s=>{
+    if(Number.isInteger(s.role)&&roleCounts[s.role]!==undefined) roleCounts[s.role]++;
+  });
+  const maxRows=2;
+  teamStatus.textContent=hired.length+' total | Caja '+roleCounts[0]+' Repo '+roleCounts[1]+' Aza '+roleCounts[2]+' Mgr '+roleCounts[3]+' DJ '+roleCounts[4];
+  clientStatus.textContent=clients.length+' total | Entr '+(G.custIn||0)+' Sal '+(G.custOut||0)+' Dentro '+clients.length;
+  teamBody.innerHTML=hired.length
+    ? hired.slice(0,maxRows).map(s=>{
+        const status=s.busy>0?'ocupado':'listo';
+        return '<div class="char-row">'
+          +'<span>'+String(s.name||'').toUpperCase()+'</span>'
+          +'<span>'+roleShortLabel(s.role)+' LV'+(s.level||1)+'</span>'
+          +'<span>E'+Math.round(s.energy||0)+' M'+Math.round(s.morale||0)+'</span>'
+          +'<span class="'+(status==='ocupado'?'ok':'muted')+'">'+status+'</span>'
+          +'</div>';
+      }).join('')
+    : '<div class="char-row"><span class="muted">Sin equipo activo</span><span></span><span></span><span></span></div>';
+  if(hired.length>maxRows){
+    teamBody.innerHTML+='<div class="char-row"><span class="muted">+'+(hired.length-maxRows)+' más</span><span></span><span></span><span></span></div>';
+  }
+
+  clientBody.innerHTML='<div class="char-row"><span class="muted">Tipo</span><span class="muted">Que hace</span><span class="muted">Upselling</span><span class="muted"></span></div>'
+    +clients.slice(0,maxRows).map(c=>{
+    const typeLabel=customerTypeLabel(c);
+    const upselling=customerUpsellingLabel(c);
+    return '<div class="char-row">'
+      +'<span style="color:'+customerTone(c)+'">'+typeLabel+'</span>'
+      +'<span>'+customerStateLabel(c)+'</span>'
+      +'<span>'+upselling+'</span>'
+      +'<span class="'+(c.bought?'ok':'muted')+'">'+(c.bought?'ok':'')+'</span>'
+      +'</div>';
+  }).join('');
+  if(clients.length>maxRows){
+    clientBody.innerHTML+='<div class="char-row"><span class="muted">+'+(clients.length-maxRows)+' más</span><span class="muted">VIP '+vipCount+'</span><span class="muted">Cola '+queueCount+'</span><span class="muted">Mira '+browsingCount+'</span></div>';
+  }else{
+    clientBody.innerHTML+='<div class="char-row"><span class="muted">VIP '+vipCount+'</span><span class="muted">Cola '+queueCount+'</span><span class="muted">Mira '+browsingCount+'</span><span></span></div>';
   }
 }
 
@@ -9644,17 +9953,51 @@ function playSaveBeep(){
 
 // ── NPC EDITOR POPUP (in-game overlay) ──────────────────────
 function openNPCEditor(staffIdx){
-  npcEdOpen=true;npcEdIdx=staffIdx;npcEdTab='look';npcEdNameEdit=false;
-  const s=G.staff[staffIdx];
-  npcEdDockSide=(s&&typeof s.x==='number'&&s.x<W*0.5)?'right':'left';
+  npcEdOpen=true;npcEdIdx=staffIdx;npcEdTab='look';npcEdNameEdit=false;npcEdKind='staff';npcPlacementDirty=false;
+  npcEdDockSide='left';
   npcEdDraft={
-    name:s.name,role:s.role,level:s.level,
-    look:JSON.parse(JSON.stringify(s.look||{shirt:0,hair:3,skin:1,pants:0,shoes:0,accessory:0})),
+    name:G.staff[staffIdx].name,role:G.staff[staffIdx].role,level:G.staff[staffIdx].level,
+    look:JSON.parse(JSON.stringify(G.staff[staffIdx].look||{shirt:0,hair:3,skin:1,pants:0,shoes:0,accessory:0})),
   };
   // Video monitors dim automatically via updateVideoPosition()
 }
+function openCustomerEditor(custIdx){
+  if(!G||!G.custs||!G.custs[custIdx]) return;
+  const c=G.custs[custIdx];
+  npcEdOpen=true;npcEdIdx=custIdx;npcEdTab='look';npcEdNameEdit=false;npcEdKind='customer';npcPlacementDirty=false;
+  npcEdDockSide='left';
+  npcEdDraft={
+    title:c.vip?'CLIENTE VIP':'CLIENTE',
+    name:c.vip?'Cliente VIP':'Cliente',
+    look:JSON.parse(JSON.stringify(c.look||{shirt:1,hair:0,skin:1,pants:0,shoes:0,accessory:0})),
+    lines:[
+      'Estado: '+customerStateLabel(c),
+      'Quiere: '+(c.wantsProdIdx>=0?prodName(c.wantsProdIdx):'-'),
+      'Compra: '+(c.bought?'si':'no'),
+      'Dentro: '+(G.custs.length||0),
+    ],
+  };
+}
+function openSpecialEditor(kind,label,lines){
+  npcEdOpen=true;npcEdIdx=-1;npcEdTab='look';npcEdNameEdit=false;npcEdKind='special';npcPlacementDirty=false;
+  npcEdDockSide='left';
+  npcEdDraft={title:label,name:label,lines:lines||[],kind};
+}
+function getNPCEditorBounds(){
+  const pw=420,ph=280,dockScale=0.58;
+  const dockW=pw*dockScale,dockH=ph*dockScale;
+  return {x:14,y:H-dockH-6,w:dockW,h:dockH};
+}
+function persistSelectedStaffPlacement(){
+  if(!npcEdOpen||npcEdKind!=='staff'||npcEdIdx<0||!G||!G.staff||!G.staff[npcEdIdx]) return false;
+  const s=G.staff[npcEdIdx];
+  if(!saveStaffPlacementByIndex(npcEdIdx)) return false;
+  npcPlacementDirty=false;
+  showEv(s.name+' guardado en '+s.zoneCol+','+s.zoneRow,'#55ccff');
+  return true;
+}
 function closeNPCEditor(){
-  npcEdOpen=false;npcEdIdx=-1;npcEdDraft=null;npcEdNameEdit=false;
+  npcEdOpen=false;npcEdIdx=-1;npcEdDraft=null;npcEdNameEdit=false;npcEdKind='staff';npcPlacementDirty=false;
   // Re-show video monitors (they'll reposition on next frame if active)
 }
 function applyNPCEditor(){
@@ -9692,7 +10035,7 @@ function drawNPCEditor(){
   const pw=420,ph=280;
   const dockScale=0.58;
   const dockW=pw*dockScale,dockH=ph*dockScale;
-  const dockX=npcEdDockSide==='right'?(W-dockW-14):14,dockY=H-34-dockH-2;
+  const dockX=14,dockY=H-dockH-6;
   const px=0,py=0;
   const npcBtn=(id,x,y,w,h)=>{BTNS[id]={x:dockX+x*dockScale,y:dockY+y*dockScale,w:w*dockScale,h:h*dockScale};};
   cx.save();
@@ -9714,6 +10057,26 @@ function drawNPCEditor(){
   npcBtn('npcEdClose',px+pw-20,py+2,18,18);
   cx.fillStyle='#cc4444';cx.fillRect(px+pw-20,py+3,16,16);
   tx('X',px+pw-12,py+15,'#fff',9,'center');
+
+  if(npcEdKind!=='staff'){
+    const cy=py+38;
+    cx.fillStyle='#e8e0cc';cx.fillRect(px+16,cy,pw-32,ph-56);
+    cx.strokeStyle='#a09880';cx.lineWidth=1;cx.strokeRect(px+16,cy,pw-32,ph-56);
+    if(npcEdKind==='customer'&&d.look){
+      cx.fillStyle='#d8d0b8';cx.fillRect(px+26,cy+16,70,86);
+      cx.strokeStyle='#a09880';cx.strokeRect(px+26,cy+16,70,86);
+      chibi(px+48,cy+56,1,d.look.shirt||1,d.look.hair||0,Math.floor(tt/12)%2,false,tt,2,false,d.look);
+    }
+    tx(d.name||d.title,px+126,cy+22,'#2a6a4a',10);
+    (d.lines||[]).forEach((line,i)=>tx(line,px+126,cy+44+i*16,'#4a3a20',8));
+    if(npcEdKind==='customer'){
+      tx('Ficha cliente',px+126,cy+108,'#7a7060',7);
+    }else{
+      tx('Ficha NPC',px+126,cy+108,'#7a7060',7);
+    }
+    cx.restore();
+    return;
+  }
 
   // ── TABS ──
   const tabs=['look','stats','custs'];
@@ -9896,6 +10259,7 @@ function drawNPCEditor(){
 function handleNPCEditorClick(id){
   if(!npcEdOpen||!npcEdDraft)return false;
   if(id==='npcEdClose'){closeNPCEditor();return true;}
+  if(npcEdKind!=='staff') return false;
   if(id==='npcEdSave'){applyNPCEditor();closeNPCEditor();return true;}
   if(id==='npcEdReset'){
     if(npcEdIdx>=0&&G.staff[npcEdIdx]){
@@ -10328,6 +10692,7 @@ function loop(){
   cx.save();try{drawFloats();}catch(e){}cx.restore();
   cx.save();try{drawEvent();}catch(e){}cx.restore();
   cx.save();try{drawHUD();}catch(e){}cx.restore();
+  cx.save();try{drawCharacterGroupsPanel();}catch(e){}cx.restore();
   cx.save();try{drawElgatoNotify();}catch(e){}cx.restore();
   cx.save();try{drawDemoBadge();}catch(e){}cx.restore();
   cx.save();try{drawUI();}catch(e){}cx.restore();
@@ -10353,6 +10718,80 @@ window.xtAPI = (function(){
 
   function prodName(i){
     try{ return T().prodLabel[i]||('Producto '+i); }catch(e){ return 'Producto '+i; }
+  }
+
+  function staffRoleAliases(roleId){
+    const aliases={
+      0:['caja','cajero','cajera','cashier'],
+      1:['repo','repositor','repositora','stocker'],
+      2:['aza','azafata','hostess'],
+      3:['manager','mgr','encargado','storemanager'],
+      4:['dj','discjockey','novah']
+    };
+    return aliases[roleId]||[];
+  }
+
+  function resolveStaffRef(ref){
+    if(!G||!G.staff) return null;
+    const clean=String(ref||'').trim().toLowerCase();
+    if(!clean) return null;
+    if(/^\d+$/.test(clean)){
+      const idx=Number(clean);
+      return G.staff[idx]?{staff:G.staff[idx],index:idx}:null;
+    }
+    let found=G.staff.findIndex(s=>String(s.name||'').trim().toLowerCase()===clean);
+    if(found>=0) return {staff:G.staff[found],index:found};
+    found=G.staff.findIndex(s=>staffRoleAliases(s.role).includes(clean));
+    if(found>=0) return {staff:G.staff[found],index:found};
+    return null;
+  }
+
+  function setStaffHomeCommand(arg){
+    const err=needsGame();if(err)return err;
+    const parts=String(arg||'').trim().split(/\s+/).filter(Boolean);
+    if(parts.length<3) return 'Uso: /equipo inicio <staff> <col> <row>';
+    const ref=resolveStaffRef(parts[0]);
+    if(!ref) return 'No encuentro ese miembro del equipo';
+    const col=parseNumberArg(parts[1]), row=parseNumberArg(parts[2]);
+    if(col===null||row===null) return 'Coordenadas no válidas. Usa /equipo inicio ana 3 4';
+    const homeCol=clampGridCol(col), homeRow=clampGridRow(row);
+    if(!shopStaffPos) shopStaffPos=DEFAULT_STAFF_POS.map(p=>({...p}));
+    while(shopStaffPos.length<=ref.index) shopStaffPos.push({col:homeCol,row:homeRow,label:'Extra',color:'#88ffcc'});
+    shopStaffPos[ref.index]={...(shopStaffPos[ref.index]||{}),col:homeCol,row:homeRow};
+    ref.staff.homeCol=homeCol;
+    ref.staff.homeRow=homeRow;
+    if(ref.staff.zoneCol===undefined||ref.staff.zoneRow===undefined){
+      ref.staff.zoneCol=homeCol;
+      ref.staff.zoneRow=homeRow;
+      ref.staff.zoneRadius=clampZoneRadius(DEFAULT_STAFF_ZONE_RADIUS[ref.index%DEFAULT_STAFF_ZONE_RADIUS.length]);
+    }
+    moveStaffToTile(ref.staff,homeCol,homeRow);
+    saveLayout();
+    showEv(ref.staff.name+' inicio '+homeCol+','+homeRow,'#55ccff');
+    return ref.staff.name+' empieza ahora en '+homeCol+','+homeRow;
+  }
+
+  function setStaffZoneCommand(arg){
+    const err=needsGame();if(err)return err;
+    const parts=String(arg||'').trim().split(/\s+/).filter(Boolean);
+    if(parts.length<4) return 'Uso: /equipo zona <staff> <col> <row> <radio>';
+    const ref=resolveStaffRef(parts[0]);
+    if(!ref) return 'No encuentro ese miembro del equipo';
+    const col=parseNumberArg(parts[1]), row=parseNumberArg(parts[2]), radius=parseNumberArg(parts[3]);
+    if(col===null||row===null||radius===null) return 'Zona no válida. Usa /equipo zona dj 12 2 2';
+    const zoneCol=clampGridCol(col), zoneRow=clampGridRow(row), zoneRadius=clampZoneRadius(radius);
+    if(!shopStaffZones) shopStaffZones=[];
+    while(shopStaffZones.length<=ref.index) shopStaffZones.push(null);
+    shopStaffZones[ref.index]={col:zoneCol,row:zoneRow,radius:zoneRadius};
+    ref.staff.zoneCol=zoneCol;
+    ref.staff.zoneRow=zoneRow;
+    ref.staff.zoneRadius=zoneRadius;
+    ref.staff.navTarget=null;
+    ref.staff.navPath=null;
+    ref.staff.navPathIdx=0;
+    saveLayout();
+    showEv(ref.staff.name+' zona '+zoneCol+','+zoneRow+' r'+zoneRadius,'#55ccff');
+    return ref.staff.name+' cubre zona '+zoneCol+','+zoneRow+' radio '+zoneRadius;
   }
 
   const api = {
@@ -11234,6 +11673,8 @@ window.xtAPI = (function(){
       '/pause | /resume | /menu',
       '/dj on | /dj off',
       '/opinador on | /opinador off',
+      '/equipo inicio ana 3 4',
+      '/equipo zona dj 12 2 2',
       '/mobiliario inicio | /mobiliario on | /mobiliario off',
       '/ladron on | /ladron off',
       '/guardiacivil on | /guardiacivil off',
@@ -11273,6 +11714,14 @@ window.xtAPI = (function(){
       if(cmd==='song'||cmd==='track') return setSong(arg);
       if(cmd==='dj'||cmd==='djnovah'||cmd==='novah') return setDJCommand(arg);
       if(cmd==='opinador'||cmd==='opinion'||cmd==='opinión') return setOpinadorCommand(arg);
+      if(cmd==='equipo'||cmd==='staffzone'||cmd==='zonaequipo'){
+        const teamParts=arg.split(/\s+/).filter(Boolean);
+        const action=(teamParts.shift()||'').toLowerCase();
+        const rest=teamParts.join(' ');
+        if(action==='inicio'||action==='home'||action==='start') return setStaffHomeCommand(rest);
+        if(action==='zona'||action==='area'||action==='radio') return setStaffZoneCommand(rest);
+        return 'Uso: /equipo inicio <staff> <col> <row> | /equipo zona <staff> <col> <row> <radio>';
+      }
       if(cmd==='mobiliario'||cmd==='furniture'||cmd==='muebles'){
         const clean=arg.toLowerCase().trim();
         if(['inicio','start','home','base','reset','origen'].includes(clean)) return restoreSavedFurnitureLayout();
@@ -11429,9 +11878,23 @@ window.xtAPI = (function(){
     if(result.ok&&composer) composer.value='';
   }
 
-  if(sendBtn) sendBtn.addEventListener('click',()=>sendComposerText(composer&&composer.value));
-  if(helpBtn) helpBtn.addEventListener('click',()=>sendComposerText('/help'));
-  if(statusBtn) statusBtn.addEventListener('click',()=>sendComposerText('/status'));
+  function bindDockButton(button,handler){
+    if(!button) return;
+    button.addEventListener('pointerdown',e=>{
+      e.preventDefault();
+      e.stopPropagation();
+      button.focus({preventScroll:true});
+    });
+    button.addEventListener('click',e=>{
+      e.preventDefault();
+      e.stopPropagation();
+      handler();
+    });
+  }
+
+  bindDockButton(sendBtn,()=>sendComposerText(composer&&composer.value));
+  bindDockButton(helpBtn,()=>sendComposerText('/help'));
+  bindDockButton(statusBtn,()=>sendComposerText('/status'));
   if(composer){
     composer.addEventListener('keydown',e=>{
       if(e.key==='Enter'&&!e.shiftKey){
