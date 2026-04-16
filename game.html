@@ -5749,6 +5749,15 @@ function drawIntro(){
     const ulw=280+40*Math.abs(Math.sin(tt*0.04));
     nl(W/2-ulw/2,H/2-2,W/2+ulw/2,H/2-2,P.neon2,1);
 
+    // Version block lives only on slide 0, just above the skip button area.
+    const versionBoxW=312,versionBoxH=34,versionBoxX=W/2-versionBoxW/2,versionBoxY=H-72;
+    r(versionBoxX,versionBoxY,versionBoxW,versionBoxH,'#0a1020');
+    rx(versionBoxX,versionBoxY,versionBoxW,versionBoxH,P.neon3,1);
+    cx.font='bold 9px monospace';cx.textAlign='center';cx.fillStyle=P.neon3;
+    cx.fillText(APP_VERSION_LABEL,W/2,versionBoxY+13);
+    cx.font='8px monospace';cx.fillStyle=P.uiT3;
+    cx.fillText(APP_FORMULA_LABEL,W/2,versionBoxY+26);
+
   } else if(sl===1){
     // ── EL OBJETIVO ──
     nt('EL OBJETIVO',W/2,44,P.neon3,16);
@@ -5997,11 +6006,6 @@ function drawIntro(){
   const slideTitles=['BIENVENIDA','EL OBJETIVO','LOS CLIENTES','EL STOCK','TU EQUIPO','LA COMPETENCIA','EVENTOS','CONTROLES'];
   r(8,8,170,18,'#0a1020');rx(8,8,170,18,P.neon2,1);
   cx.font='bold 9px monospace';cx.textAlign='left';cx.fillStyle=P.neon2;cx.fillText('▶  '+slideTitles[sl],14,21);
-  // ── Intro version header (top right) ──
-  r(W-286,8,278,30,'#0a1020');rx(W-286,8,278,30,P.neon3,1);
-  cx.textAlign='right';
-  cx.font='bold 9px monospace';cx.fillStyle=P.neon3;cx.fillText(APP_VERSION_LABEL,W-16,20);
-  cx.font='8px monospace';cx.fillStyle=P.uiT3;cx.fillText(APP_FORMULA_LABEL,W-16,31);
 }
 
 // ── PLATFORM SELECT SCREEN ────────────────────────────────────
