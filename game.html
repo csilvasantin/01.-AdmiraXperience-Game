@@ -59,6 +59,7 @@
     .char-body::-webkit-scrollbar-track{background:#07131b}
     .char-body::-webkit-scrollbar-thumb{background:#2a7585;border-radius:6px}
     .char-row{display:grid;grid-template-columns:58px minmax(74px,.95fr) minmax(126px,1.35fr) 58px 50px 46px auto;gap:3px;align-items:center;padding:2px 3px;border-radius:3px}
+    .char-row.clients-grid{grid-template-columns:44px 72px minmax(126px,1.25fr) 78px 56px 50px 52px 28px}
     .char-row.is-head,.char-row.is-summary{padding:0;background:transparent}
     .char-row.row-even{background:rgba(18,46,58,0.34)}
     .char-row.row-odd{background:rgba(8,20,28,0.72)}
@@ -1947,7 +1948,7 @@ const DEFAULT_LAYOUT=[
   {id:'djBooth',type:'djBooth',col:11,row:3,sx:1,sy:1,label:'Mesa DJ'},
   {id:'tablet',type:'tablet',col:13,row:5,sx:1,sy:1,label:'Tablet Satisfacción'},
   {id:'turnKiosk',type:'turnKiosk',col:12,row:6,sx:1,sy:1,label:'Gestor Turnos'},
-  {id:'aroma',type:'aroma',col:12,row:1,sx:1,sy:1,label:'Máquina olores'},
+  {id:'aroma',type:'aroma',col:13,row:1,sx:1,sy:1,label:'Máquina olores'},
 ];
 let shopLayout=JSON.parse(JSON.stringify(DEFAULT_LAYOUT));
 let shopFurnitureVisible=true;
@@ -2020,6 +2021,16 @@ function loadLayout(){
           if(!shopLayout.find(i=>i.id===def.id)){
             shopLayout.push(JSON.parse(JSON.stringify(def)));
           }
+        }
+        const aromaDef=DEFAULT_LAYOUT.find(i=>i.id==='aroma');
+        const aromaItem=shopLayout.find(i=>i.id==='aroma');
+        if(aromaDef&&aromaItem){
+          aromaItem.type=aromaDef.type;
+          aromaItem.label=aromaDef.label;
+          aromaItem.col=aromaDef.col;
+          aromaItem.row=aromaDef.row;
+          aromaItem.sx=aromaDef.sx||1;
+          aromaItem.sy=aromaDef.sy||1;
         }
         console.log('[Layout] ✓ Loaded saved layout ('+shopLayout.length+' items)');
         // Also load staff positions
@@ -8424,69 +8435,81 @@ function drawAirConditioning(){
 // ── AROMATIZER on back wall ──────────────────────────────────
 let aromaOn=false; // Aromatizer state: false=off, true=on (diffusing particles)
 
-function drawAromatizer(col=12,row=1){
-  // Wall-mounted fixture anchored to the editable layout tile
-  const ap=toIso(col+1,row+0.18);
-  const ax=ap.x-20, baseY=ap.y;
-  const aw=16, ah=22;
-  const ay=baseY-Math.floor(ISO.wallH*0.55);
+function drawAromatizer(col=13,row=1){
+  // Pegado a la pared larga, entre la ventana derecha y la puerta.
+  const left=toIso(Math.max(11.9,col-0.62),0);
+  const right=toIso(Math.max(12.35,col-0.18),0);
+  const topY=left.y-ISO.wallH+86;
+  const slopeY=right.y-left.y;
+  const bodyH=28;
+  const tl={x:left.x,y:topY};
+  const tr={x:right.x,y:topY+slopeY};
+  const bl={x:left.x,y:topY+bodyH};
+  const br={x:right.x,y:topY+bodyH+slopeY};
 
-  // Shadow behind on wall
-  r(ax+2,ay+2,aw,ah,'rgba(0,0,0,0.15)');
+  cx.save();
+  cx.beginPath();
+  cx.moveTo(tl.x,tl.y);cx.lineTo(tr.x,tr.y);cx.lineTo(br.x,br.y);cx.lineTo(bl.x,bl.y);
+  cx.closePath();
+  cx.fillStyle='rgba(0,0,0,0.14)';
+  cx.fill();
 
-  // Main body (black)
-  r(ax,ay,aw,ah,'#1a1a1a');
-  // Top cap (dark gray, rounded top)
-  r(ax,ay,aw,4,'#333');
-  r(ax+1,ay-1,aw-2,2,'#444');
-  // Blue accent line
-  r(ax+2,ay+3,aw-4,1,'#3388cc');
-  // USB-C port top-right
-  r(ax+aw-5,ay+1,3,1.5,'#222');
-  // Play button circle in center
-  cx.strokeStyle='#555';cx.lineWidth=0.5;
-  cx.beginPath();cx.arc(ax+aw/2,ay+ah*0.4,3,0,Math.PI*2);cx.stroke();
-  // Play triangle
-  cx.fillStyle='#555';cx.beginPath();
-  cx.moveTo(ax+aw/2-1,ay+ah*0.4-2);cx.lineTo(ax+aw/2-1,ay+ah*0.4+2);
-  cx.lineTo(ax+aw/2+2,ay+ah*0.4);cx.closePath();cx.fill();
-  // Diamond grille at bottom
-  cx.globalAlpha=0.4;
+  const vW=24,vH=34;
+  const ax=(tr.x-tl.x)/vW, ay=(tr.y-tl.y)/vW;
+  const bx=(bl.x-tl.x)/vH, by=(bl.y-tl.y)/vH;
+  cx.save();
+  cx.beginPath();
+  cx.moveTo(tl.x,tl.y);cx.lineTo(tr.x,tr.y);cx.lineTo(br.x,br.y);cx.lineTo(bl.x,bl.y);
+  cx.closePath();
+  cx.clip();
+  cx.setTransform(ax,ay,bx,by,tl.x,tl.y);
+
+  cx.fillStyle='#f1eee8';cx.fillRect(1,1,vW-2,vH-2);
+  cx.fillStyle='#cbc5ba';cx.fillRect(1,1,vW-2,4);
+  cx.fillStyle='#2e6fb5';cx.fillRect(4,6,vW-8,2);
+  cx.fillStyle='#242424';cx.fillRect(vW-7,3,3,2);
+  cx.strokeStyle='#6a6358';cx.lineWidth=1;cx.strokeRect(1.5,1.5,vW-3,vH-3);
+  cx.strokeStyle='#7b766d';cx.lineWidth=1;
+  cx.beginPath();cx.arc(vW/2,14,4,0,Math.PI*2);cx.stroke();
+  cx.fillStyle='#7b766d';
+  cx.beginPath();
+  cx.moveTo(vW/2-1,11);cx.lineTo(vW/2-1,17);cx.lineTo(vW/2+3,14);
+  cx.closePath();cx.fill();
+  cx.fillStyle=aromaOn?'#22cc22':'#cc2222';
+  cx.beginPath();cx.arc(vW/2,7,2,0,Math.PI*2);cx.fill();
+  cx.globalAlpha=0.45;
   for(let gy=0;gy<4;gy++){
-    for(let gx=0;gx<3;gx++){
-      const px=ax+3+gx*4+(gy%2)*2;
-      const py=ay+ah-10+gy*2.5;
-      cx.fillStyle='#333';
+    for(let gx=0;gx<4;gx++){
+      const px=5+gx*4+(gy%2)*1.5;
+      const py=22+gy*2.4;
+      cx.fillStyle='#55514c';
       cx.beginPath();
       cx.moveTo(px,py-1);cx.lineTo(px+1,py);cx.lineTo(px,py+1);cx.lineTo(px-1,py);
       cx.closePath();cx.fill();
     }
   }
   cx.globalAlpha=1;
-  // Status LED
-  cx.fillStyle=aromaOn?'#22cc22':'#cc2222';
-  cx.beginPath();cx.arc(ax+aw/2,ay+6,1.5,0,Math.PI*2);cx.fill();
-  // Border
-  rx(ax,ay,aw,ah,'#333',1);
-  // Label
-  cx.fillStyle='#555';cx.font='bold 3px monospace';cx.textAlign='center';
-  cx.fillText('AROMA',ax+aw/2,ay+ah-1);
-  cx.textAlign='left';
+  cx.fillStyle='#66615a';cx.font='bold 4px monospace';cx.textAlign='center';
+  cx.fillText('AROMA',vW/2,32);
+  cx.setTransform(1,0,0,1,0,0);
+  cx.restore();
 
-  // Clickable area
-  if(!editorSceneActive) BTNS['aromaToggle']={x:ax,y:ay,w:aw,h:ah};
+  if(!editorSceneActive){
+    const minX=Math.min(tl.x,bl.x)-3, maxX=Math.max(tr.x,br.x)+3;
+    const minY=Math.min(tl.y,tr.y)-3, maxY=Math.max(bl.y,br.y)+3;
+    BTNS['aromaToggle']={x:minX,y:minY,w:maxX-minX,h:maxY-minY};
+  }
 
-  // ── Scent waves (when ON) — 5s on, 5s off cycle, very slow ──
   if(aromaOn){
-    const aromaCycle=(tt+150)%600; // 600 frames = 10s total (5s on + 5s off), offset 2.5s
-    if(aromaCycle<300){ // first 5 seconds: show waves
-      const waveX=ax+aw/2;
-      const waveBase=ay-3;
-      for(let i=0;i<5;i++){
-        const phase=(tt*0.004+i*0.7)%1; // very slow
-        const wy=waveBase-phase*40;
-        const wSize=5+phase*14;
-        const alpha=0.75*(1-phase);
+    const aromaCycle=(tt+150)%600;
+    if(aromaCycle<300){
+      const waveX=(tl.x+tr.x+bl.x+br.x)/4;
+      const waveBase=Math.min(tl.y,tr.y)-4;
+      for(let i=0;i<4;i++){
+        const phase=(tt*0.004+i*0.7)%1;
+        const wy=waveBase-phase*34;
+        const wSize=4+phase*9;
+        const alpha=0.7*(1-phase);
         cx.globalAlpha=alpha;
         cx.strokeStyle='#cc66ff';
         cx.lineWidth=2;
@@ -8496,22 +8519,13 @@ function drawAromatizer(col=12,row=1){
         cx.strokeStyle='#ee88ff';
         cx.lineWidth=1;
         cx.beginPath();
-        cx.arc(waveX,wy-1,wSize*0.8,Math.PI*1.2,Math.PI*1.8);
+        cx.arc(waveX,wy,wSize-1.5,Math.PI*1.15,Math.PI*1.85);
         cx.stroke();
-      }
-      for(let i=0;i<8;i++){
-        const phase=(tt*0.003+i*0.9)%1; // very slow
-        const px=waveX+Math.sin(tt*0.005+i*2.2)*8;
-        const py=waveBase-phase*45;
-        const sz=1.2+Math.sin(tt*0.005+i)*0.5;
-        const alpha=0.6*(1-phase);
-        cx.globalAlpha=alpha;
-        cx.fillStyle=i%2===0?'#bb55ee':'#88ddaa';
-        cx.beginPath();cx.arc(px,py,sz,0,Math.PI*2);cx.fill();
       }
       cx.globalAlpha=1;
     }
   }
+  cx.restore();
 }
 
 // Clock time derived from game time (not real time)
@@ -9883,7 +9897,7 @@ function drawCharacterGroupsPanel(){
     teamBody.innerHTML+='<div class="char-row is-summary"><span class="muted">+'+(hired.length-teamMaxRows)+' más</span><span></span><span></span><span></span></div>';
   }
 
-  clientBody.innerHTML='<div class="char-row is-head"><span class="muted">Tipo</span><span class="muted">Que hace / Zona</span><span class="muted">Upselling</span><span class="muted">Turno</span><span class="muted">Tiempo</span><span class="muted">Ticket</span><span class="muted"></span></div>'
+  clientBody.innerHTML='<div class="char-row clients-grid is-head"><span class="muted">Cliente</span><span class="muted">Tipo</span><span class="muted">Que hace / Zona</span><span class="muted">Upselling</span><span class="muted">Turno</span><span class="muted">Tiempo</span><span class="muted">Ticket</span><span class="muted"></span></div>'
     +clients.map((c,rowIdx)=>{
     const custIdx=G.custs.indexOf(c);
     const typeLabel=customerTypeLabel(c);
@@ -9895,9 +9909,9 @@ function drawCharacterGroupsPanel(){
     const rowClass=rowIdx%2===0?'row-even':'row-odd';
     const activityZone=customerStateLabel(c)+(zoneLabel&&zoneLabel!=='-'?' · '+zoneLabel:'');
     const indexLabel=String(rowIdx+1).padStart(2,'0');
-    return '<div class="char-row '+rowClass+'">'
-      +'<span><span class="muted">'+indexLabel+'</span> <button type="button" class="char-trigger" data-customer-idx="'+custIdx+'" aria-label="Abrir ficha de '+typeLabel+'" onpointerdown="window.openCharacterDockCustomerDetail&&window.openCharacterDockCustomerDetail('+custIdx+');event.preventDefault();event.stopPropagation();return false;" onclick="event.preventDefault();event.stopPropagation();return false;">'+customerMiniAvatar(c)+'</button></span>'
-      +'<span style="color:'+customerTone(c)+'">'+typeLabel+'</span>'
+    return '<div class="char-row clients-grid '+rowClass+'">'
+      +'<span class="muted">'+indexLabel+'</span>'
+      +'<span><button type="button" class="char-trigger" data-customer-idx="'+custIdx+'" aria-label="Abrir ficha de '+typeLabel+'" onpointerdown="window.openCharacterDockCustomerDetail&&window.openCharacterDockCustomerDetail('+custIdx+');event.preventDefault();event.stopPropagation();return false;" onclick="event.preventDefault();event.stopPropagation();return false;">'+customerMiniAvatar(c)+'</button> <span style="color:'+customerTone(c)+'">'+typeLabel+'</span></span>'
       +'<span>'+activityZone+'</span>'
       +'<span>'+upselling+'</span>'
       +'<span>'+turn+'</span>'
@@ -9906,7 +9920,7 @@ function drawCharacterGroupsPanel(){
       +'<span class="'+(c.bought?'ok':'muted')+'">'+(c.bought?'ok':'')+'</span>'
       +'</div>';
   }).join('');
-  clientBody.innerHTML+='<div class="char-row is-summary"><span class="muted">'+clients.length+' clientes</span><span class="muted">VIP '+vipCount+' · Zona '+browsingCount+'</span><span class="muted">Cola '+queueCount+'</span><span class="muted">Turnos '+issuedTurns+'</span><span></span><span></span><span></span></div>';
+  clientBody.innerHTML+='<div class="char-row clients-grid is-summary"><span class="muted">'+clients.length+'</span><span class="muted">VIP '+vipCount+'</span><span class="muted">Zona '+browsingCount+'</span><span class="muted">Cola '+queueCount+'</span><span class="muted">Turnos '+issuedTurns+'</span><span></span><span></span><span></span></div>';
 }
 
 // ── DRAW BOTTOM BAR (GDS style: Yr Sales | Yr Profit | Status | Menu) ──
@@ -10506,7 +10520,8 @@ function openSpecialEditor(kind,label,lines){
 function getNPCEditorBounds(){
   const pw=420,ph=280,dockScale=0.58;
   const dockW=pw*dockScale,dockH=ph*dockScale;
-  return {x:14,y:H-dockH-6,w:dockW,h:dockH};
+  const bottomGap=0;
+  return {x:14,y:H-dockH-bottomGap,w:dockW,h:dockH};
 }
 function persistSelectedStaffPlacement(){
   if(!npcEdOpen||npcEdKind!=='staff'||npcEdIdx<0||!G||!G.staff||!G.staff[npcEdIdx]) return false;
@@ -10555,7 +10570,8 @@ function drawNPCEditor(){
   const pw=420,ph=280;
   const dockScale=0.58;
   const dockW=pw*dockScale,dockH=ph*dockScale;
-  const dockX=14,dockY=H-dockH-6;
+  const bottomGap=0;
+  const dockX=14,dockY=H-dockH-bottomGap;
   const px=0,py=0;
   const npcBtn=(id,x,y,w,h)=>{BTNS[id]={x:dockX+x*dockScale,y:dockY+y*dockScale,w:w*dockScale,h:h*dockScale};};
   cx.save();
