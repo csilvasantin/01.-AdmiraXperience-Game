@@ -199,9 +199,11 @@ function cacheControlFor(ext) {
 function safeFilePath(pathname) {
   const decoded = decodeURIComponent(pathname);
   const normalized = path.normalize(decoded);
+  const rootDir = path.resolve(GAME_DIR);
   const relativePath = normalized.replace(/^([/\\])+/, '') || 'index.html';
-  const filePath = path.join(GAME_DIR, relativePath);
-  if (!filePath.startsWith(GAME_DIR)) return null;
+  const filePath = path.resolve(rootDir, relativePath);
+  const relativeToRoot = path.relative(rootDir, filePath);
+  if (relativeToRoot.startsWith('..') || path.isAbsolute(relativeToRoot)) return null;
   return filePath;
 }
 

@@ -162,64 +162,64 @@
 <video id="dsVideo" preload="auto" playsinline style="display:none"></video>
 <video id="bootVideo" preload="auto" playsinline webkit-playsinline style="display:none"></video>
 <canvas id="c" width="800" height="500"></canvas>
-<div id="eraVerticalDock" aria-label="Selector de verticales">
+<div id="eraVerticalDock" aria-label="Selector inferior">
   <div class="evd-head">
     <div class="evd-head-left">
-      <strong id="evdTitle">VERTICALES XP</strong>
-      <span id="evdHint">Selecciona vertical antes de entrar</span>
+      <strong id="evdTitle">ADMIRANEXT XP</strong>
+      <span id="evdHint">Selecciona idioma antes de entrar</span>
     </div>
     <div class="evd-head-right">
-      <span id="evdCurrent">XTANCO / ESTANCOS</span>
+      <span id="evdCurrent">CASTELLANO</span>
       <button id="evdMuteBtn" class="evd-mute" type="button" aria-label="Silenciar música">🔊</button>
     </div>
   </div>
   <div class="evd-grid">
-    <button type="button" class="evd-btn" data-client="0"><strong>XTANCO</strong><span>Estancos · tabaco · impulso</span></button>
-    <button type="button" class="evd-btn" data-client="1"><strong>LOTERÍAS</strong><span>Terminal · campañas · cola</span></button>
-    <button type="button" class="evd-btn" data-client="2"><strong>SUPERMERCADO</strong><span>Helados · comida · frescos</span></button>
+    <button type="button" class="evd-btn" data-client="0"><strong>CASTELLANO</strong><span>Interfaz y storytelling en español</span></button>
+    <button type="button" class="evd-btn" data-client="1"><strong>ENGLISH</strong><span>Interface and storytelling in English</span></button>
+    <button type="button" class="evd-btn" data-client="2"><strong>CONTINUAR</strong><span>Enter para seguir</span></button>
   </div>
 </div>
 <button id="mobileSkipBtn" type="button" aria-label="Saltar al juego">SKIP AL JUEGO</button>
-<div id="characterDock" aria-label="Equipo y clientes">
+<div id="characterDock" aria-label="Team and customers">
   <div class="char-pane team">
-    <div class="char-head team"><div class="char-head-left"><span>Equipo</span><button type="button" class="char-toggle-btn" id="characterClientFocusBtn" style="display:none">Clientes</button></div><span class="char-status" id="characterTeamStatus">0 activos</span></div>
+    <div class="char-head team"><div class="char-head-left"><span>Team</span><button type="button" class="char-toggle-btn" id="characterClientFocusBtn" style="display:none">Customers</button></div><span class="char-status" id="characterTeamStatus">0 active</span></div>
     <div class="char-body" id="characterTeamBody"></div>
   </div>
   <div class="char-pane clients">
-    <div class="char-head clients"><div class="char-head-left"><span>Clientes</span><button type="button" class="char-toggle-btn" id="characterTeamFocusBtn">Equipo</button></div><span class="char-status" id="characterClientStatus">0 dentro</span></div>
+    <div class="char-head clients"><div class="char-head-left"><span>Customers</span><button type="button" class="char-toggle-btn" id="characterTeamFocusBtn">Team</button></div><span class="char-status" id="characterClientStatus">0 inside</span></div>
     <div class="char-body" id="characterClientBody"></div>
   </div>
 </div>
 <div id="telegramDock" aria-label="Telegram AdmiraXPBot">
   <div class="tg-pane send">
-    <div class="tg-head"><span>Enviar a Telegram</span><span class="tg-status" id="telegramSendStatus">AdmiraXPBot</span></div>
-    <textarea id="telegramComposer" placeholder="Escribe para @AdmiraXPBot... Enter envia, Shift+Enter salto"></textarea>
+    <div class="tg-head"><span>Send to Telegram</span><span class="tg-status" id="telegramSendStatus">AdmiraXPBot</span></div>
+    <textarea id="telegramComposer" placeholder="Write to @AdmiraXPBot... Enter sends, Shift+Enter newline"></textarea>
     <div class="tg-actions">
-      <button type="button" class="primary" id="telegramSendBtn">Enviar</button>
+      <button type="button" class="primary" id="telegramSendBtn">Send</button>
       <button type="button" id="telegramHelpBtn">/help</button>
       <button type="button" id="telegramStatusBtn">/status</button>
-      <button type="button" id="telegramHideBtn">Ocultar</button>
+      <button type="button" id="telegramHideBtn">Hide</button>
     </div>
   </div>
   <div class="tg-pane conversation">
-    <div class="tg-head"><span>Conversacion</span><span class="tg-status" id="telegramConnStatus">conectando</span></div>
+    <div class="tg-head"><span>Conversation</span><span class="tg-status" id="telegramConnStatus">connecting</span></div>
     <div class="tg-diagnostics" id="telegramDiagnostics">
       <div class="tg-card">
-        <div class="tg-card-head"><span>Telegram</span><span class="tg-card-status" id="telegramCardStatus">detectando</span></div>
+        <div class="tg-card-head"><span>Telegram</span><span class="tg-card-status" id="telegramCardStatus">detecting</span></div>
         <div class="tg-card-badges">
-          <span id="telegramOrigin">Origen: detectando</span>
-          <span id="telegramLastCommand">Ultimo: -</span>
-          <span id="telegramLatency">Latencia: -</span>
+          <span id="telegramOrigin">Origin: detecting</span>
+          <span id="telegramLastCommand">Latest: -</span>
+          <span id="telegramLatency">Latency: -</span>
           <span id="telegramMessageMeta">Msg: -</span>
         </div>
       </div>
       <div class="tg-card">
-        <div class="tg-card-head"><span>Grok</span><span class="tg-card-status" id="grokCardStatus">detectando</span></div>
+        <div class="tg-card-head"><span>Grok</span><span class="tg-card-status" id="grokCardStatus">detecting</span></div>
         <div class="tg-card-badges">
-          <span id="grokOrigin">Origen: detectando</span>
+          <span id="grokOrigin">Origin: detecting</span>
           <span id="grokPrompt">Prompt: -</span>
-          <span id="grokLatency">Latencia: -</span>
-          <span id="grokMeta">Modelo: -</span>
+          <span id="grokLatency">Latency: -</span>
+          <span id="grokMeta">Model: -</span>
         </div>
       </div>
     </div>
@@ -1044,11 +1044,78 @@ function repositionTopBarSub(){
   subBar.style.top=(mr.bottom+2)+'px';
   subBar.style.right=(window.innerWidth-mr.right)+'px';
 }
+function trimHudLabel(text,max=42){
+  const clean=String(text||'').replace(/\s+/g,' ').trim();
+  return clean.length>max?clean.slice(0,Math.max(0,max-1))+'…':clean;
+}
+function getOpsSnapshot(){
+  const readyLabel=lang==='es'?'Listo':'Ready';
+  const readyDetail=lang==='es'?'operacion estable':'store stable';
+  if(!G||!Array.isArray(G.staff)||!Array.isArray(G.prods)){
+    return {
+      focus:{label:readyLabel,detail:readyDetail,color:'#88cc88'},
+      queueCount:0,
+      lowStockCount:0,
+      avgStockPct:0,
+      pacePct:100,
+    };
+  }
+  const hired=G.staff.filter(s=>s&&s.hired&&!s.fired);
+  const cashiers=hired.filter(s=>s.role===0).length;
+  const queueCount=(G.custs||[]).filter(c=>c&&(c.st==='queue'||c.st==='buy')).length;
+  const avgStock=G.prods.length?G.prods.reduce((sum,p)=>sum+((p&&p.max)?p.stock/p.max:0),0)/G.prods.length:0;
+  const avgStockPct=Math.round(avgStock*100);
+  const lowStockCount=G.prods.filter(p=>p&&p.max&&p.stock/p.max<=0.25).length;
+  const weekProgress=((Math.max(1,G.week)-1)+Math.max(0,Math.min(1,(G.weekTimer||0)/Math.max(1,CFG.WEEK_TICKS))))/Math.max(1,CFG.WEEKS_PER_YEAR);
+  const target=CFG.YEAR_TARGETS[Math.max(0,(G.year||1)-1)]||1;
+  const expectedRevenue=Math.max(1,target*Math.max(weekProgress,0.08));
+  const pacePct=Math.round((G.yearRevenue||0)/expectedRevenue*100);
+  const focusList=[];
+  if(G.thief&&G.thief.phase&&G.thief.phase!=='idle'){
+    focusList.push({weight:0,label:lang==='es'?'Seguridad':'Security',detail:lang==='es'?'ladron dentro':'thief inside',color:'#ff6666'});
+  }
+  if(G.inspect&&G.inspect.active&&G.inspect.timer>100){
+    focusList.push({weight:1,label:lang==='es'?'Inspeccion':'Inspection',detail:lang==='es'?'ordena tienda y stock':'prepare shop and stock',color:'#ff88aa'});
+  }
+  if(cashiers===0){
+    focusList.push({weight:2,label:lang==='es'?'Contrata caja':'Hire cashier',detail:lang==='es'?'sin atencion fija':'no staffed register',color:'#ffcc66'});
+  }
+  if(lowStockCount>=2||avgStock<0.35){
+    focusList.push({weight:3,label:lang==='es'?'Reponer':'Restock',detail:(lang==='es'?'stock bajo en ':'low stock in ')+lowStockCount+(lang==='es'?' lineales':' fixtures'),color:'#66d0ff'});
+  }
+  if(queueCount>=4){
+    focusList.push({weight:4,label:lang==='es'?'Abrir cola':'Clear queue',detail:queueCount+' '+(lang==='es'?'clientes esperando':'customers waiting'),color:'#ffb36b'});
+  }
+  if((G.satisfaction||0)<45){
+    focusList.push({weight:5,label:lang==='es'?'Sube sat':'Raise sat',detail:(lang==='es'?'satisfaccion al ':'satisfaction at ')+(G.satisfaction|0)+'%',color:'#ff8b8b'});
+  }
+  if(weekProgress>0.18&&pacePct<85){
+    focusList.push({weight:6,label:lang==='es'?'Empuja ventas':'Push sales',detail:(lang==='es'?'ritmo al ':'pace at ')+pacePct+'%',color:'#ffd166'});
+  }
+  if(focusList.length===0){
+    focusList.push({
+      weight:99,
+      label:pacePct>=110?(lang==='es'?'Buen ritmo':'Strong pace'):(lang==='es'?'Optimiza ticket':'Upsell more'),
+      detail:pacePct>=110?(lang==='es'?'objetivo controlado':'target under control'):(lang==='es'?'vinos, prensa y bebida':'wine, press, drinks'),
+      color:pacePct>=110?'#88dd88':'#a7c9ff'
+    });
+  }
+  focusList.sort((a,b)=>a.weight-b.weight);
+  return {
+    focus:focusList[0],
+    queueCount,
+    lowStockCount,
+    avgStockPct,
+    pacePct,
+  };
+}
 function updateHtmlBar(){
+  try{syncDockLanguage();}catch(e){}
   const show=isGameplayUiState(state);
   bbEl.classList.toggle('show',show);
   if(!show||!G||!G.staff){resizeCanvas();return;}
   const staff=G.staff||[];
+  const ops=getOpsSnapshot();
   const profit=G.yearRevenue-(staff.filter(s=>s.hired).reduce((a,s)=>a+(CFG.SALARY[s.role]||0)*s.level*(G.week||0),0));
   document.getElementById('bbSales').textContent=(G.yearRevenue|0).toLocaleString()+'€';
   const pe=document.getElementById('bbProfit');
@@ -1056,10 +1123,9 @@ function updateHtmlBar(){
   pe.style.color=profit>=0?'#66ee66':'#ee6666';
   document.getElementById('bbSat').textContent=(G.satisfaction|0)+'%';
   document.getElementById('bbCli').textContent=G.customersToday||0;
-  const hasProj=staff.some(s=>s.hired&&s.busy>0);
   const se=document.getElementById('bbStatus');
-  se.textContent=hasProj?'Vendiendo...':'Idle';
-  se.style.color=hasProj?'#88ee88':'#bbaa88';
+  se.textContent=trimHudLabel(ops.focus.label+' · '+ops.focus.detail,38);
+  se.style.color=ops.focus.color;
   // Clock + date
   if(G.gameTime){
     const gh=Math.floor(G.gameTime),gm=Math.floor((G.gameTime%1)*60);
@@ -1891,6 +1957,11 @@ const LANGS={
 };
 let lang='es';
 const T=()=>LANGS[lang];
+function setLanguage(nextLang){
+  lang=nextLang==='en'?'en':'es';
+  menuSel=lang==='en'?1:0;
+  document.documentElement.lang=lang;
+}
 
 // ── STATE ─────────────────────────────────────────────────────
 const S={ERA_SEL:'eraSel',PRELOAD:'preload',MENU:'menu',CLIENT_SEL:'clientSel',MODEL_SEL:'modelSel',TUT:'tutorial',GAME:'game',PAUSE:'pause',YEAR_END:'yearEnd',GAME_END:'gameEnd',EDITOR:'editor',SETTINGS:'settings',HELP:'help',INTRO:'intro'};
@@ -1898,6 +1969,7 @@ let state=S.ERA_SEL, eraSel=0, menuSel=0, clientSel=0, renderMode='16bit', model
 let introSlide=0, introTimer=0;
 const INTRO_SLIDE_DURATION=260; // frames per slide (~4.3s at 60fps)
 const INTRO_SLIDES=8;
+let codexMapOpen=false;
 let tt=0;
 let tran={active:false,from:null,to:null,timer:0,dur:30};
 function startTransition(toState){if(tran.active)return;tran={active:true,from:state,to:toState,timer:0,dur:30};}
@@ -1912,9 +1984,13 @@ function updateEraVerticalDock(){
   if(!eraVerticalDock) return;
   const show=state===S.ERA_SEL;
   eraVerticalDock.classList.toggle('show',show);
+  const evdTitle=document.getElementById('evdTitle');
+  if(evdTitle) evdTitle.textContent='AdmiraNext XP · '+APP_VERSION;
+  const evdHint=document.getElementById('evdHint');
+  const grid=eraVerticalDock.querySelector('.evd-grid');
+  if(show&&evdHint) evdHint.textContent=lang==='es'?'Selecciona idioma antes de entrar':'Choose language before entering';
   if(evdCurrent){
-    const selected=(T().clientNames[clientSel]||getSelectedClient().id||'').toUpperCase();
-    evdCurrent.textContent=selected;
+    evdCurrent.textContent=lang==='es'?'CASTELLANO':'ENGLISH';
   }
   if(evdMuteBtn){
     evdMuteBtn.textContent=homeMusicMuted?'🔇':'🔊';
@@ -1923,12 +1999,29 @@ function updateEraVerticalDock(){
     evdMuteBtn.title=homeMusicMuted?'Activar música':'Silenciar música';
   }
   if(!show) return;
+  if(grid) grid.style.gridTemplateColumns='repeat(2,minmax(0,1fr))';
   eraVerticalButtons.forEach((button,idx)=>{
-    const client=CLIENTS[idx];
-    if(!client) return;
-    button.classList.toggle('is-active',idx===clientSel);
-    button.classList.toggle('is-locked',!client.available);
-    button.style.color=client.accent;
+    const strong=button.querySelector('strong');
+    const span=button.querySelector('span');
+    if(idx===0){
+      if(strong) strong.textContent='CASTELLANO';
+      if(span) span.textContent='Interfaz y storytelling en español';
+      button.classList.toggle('is-active',lang==='es');
+      button.classList.remove('is-locked');
+      button.style.color='#f2c14e';
+      button.style.display='';
+      return;
+    }
+    if(idx===1){
+      if(strong) strong.textContent='ENGLISH';
+      if(span) span.textContent='Interface and storytelling in English';
+      button.classList.toggle('is-active',lang==='en');
+      button.classList.remove('is-locked');
+      button.style.color='#58d0ff';
+      button.style.display='';
+      return;
+    }
+    button.style.display='none';
   });
 }
 const ERAS=[
@@ -2030,14 +2123,14 @@ function exitPreloadToMenu(){
   resetPreloadState();
   startTransition(S.MENU);
 }
-function goToClientSelector(preferredClient){
+function goToHomeMenu(preferredClient){
   menuEnteredAt=Date.now();
   lastInput=Date.now();
   demoMode=false;
   if(Number.isInteger(preferredClient)&&CLIENTS[preferredClient]) clientSel=preferredClient;
   else if(Number.isInteger(activeClient)&&CLIENTS[activeClient]) clientSel=activeClient;
-  modelSel=0;
-  startTransition(S.CLIENT_SEL);
+  menuSel=lang==='en'?1:0;
+  startTransition(S.MENU);
 }
 function beginPreloadPlayback(){
   preloadPhase='loading';
@@ -2619,6 +2712,13 @@ if(eraVerticalDock){
     button.addEventListener('click',e=>{
       e.preventDefault();
       const idx=Number(button.dataset.client);
+      if(state===S.ERA_SEL){
+        if(idx===0) setLanguage('es');
+        if(idx===1) setLanguage('en');
+        armHomeMusic();
+        updateEraVerticalDock();
+        return;
+      }
       if(Number.isFinite(idx)&&CLIENTS[idx]){
         clientSel=idx;
         armHomeMusic();
@@ -2814,7 +2914,11 @@ document.addEventListener('keydown',e=>{
   if(state===S.MENU){
     if(e.code==='ArrowLeft'||e.code==='ArrowUp')   menuSel=0;
     if(e.code==='ArrowRight'||e.code==='ArrowDown') menuSel=1;
-    if(e.code==='Enter'||e.code==='Space'){lang=menuSel===0?'es':'en';clientSel=0;modelSel=0;startTransition(S.CLIENT_SEL);}
+    if(e.code==='Enter'||e.code==='Space'){
+      setLanguage(menuSel===0?'es':'en');
+      clientSel=0;modelSel=0;introSlide=0;introTimer=0;
+      startTransition(S.INTRO);
+    }
     return;
   }
   if(state===S.CLIENT_SEL){
@@ -2832,14 +2936,18 @@ document.addEventListener('keydown',e=>{
   if(state===S.HELP){
     if(e.code==='Escape'){state=S.MENU;}
     if(e.code==='ArrowLeft'){helpPage=Math.max(0,helpPage-1);}
-    if(e.code==='ArrowRight'){helpPage=Math.min(HELP_PAGES.length-1,helpPage+1);}
+    if(e.code==='ArrowRight'){helpPage=Math.min(getHelpPages().length-1,helpPage+1);}
     return;
   }
   if(state===S.INTRO){
     if(e.code==='Escape'){state=S.MENU;return;}
+    if(introSlide===0){
+      if(e.code==='ArrowLeft'||e.code==='ArrowUp'){setLanguage('es');return;}
+      if(e.code==='ArrowRight'||e.code==='ArrowDown'){setLanguage('en');return;}
+    }
     if(e.code==='ArrowRight'||e.code==='Space'||e.code==='Enter'){
       introSlide++;introTimer=0;
-      if(introSlide>=INTRO_SLIDES){state=S.MENU;}
+      if(introSlide>=INTRO_SLIDES){state=S.CLIENT_SEL;}
       return;
     }
     if(e.code==='ArrowLeft'){introSlide=Math.max(0,introSlide-1);introTimer=0;return;}
@@ -2867,10 +2975,11 @@ document.addEventListener('keydown',e=>{
     return;
   }
   if(state===S.GAME_END){
-    if(e.code==='Enter'||e.code==='Space'){goToClientSelector();}
+    if(e.code==='Enter'||e.code==='Space'){goToHomeMenu();}
     return;
   }
   if(state===S.PAUSE){
+    if(codexMapOpen&&(e.code==='Escape'||e.code==='Enter'||e.code==='Space')){codexMapOpen=false;return;}
     if(e.code==='Escape'||e.code==='Enter'||e.code==='Space'){state=S.GAME;}
     return;
   }
@@ -2918,6 +3027,7 @@ document.addEventListener('keydown',e=>{
     return;
   }
   if(state===S.GAME){
+    if(codexMapOpen&&(e.code==='Escape'||e.code==='Enter'||e.code==='Space')){codexMapOpen=false;return;}
     if(e.code==='Escape'){if(uiOpen)uiOpen=false;else openPause();}
     if(e.code==='KeyS'&&npcEdOpen&&npcEdKind==='staff'&&npcPlacementDirty){
       e.preventDefault();
@@ -2953,8 +3063,8 @@ cv.addEventListener('click',e=>{
   if(state===S.TUT){tutPage++;if(tutPage>=T().tut.length){state=S.GAME;startMusic();}return;}
   if(state===S.PAUSE){state=S.GAME;return;}
   if(state===S.YEAR_END&&G.yearEndAnim>80){advanceYear();return;}
-  if(state===S.GAME_END){goToClientSelector();return;}
-  if(state!==S.GAME&&state!==S.EDITOR&&state!==S.SETTINGS&&state!==S.MENU&&state!==S.HELP&&state!==S.CLIENT_SEL&&state!==S.MODEL_SEL&&state!==S.ERA_SEL) return;
+  if(state===S.GAME_END){goToHomeMenu();return;}
+  if(state!==S.GAME&&state!==S.EDITOR&&state!==S.SETTINGS&&state!==S.MENU&&state!==S.HELP&&state!==S.CLIENT_SEL&&state!==S.MODEL_SEL&&state!==S.ERA_SEL&&state!==S.INTRO) return;
   if(state===S.GAME){
     const displayHit=getDigitalSignageHitIndex(e.clientX,e.clientY);
     if(displayHit!==-1&&toggleDigitalSignageDisplay(displayHit)) return;
@@ -3035,6 +3145,14 @@ function doAction(id){
   // NPC editor intercepts all clicks when open
   if(npcEdOpen&&handleNPCEditorClick(id))return;
   checkGuidedTut(id);
+  if(id==='codexMapToggle'){
+    codexMapOpen=!codexMapOpen;
+    return;
+  }
+  if(id==='codexMapClose'||id==='codexMapBackdrop'){
+    codexMapOpen=false;
+    return;
+  }
   if(id==='turnKioskCall'){
     callTurnNumber('');
     return;
@@ -3253,26 +3371,38 @@ function doAction(id){
     return;
   }
   // ── Menu touch/click actions ──
-  if(id==='start'||id==='menuStart'||id==='menuStart8'||id==='menuStart16'){lang=menuSel===0?'es':'en';clientSel=0;modelSel=0;startTransition(S.CLIENT_SEL);return;}
+  if(id==='start'||id==='menuStart'||id==='menuStart8'||id==='menuStart16'){
+    setLanguage(menuSel===0?'es':'en');
+    clientSel=0;modelSel=0;introSlide=0;introTimer=0;
+    startTransition(S.INTRO);
+    return;
+  }
   if(id.startsWith('clientSel')){
     const ci=parseInt(id.slice(9),10);
     if(!Number.isNaN(ci)&&ci>=0&&ci<CLIENTS.length) clientSel=ci;
-    if(state===S.MENU) startTransition(S.CLIENT_SEL);
+    if(state===S.MENU){
+      if(getSelectedClient().available){
+        modelSel=0;
+        startTransition(S.MODEL_SEL);
+      }
+      return;
+    }
     return;
   }
   if(id==='clientConfirm'){
     if(getSelectedClient().available){modelSel=0;startTransition(S.MODEL_SEL);}
     return;
   }
-  if(id==='menuLangEs'){menuSel=0;return;}
-  if(id==='menuLangEn'){menuSel=1;return;}
+  if(id==='menuLangEs'){setLanguage('es');return;}
+  if(id==='menuLangEn'){setLanguage('en');return;}
   if(id==='menuSettings'){state=S.SETTINGS;return;}
   if(id==='menuHelp'){helpPage=0;state=S.HELP;return;}
   if(id==='menuIntro'){introSlide=0;introTimer=0;state=S.INTRO;return;}
   // Opciones goes to settings (handled by menuSettings above)
   if(id==='helpBack'){state=S.MENU;return;}
   if(id==='helpPrev'){helpPage=Math.max(0,helpPage-1);return;}
-  if(id==='helpNext'){helpPage=Math.min(HELP_PAGES.length-1,helpPage+1);return;}
+  if(id==='helpNext'){helpPage=Math.min(getHelpPages().length-1,helpPage+1);return;}
+  if(id==='introNext'){introSlide++;introTimer=0;if(introSlide>=INTRO_SLIDES) state=S.CLIENT_SEL;return;}
   // ── Model selection touch/click ──
   if(id.startsWith('model')&&id!=='modelConfirm'){
     const mi=parseInt(id.slice(5));
@@ -3423,7 +3553,7 @@ function doAction(id){
   if(id==='menu'){uiOpen=!uiOpen;return;}
   if(id==='closeUI'){uiOpen=false;return;}
   if(id==='save'){saveGame();showEv('💾 Saved!','#88aa55');SFX.cashRegister();return;}
-  if(id==='quit'){saveGame();stopAllMedia();goToClientSelector();return;}
+  if(id==='quit'){saveGame();stopAllMedia();goToHomeMenu();return;}
   if(id==='editor'){state=S.EDITOR;edSelIdx=-1;edStaffSelIdx=-1;edMode='furniture';return;}
   // ── Editor actions ──
   if(id==='edSave'){saveLayout();edSaveNotify=90;playSaveBeep();return;}
@@ -5622,6 +5752,7 @@ function drawPreload(){
   tx(prompt,44,472,preloadPhase==='prompt'?'#ffffff':'#5bd8ff',12);
 }
 function drawEraSelect(){
+  const isEs=lang==='es';
   if(eraNoticeTimer>0) eraNoticeTimer--;
   drawReadyPlayerRoomBackdrop();
   cx.globalAlpha=1;
@@ -5629,9 +5760,9 @@ function drawEraSelect(){
   nl(0,H-4,W,H-4,'#ff9a1f',2);
   r(148,18,504,92,'#05070dcc');
   rx(148,18,504,92,'#5a7398',1);
-  tx('SELECCION DE ERA',W/2,56,'#ffffff',22,'center');
-  tx('1982-1997 · Elige el arranque del storytelling',W/2,78,'#c7d6ea',9,'center');
-  tx('1. Spectrum  2. Admira  3. PC DX 486',W/2,96,'#e5edf9',8,'center');
+  tx(isEs?'SELECCION DE ERA':'ERA SELECT',W/2,56,'#ffffff',22,'center');
+  tx(isEs?'1982-1997 · Elige el arranque del storytelling':'1982-1997 · Choose the storytelling entry point',W/2,78,'#c7d6ea',9,'center');
+  tx(isEs?'1. Spectrum  2. Admira  3. PC DX 486':'1. Spectrum  2. Admira  3. PC DX 486',W/2,96,'#e5edf9',8,'center');
 
   const cardX=104,cardY=128,cardW=592,cardH=78,cardGap=18;
   ERAS.forEach((era,i)=>{
@@ -5650,7 +5781,7 @@ function drawEraSelect(){
     tx(era.bits+' · '+era.years,cardX+78,y+40,era.accent,9);
     tx(era.desc,cardX+78,y+58,'#b9c7dd',8);
     tx(era.route,cardX+cardW-16,y+26,selected?era.accent:'#d8e7ff',8,'right');
-    tx(era.available?'ENTER PARA ENTRAR':'EN PREPARACION',cardX+cardW-16,y+56,era.available?'#7ff0ae':'#ffd966',8,'right');
+    tx(era.available?(isEs?'ENTER PARA ENTRAR':'PRESS ENTER TO OPEN'):(isEs?'EN PREPARACION':'IN PRODUCTION'),cardX+cardW-16,y+56,era.available?'#7ff0ae':'#ffd966',8,'right');
     BTNS['era'+i]={x:cardX,y,w:cardW,h:cardH};
   });
 
@@ -5670,8 +5801,8 @@ function drawEraSelect(){
     tx(eraNoticeMsg,boxX+boxW/2,boxY+16,'#d8f6b4',6,'center');
   }else{
     const hint=lang==='es'
-      ?'El vertical se elige abajo, encima de Skip al Juego'
-      :'Pick the vertical below, above Skip Game';
+      ?'Abajo eliges idioma · flechas cambian era · Enter entra'
+      :'Choose language below · arrows change era · Enter opens';
     tx(hint,W/2,466,'#8ea0bc',7,'center');
   }
 }
@@ -5953,10 +6084,15 @@ function drawMenu(){
 
 // ── INTRO / HOW TO PLAY ───────────────────────────────────────
 function drawIntro(){
-  introTimer++;
-  if(introTimer>=INTRO_SLIDE_DURATION){introTimer=0;introSlide++;if(introSlide>=INTRO_SLIDES){state=S.MENU;return;}}
+  if(introSlide>0){
+    introTimer++;
+    if(introTimer>=INTRO_SLIDE_DURATION){introTimer=0;introSlide++;if(introSlide>=INTRO_SLIDES){state=S.CLIENT_SEL;return;}}
+  }else{
+    introTimer=0;
+  }
   const t=introTimer, sl=introSlide;
   const fade=Math.min(1,t/18)*Math.min(1,(INTRO_SLIDE_DURATION-t)/12);
+  const isEs=lang==='es';
 
   // ── Background
   r(0,0,W,H,'#0a0c18');
@@ -5970,18 +6106,25 @@ function drawIntro(){
 
   // ── Slide content
   if(sl===0){
-    // ── BIENVENIDA ──
+    // ── WELCOME ──
     const pulse=0.7+0.3*Math.abs(Math.sin(tt*0.06));
     glow(P.neon3,30*pulse);
     cx.font='bold 52px monospace';cx.textAlign='center';cx.fillStyle=P.neon3;cx.fillText('ADMIRA XP',W/2,H/2-68);nog();
     nt('THE XPACE OS',W/2,H/2-42,P.neon1,16);
-    nt('Catalogo vivo de experiencias operativas por cliente',W/2,H/2-8,P.neon1,12);
-    nt('Empieza con Xtanco y abre la linea de verticales del motor compartido.',W/2,H/2+28,P.uiT3,10);
-    nt('Staff · stock · eventos · metricas · layout operativo',W/2,H/2+52,P.uiT3,10);
-    nt('Loterias, Retail y nuevos verticales entraran en esta misma plataforma.',W/2,H/2+74,P.uiT3,10);
+    nt(isEs?'Catalogo vivo de experiencias operativas por cliente':'Living catalog of client operational experiences',W/2,H/2-8,P.neon1,12);
+    nt(isEs?'El idioma ya se decide en la pantalla de era.':'Language is now chosen on the era screen.',W/2,H/2+22,P.uiT3,10);
+    nt(isEs?'Xtanco abre la linea inicial de verticales.':'Xtanco opens the first line of vertical experiences.',W/2,H/2+44,P.uiT3,10);
+    nt(isEs?'Staff · stock · events · metrics · operational layout':'Staff · stock · events · metrics · operational layout',W/2,H/2+66,P.uiT3,10);
     // Animated neon underline
     const ulw=280+40*Math.abs(Math.sin(tt*0.04));
     nl(W/2-ulw/2,H/2-2,W/2+ulw/2,H/2-2,P.neon2,1);
+
+    nt((isEs?'Idioma activo: ':'Active language: ')+(isEs?'Castellano':'English'),W/2,H/2+98,P.neon2,11);
+
+    const ctaW=250,ctaH=34,ctaX=W/2-ctaW/2,ctaY=H/2+120;
+    r(ctaX,ctaY,ctaW,ctaH,'#06110f');glow(P.neon3,16);rx(ctaX,ctaY,ctaW,ctaH,P.neon3,2);nog();
+    tx(isEs?'CONTINUAR':'CONTINUE',W/2,ctaY+23,P.neon3,11,'center');
+    BTNS['introNext']={x:ctaX,y:ctaY,w:ctaW,h:ctaH};
 
     // Version block lives only on slide 0, just above the skip button area.
     const versionBoxW=312,versionBoxH=34,versionBoxX=W/2-versionBoxW/2,versionBoxY=H-72;
@@ -5994,13 +6137,12 @@ function drawIntro(){
 
   } else if(sl===1){
     // ── EL OBJETIVO ──
-    nt('EL OBJETIVO',W/2,44,P.neon3,16);
+    nt(isEs?'EL OBJETIVO':'THE GOAL',W/2,44,P.neon3,16);
     nl(W/2-130,52,W/2+130,52,P.neon3,1);
     const targets=[2200,5800,12000,23000,40000];
-    const ratings=['S','A','B','C','D'];
     const cols=['#44ff88','#88eeaa','#ffcc44','#ff8844','#ff4444'];
-    nt('Supera el objetivo de cada año para avanzar.',W/2,80,P.uiT3,10);
-    nt('Al final de año recibes una calificación y un bonus:',W/2,96,P.uiT3,10);
+    nt(isEs?'Supera el objetivo de cada año para avanzar.':'Beat each year target to keep moving forward.',W/2,80,P.uiT3,10);
+    nt(isEs?'Al final de año recibes una calificación y un bonus:':'At the end of the year you get a rating and bonus:',W/2,96,P.uiT3,10);
     for(let i=0;i<5;i++){
       const bx=W/2-220+i*88,by=130;
       // Animated progress bar fill
@@ -6008,25 +6150,27 @@ function drawIntro(){
       r(bx,by,70,10,'#111a22');r(bx,by,Math.max(0,70*pct)|0,10,cols[i]);
       rx(bx,by,70,10,cols[i],1);
       cx.font='bold 10px monospace';cx.textAlign='center';cx.fillStyle=cols[i];
-      cx.fillText('AÑO '+(i+1),bx+35,by-4);
+      cx.fillText((isEs?'AÑO ':'YEAR ')+(i+1),bx+35,by-4);
       cx.fillText('€'+(targets[i]>=1000?(targets[i]/1000).toFixed(1)+'k':targets[i]),bx+35,by+22);
     }
     // Ratings row
     const rby=190;
-    nt('CALIFICACIONES  →  BONUS AL FINAL DE AÑO',W/2,rby,P.gray,9);
-    const rData=[['S','LEGENDARIO','#44ff88','€2.500'],['A','EXCELENTE','#88dd88','€1.200'],['B','BIEN','#ffcc44','€400'],['C','MEJORABLE','#ff8844','€0'],['D','INSUFICIENTE','#ff4444','-€600']];
+    nt(isEs?'CALIFICACIONES  →  BONUS AL FINAL DE AÑO':'RATINGS  →  YEAR-END BONUS',W/2,rby,P.gray,9);
+    const rData=isEs
+      ? [['S','LEGENDARIO','#44ff88','€2.500'],['A','EXCELENTE','#88dd88','€1.200'],['B','BIEN','#ffcc44','€400'],['C','MEJORABLE','#ff8844','€0'],['D','INSUFICIENTE','#ff4444','-€600']]
+      : [['S','LEGENDARY','#44ff88','€2,500'],['A','EXCELLENT','#88dd88','€1,200'],['B','SOLID','#ffcc44','€400'],['C','WEAK','#ff8844','€0'],['D','FAILED','#ff4444','-€600']];
     rData.forEach((rd,i)=>{
       const rx2=W/2-190+i*96,ry2=rby+16;
       r(rx2,ry2,80,36,'#0a1020');rx(rx2,ry2,80,36,rd[2],1);
       cx.font='bold 18px monospace';cx.textAlign='center';cx.fillStyle=rd[2];cx.fillText(rd[0],rx2+40,ry2+22);
       cx.font='7px monospace';cx.fillStyle=rd[2];cx.fillText(rd[1],rx2+40,ry2+32);
     });
-    nt('Si no alcanzas el objetivo 2 veces → FIN DE PARTIDA',W/2,260,P.red,9);
-    nt('Si tienes menos de €1.000 al pagar nóminas → FIN DE PARTIDA',W/2,276,P.red,9);
+    nt(isEs?'Si no alcanzas el objetivo 2 veces → FIN DE PARTIDA':'Miss the target twice → GAME OVER',W/2,260,P.red,9);
+    nt(isEs?'Si tienes menos de €1.000 al pagar nóminas → FIN DE PARTIDA':'Less than €1,000 when salaries hit → GAME OVER',W/2,276,P.red,9);
 
   } else if(sl===2){
     // ── LOS CLIENTES ──
-    nt('LOS CLIENTES',W/2,44,P.neon1,16);
+    nt(isEs?'LOS CLIENTES':'THE CUSTOMERS',W/2,44,P.neon1,16);
     nl(W/2-130,52,W/2+130,52,P.neon1,1);
     // Animated customer walking then buying
     const phase=t<80?'walk':t<160?'browse':'leave';
@@ -6036,7 +6180,9 @@ function drawIntro(){
     chibi(custX,H/2-10,phase==='leave'?1:-1,3,3,custFr,false,tt);
     renderMode=_rm;
     // Stage labels
-    const stages=[{x:W/2-95,label:'ENTRA',active:t<80},{x:W/2-20,label:'BUSCA',active:t>=80&&t<160},{x:W/2+80,label:'SALE',active:t>=160}];
+    const stages=isEs
+      ? [{x:W/2-95,label:'ENTRA',active:t<80},{x:W/2-20,label:'BUSCA',active:t>=80&&t<160},{x:W/2+80,label:'SALE',active:t>=160}]
+      : [{x:W/2-95,label:'ENTERS',active:t<80},{x:W/2-20,label:'BROWSES',active:t>=80&&t<160},{x:W/2+80,label:'LEAVES',active:t>=160}];
     stages.forEach(s=>{
       cx.globalAlpha=s.active?1:0.35;
       r(s.x-28,H/2+25,56,16,'#111a22');rx(s.x-28,H/2+25,56,16,s.active?P.neon1:P.gray,1);
@@ -6053,9 +6199,15 @@ function drawIntro(){
     // Info boxes
     const iby=H/2+58;
     const boxes=[
-      {x:W/2-240,w:145,col:P.neon1,title:'CON STOCK',desc:['El cliente compra','→ ingresos +€','→ satisfacción +0.5']},
-      {x:W/2-80,w:158,col:P.neon3,title:'STAFF CERCA',desc:['Empleado rescata la venta','→ producto alternativo','→ 🤝 float + ingreso']},
-      {x:W/2+90,w:148,col:P.red,title:'SIN STOCK',desc:['Cliente insatisfecho','→ "SIN STOCK" float','→ satisfacción -2']},
+      isEs
+        ? {x:W/2-240,w:145,col:P.neon1,title:'CON STOCK',desc:['El cliente compra','→ ingresos +€','→ satisfacción +0.5']}
+        : {x:W/2-240,w:145,col:P.neon1,title:'IN STOCK',desc:['Customer buys','→ revenue +€','→ satisfaction +0.5']},
+      isEs
+        ? {x:W/2-80,w:158,col:P.neon3,title:'STAFF CERCA',desc:['Empleado rescata la venta','→ producto alternativo','→ 🤝 float + ingreso']}
+        : {x:W/2-80,w:158,col:P.neon3,title:'STAFF NEARBY',desc:['Staff rescues the sale','→ alternate product','→ 🤝 float + revenue']},
+      isEs
+        ? {x:W/2+90,w:148,col:P.red,title:'SIN STOCK',desc:['Cliente insatisfecho','→ "SIN STOCK" float','→ satisfacción -2']}
+        : {x:W/2+90,w:148,col:P.red,title:'OUT OF STOCK',desc:['Customer gets upset','→ "NO STOCK" float','→ satisfaction -2']},
     ];
     boxes.forEach(b=>{
       r(b.x,iby,b.w,62,'#0a1020');rx(b.x,iby,b.w,62,b.col,1);
@@ -6065,12 +6217,12 @@ function drawIntro(){
 
   } else if(sl===3){
     // ── EL STOCK ──
-    nt('EL STOCK',W/2,44,P.neonB,16);
+    nt(isEs?'EL STOCK':'THE STOCK',W/2,44,P.neonB,16);
     nl(W/2-100,52,W/2+100,52,P.neonB,1);
-    nt('Repón el stock antes de que se agote.',W/2,76,P.uiT3,10);
-    nt('Cada producto tiene un nivel de stock independiente.',W/2,92,P.uiT3,10);
+    nt(isEs?'Repón el stock antes de que se agote.':'Restock before it runs out.',W/2,76,P.uiT3,10);
+    nt(isEs?'Cada producto tiene un nivel de stock independiente.':'Each product has its own stock level.',W/2,92,P.uiT3,10);
     // Stock bars for 6 products
-    const pNames=['Tabaco','Vapes','Lotería','Prensa','Chuches','Recarga'];
+    const pNames=isEs?['Tabaco','Vapes','Lotería','Prensa','Chuches','Recarga']:['Tobacco','Vapes','Lottery','Press','Candy','Top-Up'];
     const pCols=[P.prods[0],P.prods[1],P.prods[2],P.prods[3],P.prods[4],P.prods[5]];
     const pLevels=[0.9,0.3,0.75,0.1,0.6,0.45];
     pNames.forEach((nm,i)=>{
@@ -6088,22 +6240,22 @@ function drawIntro(){
     // Restock info
     const riby=225;
     r(W/2-170,riby,340,70,'#0a1020');rx(W/2-170,riby,340,70,P.neonB,1);
-    cx.font='bold 10px monospace';cx.textAlign='center';cx.fillStyle=P.neonB;cx.fillText('CÓMO REPONER',W/2,riby+14);
+    cx.font='bold 10px monospace';cx.textAlign='center';cx.fillStyle=P.neonB;cx.fillText(isEs?'CÓMO REPONER':'HOW TO RESTOCK',W/2,riby+14);
     cx.font='9px monospace';cx.fillStyle='#aabbcc';
-    cx.fillText('Pestaña STOCK → botón REPONER (€150 por producto)',W/2,riby+30);
-    cx.fillText('Oferta proveedor: -50% restock cuando aparece 📦',W/2,riby+44);
-    cx.fillText('Inspección: si stock <40% → multa €600-€1000 + -15 sat',W/2,riby+58);
+    cx.fillText(isEs?'Pestaña STOCK → botón REPONER (€150 por producto)':'STOCK tab → RESTOCK button (€150 per product)',W/2,riby+30);
+    cx.fillText(isEs?'Oferta proveedor: -50% restock cuando aparece 📦':'Supplier deal: -50% restock when 📦 appears',W/2,riby+44);
+    cx.fillText(isEs?'Inspección: si stock <40% → multa €600-€1000 + -15 sat':'Inspection: stock <40% → €600-€1000 fine + -15 sat',W/2,riby+58);
 
   } else if(sl===4){
     // ── TU EQUIPO ──
-    nt('TU EQUIPO',W/2,44,P.neon2,16);
+    nt(isEs?'TU EQUIPO':'YOUR TEAM',W/2,44,P.neon2,16);
     nl(W/2-100,52,W/2+100,52,P.neon2,1);
     const roles=[
-      {name:'CAJERO/A',desc:'Ventas + cobro',cost:'€500',salary:'€130/sem',col:P.prods[0],shirt:0,hair:0},
-      {name:'REPOSITOR/A',desc:'Repone stock',cost:'€400',salary:'€105/sem',col:P.prods[2],shirt:2,hair:1},
-      {name:'AZAFATA',desc:'Atención cliente',cost:'€450',salary:'€115/sem',col:P.prods[4],shirt:4,hair:2},
-      {name:'STORE MGR',desc:'Player / rescata ventas',cost:'€1.200',salary:'€210/sem',col:P.neon3,shirt:5,hair:3},
-      {name:'DJ',desc:'Strobe + fiesta',cost:'€800',salary:'€160/sem',col:P.prods[1],shirt:1,hair:5},
+      isEs?{name:'CAJERO/A',desc:'Ventas + cobro',cost:'€500',salary:'€130/sem',col:P.prods[0],shirt:0,hair:0}:{name:'CASHIER',desc:'Sales + checkout',cost:'€500',salary:'€130/wk',col:P.prods[0],shirt:0,hair:0},
+      isEs?{name:'REPOSITOR/A',desc:'Repone stock',cost:'€400',salary:'€105/sem',col:P.prods[2],shirt:2,hair:1}:{name:'STOCKER',desc:'Restocks shelves',cost:'€400',salary:'€105/wk',col:P.prods[2],shirt:2,hair:1},
+      isEs?{name:'AZAFATA',desc:'Atención cliente',cost:'€450',salary:'€115/sem',col:P.prods[4],shirt:4,hair:2}:{name:'HOSTESS',desc:'Customer care',cost:'€450',salary:'€115/wk',col:P.prods[4],shirt:4,hair:2},
+      isEs?{name:'STORE MGR',desc:'Player / rescata ventas',cost:'€1.200',salary:'€210/sem',col:P.neon3,shirt:5,hair:3}:{name:'STORE MGR',desc:'Player / saves sales',cost:'€1,200',salary:'€210/wk',col:P.neon3,shirt:5,hair:3},
+      isEs?{name:'DJ',desc:'Strobe + fiesta',cost:'€800',salary:'€160/sem',col:P.prods[1],shirt:1,hair:5}:{name:'DJ',desc:'Strobe + party',cost:'€800',salary:'€160/wk',col:P.prods[1],shirt:1,hair:5},
     ];
     const _rm=renderMode;renderMode='16bit';
     roles.forEach((ro,i)=>{
@@ -6117,16 +6269,16 @@ function drawIntro(){
     // Training info
     const tby=228;
     r(W/2-200,tby,400,54,'#0a1020');rx(W/2-200,tby,400,54,P.neon1,1);
-    cx.font='bold 9px monospace';cx.textAlign='center';cx.fillStyle=P.neon1;cx.fillText('FORMACIÓN — niveles 1 a 5',W/2,tby+14);
+    cx.font='bold 9px monospace';cx.textAlign='center';cx.fillStyle=P.neon1;cx.fillText(isEs?'FORMACIÓN — niveles 1 a 5':'TRAINING — levels 1 to 5',W/2,tby+14);
     cx.font='8px monospace';cx.fillStyle='#aabbcc';
-    cx.fillText('Cada nivel multiplica ventas y sube el salario. Coste: €200-€380.',W/2,tby+28);
-    cx.fillText('Empleado del mes aleatorio: +30 moral, +1 nivel de golpe.',W/2,tby+42);
+    cx.fillText(isEs?'Cada nivel multiplica ventas y sube el salario. Coste: €200-€380.':'Each level multiplies sales and raises salary. Cost: €200-€380.',W/2,tby+28);
+    cx.fillText(isEs?'Empleado del mes aleatorio: +30 moral, +1 nivel de golpe.':'Random employee of the month: +30 morale, +1 instant level.',W/2,tby+42);
 
   } else if(sl===5){
     // ── LA COMPETENCIA ──
-    nt('LA COMPETENCIA',W/2,44,P.red,16);
+    nt(isEs?'LA COMPETENCIA':'THE COMPETITION',W/2,44,P.red,16);
     nl(W/2-140,52,W/2+140,52,P.red,1);
-    nt('Altadis · JTI · PM · BAT compiten contigo activamente.',W/2,76,P.uiT3,10);
+    nt(isEs?'Altadis · JTI · PM · BAT compiten contigo activamente.':'Altadis · JTI · PM · BAT actively compete with you.',W/2,76,P.uiT3,10);
     // Animated comp bars
     const compNames=['Altadis','JTI','PM','BAT'];
     const compCols=['#3366cc','#cc2222','#2266aa','#333399'];
@@ -6149,25 +6301,25 @@ function drawIntro(){
     // Effect description
     const eBy=220;
     r(W/2-220,eBy,440,70,'#0a1020');rx(W/2-220,eBy,440,70,P.red,1);
-    cx.font='bold 9px monospace';cx.textAlign='center';cx.fillStyle=P.red;cx.fillText('📢 PROMO RIVAL — qué ocurre',W/2,eBy+14);
+    cx.font='bold 9px monospace';cx.textAlign='center';cx.fillStyle=P.red;cx.fillText(isEs?'📢 PROMO RIVAL — qué ocurre':'📢 RIVAL PROMO — what happens',W/2,eBy+14);
     cx.font='8px monospace';cx.fillStyle='#aabbcc';
-    cx.fillText('Un competidor lanza oferta → -35% clientes durante ~280 frames',W/2,eBy+28);
-    cx.fillText('Su barra en el top-bar se pone en ROJO con "PROMO!"',W/2,eBy+40);
-    cx.fillText('Contraataca: Publicidad Básica-2.5pt · Media-2.5pt · PREMIUM cancela la promo',W/2,eBy+54);
+    cx.fillText(isEs?'Un competidor lanza oferta → -35% clientes durante ~280 frames':'A competitor launches a promo → -35% customers for ~280 frames',W/2,eBy+28);
+    cx.fillText(isEs?'Su barra en el top-bar se pone en ROJO con "PROMO!"':'Its top-bar share turns RED with "PROMO!"',W/2,eBy+40);
+    cx.fillText(isEs?'Contraataca: Publicidad Básica-2.5pt · Media-2.5pt · PREMIUM cancela la promo':'Counter it: Basic/Mid ads hit share · PREMIUM cancels the promo',W/2,eBy+54);
     // Sat influence note
-    nt('Alta satisfacción → competidores pierden cuota poco a poco.',W/2,302,P.neon1,9);
+    nt(isEs?'Alta satisfacción → competidores pierden cuota poco a poco.':'High satisfaction → competitors slowly lose share.',W/2,302,P.neon1,9);
 
   } else if(sl===6){
     // ── EVENTOS ESPECIALES ──
-    nt('EVENTOS ESPECIALES',W/2,44,P.neon3,16);
+    nt(isEs?'EVENTOS ESPECIALES':'SPECIAL EVENTS',W/2,44,P.neon3,16);
     nl(W/2-160,52,W/2+160,52,P.neon3,1);
     const evs=[
-      {icon:'⚡',name:'HORA PUNTA',col:'#ff8800',lines:['Ventas ×2.4','Clientes ×2','Duración: ~160 frames']},
-      {icon:'🔍',name:'INSPECCIÓN',col:'#ff2244',lines:['Stock >40% + 1 empleado → +8 sat','Stock <40% → multa €600-1000','Aviso 100 frames antes']},
-      {icon:'🎉',name:'FESTIVO',col:'#ffcc00',lines:['Clientes ×1.6','Ventas ×1.8','Días: S.Valentín, Navidad…']},
-      {icon:'🌧',name:'TIEMPO',col:'#6688aa',lines:['Lluvia → clientes ×0.5','Sol → clientes ×1.5','Tormenta: flash en Hue']},
-      {icon:'⭐',name:'CLIENTE VIP',col:'#ffd700',lines:['Elige producto más caro','Gasta ×1.5 más','Diálogo especial']},
-      {icon:'🚨',name:'HURTO',col:'#cc3333',lines:['<3 empleados: -30% stock','≥3 empleados: frustrado','Aleatório, sin aviso']},
+      isEs?{icon:'⚡',name:'HORA PUNTA',col:'#ff8800',lines:['Ventas ×2.4','Clientes ×2','Duración: ~160 frames']}:{icon:'⚡',name:'RUSH HOUR',col:'#ff8800',lines:['Sales ×2.4','Customers ×2','Duration: ~160 frames']},
+      isEs?{icon:'🔍',name:'INSPECCIÓN',col:'#ff2244',lines:['Stock >40% + 1 empleado → +8 sat','Stock <40% → multa €600-1000','Aviso 100 frames antes']}:{icon:'🔍',name:'INSPECTION',col:'#ff2244',lines:['Stock >40% + 1 employee → +8 sat','Stock <40% → €600-1000 fine','100-frame warning']},
+      isEs?{icon:'🎉',name:'FESTIVO',col:'#ffcc00',lines:['Clientes ×1.6','Ventas ×1.8','Días: S.Valentín, Navidad…']}:{icon:'🎉',name:'HOLIDAY',col:'#ffcc00',lines:['Customers ×1.6','Sales ×1.8','Days: Valentine, Xmas…']},
+      isEs?{icon:'🌧',name:'TIEMPO',col:'#6688aa',lines:['Lluvia → clientes ×0.5','Sol → clientes ×1.5','Tormenta: flash en Hue']}:{icon:'🌧',name:'WEATHER',col:'#6688aa',lines:['Rain → customers ×0.5','Sun → customers ×1.5','Storm: Hue flash']},
+      isEs?{icon:'⭐',name:'CLIENTE VIP',col:'#ffd700',lines:['Elige producto más caro','Gasta ×1.5 más','Diálogo especial']}:{icon:'⭐',name:'VIP CUSTOMER',col:'#ffd700',lines:['Chooses priciest item','Spends ×1.5 more','Special dialogue']},
+      isEs?{icon:'🚨',name:'HURTO',col:'#cc3333',lines:['<3 empleados: -30% stock','≥3 empleados: frustrado','Aleatório, sin aviso']}:{icon:'🚨',name:'THEFT',col:'#cc3333',lines:['<3 employees: -30% stock','≥3 employees: stopped','Random, no warning']},
     ];
     evs.forEach((ev,i)=>{
       const col=i%3,row=Math.floor(i/3);
@@ -6180,18 +6332,18 @@ function drawIntro(){
 
   } else if(sl===7){
     // ── CONTROLES ──
-    nt('CONTROLES',W/2,44,P.neon1,16);
+    nt(isEs?'CONTROLES':'CONTROLS',W/2,44,P.neon1,16);
     nl(W/2-100,52,W/2+100,52,P.neon1,1);
     const ctrls=[
-      {key:'Q / A',desc:'Mover manager arriba-izq / abajo-izq',col:P.neon1},
-      {key:'O / P',desc:'Mover manager arriba-der / abajo-der',col:P.neon1},
-      {key:'ESC',desc:'Pausa / volver al menú',col:P.neon3},
-      {key:'CLICK',desc:'Botones UI, tabs, acciones',col:P.neon2},
-      {key:'☰ MENU',desc:'Abrir panel lateral (4 pestañas)',col:P.neon2},
-      {key:'VENTAS',desc:'Resumen ingresos, objetivo anual',col:P.uiT},
-      {key:'PERSONAL',desc:'Contratar, formar, despedir empleados',col:P.uiT},
-      {key:'STOCK',desc:'Reponer productos, publicidad, mejora local',col:P.uiT},
-      {key:'LOCAL',desc:'Visitas, opciones de tienda',col:P.uiT},
+      isEs?{key:'Q / A',desc:'Mover manager arriba-izq / abajo-izq',col:P.neon1}:{key:'Q / A',desc:'Move manager up-left / down-left',col:P.neon1},
+      isEs?{key:'O / P',desc:'Mover manager arriba-der / abajo-der',col:P.neon1}:{key:'O / P',desc:'Move manager up-right / down-right',col:P.neon1},
+      isEs?{key:'ESC',desc:'Pausa / volver al menú',col:P.neon3}:{key:'ESC',desc:'Pause / return to menu',col:P.neon3},
+      isEs?{key:'CLICK',desc:'Botones UI, tabs, acciones',col:P.neon2}:{key:'CLICK',desc:'UI buttons, tabs, actions',col:P.neon2},
+      isEs?{key:'☰ MENU',desc:'Abrir panel lateral (4 pestañas)',col:P.neon2}:{key:'☰ MENU',desc:'Open side panel (4 tabs)',col:P.neon2},
+      isEs?{key:'VENTAS',desc:'Resumen ingresos, objetivo anual',col:P.uiT}:{key:'SALES',desc:'Revenue summary, yearly target',col:P.uiT},
+      isEs?{key:'PERSONAL',desc:'Contratar, formar, despedir empleados',col:P.uiT}:{key:'STAFF',desc:'Hire, train, fire employees',col:P.uiT},
+      isEs?{key:'STOCK',desc:'Reponer productos, publicidad, mejora local',col:P.uiT}:{key:'STOCK',desc:'Restock, advertising, store upgrade',col:P.uiT},
+      isEs?{key:'LOCAL',desc:'Visitas, opciones de tienda',col:P.uiT}:{key:'STORE',desc:'Visits, store options',col:P.uiT},
     ];
     ctrls.forEach((c,i)=>{
       const row=Math.floor(i/3),col=i%3;
@@ -6210,8 +6362,8 @@ function drawIntro(){
     cx.globalAlpha=fade*cpulse;
     glow(P.neon1,12);
     cx.font='bold 13px monospace';cx.textAlign='center';cx.fillStyle=P.neon1;
-    cx.fillText('¡YA SABES TODO LO QUE NECESITAS!',W/2,ctaY);
-    cx.font='10px monospace';cx.fillStyle=P.neon2;cx.fillText('Pulsa ESPACIO o → para ir al menú',W/2,ctaY+22);
+    cx.fillText(isEs?'¡YA SABES TODO LO QUE NECESITAS!':'YOU NOW HAVE EVERYTHING YOU NEED!',W/2,ctaY);
+    cx.font='10px monospace';cx.fillStyle=P.neon2;cx.fillText(isEs?'Pulsa ESPACIO o → para abrir el catálogo':'Press SPACE or → to open the catalog',W/2,ctaY+22);
     nog();
     cx.globalAlpha=fade;
   }
@@ -6229,7 +6381,7 @@ function drawIntro(){
   // Slide counter + hint
   cx.globalAlpha=0.55;
   tx((sl+1)+'/'+INTRO_SLIDES,12,H-8,P.gray,8);
-  tx('← → NAVEGAR  |  ESC SALIR',W-8,H-8,P.gray,8,'right');
+  tx(isEs?'← → NAVEGAR  |  ESC SALIR':'← → NAVIGATE  |  ESC EXIT',W-8,H-8,P.gray,8,'right');
   // Auto-advance bar
   const pct=t/INTRO_SLIDE_DURATION;
   cx.fillStyle='#1a2030';cx.fillRect(0,H-4,W,4);
@@ -6237,7 +6389,7 @@ function drawIntro(){
   cx.globalAlpha=1;
 
   // ── Slide title badge (top left) ──
-  const slideTitles=['BIENVENIDA','EL OBJETIVO','LOS CLIENTES','EL STOCK','TU EQUIPO','LA COMPETENCIA','EVENTOS','CONTROLES'];
+  const slideTitles=isEs?['IDIOMA','EL OBJETIVO','LOS CLIENTES','EL STOCK','TU EQUIPO','LA COMPETENCIA','EVENTOS','CONTROLES']:['LANGUAGE','THE GOAL','CUSTOMERS','STOCK','YOUR TEAM','COMPETITION','EVENTS','CONTROLS'];
   r(8,8,170,18,'#0a1020');rx(8,8,170,18,P.neon2,1);
   cx.font='bold 9px monospace';cx.textAlign='left';cx.fillStyle=P.neon2;cx.fillText('▶  '+slideTitles[sl],14,21);
 }
@@ -6568,7 +6720,8 @@ function drawEraClientMiniMap(originX,originY,w,h){
 }
 
 // ── HELP / MANUAL SCREEN ─────────────────────────────────────
-const HELP_PAGES=[
+const HELP_PAGES={
+  es:[
   { title:'ADMIRA XP // THE XPACE OS — XTANCO', lines:[
     '','Bienvenido a Admira XP // The Xpace OS,',
     'la plataforma viva de experiencias operativas.','',
@@ -6674,9 +6827,121 @@ const HELP_PAGES=[
     '  xtAPI.visit(Com|Tec|Del|GC)',
     '  xtAPI.save() / xtAPI.help()',
   ]},
-];
+  ],
+  en:[
+  { title:'ADMIRA XP // THE XPACE OS — XTANCO', lines:[
+    '','Welcome to Admira XP // The Xpace OS,',
+    'the living platform for operational experiences.','',
+    'Xtanco is the first active vertical.',
+    'Manage your tobacco shop for 5 years.',
+    'Hire staff, restock products,',
+    'launch campaigns and hit your',
+    'annual sales targets.','',
+    'If you bill less than 55% of the target,',
+    'game over!',
+  ]},
+  { title:'XPACE CATALOG', lines:[
+    '','Admira XP // The Xpace OS will host',
+    'multiple business vertical games inside',
+    'the same operational engine.','',
+    'LIVE TODAY:',
+    '  Xtanco / Tobacco','',
+    'IN PRODUCTION:',
+    '  Admira Lottery',
+    '  Admira Retail','',
+    'Each client gets its own',
+    'metrics, layout and events.',
+  ]},
+  { title:'KEYBOARD CONTROLS', lines:[
+    '','Q / A / O / P — Move character',
+    '  (NW / SE / SW / NE in isometric view)','',
+    'M — Open / close side menu',
+    'E — Layout editor (move furniture)',
+    'L — Toggle lights (Elgato + Hue)',
+    '1-4 — Open direct tab (Sales,',
+    '       Staff, Stock, Store)',
+    'Escape — Pause / close panel',
+    'S (in editor) — Save layout',
+    'R (in editor) — Reset layout',
+  ]},
+  { title:'STORE MANAGEMENT', lines:[
+    '','STAFF (tab 2):',
+    '  Hire, train (level 1-5),',
+    '  fire. Roles: Cashier, Stocker,',
+    '  Hostess, Manager, DJ.','',
+    'STOCK (tab 3):',
+    '  Restock products one by one.',
+    '  Tobacco, Vapes, Lottery, Press...','',
+    'ADVERTISING: Basic, Mid, Premium.',
+    '  Raises fame and satisfaction.',
+    'UPGRADE: Upgrade store to level 2.',
+  ]},
+  { title:'ECONOMY AND EVENTS', lines:[
+    '','INCOME: Product sales.',
+    'COSTS: Salaries + restocking.','',
+    'RUSH HOUR: Period with x2.4 sales.',
+    '  Push hard while it lasts!','',
+    'INSPECTION: If you have staff and',
+    '  stock > 30%, you pass (+satisfaction).',
+    '  Otherwise: fine of 400-1000 EUR.','',
+    'YEAR RATING: S(+2500 EUR) A(+1200 EUR)',
+    '  B(+400 EUR) C(0 EUR) D(-600 EUR)',
+  ]},
+  { title:'XTANCO SCENARIOS', lines:[
+    '','GENERIC ★★★ Normal',
+    '  5 employees, 6 products, 3,500 EUR','',
+    'GOOD ★★ Easy',
+    '  2 employees, 4 products, 2,800 EUR','',
+    'BETTER ★★★★ Hard',
+    '  5 employees, 6 products, 4,500 EUR','',
+    'BEST ★★★★★ Expert',
+    '  6 employees, 8 products, 6,000 EUR',
+  ]},
+  { title:'VISITS', lines:[
+    '','From the Store tab (4):','',
+    'COMMERCIAL VISIT (green)',
+    '  +12 fame, +5 satisfaction','',
+    'TECH VISIT (blue)',
+    '  +15 satisfaction, +30% stock','',
+    'DELEGATION VISIT (pink)',
+    '  +500-1000 EUR subsidy, +8 fame','',
+    'CIVIL GUARD VISIT (black)',
+    '  Inspection: pass or pay fine',
+  ]},
+  { title:'VOICE COMMANDS "ADMIRA"', lines:[
+    '','From the Claude CLI, press space',
+    'and say "Admira" + action:','',
+    'Admira hire DJ',
+    'Admira hire everyone',
+    'Admira restock tobacco',
+    'Admira restock all',
+    'Admira status',
+    'Admira save',
+    'Admira premium campaign',
+    'Admira commercial visit',
+    'Admira train everyone',
+  ]},
+  { title:'xtAPI — CLI REFERENCE', lines:[
+    '','QUERIES:',
+    '  xtAPI.status()  — Overall status',
+    '  xtAPI.staff()   — Staff list',
+    '  xtAPI.stock()   — Inventory','',
+    'ACTIONS:',
+    '  xtAPI.hire(slot) / hireDJ()',
+    '  xtAPI.train(slot) / trainAll()',
+    '  xtAPI.restock(slot) / restockAll()',
+    '  xtAPI.advertise(0|1|2)',
+    '  xtAPI.visit(Com|Tec|Del|GC)',
+    '  xtAPI.save() / xtAPI.help()',
+  ]},
+  ],
+};
+function getHelpPages(){
+  return HELP_PAGES[lang] || HELP_PAGES.es;
+}
 
 function drawHelp(){
+  const helpPages=getHelpPages();
   // Background
   r(0,0,W,H,'#0a0a14');
   // Grid
@@ -6685,7 +6950,7 @@ function drawHelp(){
   for(let i=0;i<H;i+=40) r(0,i,W,1,'#44ccaa');
   cx.globalAlpha=1;
 
-  const pg=HELP_PAGES[helpPage];
+  const pg=helpPages[helpPage];
   const bw=520,bh=380;
   const bx=(W-bw)/2, by=(H-bh)/2-10;
 
@@ -6696,8 +6961,8 @@ function drawHelp(){
 
   // Page indicator dots
   const dotY=by+12;
-  for(let i=0;i<HELP_PAGES.length;i++){
-    const dx=W/2-((HELP_PAGES.length-1)*10)/2+i*10;
+  for(let i=0;i<helpPages.length;i++){
+    const dx=W/2-((helpPages.length-1)*10)/2+i*10;
     if(i===helpPage){ glow('#44ccaa',6);r(dx-3,dotY-3,6,6,'#44ccaa');nog(); }
     else { r(dx-2,dotY-2,4,4,'#335555'); }
   }
@@ -6721,7 +6986,7 @@ function drawHelp(){
   }
 
   // Page number
-  tx((helpPage+1)+'/'+HELP_PAGES.length,W/2,by+bh-12,'#556666',8,'center');
+  tx((helpPage+1)+'/'+helpPages.length,W/2,by+bh-12,'#556666',8,'center');
 
   // Navigation buttons
   const btnW=90,btnH=26;
@@ -6730,22 +6995,22 @@ function drawHelp(){
   // Back to menu
   const backX=bx+15;
   r(backX,navY,60,btnH,'#1a0a0a');rx(backX,navY,60,btnH,'#cc6666',1);
-  tx('✕ BACK',backX+30,navY+18,'#cc6666',9,'center');
+  tx(lang==='es'?'✕ VOLVER':'✕ BACK',backX+30,navY+18,'#cc6666',9,'center');
   BTNS['helpBack']={x:backX,y:navY,w:60,h:btnH};
 
   // Prev
   if(helpPage>0){
     const prevX=W/2-btnW-10;
     r(prevX,navY,btnW,btnH,'#0a0a18');rx(prevX,navY,btnW,btnH,'#88aaaa',1);
-    tx('◀ ANTERIOR',prevX+btnW/2,navY+18,'#88aaaa',9,'center');
+    tx(lang==='es'?'◀ ANTERIOR':'◀ PREVIOUS',prevX+btnW/2,navY+18,'#88aaaa',9,'center');
     BTNS['helpPrev']={x:prevX,y:navY,w:btnW,h:btnH};
   } else { delete BTNS['helpPrev']; }
 
   // Next
-  if(helpPage<HELP_PAGES.length-1){
+  if(helpPage<helpPages.length-1){
     const nextX=W/2+10;
     r(nextX,navY,btnW,btnH,'#0a0a18');rx(nextX,navY,btnW,btnH,'#44ccaa',1);
-    tx('SIGUIENTE ▶',nextX+btnW/2,navY+18,'#44ccaa',9,'center');
+    tx(lang==='es'?'SIGUIENTE ▶':'NEXT ▶',nextX+btnW/2,navY+18,'#44ccaa',9,'center');
     BTNS['helpNext']={x:nextX,y:navY,w:btnW,h:btnH};
   } else { delete BTNS['helpNext']; }
 }
@@ -10130,6 +10395,12 @@ function drawHUD(){
     r(600,2,120,24,'#4a0010');rx(600,2,120,24,'#ff6688',2);
     tx('🔍 INSPECCIÓN',660,18,'#ff8899',10,'center');
   }
+  // Hidden Codex button: tiny rivet on the far right of the HUD bar
+  const codexX=W-9,codexY=4;
+  cx.globalAlpha=0.28;
+  r(codexX,codexY,4,4,'#89a9bd');
+  cx.globalAlpha=1;
+  BTNS['codexMapToggle']={x:W-12,y:2,w:10,h:10};
 }
 
 // ── DRAW EVENT MSG ────────────────────────────────────────────
@@ -10193,19 +10464,23 @@ function drawElgatoNotify(){
 }
 
 function roleShortLabel(role){
-  return ['Caja','Repo','Aza','Mgr','DJ'][role]||'Eq';
+  return (lang==='es'
+    ? ['Caja','Repo','Aza','Mgr','DJ']
+    : ['Cash','Stock','Host','Mgr','DJ'])[role]||(lang==='es'?'Eq':'Tm');
 }
 
 function customerStateLabel(c){
-  const map={walk:'entra',browse:'mira',queue:'cola',buy:'atencion',leave:'sale',tablet:'vota'};
+  const map=lang==='es'
+    ? {walk:'entra',browse:'mira',queue:'cola',buy:'atencion',leave:'sale',tablet:'vota'}
+    : {walk:'enters',browse:'browses',queue:'queue',buy:'checkout',leave:'leaves',tablet:'votes'};
   return map[c&&c.st]||'shop';
 }
 
 function customerTypeLabel(c){
-  if(!c) return 'Anonimo';
+  if(!c) return lang==='es'?'Anonimo':'Unknown';
   if(c.vip) return 'VIP';
-  if(c.bought||c.st==='queue'||c.st==='buy') return 'Habitual';
-  return 'Anonimo';
+  if(c.bought||c.st==='queue'||c.st==='buy') return lang==='es'?'Habitual':'Regular';
+  return lang==='es'?'Anonimo':'Unknown';
 }
 
 function customerPriority(c){
@@ -10223,9 +10498,9 @@ function customerStatePriority(c){
 function customerUpsellingLabel(c){
   if(!c||c.wantsProdIdx<0) return '-';
   const wanted=String(prodName(c.wantsProdIdx)||'').toLowerCase();
-  if(wanted.includes('prensa')||wanted.includes('press')) return 'Prensa';
-  if(wanted.includes('vino')||wanted.includes('wine')) return 'Vinos';
-  if(wanted.includes('bebida')||wanted.includes('drink')||wanted.includes('refresco')) return 'Bebida';
+  if(wanted.includes('prensa')||wanted.includes('press')) return lang==='es'?'Prensa':'Press';
+  if(wanted.includes('vino')||wanted.includes('wine')) return lang==='es'?'Vinos':'Wine';
+  if(wanted.includes('bebida')||wanted.includes('drink')||wanted.includes('refresco')) return lang==='es'?'Bebida':'Drink';
   return '-';
 }
 
@@ -10242,14 +10517,56 @@ function customerNearbyFixtureLabel(c){
   }
   if(!best||best.dist>3) return '-';
   const map={
-    wineRack:'Vinos',
-    magazines:'Prensa',
-    vending:'Bebidas',
-    lottery:'Loteria',
-    shelves:'Souvenirs',
-    counter:'Souvenirs'
+    wineRack:lang==='es'?'Vinos':'Wine',
+    magazines:lang==='es'?'Prensa':'Press',
+    vending:lang==='es'?'Bebidas':'Drinks',
+    lottery:lang==='es'?'Loteria':'Lottery',
+    shelves:lang==='es'?'Souvenirs':'Souvenirs',
+    counter:lang==='es'?'Souvenirs':'Souvenirs'
   };
   return map[best.item.type]||'-';
+}
+
+function syncDockLanguage(){
+  const isEs=lang==='es';
+  const characterDock=document.getElementById('characterDock');
+  if(characterDock) characterDock.setAttribute('aria-label',isEs?'Equipo y clientes':'Team and customers');
+  const teamHead=document.querySelector('#characterDock .char-pane.team .char-head span');
+  const clientHead=document.querySelector('#characterDock .char-pane.clients .char-head span');
+  const clientFocusBtn=document.getElementById('characterClientFocusBtn');
+  const teamFocusBtn=document.getElementById('characterTeamFocusBtn');
+  if(teamHead) teamHead.textContent=isEs?'Equipo':'Team';
+  if(clientHead) clientHead.textContent=isEs?'Clientes':'Customers';
+  if(clientFocusBtn) clientFocusBtn.textContent=isEs?'Clientes':'Customers';
+  if(teamFocusBtn) teamFocusBtn.textContent=isEs?'Equipo':'Team';
+
+  const tgHeads=document.querySelectorAll('#telegramDock .tg-head > span:first-child');
+  if(tgHeads[0]) tgHeads[0].textContent=isEs?'Enviar a Telegram':'Send to Telegram';
+  if(tgHeads[1]) tgHeads[1].textContent=isEs?'Conversacion':'Conversation';
+  const composer=document.getElementById('telegramComposer');
+  if(composer) composer.placeholder=isEs?'Escribe para @AdmiraXPBot... Enter envia, Shift+Enter salto':'Write to @AdmiraXPBot... Enter sends, Shift+Enter newline';
+  const sendBtn=document.getElementById('telegramSendBtn');
+  const hideBtn=document.getElementById('telegramHideBtn');
+  if(sendBtn) sendBtn.textContent=isEs?'Enviar':'Send';
+  if(hideBtn) hideBtn.textContent=telegramDockHidden?(isEs?'Mostrar':'Show'):(isEs?'Ocultar':'Hide');
+  const connStatus=document.getElementById('telegramConnStatus');
+  const telegramCardStatus=document.getElementById('telegramCardStatus');
+  const grokCardStatus=document.getElementById('grokCardStatus');
+  if(connStatus&&connStatus.textContent.trim().toLowerCase()==='conectando') connStatus.textContent=isEs?'conectando':'connecting';
+  if(telegramCardStatus&&telegramCardStatus.textContent.trim().toLowerCase()==='detectando') telegramCardStatus.textContent=isEs?'detectando':'detecting';
+  if(grokCardStatus&&grokCardStatus.textContent.trim().toLowerCase()==='detectando') grokCardStatus.textContent=isEs?'detectando':'detecting';
+  const telegramOrigin=document.getElementById('telegramOrigin');
+  const telegramLastCommand=document.getElementById('telegramLastCommand');
+  const telegramLatency=document.getElementById('telegramLatency');
+  const grokOrigin=document.getElementById('grokOrigin');
+  const grokPrompt=document.getElementById('grokPrompt');
+  const grokMeta=document.getElementById('grokMeta');
+  if(telegramOrigin&&telegramOrigin.textContent.startsWith('Origen:')) telegramOrigin.textContent=isEs?'Origen: detectando':'Origin: detecting';
+  if(telegramLastCommand&&telegramLastCommand.textContent.startsWith('Ultimo:')) telegramLastCommand.textContent=isEs?'Ultimo: -':'Latest: -';
+  if(telegramLatency&&telegramLatency.textContent.startsWith('Latencia:')) telegramLatency.textContent=isEs?'Latencia: -':'Latency: -';
+  if(grokOrigin&&grokOrigin.textContent.startsWith('Origen:')) grokOrigin.textContent=isEs?'Origen: detectando':'Origin: detecting';
+  if(grokPrompt&&grokPrompt.textContent.startsWith('Prompt:')) grokPrompt.textContent='Prompt: -';
+  if(grokMeta&&grokMeta.textContent.startsWith('Modelo:')) grokMeta.textContent=isEs?'Modelo: -':'Model: -';
 }
 
 function currentTurnNumber(){
@@ -10390,6 +10707,7 @@ function customerTone(c){
 }
 
 function drawCharacterGroupsPanel(){
+  const isEs=lang==='es';
   const dock=document.getElementById('characterDock');
   const teamStatus=document.getElementById('characterTeamStatus');
   const clientStatus=document.getElementById('characterClientStatus');
@@ -10401,8 +10719,8 @@ function drawCharacterGroupsPanel(){
   if(!G||!isGameplayUiState(state)){
     dock.classList.remove('show');
     dock.classList.remove('focus-team');
-    teamStatus.textContent='0 total | Caja 0 Repo 0 Aza 0 Mgr 0 DJ 0';
-    clientStatus.textContent='0 total | Entr 0 Sal 0 Dentro 0';
+    teamStatus.textContent=isEs?'0 total | Caja 0 Repo 0 Aza 0 Mgr 0 DJ 0':'0 total | Cash 0 Stock 0 Host 0 Mgr 0 DJ 0';
+    clientStatus.textContent=isEs?'0 total | Entr 0 Sal 0 Dentro 0':'0 total | In 0 Out 0 Inside 0';
     teamBody.innerHTML='';
     clientBody.innerHTML='';
     return;
@@ -10429,12 +10747,16 @@ function drawCharacterGroupsPanel(){
     if(Number.isInteger(s.role)&&roleCounts[s.role]!==undefined) roleCounts[s.role]++;
   });
   const teamMaxRows=2;
-  teamStatus.textContent=hired.length+' total | Caja '+roleCounts[0]+' Repo '+roleCounts[1]+' Aza '+roleCounts[2]+' Mgr '+roleCounts[3]+' DJ '+roleCounts[4];
-  clientStatus.textContent=clients.length+' total | Entr '+(G.custIn||0)+' Sal '+(G.custOut||0)+' Dentro '+clients.length;
+  teamStatus.textContent=isEs
+    ? hired.length+' total | Caja '+roleCounts[0]+' Repo '+roleCounts[1]+' Aza '+roleCounts[2]+' Mgr '+roleCounts[3]+' DJ '+roleCounts[4]
+    : hired.length+' total | Cash '+roleCounts[0]+' Stock '+roleCounts[1]+' Host '+roleCounts[2]+' Mgr '+roleCounts[3]+' DJ '+roleCounts[4];
+  clientStatus.textContent=isEs
+    ? clients.length+' total | Entr '+(G.custIn||0)+' Sal '+(G.custOut||0)+' Dentro '+clients.length
+    : clients.length+' total | In '+(G.custIn||0)+' Out '+(G.custOut||0)+' Inside '+clients.length;
   teamBody.innerHTML=hired.length
     ? hired.slice(0,teamMaxRows).map((s,rowIdx)=>{
         const staffIdx=G.staff.indexOf(s);
-        const status=s.busy>0?'ocupado':'listo';
+        const status=s.busy>0?(isEs?'ocupado':'busy'):(isEs?'listo':'ready');
         const rowClass=rowIdx%2===0?'row-even':'row-odd';
         return '<div class="char-row '+rowClass+'">'
           +'<button type="button" class="char-trigger" data-staff-idx="'+staffIdx+'" aria-label="Abrir ficha de '+String(s.name||'miembro')+'" onpointerdown="window.openCharacterDockStaffDetail&&window.openCharacterDockStaffDetail('+staffIdx+');event.preventDefault();event.stopPropagation();return false;" onclick="event.preventDefault();event.stopPropagation();return false;">'+staffMiniAvatar(s)+'</button>'
@@ -10444,12 +10766,12 @@ function drawCharacterGroupsPanel(){
           +'<span class="'+(status==='ocupado'?'ok':'muted')+'">'+status+'</span>'
           +'</div>';
       }).join('')
-    : '<div class="char-row"><span class="muted">Sin equipo activo</span><span></span><span></span><span></span></div>';
+    : '<div class="char-row"><span class="muted">'+(isEs?'Sin equipo activo':'No active team')+'</span><span></span><span></span><span></span></div>';
   if(hired.length>teamMaxRows){
-    teamBody.innerHTML+='<div class="char-row is-summary"><span class="muted">+'+(hired.length-teamMaxRows)+' más</span><span></span><span></span><span></span></div>';
+    teamBody.innerHTML+='<div class="char-row is-summary"><span class="muted">+'+(hired.length-teamMaxRows)+' '+(isEs?'más':'more')+'</span><span></span><span></span><span></span></div>';
   }
 
-  clientBody.innerHTML='<div class="char-row clients-grid is-head"><span class="muted">Cliente</span><span class="muted">Tipo</span><span class="muted">Que hace / Zona</span><span class="muted">Upselling</span><span class="muted">Turno</span><span class="muted">Tiempo</span><span class="muted">Ticket</span><span class="muted"></span></div>'
+  clientBody.innerHTML='<div class="char-row clients-grid is-head"><span class="muted">'+(isEs?'Cliente':'Customer')+'</span><span class="muted">'+(isEs?'Tipo':'Type')+'</span><span class="muted">'+(isEs?'Que hace / Zona':'Activity / Zone')+'</span><span class="muted">Upselling</span><span class="muted">'+(isEs?'Turno':'Turn')+'</span><span class="muted">'+(isEs?'Tiempo':'Time')+'</span><span class="muted">Ticket</span><span class="muted"></span></div>'
     +clients.map((c,rowIdx)=>{
     const custIdx=G.custs.indexOf(c);
     const typeLabel=customerTypeLabel(c);
@@ -10472,13 +10794,14 @@ function drawCharacterGroupsPanel(){
       +'<span class="'+(c.bought?'ok':'muted')+'">'+(c.bought?'ok':'')+'</span>'
       +'</div>';
   }).join('');
-  clientBody.innerHTML+='<div class="char-row clients-grid is-summary"><span class="muted">'+clients.length+'</span><span class="muted">VIP '+vipCount+'</span><span class="muted">Zona '+browsingCount+'</span><span class="muted">Cola '+queueCount+'</span><span class="muted">Turnos '+issuedTurns+'</span><span></span><span></span><span></span></div>';
+  clientBody.innerHTML+='<div class="char-row clients-grid is-summary"><span class="muted">'+clients.length+'</span><span class="muted">VIP '+vipCount+'</span><span class="muted">'+(isEs?'Zona ':'Zone ')+browsingCount+'</span><span class="muted">'+(isEs?'Cola ':'Queue ')+queueCount+'</span><span class="muted">'+(isEs?'Turnos ':'Turns ')+issuedTurns+'</span><span></span><span></span><span></span></div>';
 }
 
 // ── DRAW BOTTOM BAR (GDS style: Yr Sales | Yr Profit | Status | Menu) ──
 function drawBottomBar(){
   if(!G||!G.staff||!G.bars) return; // guard: game not ready yet
   const bh=34, by=H-bh;
+  const ops=getOpsSnapshot();
   // Solid dark background — high contrast against game area
   r(0,by,W,bh,'#282030');
   // Bright top border
@@ -10530,9 +10853,12 @@ function drawBottomBar(){
   // Separator
   cx.beginPath();cx.moveTo(480,by+5);cx.lineTo(480,by+bh-3);cx.stroke();
 
-  // Status
-  const hasProject=G.staff.some(s=>s.hired&&s.busy>0);
-  tx(hasProject?'Vendiendo...':'Idle',490,by+20,hasProject?'#88ee88':'#bbaa88',10);
+  // Ops focus
+  tx(lang==='es'?'Foco':'Focus',490,by+12,'#bbaa88',7);
+  tx(trimHudLabel(ops.focus.label,16),490,by+22,ops.focus.color,10);
+  tx(trimHudLabel(ops.focus.detail,24),548,by+12,'#d7d3c8',7);
+  const metricLine=(lang==='es'?'Stock ':'Stock ')+ops.avgStockPct+'% · '+(lang==='es'?'Cola ':'Queue ')+ops.queueCount+' · '+(lang==='es'?'Ritmo ':'Pace ')+ops.pacePct+'%';
+  tx(trimHudLabel(metricLine,27),548,by+23,'#9bb0c5',7);
 
   // Editor button — bright purple
   const edX=W-120;
@@ -10922,6 +11248,61 @@ function drawPause(){
   });
   cx.globalAlpha=.5+.5*Math.abs(Math.sin(tt*.05));
   nt(T().pauseCont,W/2,py2+ph-18,P.gray,8);cx.globalAlpha=1;
+}
+
+function drawCodexMapOverlay(){
+  const isEs=lang==='es';
+  BTNS['codexMapClose']={x:W-86,y:40,w:46,h:22};
+  BTNS['codexMapBackdrop']={x:0,y:0,w:W,h:H};
+  cx.globalAlpha=0.74;
+  r(0,0,W,H,'#000');
+  cx.globalAlpha=1;
+
+  const ox=56,oy=42,ow=688,oh=406;
+  r(ox,oy,ow,oh,'#07111a');
+  glow('#59d4ff',10);rx(ox,oy,ow,oh,'#59d4ff',2);nog();
+  tx(isEs?'CODEX MAP · COMO ESTA HECHO EL JUEGO':'CODEX MAP · HOW THE GAME IS BUILT',ox+20,oy+24,'#dff7ff',14);
+  tx(isEs?'flujo principal + sistemas laterales':'main flow + side systems',ox+20,oy+40,'#7fb7c7',8);
+
+  r(W-86,40,46,22,'#2a1212');rx(W-86,40,46,22,'#ff7b7b',1);
+  tx('✕',W-63,56,'#ffb6b6',12,'center');
+
+  const nodes=[
+    {x:90,y:92,w:128,h:44,title:isEs?'ERA':'ERA',sub:isEs?'arranque retro':'retro entry',col:'#5bd8ff'},
+    {x:248,y:92,w:128,h:44,title:isEs?'PRELOAD':'PRELOAD',sub:isEs?'cinta / carga':'tape / load',col:'#ffb25b'},
+    {x:406,y:92,w:128,h:44,title:isEs?'INTRO':'INTRO',sub:isEs?'contexto del juego':'game context',col:'#b38dff'},
+    {x:564,y:92,w:128,h:44,title:isEs?'CATALOGO':'CATALOG',sub:isEs?'vertical + modelo':'vertical + model',col:'#7af05c'},
+    {x:248,y:180,w:128,h:44,title:isEs?'TUTORIAL':'TUTORIAL',sub:isEs?'onboarding':'onboarding',col:'#ffd35b'},
+    {x:406,y:180,w:128,h:44,title:isEs?'GAME LOOP':'GAME LOOP',sub:isEs?'update + render':'update + render',col:'#59d4ff'},
+    {x:564,y:180,w:128,h:44,title:isEs?'PAUSA / FIN':'PAUSE / END',sub:isEs?'resumen + score':'summary + score',col:'#ff7b7b'},
+    {x:86,y:286,w:142,h:50,title:isEs?'HUD + BARRAS':'HUD + BARS',sub:isEs?'dinero · stock · ritmo':'money · stock · pace',col:'#59d4ff'},
+    {x:248,y:286,w:142,h:50,title:isEs?'PERSONAJES':'CHARACTERS',sub:isEs?'staff · clientes · cola':'staff · customers · queue',col:'#7af05c'},
+    {x:410,y:286,w:142,h:50,title:isEs?'EVENTOS':'EVENTS',sub:isEs?'clima · hurto · GC':'weather · thief · guard',col:'#ffb25b'},
+    {x:572,y:286,w:142,h:50,title:isEs?'DOCKS':'DOCKS',sub:isEs?'telegram · team · cli':'telegram · team · cli',col:'#b38dff'},
+  ];
+  const drawNode=(n)=>{
+    const nx=ox+n.x,ny=oy+n.y;
+    r(nx,ny,n.w,n.h,'#0d1a24');
+    rx(nx,ny,n.w,n.h,n.col,1.5);
+    tx(n.title,nx+12,ny+18,n.col,10);
+    tx(n.sub,nx+12,ny+33,'#b8d2de',7);
+  };
+  const link=(a,b,col='#3a6d82')=>{
+    const ax=ox+a.x+a.w/2, ay=oy+a.y+a.h;
+    const bx=ox+b.x+b.w/2, by=oy+b.y;
+    cx.strokeStyle=col;cx.lineWidth=2;
+    cx.beginPath();cx.moveTo(ax,ay);cx.lineTo(ax,(ay+by)/2);cx.lineTo(bx,(ay+by)/2);cx.lineTo(bx,by);cx.stroke();
+  };
+  link(nodes[0],nodes[1]); link(nodes[1],nodes[2]); link(nodes[2],nodes[3]);
+  link(nodes[3],nodes[4]); link(nodes[4],nodes[5]); link(nodes[5],nodes[6]);
+  link(nodes[5],nodes[7],'#2d6b82'); link(nodes[5],nodes[8],'#2f8e55'); link(nodes[5],nodes[9],'#9b6d2d'); link(nodes[5],nodes[10],'#7c62b8');
+  nodes.forEach(drawNode);
+
+  const legendY=oy+356;
+  tx(isEs?'Lectura rapida:':'Quick read:',ox+18,legendY,'#d8eef8',9);
+  tx(isEs?'1) la era abre el framing, 2) el catalogo elige vertical, 3) GAME LOOP conecta HUD, NPCs, eventos y docks.':'1) era sets framing, 2) catalog picks vertical, 3) GAME LOOP connects HUD, NPCs, events and docks.',ox+112,legendY,'#98b4c2',7);
+  tx(isEs?'El boton secreto es el remache azul diminuto de la esquina superior derecha de la barra del canvas.':'The secret button is the tiny blue rivet at the top-right corner of the canvas bar.',ox+18,legendY+22,'#8ee7ff',8);
+  tx(isEs?'Pulsa ESC para cerrar.':'Press ESC to close.',ox+18,legendY+42,'#9fb7c4',7);
 }
 
 // ── DRAW YEAR END ─────────────────────────────────────────────
@@ -11769,7 +12150,9 @@ function loop(){
     cx.save();try{drawShopChars();}catch(e){}cx.restore();
     cx.save();try{drawHUD();}catch(e){}cx.restore();
     cx.save();try{drawUI();}catch(e){}cx.restore();
-    drawPause();drawTransition();return;
+    drawPause();
+    cx.save();try{if(codexMapOpen)drawCodexMapOverlay();}catch(e){}cx.restore();
+    drawTransition();return;
   }
   // GAME
   if(demoMode) demoUpdate();
@@ -11789,6 +12172,7 @@ function loop(){
   cx.save();try{drawGuidedTut();}catch(e){}cx.restore();
   cx.save();try{drawMobileControls();}catch(e){}cx.restore();
   cx.save();try{drawNPCEditor();}catch(e){}cx.restore();
+  cx.save();try{if(codexMapOpen)drawCodexMapOverlay();}catch(e){}cx.restore();
   drawTransition();
 }
 loop();
@@ -12990,7 +13374,7 @@ window.xtAPI = (function(){
 
   function setTelegramDockHidden(active){
     telegramDockHidden=!!active;
-    if(hideBtn) hideBtn.textContent=telegramDockHidden?'Mostrar':'Ocultar';
+    if(hideBtn) hideBtn.textContent=telegramDockHidden?(lang==='es'?'Mostrar':'Show'):(lang==='es'?'Ocultar':'Hide');
     if(cliBtn){
       cliBtn.textContent=telegramDockHidden?'> CLI':'v CLI';
       cliBtn.style.opacity=telegramDockHidden?'0.75':'1';
@@ -13088,7 +13472,7 @@ window.xtAPI = (function(){
   if(characterDock){
     characterDock.addEventListener('click',e=>openCharacterDockDetail(e.target));
   }
-  if(hideBtn) hideBtn.textContent=telegramDockHidden?'Mostrar':'Ocultar';
+  if(hideBtn) hideBtn.textContent=telegramDockHidden?(lang==='es'?'Mostrar':'Show'):(lang==='es'?'Ocultar':'Hide');
   if(cliBtn){
     cliBtn.textContent=telegramDockHidden?'> CLI':'v CLI';
     window.toggleCliDock=()=>setTelegramDockHidden(!telegramDockHidden);
