@@ -67,8 +67,12 @@
     .char-body::-webkit-scrollbar-track{background:#07131b}
     .char-body::-webkit-scrollbar-thumb{background:#2a7585;border-radius:6px}
     .char-row{display:grid;grid-template-columns:58px minmax(74px,.95fr) minmax(126px,1.35fr) 58px 50px 46px auto;gap:3px;align-items:center;padding:2px 3px;border-radius:3px}
-    .char-row.clients-grid{grid-template-columns:44px 72px minmax(126px,1.25fr) 78px 56px 50px 52px 28px}
+    .char-row.clients-grid{grid-template-columns:var(--cust-col-0,44px) var(--cust-col-1,72px) var(--cust-col-2,150px) var(--cust-col-3,78px) var(--cust-col-4,56px) var(--cust-col-5,50px) var(--cust-col-6,52px) var(--cust-col-7,28px)}
     .char-row.is-head,.char-row.is-summary{padding:0;background:transparent}
+    .char-col-head{position:relative;display:block;padding-right:8px}
+    .char-col-resizer{position:absolute;top:-2px;right:-4px;width:8px;height:18px;border:0;background:transparent;cursor:col-resize;touch-action:none}
+    .char-col-resizer::after{content:"";position:absolute;left:3px;top:1px;width:1px;height:16px;background:rgba(120,243,255,.38)}
+    .char-col-resizer:hover::after,.char-col-resizer.is-dragging::after{background:#78f3ff;box-shadow:0 0 8px rgba(120,243,255,.7)}
     .char-row.row-even{background:rgba(18,46,58,0.34)}
     .char-row.row-odd{background:rgba(8,20,28,0.72)}
     .char-row span{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -299,12 +303,23 @@ let telegramDockHidden=false;
 let characterDockFocus='clients';
 let telegramComposeStart=true;
 const DOCK_HEIGHT_KEY='admira_xp_dock_height';
+const CLIENT_COLS_KEY='admira_xp_client_cols';
+const CLIENT_COL_DEFAULTS=[44,72,150,78,56,50,52,28];
 let gameplayDockHeight=(()=>{
   try{
     const saved=Number(localStorage.getItem(DOCK_HEIGHT_KEY)||0);
     if(saved>0) return saved;
   }catch(e){}
   return 228;
+})();
+let clientColumnWidths=(()=>{
+  try{
+    const saved=JSON.parse(localStorage.getItem(CLIENT_COLS_KEY)||'[]');
+    if(Array.isArray(saved)&&saved.length===CLIENT_COL_DEFAULTS.length){
+      return saved.map((v,i)=>Math.max(28,Math.min(360,Number(v)||CLIENT_COL_DEFAULTS[i])));
+    }
+  }catch(e){}
+  return CLIENT_COL_DEFAULTS.slice();
 })();
 bootVideoEl.src=PRELOAD_VIDEO_SRC;
 bootVideoEl.loop=false;
@@ -556,6 +571,53 @@ function setupDockResizers(){
   });
 }
 setupDockResizers();
+
+function setupClientColumnResizers(){
+  const panelBody=document.getElementById('characterPanelBody');
+  if(!panelBody) return;
+  let drag=null;
+  const minW=[32,48,80,52,42,42,42,24];
+  const move=e=>{
+    if(!drag) return;
+    e.preventDefault();
+    const rawDx=e.clientX-drag.x;
+    const minDx=minW[drag.idx]-drag.widths[drag.idx];
+    const maxDx=drag.widths[drag.idx+1]-minW[drag.idx+1];
+    const dx=Math.max(minDx,Math.min(maxDx,rawDx));
+    const left=drag.widths[drag.idx]+dx;
+    const right=drag.widths[drag.idx+1]-dx;
+    clientColumnWidths=drag.widths.slice();
+    clientColumnWidths[drag.idx]=left;
+    clientColumnWidths[drag.idx+1]=right;
+    applyClientColumnWidths(panelBody);
+  };
+  const end=e=>{
+    if(!drag) return;
+    if(e) e.preventDefault();
+    document.querySelectorAll('.char-col-resizer.is-dragging').forEach(el=>el.classList.remove('is-dragging'));
+    try{localStorage.setItem(CLIENT_COLS_KEY,JSON.stringify(clientColumnWidths.map(v=>Math.round(v))));}catch(err){}
+    drag=null;
+    document.removeEventListener('pointermove',move);
+    document.removeEventListener('pointerup',end);
+    document.removeEventListener('pointercancel',end);
+  };
+  panelBody.addEventListener('pointerdown',e=>{
+    const handle=e.target&&e.target.closest?e.target.closest('.char-col-resizer'):null;
+    if(!handle) return;
+    const idx=Number(handle.dataset.clientCol);
+    if(!Number.isInteger(idx)||idx<0||idx>=CLIENT_COL_DEFAULTS.length-1) return;
+    e.preventDefault();
+    e.stopPropagation();
+    handle.classList.add('is-dragging');
+    drag={idx,x:e.clientX,widths:clientColumnWidths.slice()};
+    try{handle.setPointerCapture(e.pointerId);}catch(err){}
+    document.addEventListener('pointermove',move,{passive:false});
+    document.addEventListener('pointerup',end,{passive:false});
+    document.addEventListener('pointercancel',end,{passive:false});
+  });
+  applyClientColumnWidths(panelBody);
+}
+setupClientColumnResizers();
 
 // ── SONG LIST & AUDIO FILES ──────────────────────────────────
 const SONG_LIST=[
@@ -11037,6 +11099,19 @@ function customerTone(c){
   return '#8defff';
 }
 
+function applyClientColumnWidths(panelBody){
+  const target=panelBody||document.getElementById('characterPanelBody');
+  if(!target) return;
+  clientColumnWidths.forEach((width,idx)=>{
+    target.style.setProperty('--cust-col-'+idx,Math.round(width)+'px');
+  });
+}
+
+function clientHeadCell(label,index){
+  const canResize=index<CLIENT_COL_DEFAULTS.length-1;
+  return '<span class="muted char-col-head">'+label+(canResize?'<button type="button" class="char-col-resizer" data-client-col="'+index+'" aria-label="Ajustar columna '+label+'"></button>':'')+'</span>';
+}
+
 function drawCharacterGroupsPanel(){
   const isEs=lang==='es';
   const dock=document.getElementById('characterDock');
@@ -11045,6 +11120,7 @@ function drawCharacterGroupsPanel(){
   const teamFocusBtn=document.getElementById('characterTeamFocusBtn');
   const clientFocusBtn=document.getElementById('characterClientFocusBtn');
   if(!dock||!panelStatus||!panelBody) return;
+  applyClientColumnWidths(panelBody);
   if(!G||!isGameplayUiState(state)){
     dock.classList.remove('show');
     dock.classList.remove('focus-team');
@@ -11099,7 +11175,16 @@ function drawCharacterGroupsPanel(){
     teamHtml+='<div class="char-row is-summary"><span class="muted">+'+(hired.length-teamMaxRows)+' '+(isEs?'más':'more')+'</span><span></span><span></span><span></span></div>';
   }
 
-  let clientHtml='<div class="char-row clients-grid is-head"><span class="muted">'+(isEs?'Cliente':'Customer')+'</span><span class="muted">'+(isEs?'Tipo':'Type')+'</span><span class="muted">'+(isEs?'Que hace / Zona':'Activity / Zone')+'</span><span class="muted">Upselling</span><span class="muted">'+(isEs?'Turno':'Turn')+'</span><span class="muted">'+(isEs?'Tiempo':'Time')+'</span><span class="muted">Ticket</span><span class="muted"></span></div>'
+  let clientHtml='<div class="char-row clients-grid is-head">'
+    +clientHeadCell(isEs?'Cliente':'Customer',0)
+    +clientHeadCell(isEs?'Tipo':'Type',1)
+    +clientHeadCell(isEs?'Que hace / Zona':'Activity / Zone',2)
+    +clientHeadCell('Upselling',3)
+    +clientHeadCell(isEs?'Turno':'Turn',4)
+    +clientHeadCell(isEs?'Tiempo':'Time',5)
+    +clientHeadCell('Ticket',6)
+    +clientHeadCell('',7)
+    +'</div>'
     +clients.map((c,rowIdx)=>{
     const custIdx=G.custs.indexOf(c);
     const typeLabel=customerTypeLabel(c);
