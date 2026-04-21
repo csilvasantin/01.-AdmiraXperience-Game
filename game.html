@@ -1282,9 +1282,12 @@ const ELGATO={
 };
 const TELEGRAM={
   proxyUrl:typeof TELEGRAM_CONFIG.proxyUrl==='string'?TELEGRAM_CONFIG.proxyUrl.replace(/\/+$/,''):'',
+  localEnabled:!!TELEGRAM_CONFIG.enabled,
   enabled:!!TELEGRAM_CONFIG.enabled||!!TELEGRAM_CONFIG.proxyUrl,
   proxyPort:Number(TELEGRAM_CONFIG.proxyPort)||9124,
   polling:TELEGRAM_CONFIG.polling!==false,
+  bridgeMode:'probing',
+  activeBaseUrl:'',
   lastCommandId:0,
   lastCommandLabel:'',
   lastLatencyMs:0,
@@ -2312,22 +2315,56 @@ const DEFAULT_STAFF_POS=[
 const DEFAULT_STAFF_ZONE_RADIUS=[1,2,2,2,1,2,2,2];
 
 // ── LAYOUT PERSISTENCE ───────────────────────────────────────
-// Always load from localStorage. If nothing saved, use DEFAULT_LAYOUT.
-// The "Save" button in editor saves to localStorage.
-// The "Reset" button saves current positions as the new default
-// (stored separately so code updates don't overwrite user layout).
+// Startup order is explicit:
+//   1) layout1 = user-approved initial layout
+//   2) layout0 = built-in canonical layout for this client
+//   3) legacy slots as fallback for backwards compatibility
+function getLayoutSlotKeys(prefix){
+  return {
+    current: prefix+'_layout_user',
+    initial: prefix+'_layout_initial',
+    backup: prefix+'_layout_backup',
+    slot0: prefix+'_layout_slot0',
+    slot1: prefix+'_layout_slot1',
+    staffPos: prefix+'_staff_pos',
+    staffZones: prefix+'_staff_zones',
+    slot0StaffPos: prefix+'_layout_slot0_staff_pos',
+    slot0StaffZones: prefix+'_layout_slot0_staff_zones',
+    slot1StaffPos: prefix+'_layout_slot1_staff_pos',
+    slot1StaffZones: prefix+'_layout_slot1_staff_zones',
+  };
+}
+function getFactoryStaffPosSnapshot(){
+  return JSON.parse(JSON.stringify(shopStaffPos&&shopStaffPos.length?shopStaffPos:DEFAULT_STAFF_POS));
+}
+function syncLayout0(){
+  try{
+    const prefix=getLayoutStoragePrefix();
+    const keys=getLayoutSlotKeys(prefix);
+    localStorage.setItem(keys.slot0,JSON.stringify(DEFAULT_LAYOUT));
+    localStorage.setItem(keys.slot0StaffPos,JSON.stringify(DEFAULT_STAFF_POS));
+    localStorage.setItem(keys.slot0StaffZones,JSON.stringify([]));
+  }catch(e){console.warn('[Layout] Slot0 sync error:',e);}
+}
 function loadLayout(){
   // NOTE: ISO is not yet defined when this runs at page-start (line 1203).
   // Do NOT reference ISO here — use raw numbers or simple checks only.
   try{
-    // Try primary key, then explicit initial snapshot, then backup key
     const prefix=getLayoutStoragePrefix();
-    let d=localStorage.getItem(prefix+'_layout_user');
-    if(!d) d=localStorage.getItem(prefix+'_layout_initial');
-    if(!d) d=localStorage.getItem(prefix+'_layout_backup');
-    if(!d&&prefix==='xtanco') d=localStorage.getItem('xtanco_layout_user');
-    if(!d&&prefix==='xtanco') d=localStorage.getItem('xtanco_layout_initial');
-    if(!d&&prefix==='xtanco') d=localStorage.getItem('xtanco_layout_backup');
+    const keys=getLayoutSlotKeys(prefix);
+    syncLayout0();
+    let source='slot0';
+    let d=localStorage.getItem(keys.slot1);
+    if(d) source='slot1';
+    if(!d){ d=localStorage.getItem(keys.slot0); source='slot0'; }
+    if(!d){ d=localStorage.getItem(keys.initial); source='initial'; }
+    if(!d){ d=localStorage.getItem(keys.backup); source='backup'; }
+    if(!d){ d=localStorage.getItem(keys.current); source='current'; }
+    if(!d&&prefix==='xtanco') d=localStorage.getItem('xtanco_layout_slot1'),source='legacy-slot1';
+    if(!d&&prefix==='xtanco') d=localStorage.getItem('xtanco_layout_slot0'),source='legacy-slot0';
+    if(!d&&prefix==='xtanco') d=localStorage.getItem('xtanco_layout_initial'),source='legacy-initial';
+    if(!d&&prefix==='xtanco') d=localStorage.getItem('xtanco_layout_backup'),source='legacy-backup';
+    if(!d&&prefix==='xtanco') d=localStorage.getItem('xtanco_layout_user'),source='legacy-current';
     if(d){
       const saved=JSON.parse(d);
       if(Array.isArray(saved)&&saved.length>0){
@@ -2358,10 +2395,12 @@ function loadLayout(){
           aromaItem.sx=aromaDef.sx||1;
           aromaItem.sy=aromaDef.sy||1;
         }
-        console.log('[Layout] ✓ Loaded saved layout ('+shopLayout.length+' items)');
+        console.log('[Layout] ✓ Loaded '+source+' ('+shopLayout.length+' items)');
         // Also load staff positions
-        try{const sp=localStorage.getItem(prefix+'_staff_pos');if(sp) shopStaffPos=JSON.parse(sp);}catch(e){}
-        try{const sz=localStorage.getItem(prefix+'_staff_zones');if(sz) shopStaffZones=JSON.parse(sz);}catch(e){}
+        const spKey=source==='slot1'?keys.slot1StaffPos:source==='slot0'?keys.slot0StaffPos:keys.staffPos;
+        const szKey=source==='slot1'?keys.slot1StaffZones:source==='slot0'?keys.slot0StaffZones:keys.staffZones;
+        try{const sp=localStorage.getItem(spKey);if(sp) shopStaffPos=JSON.parse(sp);else shopStaffPos=(source==='slot0'?JSON.parse(JSON.stringify(DEFAULT_STAFF_POS)):null);}catch(e){}
+        try{const sz=localStorage.getItem(szKey);if(sz) shopStaffZones=JSON.parse(sz);else shopStaffZones=null;}catch(e){}
         return;
       }
     }
@@ -2375,16 +2414,30 @@ function saveLayout(){
   const data=JSON.stringify(shopLayout);
   try{
     const prefix=getLayoutStoragePrefix();
-    localStorage.setItem(prefix+'_layout_user',data);
-    localStorage.setItem(prefix+'_layout_initial',data);
-    localStorage.setItem(prefix+'_layout_backup',data);
-    // Also mirror into DEFAULT_LAYOUT so that if localStorage ever fails,
-    // the in-session fallback already has the user's layout (not factory positions).
-    DEFAULT_LAYOUT=JSON.parse(JSON.stringify(shopLayout));
-    if(shopStaffPos) localStorage.setItem(prefix+'_staff_pos',JSON.stringify(shopStaffPos));
-    if(shopStaffZones) localStorage.setItem(prefix+'_staff_zones',JSON.stringify(shopStaffZones));
-    console.log('[Layout] ✓ Saved ('+shopLayout.length+' items) → localStorage + DEFAULT_LAYOUT updated');
+    const keys=getLayoutSlotKeys(prefix);
+    localStorage.setItem(keys.current,data);
+    localStorage.setItem(keys.backup,data);
+    if(shopStaffPos) localStorage.setItem(keys.staffPos,JSON.stringify(shopStaffPos));
+    if(shopStaffZones) localStorage.setItem(keys.staffZones,JSON.stringify(shopStaffZones));
+    console.log('[Layout] ✓ Saved current layout ('+shopLayout.length+' items)');
   }catch(e){console.warn('[Layout] Save error:',e);}
+}
+function saveLayoutSlot1(){
+  const data=JSON.stringify(shopLayout);
+  try{
+    const prefix=getLayoutStoragePrefix();
+    const keys=getLayoutSlotKeys(prefix);
+    localStorage.setItem(keys.slot1,data);
+    localStorage.setItem(keys.current,data);
+    localStorage.setItem(keys.backup,data);
+    if(shopStaffPos) localStorage.setItem(keys.slot1StaffPos,JSON.stringify(shopStaffPos));
+    else localStorage.setItem(keys.slot1StaffPos,JSON.stringify(getFactoryStaffPosSnapshot()));
+    if(shopStaffZones) localStorage.setItem(keys.slot1StaffZones,JSON.stringify(shopStaffZones));
+    else localStorage.removeItem(keys.slot1StaffZones);
+    console.log('[Layout] ✓ Saved Layout1 ('+shopLayout.length+' items)');
+    return true;
+  }catch(e){console.warn('[Layout] Layout1 save error:',e);}
+  return false;
 }
 function restoreSavedFurnitureLayout(){
   loadLayout();
@@ -2447,15 +2500,22 @@ function getStaffZoneConfig(index,homeCol,homeRow){
   };
 }
 function resetLayout(){
-  // Reset to DEFAULT_LAYOUT and save it as the base for new games
+  // Reset current editable layout to Layout0 (canonical startup layout)
   shopLayout=JSON.parse(JSON.stringify(DEFAULT_LAYOUT));
+  shopStaffPos=JSON.parse(JSON.stringify(DEFAULT_STAFF_POS));
+  shopStaffZones=null;
   saveLayout();
-  console.log('[Layout] Reset to DEFAULT and saved as base');
+  console.log('[Layout] Reset current layout to Layout0');
 }
 function resetToFactory(){
-  localStorage.removeItem('xtanco_layout_user');
-  localStorage.removeItem('xtanco_layout_backup');
+  const prefix=getLayoutStoragePrefix();
+  const keys=getLayoutSlotKeys(prefix);
+  localStorage.removeItem(keys.current);
+  localStorage.removeItem(keys.backup);
+  localStorage.removeItem(keys.slot1);
   shopLayout=JSON.parse(JSON.stringify(DEFAULT_LAYOUT));
+  shopStaffPos=JSON.parse(JSON.stringify(DEFAULT_STAFF_POS));
+  shopStaffZones=null;
   console.log('[Layout] Factory reset');
 }
 // Export layout as JSON file download
@@ -2560,6 +2620,109 @@ function astarPath(sc,sr,ec,er){
 
 // ── GAME STATE ────────────────────────────────────────────────
 let G={};
+const CUSTOMER_ARCHETYPES=['impatient','curious','loyal','impulsive'];
+const MANAGER_ACTION_DEFS={
+  rushQueue:{cooldown:900,color:'#ffb36b'},
+  flashPromo:{cooldown:1200,color:'#ff5f8f'},
+  quickRestock:{cooldown:1050,color:'#63d7ff'},
+  calmFloor:{cooldown:780,color:'#8dff9b'},
+};
+function missionLabel(kind){
+  const isEs=lang==='es';
+  if(kind==='serveCustomers') return isEs?'Atiende clientes':'Serve customers';
+  if(kind==='earnRevenue') return isEs?'Factura rápida':'Quick revenue';
+  if(kind==='vipSales') return isEs?'Cuida VIP':'Handle VIPs';
+  if(kind==='restockOps') return isEs?'Operación stock':'Stock ops';
+  return isEs?'Misión':'Mission';
+}
+function missionProgressLabel(m){
+  if(!m) return '';
+  return (m.progress|0)+'/'+(m.target|0);
+}
+function customerPersonaLabel(c){
+  const isEs=lang==='es';
+  const map={
+    impatient:isEs?'Impaciente':'Impatient',
+    curious:isEs?'Curioso':'Curious',
+    loyal:isEs?'Fiel':'Loyal',
+    impulsive:isEs?'Impulsivo':'Impulsive',
+  };
+  return map[c&&c.persona]||(isEs?'Cliente':'Customer');
+}
+function getMissionPool(){
+  return [
+    {kind:'serveCustomers',target:4+Math.floor(Math.random()*4),reward:{money:120,fame:2,sat:2}},
+    {kind:'earnRevenue',target:90+Math.floor(Math.random()*120),reward:{money:160,fame:1,sat:1}},
+    {kind:'vipSales',target:1+Math.floor(Math.random()*2),reward:{money:140,fame:3,sat:2}},
+    {kind:'restockOps',target:2+Math.floor(Math.random()*2),reward:{money:90,fame:1,sat:1}},
+  ];
+}
+function assignMission(reason='daily'){
+  if(!G) return;
+  const pool=getMissionPool();
+  const next=pool[Math.floor(Math.random()*pool.length)];
+  G.mission={...next,progress:0,completed:false,reason};
+}
+function advanceMission(kind,amount=1){
+  if(!G||!G.mission||G.mission.completed||G.mission.kind!==kind) return;
+  G.mission.progress=Math.min(G.mission.target,G.mission.progress+amount);
+  if(G.mission.progress>=G.mission.target){
+    G.mission.completed=true;
+    const reward=G.mission.reward||{};
+    G.money+=(reward.money||0);
+    G.fame=Math.min(100,(G.fame||0)+(reward.fame||0));
+    G.satisfaction=Math.min(100,(G.satisfaction||0)+(reward.sat||0));
+    showEv((lang==='es'?'✅ Misión completada: ':'✅ Mission complete: ')+missionLabel(G.mission.kind),P.green);
+    addFloat(W/2,H-52,'+'+(reward.money||0)+'€',P.green);
+    setTimeout(()=>{if(G&&G.mission&&G.mission.completed) assignMission('refresh');},250);
+  }
+}
+function tickManagerActions(){
+  if(!G||!G.managerActions) return;
+  Object.values(G.managerActions).forEach(action=>{
+    if(action.cooldown>0) action.cooldown--;
+    if(action.buffTimer>0) action.buffTimer--;
+  });
+}
+function managerActionReady(id){
+  return !!(G&&G.managerActions&&G.managerActions[id]&&G.managerActions[id].cooldown<=0);
+}
+function triggerManagerAction(id){
+  if(!G||!G.managerActions||!managerActionReady(id)) return false;
+  const action=G.managerActions[id];
+  action.cooldown=action.maxCooldown||MANAGER_ACTION_DEFS[id].cooldown;
+  const isEs=lang==='es';
+  if(id==='rushQueue'){
+    const waiting=getWaitingTurnCustomers();
+    if(waiting.length){
+      const target=waiting[0];
+      callTurnNumber(target.queueNumber||0);
+      target.serviceTimer=Math.min(target.serviceTimer||95,70);
+      target.bMsg=isEs?'Atención express':'Express checkout';
+      target.bTimer=120;
+      G.satisfaction=Math.min(100,G.satisfaction+2);
+    } else {
+      G.satisfaction=Math.min(100,G.satisfaction+1);
+    }
+    showEv(isEs?'⚡ Manager abre atención express':'⚡ Manager opens express checkout','#ffb36b');
+  } else if(id==='flashPromo'){
+    action.buffTimer=480;
+    G.fame=Math.min(100,G.fame+3);
+    showEv(isEs?'📣 Promo flash lanzada':'📣 Flash promo launched','#ff5f8f');
+  } else if(id==='quickRestock'){
+    const lows=(G.prods||[]).slice().sort((a,b)=>(a.stock/a.max)-(b.stock/b.max)).slice(0,2);
+    lows.forEach(p=>{p.stock=Math.min(p.max,p.stock+Math.max(2,Math.ceil(p.max*0.35)));});
+    advanceMission('restockOps',1);
+    showEv(isEs?'📦 Reposición rápida del manager':'📦 Manager quick restock','#63d7ff');
+  } else if(id==='calmFloor'){
+    action.buffTimer=360;
+    G.satisfaction=Math.min(100,G.satisfaction+4);
+    (G.staff||[]).forEach(s=>{if(s.hired) s.morale=Math.min(100,(s.morale||0)+4);});
+    (G.custs||[]).forEach(c=>{if(c.st==='queue') c.serviceTimer=Math.max(40,(c.serviceTimer||100)-18);});
+    showEv(isEs?'🫶 Sala calmada, cola más estable':'🫶 Floor calmed, queue stabilized','#8dff9b');
+  }
+  return true;
+}
 function initGame(){
   stopAllMedia();
   try{
@@ -2630,6 +2793,9 @@ function initGame(){
     escaparate:{active:true,phase:0,boost:0,smTimer:900},
     saca:{phase:'idle',cooldown:1800+Math.floor(Math.random()*600),x:820,y:0,dir:-1,aFrame:0,aTimer:0,unloadTimer:0,boxes:6},
     thief:{phase:'idle',cooldown:3600+Math.floor(Math.random()*1800),x:820,y:0,dir:-1,aFrame:0,aTimer:0,targetCol:5,targetRow:3,path:null,pathIdx:0,lootTimer:0,caught:false},
+    mission:null,
+    metrics:{servedCustomers:0,revenueSales:0,vipSales:0,restockOps:0},
+    managerActions:Object.fromEntries(Object.entries(MANAGER_ACTION_DEFS).map(([id,def])=>[id,{cooldown:0,maxCooldown:def.cooldown,buffTimer:0}])),
   };
   // Staff from model — convert grid positions to isometric screen coords
   // Staff positions on the iso grid based on their role
@@ -2668,6 +2834,7 @@ function initGame(){
   G.floats=[];
   // Stat bars
   G.bars=[{val:55,col:P.neon1},{val:40,col:P.neon3},{val:72,col:P.neonB},{val:50,col:P.neon2}];
+  assignMission('start');
   buildWalkGrid();
   loadNPCCustoms();
 }
@@ -3157,6 +3324,10 @@ function doAction(id){
     callTurnNumber('');
     return;
   }
+  if(MANAGER_ACTION_DEFS[id]){
+    triggerManagerAction(id);
+    return;
+  }
   if(id.startsWith('era')){
     const idx=parseInt(id.slice(3),10);
     if(Number.isFinite(idx)) launchEra(idx);
@@ -3250,7 +3421,11 @@ function doAction(id){
         p.stock=p.max;count++;
       }
     }
-    if(count>0){updateBars();showEv('📦 '+count+' productos repuestos',P.neonB);SFX.restockThud();}
+    if(count>0){
+      if(G.metrics) G.metrics.restockOps=(G.metrics.restockOps||0)+count;
+      advanceMission('restockOps',count);
+      updateBars();showEv('📦 '+count+' productos repuestos',P.neonB);SFX.restockThud();
+    }
     return;
   }
   if(id.startsWith('rest')){
@@ -3258,6 +3433,8 @@ function doAction(id){
     const restCost=(G.supplierDeal&&G.supplierDeal.active&&G.supplierDeal.prodIdx===i)?Math.floor(CFG.RESTOCK_COST*0.5):CFG.RESTOCK_COST;
     if(G.money>=restCost&&p.stock<p.max){
       G.money-=restCost;G.weekExpenses+=restCost;
+      if(G.metrics) G.metrics.restockOps=(G.metrics.restockOps||0)+1;
+      advanceMission('restockOps',1);
       p.stock=p.max;updateBars();showEv(T().events[4],P.neonB);SFX.restockThud();
     }
   }
@@ -3563,6 +3740,13 @@ function doAction(id){
   if(id==='edModeStaff'){edMode='staff';edSelIdx=-1;edStaffSelIdx=-1;return;}
   // Furniture mode actions
   if(id.startsWith('edsel')){edSelIdx=parseInt(id.slice(5));return;}
+  if(id==='edLayout1'){
+    if(saveLayoutSlot1()){
+      edSaveNotify=90;playSaveBeep();
+      showEv(lang==='es'?'💾 Layout1 guardado como arranque':'💾 Layout1 saved as startup','#55ccff');
+    }
+    return;
+  }
   if(id==='edReset'){resetLayout();edSelIdx=-1;return;}
   if(id==='edDelete'&&edSelIdx>=0&&edSelIdx<shopLayout.length){
     shopLayout.splice(edSelIdx,1);edSelIdx=-1;return;
@@ -3642,10 +3826,11 @@ function openPause(){
 function updateBars(){
   const hi=G.staff.filter(s=>s.hired);
   const avgStk=G.prods.reduce((a,p)=>a+(p.stock/p.max),0)/G.prods.length;
+  const missionBoost=G.mission&&!G.mission.completed?Math.min(1,(G.mission.progress||0)/Math.max(1,G.mission.target||1)):1;
   G.bars[0].val=Math.min(100,35+hi.length*10+G.fame*0.25)|0;
   G.bars[1].val=Math.min(100,15+G.customersToday*3+G.satisfaction*0.4)|0;
   G.bars[2].val=(avgStk*100)|0;
-  G.bars[3].val=Math.min(100,25+hi.length*11+G.satisfaction*0.4)|0;
+  G.bars[3].val=Math.min(100,25+hi.length*11+G.satisfaction*0.4+missionBoost*8)|0;
 }
 
 function getRating(rev,target){
@@ -3700,6 +3885,7 @@ function endWeek(){
   // Reset Hue to cool daylight for morning
   HUE.on=false;
   try{hueAll({on:true,bri:254,ct:250});}catch(e){}
+  assignMission('week');
   G.week++;
   if(G.week>CFG.WEEKS_PER_YEAR){
     // Year end
@@ -3944,6 +4130,7 @@ function updateGame(){
   // Update wall clock from game time
   _clockH=Math.floor(G.gameTime)%12;
   _clockM=Math.floor((G.gameTime%1)*60);
+  tickManagerActions();
   // Day end = closing time
   if(G.gameTime>=shopTimeSettings.closeHour&&!G.dayEnded){
     G.dayEnded=true;
@@ -4267,12 +4454,14 @@ function updateGame(){
   const currentCustomerCap=getCurrentCustomerCap();
   trimCustomersToHourCap();
   if(G.customerSpawnDelay>0) G.customerSpawnDelay--;
-  else if(G.custs.length<currentCustomerCap&&Math.random()<0.006*Math.max(1,G.staff.filter(s=>s.hired).length)*(G.rush.active?2:1)*weatherMod*holidaySpawn*(1-compSteal)*repMod*escapMod*hourSpawnMod) spawnCust();
+  const promoSpawnBoost=G.managerActions&&G.managerActions.flashPromo&&G.managerActions.flashPromo.buffTimer>0?1.35:1;
+  if(G.custs.length<currentCustomerCap&&Math.random()<0.006*Math.max(1,G.staff.filter(s=>s.hired).length)*(G.rush.active?2:1)*weatherMod*holidaySpawn*(1-compSteal)*repMod*escapMod*hourSpawnMod*promoSpawnBoost) spawnCust();
   for(let i=G.custs.length-1;i>=0;i--){
     const c=G.custs[i];c.ft++;if(c.ft>10){c.fr=(c.fr+1)%2;c.ft=0;}
     c.dwellTicks=(c.dwellTicks|0)+1;
     if(!Number.isFinite(c.stayTargetTicks)) c.stayTargetTicks=Math.round((60+Math.random()*240)*60);
     if(c.bTimer>0) c.bTimer--;
+    const queueStress=(c.persona==='impatient'?1.8:1);
     if(c.st==='walk'){
       // Sun → customers walk 65% speed (too hot); Rain → normal speed (rushing in)
       const wSpd=G.weather&&G.weather.type==='sun'?0.85:1.3;
@@ -4296,7 +4485,8 @@ function updateGame(){
             }else if(c.wantsTurn){
               c.st='queue';
             }else{
-              c.st='browse';c.timer=Math.round((60+Math.random()*80)*browseBase);
+              const browsePersona=c.persona==='curious'?1.4:(c.persona==='impulsive'?0.7:1);
+              c.st='browse';c.timer=Math.round((60+Math.random()*80)*browseBase*browsePersona);
             }
           }
         }
@@ -4320,13 +4510,14 @@ function updateGame(){
           }else if(c.wantsTurn){
             c.st='queue';
           }else{
-            c.st='browse';c.timer=Math.round((60+Math.random()*80)*browseBase);
+            const browsePersona=c.persona==='curious'?1.4:(c.persona==='impulsive'?0.7:1);
+            c.st='browse';c.timer=Math.round((60+Math.random()*80)*browseBase*browsePersona);
           }
         }
         else{
           const nx=c.x+dx/d*wSpd,ny=c.y+dy/d*wSpd;
           if(canWalkTo(nx+5,ny+20)){c.x=nx;c.y=ny;c.dir=dx<0?-1:1;}
-          else{c.st='browse';c.timer=Math.round((30+Math.random()*40)*browseBase);}
+          else{c.st='browse';c.timer=Math.round((30+Math.random()*40)*browseBase*(c.persona==='curious'?1.4:1));}
         }
       }
     } else if(c.st==='queue'){
@@ -4344,8 +4535,10 @@ function updateGame(){
         G.turns.current=c.queueNumber||0;
         G.turns.servingId=c.id;
         c.st='buy';
-        c.serviceTimer=130+Math.floor(Math.random()*70);
+        c.serviceTimer=Math.round((130+Math.floor(Math.random()*70))*(c.persona==='impatient'?0.8:(c.persona==='curious'?1.1:1)));
         c.bMsg='Turno '+String(c.queueNumber).padStart(3,'0')+' en caja';c.bTimer=110;
+      }else if((c.dwellTicks|0)%180===0){
+        G.satisfaction=Math.max(0,G.satisfaction-0.2*queueStress);
       }
     } else if(c.st==='buy'){
       const spot=getQueueTarget(0);
@@ -4398,7 +4591,7 @@ function updateGame(){
       c.timer--;if(c.timer<=0){
         const stayRemaining=(c.stayTargetTicks|0)-(c.dwellTicks|0);
         if(stayRemaining>0){
-          const browseChunk=Math.round((45+Math.random()*120)*(G.weather&&G.weather.type==='rain'?1.25:1));
+          const browseChunk=Math.round((45+Math.random()*120)*(G.weather&&G.weather.type==='rain'?1.25:1)*(c.persona==='curious'?1.35:(c.persona==='impulsive'?0.72:1)));
           c.timer=Math.max(30,Math.min(stayRemaining,browseChunk));
           continue;
         }
@@ -4614,12 +4807,14 @@ function spawnCust(isVip){
   if(G.custs.length>=getCurrentCustomerCap()) return;
   const ci=Math.floor(Math.random()*6);
   const isV=!!isVip;
+  const persona=isV?'loyal':CUSTOMER_ARCHETYPES[Math.floor(Math.random()*CUSTOMER_ARCHETYPES.length)];
   const avgTicket=isV
     ? 30+Math.round(Math.random()*20)
     : (Math.random()<0.45
         ? 12+Math.round(Math.random()*13)
         : 5+Math.round(Math.random()*10));
-  const wantsTurn=Math.random()<(isV?0.7:0.4);
+  const personaTurnBias=persona==='impatient'?0.18:persona==='curious'?-0.14:0;
+  const wantsTurn=Math.random()<Math.max(0.08,Math.min(0.92,(isV?0.7:0.4)+personaTurnBias));
   // Spawn at door, target a walkable tile
   const doorStart=getDoorOutsidePos();
   let tCol,tRow,attempts=0;
@@ -4655,6 +4850,12 @@ function spawnCust(isVip){
   } else {
     cLook={shirt:1+Math.floor(Math.random()*5),hair:Math.floor(Math.random()*6),skin:Math.floor(Math.random()*6),pants:0,shoes:0,accessory:0};
   }
+  const personaTicketBoost=persona==='impulsive'?1.35:persona==='loyal'?1.12:1;
+  const stayBase=Math.round((60+Math.random()*240)*60);
+  const stayTargetTicks=persona==='impatient'?Math.round(stayBase*0.58)
+    : persona==='curious'?Math.round(stayBase*1.45)
+    : persona==='impulsive'?Math.round(stayBase*0.72)
+    : Math.round(stayBase*1.1);
   G.custs.push({
     id:(G.loyaltyCard&&Number.isFinite(G.loyaltyCard.nextId)?G.loyaltyCard.nextId++:Date.now()),
     x:doorStart.x,y:doorStart.y,
@@ -4668,8 +4869,9 @@ function spawnCust(isVip){
     wantsTurn:wantsTurn,queueNumber:0,serviceTimer:0,ticketPicked:false,
     bTimer:cBTimer,bMsg:cBMsg,bShown:false,
     wantsProdIdx:wantsProdIdx,bought:false,loyaltyFree:false,dwellTicks:0,
-    stayTargetTicks:Math.round((60+Math.random()*240)*60),
-    avgTicket:avgTicket
+    stayTargetTicks:stayTargetTicks,
+    avgTicket:Math.round(avgTicket*personaTicketBoost),
+    persona:persona
   });
   const newCust=G.custs[G.custs.length-1];
   if(G.loyaltyCard&&G.loyaltyCard.pending){
@@ -4754,9 +4956,12 @@ function startCustomerLeave(c){
 function resolveCustomerCheckout(c){
   const wp=c.wantsProdIdx>=0?G.prods[c.wantsProdIdx]:null;
   const inStock=wp&&wp.stock>0;
+  const promoRevenueBoost=G.managerActions&&G.managerActions.flashPromo&&G.managerActions.flashPromo.buffTimer>0?1.15:1;
   if(inStock){
     wp.stock=Math.max(0,wp.stock-1);
-    const baseRev=Math.max(1,Math.round(wp.price*(0.8+Math.random()*0.4)*(c.vip?1.5:1)));
+    const impulseBoost=c&&c.persona==='impulsive'?1.28:1;
+    const loyalBoost=c&&c.persona==='loyal'?1.1:1;
+    const baseRev=Math.max(1,Math.round(wp.price*(0.8+Math.random()*0.4)*(c.vip?1.5:1)*impulseBoost*loyalBoost*promoRevenueBoost));
     const rev=c.loyaltyFree?0:baseRev;
     if(rev>0){
       G.money+=rev;G.weekRevenue+=rev;G.yearRevenue+=rev;G.totalRevenue+=rev;
@@ -4769,8 +4974,16 @@ function resolveCustomerCheckout(c){
     G.satisfaction=Math.min(100,G.satisfaction+0.5);
     c.bought=true;
     c.loyaltyFree=false;
+    if(G.metrics){
+      G.metrics.servedCustomers=(G.metrics.servedCustomers||0)+1;
+      G.metrics.revenueSales=(G.metrics.revenueSales||0)+rev;
+      if(c.vip) G.metrics.vipSales=(G.metrics.vipSales||0)+1;
+    }
+    advanceMission('serveCustomers',1);
+    advanceMission('earnRevenue',rev);
+    if(c.vip) advanceMission('vipSales',1);
     const arr=T().custBought;c.bMsg=arr[Math.floor(Math.random()*arr.length)];c.bTimer=190;
-    if(G.reviews&&Math.random()<(c.vip?0.6:0.15)){
+    if(G.reviews&&Math.random()<(c.vip?0.6:(c.persona==='loyal'?0.24:0.15))){
       G.reviews.positive++;
       const fameBonus=c.vip?3:1;
       G.fame=Math.min(100,G.fame+fameBonus);
@@ -4789,6 +5002,12 @@ function resolveCustomerCheckout(c){
         addFloat(nearStaff.x+7,nearStaff.y-36,'🤝',P.neon1);
         G.satisfaction=Math.min(100,G.satisfaction+0.2);
         c.bought=true;
+        if(G.metrics){
+          G.metrics.servedCustomers=(G.metrics.servedCustomers||0)+1;
+          G.metrics.revenueSales=(G.metrics.revenueSales||0)+rev;
+        }
+        advanceMission('serveCustomers',1);
+        advanceMission('earnRevenue',rev);
         const arr=T().custSaved;c.bMsg=arr[Math.floor(Math.random()*arr.length)];c.bTimer=190;
       } else {
         const arr=T().custNoStock;c.bMsg=arr[Math.floor(Math.random()*arr.length)];c.bTimer=190;
@@ -10479,14 +10698,14 @@ function customerStateLabel(c){
 function customerTypeLabel(c){
   if(!c) return lang==='es'?'Anonimo':'Unknown';
   if(c.vip) return 'VIP';
-  if(c.bought||c.st==='queue'||c.st==='buy') return lang==='es'?'Habitual':'Regular';
-  return lang==='es'?'Anonimo':'Unknown';
+  return customerPersonaLabel(c);
 }
 
 function customerPriority(c){
   if(!c) return 9;
   if(c.vip) return 0;
-  if(c.bought||c.st==='queue'||c.st==='buy') return 1;
+  if(c.persona==='impatient') return 1;
+  if(c.bought||c.st==='queue'||c.st==='buy') return 2;
   return 2;
 }
 
@@ -10497,6 +10716,8 @@ function customerStatePriority(c){
 
 function customerUpsellingLabel(c){
   if(!c||c.wantsProdIdx<0) return '-';
+  if(c.persona==='impulsive') return lang==='es'?'Compra plus':'Adds more';
+  if(c.persona==='loyal') return lang==='es'?'Vuelve':'Returns';
   const wanted=String(prodName(c.wantsProdIdx)||'').toLowerCase();
   if(wanted.includes('prensa')||wanted.includes('press')) return lang==='es'?'Prensa':'Press';
   if(wanted.includes('vino')||wanted.includes('wine')) return lang==='es'?'Vinos':'Wine';
@@ -10859,6 +11080,10 @@ function drawBottomBar(){
   tx(trimHudLabel(ops.focus.detail,24),548,by+12,'#d7d3c8',7);
   const metricLine=(lang==='es'?'Stock ':'Stock ')+ops.avgStockPct+'% · '+(lang==='es'?'Cola ':'Queue ')+ops.queueCount+' · '+(lang==='es'?'Ritmo ':'Pace ')+ops.pacePct+'%';
   tx(trimHudLabel(metricLine,27),548,by+23,'#9bb0c5',7);
+  if(G.mission){
+    tx(trimHudLabel((lang==='es'?'Misión ':'Mission ')+missionLabel(G.mission.kind),22),490,by+31,'#d8eef8',6);
+    tx(missionProgressLabel(G.mission),W-126,by+31,G.mission.completed?P.green:'#8defff',6,'right');
+  }
 
   // Editor button — bright purple
   const edX=W-120;
@@ -11164,13 +11389,14 @@ function tabStock(py){
 }
 
 function tabStore(py){
+  const isEs=lang==='es';
   // Visit action buttons
-  tx('— VISITAS —',UI.x+UI.w/2,py+10,P.uiT3,8,'center');
+  tx('— '+(isEs?'VISITAS':'VISITS')+' —',UI.x+UI.w/2,py+10,P.uiT3,8,'center');
   const visits=[
-    {id:'visitCom',label:'🧑‍💼 Visita Comercial',col:'#1a4a1a',border:'#44aa44'},
-    {id:'visitTec',label:'🔧 Visita Técnico',col:'#1a2a4a',border:'#4488cc'},
-    {id:'visitDel',label:'🏛 Visita Delegación',col:'#4a1a3a',border:'#cc44aa'},
-    {id:'visitGC',label:'👮 Visita Guardia Civil',col:'#1a1a1a',border:'#666666'},
+    {id:'visitCom',label:isEs?'🧑‍💼 Visita Comercial':'🧑‍💼 Commercial Visit',col:'#1a4a1a',border:'#44aa44'},
+    {id:'visitTec',label:isEs?'🔧 Visita Técnico':'🔧 Tech Visit',col:'#1a2a4a',border:'#4488cc'},
+    {id:'visitDel',label:isEs?'🏛 Visita Delegación':'🏛 HQ Visit',col:'#4a1a3a',border:'#cc44aa'},
+    {id:'visitGC',label:isEs?'👮 Visita Guardia Civil':'👮 Civil Guard Visit',col:'#1a1a1a',border:'#666666'},
   ];
   visits.forEach((v,i)=>{
     const vy=py+16+i*28;
@@ -11181,46 +11407,53 @@ function tabStore(py){
   });
   cx.strokeStyle='#c0b898';cx.lineWidth=1;
   cx.beginPath();cx.moveTo(UI.x+4,py+132.5);cx.lineTo(UI.x+UI.w-4,py+132.5);cx.stroke();
-  // Store upgrade
-  tx('— '+T().upgrade+' —',UI.x+UI.w/2,py+144,P.uiT3,8,'center');
-  if(G.storeLevel<2){
-    mkBtn('upgrade',UI.x+5,py+152,UI.w-10,22,'LVL 2  €'+CFG.UPGRADE_COST,'#5a4a30',G.money>=CFG.UPGRADE_COST);
-  } else {
-    tx('★ LVL 2 ACTIVO',UI.x+UI.w/2,py+162,'#6a8a4a',8,'center');
-  }
+  tx('— '+(isEs?'MISIÓN ACTIVA':'ACTIVE MISSION')+' —',UI.x+UI.w/2,py+144,P.uiT3,8,'center');
+  const mission=G.mission||null;
+  r(UI.x+5,py+152,UI.w-10,34,'#131b22');
+  rx(UI.x+5,py+152,UI.w-10,34,mission&&mission.completed?P.green:'#4f6577',1);
+  tx(mission?missionLabel(mission.kind):(isEs?'Sin misión':'No mission'),UI.x+10,py+166,mission&&mission.completed?P.green:'#dbe9f2',8);
+  tx(mission?missionProgressLabel(mission):'-',UI.x+UI.w-10,py+166,mission&&mission.completed?P.green:'#8defff',8,'right');
+  r(UI.x+8,py+172,UI.w-16,5,'#081018');
+  const mProg=mission?Math.max(0,Math.min(1,(mission.progress||0)/Math.max(1,mission.target||1))):0;
+  r(UI.x+8,py+172,((UI.w-16)*mProg)|0,5,mission&&mission.completed?P.green:'#55ccff');
+  const rewardTxt=mission?('+'+(mission.reward.money||0)+'€ · +'+(mission.reward.fame||0)+' fame · +'+(mission.reward.sat||0)+' sat'):'';
+  tx(rewardTxt,UI.x+10,py+184,'#8ca5b8',6);
+
   cx.strokeStyle='#c0b898';cx.lineWidth=1;
-  cx.beginPath();cx.moveTo(UI.x+4,py+180.5);cx.lineTo(UI.x+UI.w-4,py+180.5);cx.stroke();
-  // Salary summary
-  tx(T().salary,UI.x+5,py+192,P.uiT3,7);
+  cx.beginPath();cx.moveTo(UI.x+4,py+193.5);cx.lineTo(UI.x+UI.w-4,py+193.5);cx.stroke();
+  tx('— '+(isEs?'ACCIONES MANAGER':'MANAGER ACTIONS')+' —',UI.x+UI.w/2,py+205,P.uiT3,8,'center');
+  const actionRows=[
+    {id:'rushQueue',label:isEs?'⚡ Atención express':'⚡ Express checkout'},
+    {id:'flashPromo',label:isEs?'📣 Promo flash':'📣 Flash promo'},
+    {id:'quickRestock',label:isEs?'📦 Reposición rápida':'📦 Quick restock'},
+    {id:'calmFloor',label:isEs?'🫶 Calmar sala':'🫶 Calm floor'},
+  ];
+  actionRows.forEach((row,i)=>{
+    const ay=py+211+i*18;
+    const action=G.managerActions&&G.managerActions[row.id];
+    const ready=managerActionReady(row.id);
+    const border=MANAGER_ACTION_DEFS[row.id].color;
+    r(UI.x+5,ay,UI.w-10,16,ready?'#121920':'#191919');
+    rx(UI.x+5,ay,UI.w-10,16,border,1);
+    tx(row.label,UI.x+10,ay+11,ready?border:'#7d858c',7);
+    const cd=action&&action.cooldown>0?Math.ceil(action.cooldown/60)+(isEs?'s':'s'):(isEs?'OK':'READY');
+    tx(cd,UI.x+UI.w-10,ay+11,ready?P.green:'#999',7,'right');
+    if(ready) BTNS[row.id]={x:UI.x+5,y:ay,w:UI.w-10,h:16};
+  });
+
+  cx.strokeStyle='#c0b898';cx.lineWidth=1;
+  cx.beginPath();cx.moveTo(UI.x+4,py+288.5);cx.lineTo(UI.x+UI.w-4,py+288.5);cx.stroke();
+  tx('— '+(isEs?'PROGRESO TIENDA':'STORE PROGRESS')+' —',UI.x+UI.w/2,py+300,P.uiT3,8,'center');
   const total=G.staff.filter(s=>s.hired).reduce((a,s)=>a+CFG.SALARY[s.role]*s.level,0);
-  tx('€'+total,UI.x+5,py+205,'#cc5555',12);
-  // Minimap (isometric diamond)
-  const mm={x:UI.x+5,y:py+212,w:UI.w-10,h:70};
-  r(mm.x,mm.y,mm.w,mm.h,P.bg);rx(mm.x,mm.y,mm.w,mm.h,P.neon1,1);
-  tx('PLANTA',mm.x+mm.w/2,mm.y-3,P.neon1,7,'center');
-  // Mini iso grid
-  const mScale=0.08;
-  const mox=mm.x+mm.w/2, moy=mm.y+12;
-  for(let mr=0;mr<ISO.rows;mr++){
-    for(let mc=0;mc<ISO.cols;mc++){
-      const mpx=mox+(mc-mr)*ISO.tileW*mScale/2;
-      const mpy=moy+(mc+mr)*ISO.tileH*mScale/2;
-      cx.fillStyle=((mc+mr)%2===0)?'#1a3050':'#152848';
-      cx.fillRect(mpx-1,mpy-1,2,2);
-    }
-  }
-  // Staff dots on minimap
-  for(const s of G.staff){
-    if(!s.hired) continue;
-    const sx2=mm.x+2+((s.x+7)/SHOP.w)*(mm.w-4);
-    const sy2=mm.y+10+((s.y+14)/(SHOP.h))*50;
-    glow(P.neon1,2);r(sx2,sy2,3,3,P.neon1);nog();
-  }
-  // Customer dots
-  for(const c of G.custs){
-    const cx2=mm.x+2+((c.x+5)/SHOP.w)*(mm.w-4);
-    const cy2=mm.y+10+((c.y+10)/(SHOP.h))*50;
-    r(cx2,cy2,2,2,c.col);
+  tx(T().salary,UI.x+5,py+312,P.uiT3,7);
+  tx('€'+total,UI.x+UI.w-8,py+312,'#cc5555',9,'right');
+  tx((isEs?'Nivel tienda ':'Store level ')+G.storeLevel,UI.x+5,py+326,'#dce9f0',7);
+  tx((isEs?'Ingresos ':'Revenue ')+(G.totalRevenue|0).toLocaleString()+'€',UI.x+5,py+338,'#9fe0a5',7);
+  tx((isEs?'Clientes ':'Customers ')+(G.totalCustomers||0),UI.x+5,py+350,'#88ccee',7);
+  if(G.storeLevel<2){
+    mkBtn('upgrade',UI.x+5,py+356,UI.w-10,20,'LVL 2  €'+CFG.UPGRADE_COST,'#5a4a30',G.money>=CFG.UPGRADE_COST);
+  } else {
+    tx(isEs?'★ LVL 2 ACTIVO':'★ LVL 2 ACTIVE',UI.x+UI.w/2,py+369,'#6a8a4a',8,'center');
   }
 }
 
@@ -11892,18 +12125,20 @@ function drawEditor(){
     // Action buttons
     r(4,btnY,60,24,'#2a5a2a');rx(4,btnY,60,24,'#44aa44',1);
     tx('💾 Save',34,btnY+16,'#88ee88',7,'center');BTNS['edSave']={x:4,y:btnY,w:60,h:24};
-    r(68,btnY,60,24,'#5a2a2a');rx(68,btnY,60,24,'#aa4444',1);
-    tx('↺ Reset',98,btnY+16,'#ee8888',7,'center');BTNS['edReset']={x:68,y:btnY,w:60,h:24};
-    r(132,btnY,46,24,'#3a3a18');rx(132,btnY,46,24,'#aaaa44',1);
-    tx('✕ Salir',155,btnY+16,'#dddd88',7,'center');BTNS['edExit']={x:132,y:btnY,w:46,h:24};
+    r(68,btnY,70,24,'#18344c');rx(68,btnY,70,24,'#55ccff',1);
+    tx('Layout1',103,btnY+16,'#aeeeff',7,'center');BTNS['edLayout1']={x:68,y:btnY,w:70,h:24};
+    r(142,btnY,60,24,'#5a2a2a');rx(142,btnY,60,24,'#aa4444',1);
+    tx('↺ Reset',172,btnY+16,'#ee8888',7,'center');BTNS['edReset']={x:142,y:btnY,w:60,h:24};
+    r(206,btnY,46,24,'#3a3a18');rx(206,btnY,46,24,'#aaaa44',1);
+    tx('✕ Salir',229,btnY+16,'#dddd88',7,'center');BTNS['edExit']={x:206,y:btnY,w:46,h:24};
     if(edSelIdx>=0){
-      r(182,btnY,50,24,'#5a1a1a');rx(182,btnY,50,24,'#ee3333',1);
-      tx('🗑 Del',207,btnY+16,'#ff6666',7,'center');BTNS['edDelete']={x:182,y:btnY,w:50,h:24};
+      r(256,btnY,50,24,'#5a1a1a');rx(256,btnY,50,24,'#ee3333',1);
+      tx('🗑 Del',281,btnY+16,'#ff6666',7,'center');BTNS['edDelete']={x:256,y:btnY,w:50,h:24};
       // Flip button
       const it0=shopLayout[edSelIdx];
       const flipped=it0.flipX||false;
-      r(236,btnY,46,24,flipped?'#304050':'#2a3a3a');rx(236,btnY,46,24,flipped?'#44aaff':'#5a8888',1);
-      tx('⟳ Flip',259,btnY+16,flipped?'#88ddff':'#88bbcc',7,'center');BTNS['edFlip']={x:236,y:btnY,w:46,h:24};
+      r(310,btnY,46,24,flipped?'#304050':'#2a3a3a');rx(310,btnY,46,24,flipped?'#44aaff':'#5a8888',1);
+      tx('⟳ Flip',333,btnY+16,flipped?'#88ddff':'#88bbcc',7,'center');BTNS['edFlip']={x:310,y:btnY,w:46,h:24};
     }
     // Selected item fine controls (right side)
     if(edSelIdx>=0){
@@ -11960,10 +12195,12 @@ function drawEditor(){
     // Staff mode buttons
     r(4,btnY,68,24,'#2a5a2a');rx(4,btnY,68,24,'#44aa44',1);
     tx('💾 Guardar',38,btnY+16,'#88ee88',8,'center');BTNS['edSave']={x:4,y:btnY,w:68,h:24};
-    r(76,btnY,80,24,'#3a2a10');rx(76,btnY,80,24,'#aa7744',1);
-    tx('↺ Pos defecto',116,btnY+16,'#ffbb66',8,'center');BTNS['edStReset']={x:76,y:btnY,w:80,h:24};
-    r(160,btnY,54,24,'#3a3a18');rx(160,btnY,54,24,'#aaaa44',1);
-    tx('✕ Salir',187,btnY+16,'#dddd88',8,'center');BTNS['edExit']={x:160,y:btnY,w:54,h:24};
+    r(76,btnY,70,24,'#18344c');rx(76,btnY,70,24,'#55ccff',1);
+    tx('Layout1',111,btnY+16,'#aeeeff',8,'center');BTNS['edLayout1']={x:76,y:btnY,w:70,h:24};
+    r(150,btnY,80,24,'#3a2a10');rx(150,btnY,80,24,'#aa7744',1);
+    tx('↺ Pos defecto',190,btnY+16,'#ffbb66',8,'center');BTNS['edStReset']={x:150,y:btnY,w:80,h:24};
+    r(234,btnY,54,24,'#3a3a18');rx(234,btnY,54,24,'#aaaa44',1);
+    tx('✕ Salir',261,btnY+16,'#dddd88',8,'center');BTNS['edExit']={x:234,y:btnY,w:54,h:24};
     // Selected staff fine controls
     if(edStaffSelIdx>=0){
       const ax=W-238;
@@ -12509,11 +12746,12 @@ window.xtAPI = (function(){
   const grokPromptEl=document.getElementById('grokPrompt');
   const grokLatencyEl=document.getElementById('grokLatency');
   const grokMetaEl=document.getElementById('grokMeta');
-  const BRIDGE_MODE=TELEGRAM.proxyUrl?'public-worker':(TELEGRAM.enabled?'local-proxy':'offline');
   const GROK_MODE=GROK.proxyUrl?'public-worker':(GROK.enabled?'local-proxy':'offline');
   const GROK_MEMORY={events:[],dialog:[]};
 
   function modeLabel(mode){
+    if(mode==='probing') return 'Comprobando';
+    if(mode==='setup') return 'Configurar';
     if(mode==='public-worker') return 'Worker publico';
     if(mode==='local-proxy') return 'Proxy local';
     return 'Sin enlace';
@@ -12540,17 +12778,54 @@ window.xtAPI = (function(){
     return sections.join('\n\n').slice(0,5000);
   }
 
+  function localTelegramBaseUrl(){
+    return `http://localhost:${TELEGRAM.proxyPort}`;
+  }
+
+  function workerTelegramBaseUrl(){
+    return TELEGRAM.proxyUrl||'';
+  }
+
+  function telegramCandidates(){
+    const seen=new Set();
+    return [TELEGRAM.activeBaseUrl,workerTelegramBaseUrl(),localTelegramBaseUrl()]
+      .filter(Boolean)
+      .filter(base=>{
+        if(seen.has(base)) return false;
+        seen.add(base);
+        return true;
+      });
+  }
+
+  function setTelegramBridge(baseUrl,status){
+    TELEGRAM.activeBaseUrl=baseUrl||'';
+    TELEGRAM.bridgeStatus=status||null;
+    if(!baseUrl){
+      TELEGRAM.bridgeMode='offline';
+      TELEGRAM.enabled=false;
+      return;
+    }
+    TELEGRAM.bridgeMode=baseUrl===workerTelegramBaseUrl()?'public-worker':'local-proxy';
+    TELEGRAM.enabled=!!(status&&status.configured);
+    if(status&&status.configured===false&&!status.lastError){
+      TELEGRAM.lastError='Telegram no configurado en este bridge';
+    }
+  }
+
   function refreshTelegramDiagnostics(){
     const bridge=TELEGRAM.bridgeStatus||{};
-    const telegramSource=bridge.webhook&&bridge.webhook.url?trimLabel(String(bridge.webhook.url).replace(/^https?:\/\//,''),38):trimLabel(TELEGRAM.proxyUrl.replace(/^https?:\/\//,''),38);
+    const activeSource=TELEGRAM.activeBaseUrl||TELEGRAM.proxyUrl||'';
+    const telegramSource=bridge.webhook&&bridge.webhook.url
+      ? trimLabel(String(bridge.webhook.url).replace(/^https?:\/\//,''),38)
+      : trimLabel(String(activeSource).replace(/^https?:\/\//,''),38);
     const lastQueued=bridge.lastQueuedCommand&&bridge.lastQueuedCommand.text?trimLabel((bridge.lastQueuedCommand.from||'Telegram')+': '+bridge.lastQueuedCommand.text,42):'';
     const latencyLabel=TELEGRAM.lastLatencyMs>0?'Latencia: '+Math.round(TELEGRAM.lastLatencyMs)+' ms':'Latencia: -';
     const messageMeta=TELEGRAM.lastMessageMeta
       || (bridge.lastReplyMessageId?'Reply #'+bridge.lastReplyMessageId:'')
       || (bridge.lastSentMessageId?'Send #'+bridge.lastSentMessageId:'')
       || 'Msg: -';
-    if(telegramCardStatus) telegramCardStatus.textContent=TELEGRAM.lastError?'error':(BRIDGE_MODE==='public-worker'?'worker publico':modeLabel(BRIDGE_MODE));
-    if(telegramOriginEl) telegramOriginEl.textContent='Origen: '+modeLabel(BRIDGE_MODE)+(TELEGRAM.proxyUrl?' '+trimLabel(TELEGRAM.proxyUrl.replace(/^https?:\/\//,''),38):'');
+    if(telegramCardStatus) telegramCardStatus.textContent=TELEGRAM.lastError?'error':(TELEGRAM.bridgeMode==='public-worker'?'worker publico':modeLabel(TELEGRAM.bridgeMode));
+    if(telegramOriginEl) telegramOriginEl.textContent='Origen: '+modeLabel(TELEGRAM.bridgeMode)+(activeSource?' '+trimLabel(String(activeSource).replace(/^https?:\/\//,''),38):'');
     if(lastCommandEl){
       const last=TELEGRAM.lastError
         ? 'Error: '+trimLabel(TELEGRAM.lastError,42)
@@ -12573,16 +12848,17 @@ window.xtAPI = (function(){
   }
 
   async function refreshBridgeStatus(){
-    if(!TELEGRAM.enabled) return;
     try{
       const data=await telegramFetch('/telegram/status');
       TELEGRAM.bridgeStatus=data;
-      if(data.lastError) TELEGRAM.lastError=data.lastError;
+      TELEGRAM.enabled=!!data.configured;
+      TELEGRAM.lastError=data.lastError||(!data.configured?'Telegram no configurado en este bridge':'');
       if(data.lastQueuedCommand&&data.lastQueuedCommand.text&&!TELEGRAM.lastCommandLabel){
         TELEGRAM.lastCommandLabel=(data.lastQueuedCommand.from||'Telegram')+': '+data.lastQueuedCommand.text;
       }
       refreshTelegramDiagnostics();
     }catch(e){
+      setTelegramBridge('',null);
       TELEGRAM.lastError=e.message;
       refreshTelegramDiagnostics();
     }
@@ -12626,21 +12902,13 @@ window.xtAPI = (function(){
     });
   }
 
-  if(!TELEGRAM.enabled){
-    setTelegramUiStatus('offline',false);
-    appendTelegramLog('bot','AdmiraXPBot','Modo local sin puente activo. Los comandos funcionan dentro del juego. Para conectar Telegram real, configura telegram.proxyUrl o abre el proxy local.');
-    console.log('%cTelegram console offline — configure telegram.proxyUrl or start elgato-proxy.js','color:#55ccff');
-  } else {
-    setTelegramUiStatus(BRIDGE_MODE==='public-worker'?'worker publico':'proxy local',false);
-    appendTelegramLog('bot','AdmiraXPBot',BRIDGE_MODE==='public-worker'
-      ? 'Bridge publico activo. Telegram y Grok salen por Workers. Escribe /help o /status.'
-      : 'Proxy local activo. Escribe /help o /status.');
-  }
+  setTelegramUiStatus('checking',false);
+  appendTelegramLog('bot','AdmiraXPBot','Comprobando bridge de Telegram...');
   refreshTelegramDiagnostics();
 
   function telegramUrl(path){
-    if(TELEGRAM.proxyUrl) return TELEGRAM.proxyUrl+path;
-    return `http://localhost:${TELEGRAM.proxyPort}${path}`;
+    const base=TELEGRAM.activeBaseUrl||workerTelegramBaseUrl()||localTelegramBaseUrl();
+    return base+path;
   }
 
   function grokUrl(path){
@@ -12648,10 +12916,19 @@ window.xtAPI = (function(){
   }
 
   async function telegramFetch(path,opts){
-    const res=await fetch(telegramUrl(path),opts);
-    const json=await res.json().catch(()=>({ok:false,error:'Invalid JSON'}));
-    if(!res.ok||json.error) throw new Error(json.message||json.error||('HTTP '+res.status));
-    return json;
+    let lastError=null;
+    for(const baseUrl of telegramCandidates()){
+      try{
+        const res=await fetch(baseUrl+path,opts);
+        const json=await res.json().catch(()=>({ok:false,error:'Invalid JSON'}));
+        if(!res.ok||json.error) throw new Error(json.message||json.error||('HTTP '+res.status));
+        if(path==='/telegram/status') setTelegramBridge(baseUrl,json);
+        return json;
+      }catch(error){
+        lastError=error;
+      }
+    }
+    throw lastError||new Error('Telegram bridge unavailable');
   }
 
   async function grokFetch(path,opts){
@@ -12665,7 +12942,7 @@ window.xtAPI = (function(){
     if(!text) return {ok:false,message:'Mensaje vacio'};
     if(!TELEGRAM.enabled){
       setTelegramUiStatus('offline',false);
-      return {ok:true,message:'Modo local: no enviado a Telegram'};
+      return {ok:false,message:TELEGRAM.lastError||'Telegram no configurado'};
     }
     try{
       const startedAt=performance.now();
@@ -12689,6 +12966,19 @@ window.xtAPI = (function(){
       return {ok:false,message:e.message};
     }
   }
+
+  refreshBridgeStatus().then(()=>{
+    if(TELEGRAM.enabled){
+      setTelegramUiStatus(TELEGRAM.bridgeMode==='public-worker'?'worker publico':'proxy local',false);
+      appendTelegramLog('bot','AdmiraXPBot',TELEGRAM.bridgeMode==='public-worker'
+        ? 'Bridge publico activo. Telegram y Grok salen por Workers. Escribe /help o /status.'
+        : 'Proxy local activo. Escribe /help o /status.');
+      return;
+    }
+    setTelegramUiStatus(TELEGRAM.bridgeMode==='offline'?'offline':'setup',false);
+    appendTelegramLog('bot','AdmiraXPBot',TELEGRAM.lastError||'Telegram no esta disponible en este entorno.');
+    console.log('%cTelegram bridge unavailable — configure bot token or restore the worker bridge','color:#55ccff');
+  });
 
   async function telegramReply(cmd,text){
     if(!TELEGRAM.enabled) return;
