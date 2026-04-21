@@ -491,13 +491,18 @@ function resizeCanvas(){
   const inGameplay=isGameplayUiState(currentState);
   const composeStart=inGameplay&&!telegramDockHidden&&telegramComposeStart;
   gameplayDockHeight=clampGameplayDockHeight(gameplayDockHeight,vh,barH);
-  if(inGameplay&&dock&&!telegramDockHidden) dock.style.height=gameplayDockHeight+'px';
-  const dockH=(inGameplay&&!telegramDockHidden)?gameplayDockHeight:0;
+  let dockH=(inGameplay&&!telegramDockHidden)?gameplayDockHeight:0;
   const availH=vh-barH-dockH;
   const ratio=W/H;
   let cw,ch;
   if(vw/availH > ratio){ ch=availH; cw=Math.floor(ch*ratio); }
   else { cw=vw; ch=Math.floor(cw/ratio); }
+  if(inGameplay&&!telegramDockHidden){
+    const spareH=Math.max(0,vh-barH-dockH-ch);
+    if(spareH>2){
+      dockH=Math.min(vh-barH-220,dockH+spareH);
+    }
+  }
   cv.style.width=cw+'px';
   cv.style.height=ch+'px';
   const canvasRect=cv.getBoundingClientRect();
@@ -506,7 +511,7 @@ function resizeCanvas(){
   if(dock){
     dock.style.width=(composeStart?Math.max(0,Math.floor((dockWidth-8)/2)):dockWidth)+'px';
     dock.style.left=dockLeft+'px';
-    if(inGameplay&&!telegramDockHidden) dock.style.height=gameplayDockHeight+'px';
+    if(inGameplay&&!telegramDockHidden) dock.style.height=dockH+'px';
     dock.style.top='auto';
     dock.style.bottom='0px';
   }
