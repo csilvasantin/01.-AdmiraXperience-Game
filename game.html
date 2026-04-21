@@ -68,7 +68,7 @@
     .char-body::-webkit-scrollbar-thumb{background:#2a7585;border-radius:6px}
     .char-row{display:grid;grid-template-columns:58px minmax(74px,.95fr) minmax(126px,1.35fr) 58px 50px 46px auto;gap:3px;align-items:center;padding:2px 3px;border-radius:3px}
     .char-row.team-grid{grid-template-columns:var(--team-col-0,58px) var(--team-col-1,110px) var(--team-col-2,160px) var(--team-col-3,78px) var(--team-col-4,68px)}
-    .char-row.clients-grid{grid-template-columns:var(--cust-col-0,44px) var(--cust-col-1,72px) var(--cust-col-2,150px) var(--cust-col-3,78px) var(--cust-col-4,56px) var(--cust-col-5,50px) var(--cust-col-6,52px) var(--cust-col-7,28px)}
+    .char-row.clients-grid{grid-template-columns:var(--cust-col-0,44px) var(--cust-col-1,72px) var(--cust-col-2,150px) var(--cust-col-3,78px) var(--cust-col-4,56px) var(--cust-col-5,50px) var(--cust-col-6,80px)}
     .char-row.is-head,.char-row.is-summary{padding:0;background:transparent}
     .char-col-head{position:relative;display:block;padding-right:8px}
     .char-col-resizer{position:absolute;top:-2px;right:-4px;width:8px;height:18px;border:0;background:transparent;cursor:col-resize;touch-action:none}
@@ -77,6 +77,7 @@
     .char-row.row-even{background:rgba(18,46,58,0.34)}
     .char-row.row-odd{background:rgba(8,20,28,0.72)}
     .char-row span{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .char-ticket-cell{display:flex;align-items:center;justify-content:space-between;gap:8px}
     .char-row .ok{color:#88ee88}
     .char-row .muted{color:#6c94a1}
     .char-trigger{display:inline-flex;align-items:center;justify-content:flex-start;padding:0;margin:0;border:none;background:transparent;color:inherit;cursor:pointer}
@@ -305,7 +306,7 @@ let characterDockFocus='clients';
 let telegramComposeStart=true;
 const DOCK_HEIGHT_KEY='admira_xp_dock_height';
 const CLIENT_COLS_KEY='admira_xp_client_cols';
-const CLIENT_COL_DEFAULTS=[44,72,150,78,56,50,52,28];
+const CLIENT_COL_DEFAULTS=[44,72,150,78,56,50,80];
 const TEAM_COL_DEFAULTS=[58,110,160,78,68];
 let clientColumnsCustom=false;
 let gameplayDockHeight=(()=>{
@@ -318,9 +319,9 @@ let gameplayDockHeight=(()=>{
 let clientColumnWidths=(()=>{
   try{
     const saved=JSON.parse(localStorage.getItem(CLIENT_COLS_KEY)||'[]');
-    if(Array.isArray(saved)&&saved.length===CLIENT_COL_DEFAULTS.length){
+    if(Array.isArray(saved)&&saved.length>=CLIENT_COL_DEFAULTS.length){
       clientColumnsCustom=true;
-      return saved.map((v,i)=>Math.max(28,Math.min(360,Number(v)||CLIENT_COL_DEFAULTS[i])));
+      return saved.slice(0,CLIENT_COL_DEFAULTS.length).map((v,i)=>Math.max(28,Math.min(420,Number(v)||CLIENT_COL_DEFAULTS[i])));
     }
   }catch(e){}
   return CLIENT_COL_DEFAULTS.slice();
@@ -11213,7 +11214,6 @@ function drawCharacterGroupsPanel(){
     +clientHeadCell(isEs?'Turno':'Turn',4)
     +clientHeadCell(isEs?'Tiempo':'Time',5)
     +clientHeadCell('Ticket',6)
-    +clientHeadCell('',7)
     +'</div>'
     +clients.map((c,rowIdx)=>{
     const custIdx=G.custs.indexOf(c);
@@ -11233,11 +11233,10 @@ function drawCharacterGroupsPanel(){
       +'<span>'+upselling+'</span>'
       +'<span>'+turn+'</span>'
       +'<span>'+dwell+'</span>'
-      +'<span>'+ticket+'</span>'
-      +'<span class="'+(c.bought?'ok':'muted')+'">'+(c.bought?'ok':'')+'</span>'
+      +'<span class="char-ticket-cell"><span>'+ticket+'</span><span class="'+(c.bought?'ok':'muted')+'">'+(c.bought?'ok':'')+'</span></span>'
       +'</div>';
   }).join('');
-  clientHtml+='<div class="char-row clients-grid is-summary"><span class="muted">'+clients.length+'</span><span class="muted">VIP '+vipCount+'</span><span class="muted">'+(isEs?'Zona ':'Zone ')+browsingCount+'</span><span class="muted">'+(isEs?'Cola ':'Queue ')+queueCount+'</span><span class="muted">'+(isEs?'Turnos ':'Turns ')+issuedTurns+'</span><span></span><span></span><span></span></div>';
+  clientHtml+='<div class="char-row clients-grid is-summary"><span class="muted">'+clients.length+'</span><span class="muted">VIP '+vipCount+'</span><span class="muted">'+(isEs?'Zona ':'Zone ')+browsingCount+'</span><span class="muted">'+(isEs?'Cola ':'Queue ')+queueCount+'</span><span class="muted">'+(isEs?'Turnos ':'Turns ')+issuedTurns+'</span><span></span><span></span></div>';
   panelStatus.textContent=activePane==='team'?teamStatusText:clientStatusText;
   panelBody.innerHTML=activePane==='team'?teamHtml:clientHtml;
 }
