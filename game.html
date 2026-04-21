@@ -90,6 +90,17 @@
     .tg-status{color:#9ec7d0;font-size:8px;font-weight:normal;text-transform:none}
     #telegramComposer{flex:1;width:100%;resize:none;border:none;outline:none;background:radial-gradient(circle at 10% 0,rgba(120,243,255,.07),transparent 36%),#02080d;color:#e6fbff;padding:10px;font-family:monospace;font-size:12px;line-height:1.35}
     #telegramComposer::placeholder{color:#57747c}
+    #telegramHelpPanel{display:none;flex:1;overflow:auto;padding:9px 10px;background:radial-gradient(circle at 0 0,rgba(120,243,255,.08),transparent 34%),#02080d;color:#dff8ff;font-family:monospace;font-size:10px;line-height:1.35;scrollbar-width:thin;scrollbar-color:#2a7585 #07131b}
+    .tg-pane.send.help-open #telegramComposer{display:none}
+    .tg-pane.send.help-open #telegramHelpPanel{display:block}
+    .tg-help-top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;color:#f3fbff}
+    .tg-help-top strong{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#ffffff}
+    .tg-help-close{border:1px solid #2a7585;border-radius:999px;background:#0c2a35;color:#bff7ff;font-family:monospace;font-size:9px;font-weight:bold;padding:2px 8px;cursor:pointer}
+    .tg-help-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+    .tg-help-section{border:1px solid rgba(120,243,255,.20);border-radius:9px;background:rgba(5,19,28,.78);padding:7px}
+    .tg-help-section h4{margin:0 0 5px 0;color:#ffd86b;font-size:9px;text-transform:uppercase;letter-spacing:.08em}
+    .tg-help-cmd{display:block;width:100%;border:0;border-left:2px solid rgba(120,243,255,.28);background:transparent;color:#cceef5;font-family:monospace;font-size:9px;text-align:left;padding:2px 0 2px 6px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .tg-help-cmd:hover{color:#ffffff;border-left-color:#78f3ff;background:rgba(120,243,255,.07)}
     .tg-actions{height:32px;display:flex;gap:6px;padding:5px 6px;background:#071720;border-top:1px solid rgba(120,243,255,.16)}
     .tg-actions button{border:1px solid #2a7585;border-radius:999px;background:#0c2a35;color:#bff7ff;font-family:monospace;font-size:10px;font-weight:bold;padding:2px 10px;cursor:pointer}
     .tg-actions button.primary{background:linear-gradient(180deg,#1e7d8d,#11515f);color:#ffffff;border-color:#75ecff}
@@ -138,6 +149,7 @@
       #telegramComposer{font-size:11px}
       .tg-head{font-size:8px}
       .tg-quick-actions{grid-template-columns:repeat(2,minmax(0,1fr));gap:5px;padding:5px}
+      .tg-help-grid{grid-template-columns:1fr}
       .tg-quick-btn{min-height:38px;padding:5px 6px}
       #eraVerticalDock{bottom:70px;width:min(100vw - 18px,860px);padding:8px}
       .evd-head{font-size:9px}
@@ -223,6 +235,7 @@
   <div class="dock-resize-handle" data-dock-resize aria-hidden="true"></div>
   <div class="tg-pane send">
     <div class="tg-head"><span>Control de la Store desde Telegram / WhatsApp</span><span class="tg-status" id="telegramSendStatus">AdmiraXPBot</span></div>
+    <div id="telegramHelpPanel" aria-label="Comandos disponibles"></div>
     <textarea id="telegramComposer" placeholder="Write to @AdmiraXPBot... Enter sends, Shift+Enter newline"></textarea>
     <div class="tg-actions">
       <button type="button" class="primary" id="telegramSendBtn">Send</button>
@@ -12948,6 +12961,8 @@ window.xtAPI = (function(){
 (function(){
   const dock=document.getElementById('telegramDock');
   const composer=document.getElementById('telegramComposer');
+  const helpPanel=document.getElementById('telegramHelpPanel');
+  const sendPane=document.querySelector('#telegramDock .tg-pane.send');
   const sendBtn=document.getElementById('telegramSendBtn');
   const helpBtn=document.getElementById('telegramHelpBtn');
   const statusBtn=document.getElementById('telegramStatusBtn');
@@ -13741,48 +13756,39 @@ window.xtAPI = (function(){
     return res.data.map(p=>'#'+p.slot+' '+p.name+': '+p.stock+'/'+p.max+' ('+p.pct+'%)').join('\n');
   }
 
-  function commandHelp(){
+  function helpSections(){
     return [
-      'Comandos Admira XP:',
-      '/status',
-      '/staff',
-      '/stock',
-      '/hire 1 | /hire dj | /hire all',
-      '/train 1 | /train all',
-      '/restock 2 | /restock all | /restock nombre',
-      '/ad 0|1|2',
-      '/visit com|tec|del|gc',
-      '/weather normal|rain|sun',
-      '/time am|pm|night',
-      '/reloj 14:30',
-      '/turno | /turno 12',
-      '/set money 12000 | /money 12000',
-      '/set sat 90 | /sat 90',
-      '/set fame 80 | /fame 80',
-      '/set week 12 | /set year 2',
-      '/set revenue 5000',
-      '/set storeLevel 2',
-      '/set customers 30',
-      '/song 1 | /song bad bunny',
-      '/pause | /resume | /menu',
-      '/dj on | /dj off',
-      '/tarjetaFidelidad',
-      '/opinador on | /opinador off',
-      '/equipo inicio ana 3 4',
-      '/equipo zona dj 12 2 2',
-      '/mobiliario inicio | /mobiliario on | /mobiliario off',
-      '/ladron on | /ladron off',
-      '/guardiacivil on | /guardiacivil off',
-      '/door open | /door close | /door auto',
-      '/lamp',
-      '/music | /next | /prev',
-      '/save',
-      '/say texto',
-      '/grok pregunta | /ask pregunta',
-      '/draw dibujo | /dibuja dibujo',
-      '/AdmiraLive texto | /AdmiraLive off',
-      '/AdmiraTube URL 1|2 audio|mute | /AdmiraTube off'
-    ].join('\n');
+      {title:'Consulta',items:['/status','/staff','/stock','/turno','/turno 12']},
+      {title:'Equipo y stock',items:['/hire 1','/hire dj','/hire all','/train 1','/train all','/restock 2','/restock all','/restock prensa']},
+      {title:'Tienda',items:['/ad 0','/ad 1','/ad 2','/upgrade','/visit com','/visit tec','/visit del','/visit gc','/save']},
+      {title:'Tiempo y ambiente',items:['/reloj 14:30','/reloj 14 30','/time am','/time pm','/time night','/weather normal','/weather rain','/weather sun','/lamp']},
+      {title:'Escena en vivo',items:['/dj on','/dj off','/ladron on','/ladron off','/guardiacivil on','/guardiacivil off','/opinador on','/opinador off','/door open','/door close','/door auto']},
+      {title:'Paneles y contenido',items:['/AdmiraLive texto','/AdmiraLive off','/AdmiraTube URL 2 audio','/AdmiraTube off','/say texto','/grok pregunta','/draw dibujo']},
+      {title:'Ajustes rápidos',items:['/money 12000','/sat 90','/fame 80','/set week 12','/set year 2','/set revenue 5000','/set storeLevel 2','/set customers 30']},
+      {title:'Música y layout',items:['/song 1','/song bad bunny','/music','/next','/prev','/equipo inicio ana 3 4','/equipo zona dj 12 2 2','/mobiliario on','/mobiliario off']},
+    ];
+  }
+
+  function showHelpPanel(){
+    if(!helpPanel||!sendPane) return;
+    const sections=helpSections();
+    helpPanel.innerHTML='<div class="tg-help-top"><strong>Comandos de control</strong><button type="button" class="tg-help-close" data-help-close>Cerrar</button></div>'
+      +'<div class="tg-help-grid">'
+      +sections.map(section=>'<div class="tg-help-section"><h4>'+section.title+'</h4>'
+        +section.items.map(cmd=>'<button type="button" class="tg-help-cmd" data-help-cmd="'+cmd.replace(/"/g,'&quot;')+'">'+cmd+'</button>').join('')
+        +'</div>').join('')
+      +'</div>';
+    sendPane.classList.add('help-open');
+    helpPanel.scrollTop=0;
+  }
+
+  function hideHelpPanel(){
+    if(sendPane) sendPane.classList.remove('help-open');
+  }
+
+  function commandHelp(){
+    showHelpPanel();
+    return 'Ayuda abierta en la ventana de Control de la Store. Pulsa un comando para prepararlo.';
   }
 
   async function executeTelegramText(rawText){
@@ -14036,10 +14042,11 @@ window.xtAPI = (function(){
       const answer=await executeTelegramText(clean);
       appendTelegramLog('bot','AdmiraXPBot',answer);
       await telegramSend('Juego: '+clean+'\nAdmiraXPBot: '+answer);
-      if(composer) composer.value='';
+      if(composer&&clean.replace(/^\/([a-zA-Z0-9_]+).*/,'$1').toLowerCase()!=='help') composer.value='';
       renderQuickActionButtons();
       return;
     }
+    hideHelpPanel();
     const result=await telegramSend(clean);
     if(result.ok&&composer) composer.value='';
     renderQuickActionButtons();
@@ -14077,6 +14084,27 @@ window.xtAPI = (function(){
   bindDockButton(hideBtn,()=>setTelegramDockHidden(!telegramDockHidden));
   bindDockButton(teamFocusBtn,()=>{characterDockFocus='team';drawCharacterGroupsPanel();});
   bindDockButton(clientFocusBtn,()=>{characterDockFocus='clients';drawCharacterGroupsPanel();});
+  if(helpPanel){
+    helpPanel.addEventListener('click',e=>{
+      const close=e.target.closest('[data-help-close]');
+      if(close){
+        e.preventDefault();
+        e.stopPropagation();
+        hideHelpPanel();
+        if(composer) composer.focus({preventScroll:true});
+        return;
+      }
+      const cmdBtn=e.target.closest('[data-help-cmd]');
+      if(!cmdBtn) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if(composer){
+        composer.value=cmdBtn.getAttribute('data-help-cmd')||'';
+        hideHelpPanel();
+        composer.focus({preventScroll:true});
+      }
+    });
+  }
   if(characterDock){
     characterDock.addEventListener('click',e=>openCharacterDockDetail(e.target));
   }
