@@ -46,12 +46,18 @@
     #characterDock.expand-clients .char-pane.clients{flex:1 1 100%}
     #characterDock.focus-team .char-pane.clients{display:none}
     #characterDock.focus-team .char-pane.team{flex:1 1 100%}
+    #characterDock .char-pane.people{flex:1 1 100%}
     .char-pane{min-width:0;flex:1;display:flex;flex-direction:column;border:1px solid rgba(120,243,255,.28);border-radius:10px;background:rgba(6,19,29,.94);overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.08)}
     .char-head{height:22px;flex:0 0 22px;display:flex;align-items:center;justify-content:space-between;padding:0 10px;background:linear-gradient(90deg,#0d2b39,#102331);font-size:9px;font-weight:bold;text-transform:uppercase;letter-spacing:.08em}
     .char-head-left,.char-head-right{display:flex;align-items:center;gap:6px;min-width:0}
     .char-head.team{color:#8defff}
     .char-head.clients{color:#ffd86b}
+    .char-head.people{color:#dff8ff}
     .char-status{color:#9ec7d0;font-size:7px;font-weight:normal;text-transform:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:70%}
+    .char-tabs{display:flex;align-items:center;gap:4px}
+    .char-tab-btn{border:1px solid rgba(120,243,255,.28);border-radius:999px;background:#071721;color:#86aeba;font-family:monospace;font-size:8px;font-weight:bold;letter-spacing:.06em;text-transform:uppercase;padding:2px 9px;cursor:pointer}
+    .char-tab-btn.is-active{background:linear-gradient(180deg,#164555,#0c2b38);border-color:#78f3ff;color:#ffffff;box-shadow:0 0 12px rgba(120,243,255,.22)}
+    .char-tab-btn.clients.is-active{border-color:#ffd86b;box-shadow:0 0 12px rgba(255,216,107,.20)}
     .char-toggle-btn{border:1px solid #2a7585;border-radius:4px;background:#0c2a35;color:#bff7ff;font-family:monospace;font-size:8px;font-weight:bold;padding:1px 6px;cursor:pointer}
     .char-body{flex:1;padding:7px 8px;background:linear-gradient(180deg,#041019,#02080d);font-size:10px;line-height:1.3;color:#cceef5;display:flex;flex-direction:column;gap:2px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:#2a7585 #07131b}
     .char-body::-webkit-scrollbar{width:8px}
@@ -192,13 +198,15 @@
 </div>
 <button id="mobileSkipBtn" type="button" aria-label="Saltar al juego">SKIP AL JUEGO</button>
 <div id="characterDock" aria-label="Team and customers">
-  <div class="char-pane team">
-    <div class="char-head team"><div class="char-head-left"><span>Team</span></div><span class="char-status" id="characterTeamStatus">0 active</span></div>
-    <div class="char-body" id="characterTeamBody"></div>
-  </div>
-  <div class="char-pane clients">
-    <div class="char-head clients"><div class="char-head-left"><span>Customers</span></div><span class="char-status" id="characterClientStatus">0 inside</span></div>
-    <div class="char-body" id="characterClientBody"></div>
+  <div class="char-pane people">
+    <div class="char-head people">
+      <div class="char-head-left char-tabs">
+        <button type="button" class="char-tab-btn team" id="characterTeamFocusBtn">Team</button>
+        <button type="button" class="char-tab-btn clients" id="characterClientFocusBtn">Customers</button>
+      </div>
+      <span class="char-status" id="characterPanelStatus">0 inside</span>
+    </div>
+    <div class="char-body" id="characterPanelBody"></div>
   </div>
 </div>
 <div id="telegramDock" aria-label="Telegram AdmiraXPBot">
@@ -283,7 +291,7 @@ const AMIGA_PAGE0_TODO=['BUY SHIP','FIND BIGWHOOP','DEFEAT LECHUCK','MARRY ELAIN
 let amigaPage0Todo=AMIGA_PAGE0_TODO.slice();
 let amigaPage0TodoLoaded=false;
 let telegramDockHidden=false;
-let characterDockFocus='split';
+let characterDockFocus='clients';
 let telegramComposeStart=true;
 bootVideoEl.src=PRELOAD_VIDEO_SRC;
 bootVideoEl.loop=false;
@@ -10798,14 +10806,10 @@ function syncDockLanguage(){
   const isEs=lang==='es';
   const characterDock=document.getElementById('characterDock');
   if(characterDock) characterDock.setAttribute('aria-label',isEs?'Equipo y clientes':'Team and customers');
-  const teamHead=document.querySelector('#characterDock .char-pane.team .char-head span');
-  const clientHead=document.querySelector('#characterDock .char-pane.clients .char-head span');
   const clientFocusBtn=document.getElementById('characterClientFocusBtn');
   const teamFocusBtn=document.getElementById('characterTeamFocusBtn');
-  if(teamHead) teamHead.textContent=isEs?'Equipo':'Team';
-  if(clientHead) clientHead.textContent=isEs?'Clientes':'Customers';
-  if(clientFocusBtn) clientFocusBtn.textContent=isEs?'Clientes':'Customers';
   if(teamFocusBtn) teamFocusBtn.textContent=isEs?'Equipo':'Team';
+  if(clientFocusBtn) clientFocusBtn.textContent=isEs?'Clientes':'Customers';
 
   const tgHeads=document.querySelectorAll('#telegramDock .tg-head > span:first-child');
   if(tgHeads[0]) tgHeads[0].textContent=isEs?'Enviar a Telegram':'Send to Telegram';
@@ -10976,25 +10980,22 @@ function customerTone(c){
 function drawCharacterGroupsPanel(){
   const isEs=lang==='es';
   const dock=document.getElementById('characterDock');
-  const teamStatus=document.getElementById('characterTeamStatus');
-  const clientStatus=document.getElementById('characterClientStatus');
-  const teamBody=document.getElementById('characterTeamBody');
-  const clientBody=document.getElementById('characterClientBody');
+  const panelStatus=document.getElementById('characterPanelStatus');
+  const panelBody=document.getElementById('characterPanelBody');
   const teamFocusBtn=document.getElementById('characterTeamFocusBtn');
   const clientFocusBtn=document.getElementById('characterClientFocusBtn');
-  if(!dock||!teamStatus||!clientStatus||!teamBody||!clientBody) return;
+  if(!dock||!panelStatus||!panelBody) return;
   if(!G||!isGameplayUiState(state)){
     dock.classList.remove('show');
     dock.classList.remove('focus-team');
-    teamStatus.textContent=isEs?'0 total | Caja 0 Repo 0 Aza 0 Mgr 0 DJ 0':'0 total | Cash 0 Stock 0 Host 0 Mgr 0 DJ 0';
-    clientStatus.textContent=isEs?'0 total | Entr 0 Sal 0 Dentro 0':'0 total | In 0 Out 0 Inside 0';
-    teamBody.innerHTML='';
-    clientBody.innerHTML='';
+    panelStatus.textContent=isEs?'0 total':'0 total';
+    panelBody.innerHTML='';
     return;
   }
-  dock.classList.toggle('focus-team',characterDockFocus==='team');
-  if(teamFocusBtn) teamFocusBtn.style.display=characterDockFocus==='team'?'none':'inline-flex';
-  if(clientFocusBtn) clientFocusBtn.style.display=characterDockFocus==='team'?'inline-flex':'none';
+  const activePane=characterDockFocus==='team'?'team':'clients';
+  dock.classList.toggle('focus-team',activePane==='team');
+  if(teamFocusBtn) teamFocusBtn.classList.toggle('is-active',activePane==='team');
+  if(clientFocusBtn) clientFocusBtn.classList.toggle('is-active',activePane==='clients');
   const hired=(G.staff||[]).filter(s=>s.hired&&!s.fired);
   const clients=(G.custs||[]).slice().sort((a,b)=>{
     const prDiff=customerPriority(a)-customerPriority(b);
@@ -11013,14 +11014,14 @@ function drawCharacterGroupsPanel(){
   hired.forEach(s=>{
     if(Number.isInteger(s.role)&&roleCounts[s.role]!==undefined) roleCounts[s.role]++;
   });
-  const teamMaxRows=2;
-  teamStatus.textContent=isEs
+  const teamMaxRows=activePane==='team'?999:2;
+  const teamStatusText=isEs
     ? hired.length+' total | Caja '+roleCounts[0]+' Repo '+roleCounts[1]+' Aza '+roleCounts[2]+' Mgr '+roleCounts[3]+' DJ '+roleCounts[4]
     : hired.length+' total | Cash '+roleCounts[0]+' Stock '+roleCounts[1]+' Host '+roleCounts[2]+' Mgr '+roleCounts[3]+' DJ '+roleCounts[4];
-  clientStatus.textContent=isEs
+  const clientStatusText=isEs
     ? clients.length+' total | Entr '+(G.custIn||0)+' Sal '+(G.custOut||0)+' Dentro '+clients.length
     : clients.length+' total | In '+(G.custIn||0)+' Out '+(G.custOut||0)+' Inside '+clients.length;
-  teamBody.innerHTML=hired.length
+  let teamHtml=hired.length
     ? hired.slice(0,teamMaxRows).map((s,rowIdx)=>{
         const staffIdx=G.staff.indexOf(s);
         const status=s.busy>0?(isEs?'ocupado':'busy'):(isEs?'listo':'ready');
@@ -11035,10 +11036,10 @@ function drawCharacterGroupsPanel(){
       }).join('')
     : '<div class="char-row"><span class="muted">'+(isEs?'Sin equipo activo':'No active team')+'</span><span></span><span></span><span></span></div>';
   if(hired.length>teamMaxRows){
-    teamBody.innerHTML+='<div class="char-row is-summary"><span class="muted">+'+(hired.length-teamMaxRows)+' '+(isEs?'más':'more')+'</span><span></span><span></span><span></span></div>';
+    teamHtml+='<div class="char-row is-summary"><span class="muted">+'+(hired.length-teamMaxRows)+' '+(isEs?'más':'more')+'</span><span></span><span></span><span></span></div>';
   }
 
-  clientBody.innerHTML='<div class="char-row clients-grid is-head"><span class="muted">'+(isEs?'Cliente':'Customer')+'</span><span class="muted">'+(isEs?'Tipo':'Type')+'</span><span class="muted">'+(isEs?'Que hace / Zona':'Activity / Zone')+'</span><span class="muted">Upselling</span><span class="muted">'+(isEs?'Turno':'Turn')+'</span><span class="muted">'+(isEs?'Tiempo':'Time')+'</span><span class="muted">Ticket</span><span class="muted"></span></div>'
+  let clientHtml='<div class="char-row clients-grid is-head"><span class="muted">'+(isEs?'Cliente':'Customer')+'</span><span class="muted">'+(isEs?'Tipo':'Type')+'</span><span class="muted">'+(isEs?'Que hace / Zona':'Activity / Zone')+'</span><span class="muted">Upselling</span><span class="muted">'+(isEs?'Turno':'Turn')+'</span><span class="muted">'+(isEs?'Tiempo':'Time')+'</span><span class="muted">Ticket</span><span class="muted"></span></div>'
     +clients.map((c,rowIdx)=>{
     const custIdx=G.custs.indexOf(c);
     const typeLabel=customerTypeLabel(c);
@@ -11061,7 +11062,9 @@ function drawCharacterGroupsPanel(){
       +'<span class="'+(c.bought?'ok':'muted')+'">'+(c.bought?'ok':'')+'</span>'
       +'</div>';
   }).join('');
-  clientBody.innerHTML+='<div class="char-row clients-grid is-summary"><span class="muted">'+clients.length+'</span><span class="muted">VIP '+vipCount+'</span><span class="muted">'+(isEs?'Zona ':'Zone ')+browsingCount+'</span><span class="muted">'+(isEs?'Cola ':'Queue ')+queueCount+'</span><span class="muted">'+(isEs?'Turnos ':'Turns ')+issuedTurns+'</span><span></span><span></span><span></span></div>';
+  clientHtml+='<div class="char-row clients-grid is-summary"><span class="muted">'+clients.length+'</span><span class="muted">VIP '+vipCount+'</span><span class="muted">'+(isEs?'Zona ':'Zone ')+browsingCount+'</span><span class="muted">'+(isEs?'Cola ':'Queue ')+queueCount+'</span><span class="muted">'+(isEs?'Turnos ':'Turns ')+issuedTurns+'</span><span></span><span></span><span></span></div>';
+  panelStatus.textContent=activePane==='team'?teamStatusText:clientStatusText;
+  panelBody.innerHTML=activePane==='team'?teamHtml:clientHtml;
 }
 
 // ── DRAW BOTTOM BAR (GDS style: Yr Sales | Yr Profit | Status | Menu) ──
@@ -13875,8 +13878,8 @@ window.xtAPI = (function(){
   bindDockButton(helpBtn,()=>sendComposerText('/help'));
   bindDockButton(statusBtn,()=>sendComposerText('/status'));
   bindDockButton(hideBtn,()=>setTelegramDockHidden(!telegramDockHidden));
-  bindDockButton(teamFocusBtn,()=>{characterDockFocus='team';});
-  bindDockButton(clientFocusBtn,()=>{characterDockFocus='split';});
+  bindDockButton(teamFocusBtn,()=>{characterDockFocus='team';drawCharacterGroupsPanel();});
+  bindDockButton(clientFocusBtn,()=>{characterDockFocus='clients';drawCharacterGroupsPanel();});
   if(characterDock){
     characterDock.addEventListener('click',e=>openCharacterDockDetail(e.target));
   }
