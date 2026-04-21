@@ -1458,6 +1458,7 @@ const TELEGRAM={
   bridgeMode:'probing',
   activeBaseUrl:'',
   lastCommandId:0,
+  commandBaselineReady:false,
   lastCommandLabel:'',
   lastLatencyMs:0,
   lastMessageMeta:'',
@@ -13077,6 +13078,10 @@ window.xtAPI = (function(){
       TELEGRAM.bridgeStatus=data;
       TELEGRAM.enabled=!!data.configured;
       TELEGRAM.lastError=data.lastError||(!data.configured?'Telegram no configurado en este bridge':'');
+      if(!TELEGRAM.commandBaselineReady&&Number.isFinite(Number(data.lastCommandId))){
+        TELEGRAM.lastCommandId=Math.max(TELEGRAM.lastCommandId,Number(data.lastCommandId)||0);
+        TELEGRAM.commandBaselineReady=true;
+      }
       if(data.lastQueuedCommand&&data.lastQueuedCommand.text&&!TELEGRAM.lastCommandLabel){
         TELEGRAM.lastCommandLabel=(data.lastQueuedCommand.from||'Telegram')+': '+data.lastQueuedCommand.text;
       }
@@ -13501,11 +13506,14 @@ window.xtAPI = (function(){
   function setClockTime(arg){
     const err=needsGame();if(err)return err;
     const raw=String(arg||'').trim().toLowerCase().replace(',', '.');
-    if(!raw) return 'Uso: /reloj HH:MM o /reloj 14.5';
+    if(!raw) return 'Uso: /reloj HH:MM, /reloj 14 30 o /reloj 14.5';
     let h,m;
     const colon=raw.match(/^(\d{1,2})[:h](\d{1,2})$/);
+    const spaced=raw.match(/^(\d{1,2})\s+(\d{1,2})$/);
     if(colon){
       h=Number(colon[1]);m=Number(colon[2]);
+    } else if(spaced){
+      h=Number(spaced[1]);m=Number(spaced[2]);
     } else {
       const n=Number(raw);
       if(!Number.isFinite(n)) return 'Hora no válida. Usa /reloj 14:30 o /reloj 14.5';
@@ -13516,6 +13524,9 @@ window.xtAPI = (function(){
     G.weekTimer=Math.floor(((G.gameTime-shopTimeSettings.openHour)/(shopTimeSettings.closeHour-shopTimeSettings.openHour))*CFG.WEEK_TICKS);
     _clockH=Math.floor(G.gameTime)%12;
     _clockM=Math.floor((G.gameTime%1)*60);
+    const bbClock=document.getElementById('bbClock');
+    if(bbClock) bbClock.textContent=String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');
+    if(G.gameTime<shopTimeSettings.closeHour) G.dayEnded=false;
     showEv('Reloj: '+String(h).padStart(2,'0')+':'+String(m).padStart(2,'0'),'#55ccff');
     return 'Reloj actualizado a '+String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');
   }
