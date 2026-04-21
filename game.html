@@ -28,7 +28,7 @@
     .btn-telegram{background:#14351d;color:#8fffc2;border:1px solid #36a86a !important}
     .btn-edit{background:#332255;color:#bb88ff;border:1px solid #8866cc !important}
     .btn-menu{background:#553311;color:#ffcc66;border:1px solid #cc9933 !important}
-    #telegramDock{display:none;position:fixed;left:0;bottom:0;height:164px;background:#030b12;border:2px solid #163c4a;border-bottom:none;color:#d9f7ff;font-family:monospace;z-index:30;gap:8px;padding:8px}
+    #telegramDock{display:none;position:fixed;left:0;bottom:0;height:228px;background:#030b12;border:2px solid #163c4a;border-bottom:none;color:#d9f7ff;font-family:monospace;z-index:30;gap:8px;padding:8px}
     #telegramDock.show{display:flex}
     #telegramDock.hide-dock{display:none}
     #telegramDock.compose-start{display:flex}
@@ -37,12 +37,10 @@
     #telegramDock.focus-send{display:block}
     #telegramDock.focus-send .tg-pane.conversation{display:none}
     #telegramDock.focus-send .tg-pane.send{display:flex;flex:1 1 100%;width:100%;max-width:none;height:100%}
-    #characterDock{display:none;position:fixed;left:0;bottom:164px;height:64px;color:#d9f7ff;font-family:monospace;z-index:29;gap:8px}
+    #characterDock{display:none;position:fixed;left:0;bottom:228px;height:64px;color:#d9f7ff;font-family:monospace;z-index:29;gap:8px}
     #characterDock.show{display:flex}
-    #characterDock.compose-start{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-rows:64px 164px;height:236px;bottom:0}
-    #characterDock.compose-start .char-pane.team{grid-column:1;grid-row:1}
-    #characterDock.compose-start .char-pane.clients{grid-column:2;grid-row:1 / span 2}
-    #characterDock.hide-telegram{bottom:0;height:228px}
+    #characterDock.compose-start{display:flex;height:64px}
+    #characterDock.hide-telegram{height:228px}
     #characterDock.expand-clients .char-pane.team{display:none}
     #characterDock.expand-clients .char-pane.clients{flex:1 1 100%}
     #characterDock.focus-team .char-pane.clients{display:none}
@@ -79,6 +77,14 @@
     .tg-actions{height:28px;display:flex;gap:6px;padding:5px 6px;background:#071720;border-top:1px solid #14323c}
     .tg-actions button{border:1px solid #2a7585;border-radius:6px;background:#0c2a35;color:#bff7ff;font-family:monospace;font-size:10px;font-weight:bold;padding:2px 8px;cursor:pointer}
     .tg-actions button.primary{background:#14525f;color:#ffffff;border-color:#4ac6d8}
+    .tg-quick-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;padding:6px;background:#05131c;border-top:1px solid #14323c}
+    .tg-quick-btn{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:2px;min-height:42px;padding:6px 8px;border:1px solid #24505d;border-radius:6px;background:#0a2029;color:#dff8ff;font-family:monospace;font-size:10px;line-height:1.1;cursor:pointer;text-align:left}
+    .tg-quick-btn strong{font-size:10px}
+    .tg-quick-btn span{font-size:8px;color:#94c2cf}
+    .tg-quick-btn.is-active{border-color:#6ce6a2;background:#123427;color:#f0fff4}
+    .tg-quick-btn.is-active span{color:#a7e6be}
+    .tg-quick-btn.is-alert{border-color:#d48b52;background:#31170d;color:#fff2df}
+    .tg-quick-btn.is-alert span{color:#ffca98}
     .tg-diagnostics{display:flex;flex-direction:column;gap:6px;padding:6px 8px;border-bottom:1px solid #14323c;background:#04111a;font-size:9px;line-height:1.3;color:#9ec7d0}
     .tg-card{display:flex;flex-direction:column;gap:4px;padding:5px 6px;border:1px solid #1d5260;border-radius:6px;background:#071720}
     .tg-card-head{display:flex;align-items:center;justify-content:space-between;gap:8px;color:#bff7ff;font-size:9px;font-weight:bold;text-transform:uppercase}
@@ -108,11 +114,13 @@
     .evd-btn.is-active{box-shadow:0 0 0 2px currentColor inset;background:linear-gradient(180deg,rgba(32,48,64,0.98),rgba(12,20,30,0.98))}
     .evd-btn.is-locked{opacity:0.68}
     @media (max-width:700px){
-      #telegramDock{height:192px;gap:5px;padding:5px}
-      #characterDock{bottom:192px;height:72px;gap:5px}
+      #telegramDock{height:248px;gap:5px;padding:5px}
+      #characterDock{bottom:248px;height:72px;gap:5px}
       #characterDock.hide-telegram{height:264px}
       #telegramComposer{font-size:11px}
       .tg-head{font-size:8px}
+      .tg-quick-actions{grid-template-columns:repeat(2,minmax(0,1fr));gap:5px;padding:5px}
+      .tg-quick-btn{min-height:38px;padding:5px 6px}
       #eraVerticalDock{bottom:70px;width:min(100vw - 18px,860px);padding:8px}
       .evd-head{font-size:9px}
       .evd-head strong{font-size:10px}
@@ -182,11 +190,11 @@
 <button id="mobileSkipBtn" type="button" aria-label="Saltar al juego">SKIP AL JUEGO</button>
 <div id="characterDock" aria-label="Team and customers">
   <div class="char-pane team">
-    <div class="char-head team"><div class="char-head-left"><span>Team</span><button type="button" class="char-toggle-btn" id="characterClientFocusBtn" style="display:none">Customers</button></div><span class="char-status" id="characterTeamStatus">0 active</span></div>
+    <div class="char-head team"><div class="char-head-left"><span>Team</span></div><span class="char-status" id="characterTeamStatus">0 active</span></div>
     <div class="char-body" id="characterTeamBody"></div>
   </div>
   <div class="char-pane clients">
-    <div class="char-head clients"><div class="char-head-left"><span>Customers</span><button type="button" class="char-toggle-btn" id="characterTeamFocusBtn">Team</button></div><span class="char-status" id="characterClientStatus">0 inside</span></div>
+    <div class="char-head clients"><div class="char-head-left"><span>Customers</span></div><span class="char-status" id="characterClientStatus">0 inside</span></div>
     <div class="char-body" id="characterClientBody"></div>
   </div>
 </div>
@@ -200,6 +208,7 @@
       <button type="button" id="telegramStatusBtn">/status</button>
       <button type="button" id="telegramHideBtn">Hide</button>
     </div>
+    <div class="tg-quick-actions" id="telegramQuickActions" aria-label="Acciones rápidas de escena"></div>
   </div>
   <div class="tg-pane conversation">
     <div class="tg-head"><span>Conversation</span><span class="tg-status" id="telegramConnStatus">connecting</span></div>
@@ -434,9 +443,8 @@ function resizeCanvas(){
   try{currentState=state;}catch(e){currentState=null;}
   const inGameplay=isGameplayUiState(currentState);
   const composeStart=inGameplay&&!telegramDockHidden&&telegramComposeStart;
-  const dockH=(inGameplay&&dock&&!telegramDockHidden&&!composeStart)?dock.offsetHeight:0;
-  const characterDockH=(inGameplay&&characterDock)?characterDock.offsetHeight:0;
-  const availH=vh-barH-dockH-characterDockH;
+  const dockH=(inGameplay&&dock&&!telegramDockHidden)?dock.offsetHeight:0;
+  const availH=vh-barH-dockH;
   const ratio=W/H;
   let cw,ch;
   if(vw/availH > ratio){ ch=availH; cw=Math.floor(ch*ratio); }
@@ -449,12 +457,15 @@ function resizeCanvas(){
   if(dock){
     dock.style.width=(composeStart?Math.max(0,Math.floor((dockWidth-8)/2)):dockWidth)+'px';
     dock.style.left=dockLeft+'px';
+    dock.style.top='auto';
     dock.style.bottom='0px';
   }
   if(characterDock){
     characterDock.style.width=dockWidth+'px';
     characterDock.style.left=dockLeft+'px';
-    characterDock.style.bottom=composeStart?'0px':dockH+'px';
+    characterDock.style.removeProperty('height');
+    characterDock.style.removeProperty('top');
+    characterDock.style.bottom=(inGameplay&&!telegramDockHidden?dockH:0)+'px';
   }
   const tb=document.getElementById('topBar');
   if(tb) tb.style.maxWidth=cw+'px';
@@ -12728,6 +12739,7 @@ window.xtAPI = (function(){
   const helpBtn=document.getElementById('telegramHelpBtn');
   const statusBtn=document.getElementById('telegramStatusBtn');
   const hideBtn=document.getElementById('telegramHideBtn');
+  const quickActionsEl=document.getElementById('telegramQuickActions');
   const cliBtn=document.getElementById('btnCLI');
   const telegramBtn=document.getElementById('btnTelegram');
   const characterDock=document.getElementById('characterDock');
@@ -12871,6 +12883,74 @@ window.xtAPI = (function(){
       connStatus.style.color=isError?'#ffb6b6':'#9ec7d0';
     }
     refreshTelegramDiagnostics();
+  }
+
+  function isEntityActive(entity){
+    return !!(entity&&entity.phase&&entity.phase!=='idle');
+  }
+
+  function getQuickSceneActions(){
+    const isEs=lang==='es';
+    const hasGame=!!G;
+    const djStaff=hasGame&&G.staff?G.staff.find(s=>s.role===4):null;
+    const djActive=!!(djStaff&&djStaff.hired&&!djStaff.fired);
+    const thiefActive=hasGame&&isEntityActive(G.thief);
+    const guardiaActive=hasGame&&isEntityActive(G.guardiaCivil);
+    const opinadorActive=hasGame&&isEntityActive(G.opinador);
+    const liveActive=!!(hasGame&&G.admiraLiveMsg);
+    const loyaltyReady=!!(hasGame&&G.loyaltyCard&&(G.loyaltyCard.pending||G.loyaltyCard.targetId));
+    return [
+      {
+        label:'DJ Novah',
+        status:djActive?(isEs?'ON':'ON'):(isEs?'OFF':'OFF'),
+        command:djActive?'/dj off':'/dj on',
+        active:djActive
+      },
+      {
+        label:isEs?'Ladrón':'Thief',
+        status:thiefActive?(isEs?'en tienda':'in store'):(isEs?'listo':'ready'),
+        command:thiefActive?'/ladron off':'/ladron on',
+        alert:thiefActive
+      },
+      {
+        label:'Guardia Civil',
+        status:guardiaActive?(isEs?'activo':'active'):(isEs?'fuera':'away'),
+        command:guardiaActive?'/guardiacivil off':'/guardiacivil on',
+        active:guardiaActive
+      },
+      {
+        label:isEs?'Opinador':'Reviewer',
+        status:opinadorActive?(isEs?'en ruta':'en route'):(isEs?'rápido':'quick'),
+        command:opinadorActive?'/opinador off':'/opinador happy',
+        active:opinadorActive
+      },
+      {
+        label:'AdmiraLive',
+        status:liveActive?trimLabel(G.admiraLiveMsg,22):(isEs?'texto LED':'LED text'),
+        command:liveActive?'/AdmiraLive off':'/AdmiraLive Bienvenidos a Admira XP',
+        active:liveActive
+      },
+      {
+        label:isEs?'Fidelidad':'Loyalty',
+        status:loyaltyReady?(isEs?'preparada':'armed'):(isEs?'regalo':'gift'),
+        command:'/tarjetaFidelidad',
+        active:loyaltyReady
+      }
+    ];
+  }
+
+  function renderQuickActionButtons(){
+    if(!quickActionsEl) return;
+    const actions=getQuickSceneActions();
+    quickActionsEl.innerHTML=actions.map((action,idx)=>{
+      const classes=['tg-quick-btn'];
+      if(action.active) classes.push('is-active');
+      if(action.alert) classes.push('is-alert');
+      return '<button type="button" class="'+classes.join(' ')+'" data-quick-command="'+String(action.command).replace(/"/g,'&quot;')+'" data-quick-idx="'+idx+'">'
+        +'<strong>'+action.label+'</strong>'
+        +'<span>'+action.status+'</span>'
+        +'</button>';
+    }).join('');
   }
 
   function appendTelegramLog(kind,label,text){
@@ -13674,6 +13754,7 @@ window.xtAPI = (function(){
       telegramBtn.style.opacity=telegramDockHidden?'0.75':'1';
     }
     resizeCanvas();
+    renderQuickActionButtons();
   }
 
   function openCharacterDockDetail(target){
@@ -13733,10 +13814,12 @@ window.xtAPI = (function(){
       appendTelegramLog('bot','AdmiraXPBot',answer);
       await telegramSend('Juego: '+clean+'\nAdmiraXPBot: '+answer);
       if(composer) composer.value='';
+      renderQuickActionButtons();
       return;
     }
     const result=await telegramSend(clean);
     if(result.ok&&composer) composer.value='';
+    renderQuickActionButtons();
   }
 
   function bindDockButton(button,handler){
@@ -13762,6 +13845,15 @@ window.xtAPI = (function(){
   if(characterDock){
     characterDock.addEventListener('click',e=>openCharacterDockDetail(e.target));
   }
+  if(quickActionsEl){
+    quickActionsEl.addEventListener('click',e=>{
+      const button=e.target.closest('[data-quick-command]');
+      if(!button) return;
+      e.preventDefault();
+      e.stopPropagation();
+      sendComposerText(button.getAttribute('data-quick-command')||'');
+    });
+  }
   if(hideBtn) hideBtn.textContent=telegramDockHidden?(lang==='es'?'Mostrar':'Show'):(lang==='es'?'Ocultar':'Hide');
   if(cliBtn){
     cliBtn.textContent=telegramDockHidden?'> CLI':'v CLI';
@@ -13772,6 +13864,7 @@ window.xtAPI = (function(){
     window.toggleTelegramDock=()=>setTelegramDockHidden(!telegramDockHidden);
   }
   setTelegramFocusMode(false,false);
+  renderQuickActionButtons();
   if(composer){
     composer.addEventListener('keydown',e=>{
       if(e.key==='Enter'&&!e.shiftKey){
@@ -13784,6 +13877,7 @@ window.xtAPI = (function(){
   setInterval(pollTelegramCommands,2500);
   setInterval(monitorGameForTelegram,3000);
   setInterval(refreshBridgeStatus,4000);
+  setInterval(renderQuickActionButtons,1000);
   refreshBridgeStatus();
   if(TELEGRAM.enabled&&shouldAnnounceOnline()){
     telegramSend('Admira XP '+APP_VERSION+' online. Usa /help para ver comandos.').then(res=>{
