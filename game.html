@@ -506,8 +506,8 @@ function resizeCanvas(){
   cv.style.width=cw+'px';
   cv.style.height=ch+'px';
   const canvasRect=cv.getBoundingClientRect();
-  const dockLeft=Math.max(0,Math.round(canvasRect.left));
-  const dockWidth=Math.max(0,Math.round(canvasRect.width));
+  const dockLeft=inGameplay?0:Math.max(0,Math.round(canvasRect.left));
+  const dockWidth=inGameplay?vw:Math.max(0,Math.round(canvasRect.width));
   if(dock){
     dock.style.width=(composeStart?Math.max(0,Math.floor((dockWidth-8)/2)):dockWidth)+'px';
     dock.style.left=dockLeft+'px';
@@ -534,7 +534,7 @@ function resizeCanvas(){
     }
   }
   const tb=document.getElementById('topBar');
-  if(tb) tb.style.maxWidth=cw+'px';
+  if(tb) tb.style.maxWidth=(inGameplay?vw:cw)+'px';
   if(typeof repositionTopBarSub==='function') repositionTopBarSub();
 }
 resizeCanvas();
