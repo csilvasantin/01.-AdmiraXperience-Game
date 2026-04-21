@@ -40,7 +40,7 @@
     #telegramDock.focus-send .tg-pane.send{display:flex;flex:1 1 100%;width:100%;max-width:none;height:100%}
     #characterDock{display:none;position:fixed;left:0;bottom:228px;height:64px;color:#d9f7ff;font-family:monospace;z-index:29;gap:8px}
     #characterDock.show{display:flex}
-    #characterDock.compose-start{display:flex;height:64px}
+    #characterDock.compose-start{display:flex;height:228px}
     #characterDock.hide-telegram{height:228px}
     #characterDock.expand-clients .char-pane.team{display:none}
     #characterDock.expand-clients .char-pane.clients{flex:1 1 100%}
@@ -118,6 +118,7 @@
     @media (max-width:700px){
       #telegramDock{height:248px;gap:5px;padding:5px}
       #characterDock{bottom:248px;height:72px;gap:5px}
+      #characterDock.compose-start{height:248px}
       #characterDock.hide-telegram{height:264px}
       #telegramComposer{font-size:11px}
       .tg-head{font-size:8px}
@@ -429,9 +430,11 @@ function syncGameplayChrome(){
     dock.classList.toggle('compose-start',inGameplay&&!telegramDockHidden&&telegramComposeStart);
   }
   if(characterDock){
+    const composeStart=inGameplay&&!telegramDockHidden&&telegramComposeStart;
     characterDock.classList.toggle('show',inGameplay);
     characterDock.classList.toggle('hide-telegram',telegramDockHidden&&inGameplay);
-    characterDock.classList.toggle('compose-start',inGameplay&&!telegramDockHidden&&telegramComposeStart);
+    characterDock.classList.toggle('compose-start',composeStart);
+    characterDock.classList.toggle('expand-clients',composeStart);
   }
 }
 
@@ -463,11 +466,21 @@ function resizeCanvas(){
     dock.style.bottom='0px';
   }
   if(characterDock){
-    characterDock.style.width=dockWidth+'px';
-    characterDock.style.left=dockLeft+'px';
-    characterDock.style.removeProperty('height');
-    characterDock.style.removeProperty('top');
-    characterDock.style.bottom=(inGameplay&&!telegramDockHidden?dockH:0)+'px';
+    if(composeStart){
+      const leftWidth=Math.max(0,Math.floor((dockWidth-8)/2));
+      const rightLeft=dockLeft+leftWidth+8;
+      characterDock.style.width=Math.max(0,dockWidth-leftWidth-8)+'px';
+      characterDock.style.left=rightLeft+'px';
+      characterDock.style.height=dockH+'px';
+      characterDock.style.top='auto';
+      characterDock.style.bottom='0px';
+    } else {
+      characterDock.style.width=dockWidth+'px';
+      characterDock.style.left=dockLeft+'px';
+      characterDock.style.removeProperty('height');
+      characterDock.style.removeProperty('top');
+      characterDock.style.bottom=(inGameplay&&!telegramDockHidden?dockH:0)+'px';
+    }
   }
   const tb=document.getElementById('topBar');
   if(tb) tb.style.maxWidth=cw+'px';
