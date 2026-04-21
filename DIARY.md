@@ -2,6 +2,20 @@
 
 ---
 
+## [v26.21.04.12] — 2026-04-22
+
+### Cierre de sesión: interfaz inferior adaptable y aprovechamiento total de pantalla
+
+- Rediseñado el shell visual de Admira XP con barra superior, docks y selector inferior más premium.
+- Unificada la ventana **Equipo / Clientes** en un solo panel con pestañas internas.
+- Añadido resize vertical del área inferior para Telegram y Equipo/Clientes, persistente en `localStorage`.
+- Añadidos separadores arrastrables entre columnas del panel Clientes.
+- Corregidos los botones `/help`, `/status` y `Ocultar` del dock de Telegram para funcionar con pointer, click y teclado.
+- Mejorado el responsive: en layouts altos el dock inferior absorbe el hueco vertical sobrante.
+- Mejorado el layout panorámico: los docks usan todo el ancho del viewport y el canvas del juego queda centrado cuando sobra espacio horizontal.
+
+---
+
 ## [v4.4] — 2026-03-31
 
 ### DJ look, booth interactivo, layout persistente y UX fixes

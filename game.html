@@ -505,6 +505,7 @@ function resizeCanvas(){
   }
   cv.style.width=cw+'px';
   cv.style.height=ch+'px';
+  cv.style.marginLeft=Math.max(0,Math.floor((vw-cw)/2))+'px';
   const canvasRect=cv.getBoundingClientRect();
   const dockLeft=inGameplay?0:Math.max(0,Math.round(canvasRect.left));
   const dockWidth=inGameplay?vw:Math.max(0,Math.round(canvasRect.width));
