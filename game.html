@@ -281,6 +281,27 @@
 <script src="xtanco-version.js"></script>
 <script src="xtanco-runtime-config.js"></script>
 <script>
+// Direct game.html loads can otherwise keep an old public service worker alive.
+(function clearOldRuntimeFromGamePage(){
+  const params=new URLSearchParams(window.location.search);
+  if(!params.has('fresh')||params.has('freshdone')) return;
+  const reloadFresh=()=>{
+    params.set('freshdone','1');
+    params.set('cf',String(Date.now()));
+    window.location.replace(window.location.pathname+'?'+params.toString()+(window.location.hash||''));
+  };
+  const tasks=[];
+  try{
+    if('serviceWorker' in navigator){
+      tasks.push(navigator.serviceWorker.getRegistrations()
+        .then(regs=>Promise.all(regs.map(reg=>reg.unregister()))));
+    }
+    if(window.caches){
+      tasks.push(caches.keys().then(keys=>Promise.all(keys.map(key=>caches.delete(key)))));
+    }
+  }catch(e){}
+  Promise.all(tasks).then(reloadFresh).catch(reloadFresh);
+})();
 // ═══════════════════════════════════════════════════════════════
 //  ADMIRA XP // THE XPACE OS — XTANCO — runtime version/build
 // ═══════════════════════════════════════════════════════════════
