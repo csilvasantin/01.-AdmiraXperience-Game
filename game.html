@@ -13862,15 +13862,27 @@ window.xtAPI = (function(){
 
   function bindDockButton(button,handler){
     if(!button) return;
+    let lastRun=0;
+    const run=e=>{
+      if(e){
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      const now=Date.now();
+      if(now-lastRun<180) return;
+      lastRun=now;
+      handler();
+    };
     button.addEventListener('pointerdown',e=>{
-      e.preventDefault();
       e.stopPropagation();
       button.focus({preventScroll:true});
     });
-    button.addEventListener('click',e=>{
-      e.preventDefault();
-      e.stopPropagation();
-      handler();
+    button.addEventListener('pointerup',run);
+    button.addEventListener('click',run);
+    button.addEventListener('keydown',e=>{
+      if(e.key==='Enter'||e.key===' '){
+        run(e);
+      }
     });
   }
 
