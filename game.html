@@ -47,6 +47,9 @@
     #characterDock.focus-team .char-pane.clients{display:none}
     #characterDock.focus-team .char-pane.team{flex:1 1 100%}
     #characterDock .char-pane.people{flex:1 1 100%}
+    .dock-resize-handle{position:absolute;left:8px;right:8px;top:-7px;height:13px;z-index:3;cursor:ns-resize;touch-action:none}
+    .dock-resize-handle::before{content:"";position:absolute;left:50%;top:3px;transform:translateX(-50%);width:76px;height:4px;border-radius:999px;background:rgba(120,243,255,.42);box-shadow:0 0 12px rgba(120,243,255,.22)}
+    .dock-resize-handle:hover::before,.dock-resize-handle.is-dragging::before{background:#78f3ff}
     .char-pane{min-width:0;flex:1;display:flex;flex-direction:column;border:1px solid rgba(120,243,255,.28);border-radius:10px;background:rgba(6,19,29,.94);overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.08)}
     .char-head{height:22px;flex:0 0 22px;display:flex;align-items:center;justify-content:space-between;padding:0 10px;background:linear-gradient(90deg,#0d2b39,#102331);font-size:9px;font-weight:bold;text-transform:uppercase;letter-spacing:.08em}
     .char-head-left,.char-head-right{display:flex;align-items:center;gap:6px;min-width:0}
@@ -198,6 +201,7 @@
 </div>
 <button id="mobileSkipBtn" type="button" aria-label="Saltar al juego">SKIP AL JUEGO</button>
 <div id="characterDock" aria-label="Team and customers">
+  <div class="dock-resize-handle" data-dock-resize aria-hidden="true"></div>
   <div class="char-pane people">
     <div class="char-head people">
       <div class="char-head-left char-tabs">
@@ -210,6 +214,7 @@
   </div>
 </div>
 <div id="telegramDock" aria-label="Telegram AdmiraXPBot">
+  <div class="dock-resize-handle" data-dock-resize aria-hidden="true"></div>
   <div class="tg-pane send">
     <div class="tg-head"><span>Send to Telegram</span><span class="tg-status" id="telegramSendStatus">AdmiraXPBot</span></div>
     <textarea id="telegramComposer" placeholder="Write to @AdmiraXPBot... Enter sends, Shift+Enter newline"></textarea>
@@ -293,6 +298,14 @@ let amigaPage0TodoLoaded=false;
 let telegramDockHidden=false;
 let characterDockFocus='clients';
 let telegramComposeStart=true;
+const DOCK_HEIGHT_KEY='admira_xp_dock_height';
+let gameplayDockHeight=(()=>{
+  try{
+    const saved=Number(localStorage.getItem(DOCK_HEIGHT_KEY)||0);
+    if(saved>0) return saved;
+  }catch(e){}
+  return 228;
+})();
 bootVideoEl.src=PRELOAD_VIDEO_SRC;
 bootVideoEl.loop=false;
 bootVideoEl.preload='auto';
@@ -446,6 +459,12 @@ function syncGameplayChrome(){
   }
 }
 
+function clampGameplayDockHeight(value,viewportH=window.innerHeight,barH=0){
+  const minH=window.innerWidth<=700?208:168;
+  const maxH=Math.min(560,Math.max(minH,viewportH-barH-260));
+  return Math.max(minH,Math.min(maxH,Math.round(value||minH)));
+}
+
 function resizeCanvas(){
   const vw=window.innerWidth, vh=window.innerHeight;
   const barH=document.getElementById('topBar').classList.contains('show')?38:0;
@@ -456,7 +475,9 @@ function resizeCanvas(){
   try{currentState=state;}catch(e){currentState=null;}
   const inGameplay=isGameplayUiState(currentState);
   const composeStart=inGameplay&&!telegramDockHidden&&telegramComposeStart;
-  const dockH=(inGameplay&&dock&&!telegramDockHidden)?dock.offsetHeight:0;
+  gameplayDockHeight=clampGameplayDockHeight(gameplayDockHeight,vh,barH);
+  if(inGameplay&&dock&&!telegramDockHidden) dock.style.height=gameplayDockHeight+'px';
+  const dockH=(inGameplay&&!telegramDockHidden)?gameplayDockHeight:0;
   const availH=vh-barH-dockH;
   const ratio=W/H;
   let cw,ch;
@@ -470,6 +491,7 @@ function resizeCanvas(){
   if(dock){
     dock.style.width=(composeStart?Math.max(0,Math.floor((dockWidth-8)/2)):dockWidth)+'px';
     dock.style.left=dockLeft+'px';
+    if(inGameplay&&!telegramDockHidden) dock.style.height=gameplayDockHeight+'px';
     dock.style.top='auto';
     dock.style.bottom='0px';
   }
@@ -485,7 +507,8 @@ function resizeCanvas(){
     } else {
       characterDock.style.width=dockWidth+'px';
       characterDock.style.left=dockLeft+'px';
-      characterDock.style.removeProperty('height');
+      if(inGameplay&&telegramDockHidden) characterDock.style.height=gameplayDockHeight+'px';
+      else characterDock.style.removeProperty('height');
       characterDock.style.removeProperty('top');
       characterDock.style.bottom=(inGameplay&&!telegramDockHidden?dockH:0)+'px';
     }
@@ -496,6 +519,43 @@ function resizeCanvas(){
 }
 resizeCanvas();
 window.addEventListener('resize',resizeCanvas);
+
+function setupDockResizers(){
+  const handles=[...document.querySelectorAll('[data-dock-resize]')];
+  if(!handles.length) return;
+  let drag=null;
+  const move=e=>{
+    if(!drag) return;
+    e.preventDefault();
+    const y=e.clientY!=null?e.clientY:(e.touches&&e.touches[0]?e.touches[0].clientY:drag.y);
+    gameplayDockHeight=clampGameplayDockHeight(drag.h+(drag.y-y));
+    resizeCanvas();
+  };
+  const end=e=>{
+    if(!drag) return;
+    if(e) e.preventDefault();
+    handles.forEach(h=>h.classList.remove('is-dragging'));
+    try{localStorage.setItem(DOCK_HEIGHT_KEY,String(gameplayDockHeight));}catch(err){}
+    drag=null;
+    document.removeEventListener('pointermove',move);
+    document.removeEventListener('pointerup',end);
+    document.removeEventListener('pointercancel',end);
+  };
+  handles.forEach(handle=>{
+    handle.addEventListener('pointerdown',e=>{
+      if(!isGameplayUiState(state)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      handle.classList.add('is-dragging');
+      drag={y:e.clientY,h:gameplayDockHeight};
+      try{handle.setPointerCapture(e.pointerId);}catch(err){}
+      document.addEventListener('pointermove',move,{passive:false});
+      document.addEventListener('pointerup',end,{passive:false});
+      document.addEventListener('pointercancel',end,{passive:false});
+    });
+  });
+}
+setupDockResizers();
 
 // ── SONG LIST & AUDIO FILES ──────────────────────────────────
 const SONG_LIST=[
