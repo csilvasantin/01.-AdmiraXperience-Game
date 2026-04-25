@@ -26,9 +26,16 @@
     .comp-pct{font-size:10px;font-weight:bold;color:#eee}
     .btn-save{background:linear-gradient(180deg,#1d7f45,#0c3c24);color:#d8ffe8;border:1px solid #58ff97 !important}
     .btn-cli{background:linear-gradient(180deg,#17495a,#0b2531);color:#b9f8ff;border:1px solid #48d5ed !important}
+    .btn-livecam{background:linear-gradient(180deg,#5e1123,#2a0811);color:#ffd8df;border:1px solid #ff6f9a !important}
+    .btn-livecam.is-active{background:linear-gradient(180deg,#18613f,#0a2b1b);color:#ddffe7;border-color:#6ef0a2 !important}
+    .btn-livecam.is-busy{background:linear-gradient(180deg,#6a5322,#2c220b);color:#ffefb7;border-color:#f3c55a !important}
     .btn-telegram{background:linear-gradient(180deg,#145c39,#092a1d);color:#bfffd9;border:1px solid #55dc88 !important}
     .btn-edit{background:linear-gradient(180deg,#41325f,#1d1730);color:#dec8ff;border:1px solid #a991ff !important}
     .btn-menu{background:linear-gradient(180deg,#6a4618,#2b1a08);color:#ffe0a0;border:1px solid #f0bd55 !important}
+    #speechOverlay{display:none;position:fixed;left:0;top:0;width:100vw;height:100vh;pointer-events:none;z-index:8}
+    .speech-bubble{position:fixed;border:1px solid #8a7a60;border-radius:4px;background:#ffffffe8;color:#4a3a20;font-family:monospace;font-weight:bold;letter-spacing:0;white-space:pre-wrap;overflow-wrap:anywhere;box-shadow:0 8px 18px rgba(0,0,0,.22)}
+    .speech-bubble.is-emphasis{box-shadow:0 0 0 1px currentColor,0 10px 22px rgba(0,0,0,.24)}
+    .speech-bubble-line{display:block}
     #telegramDock{display:none;position:fixed;left:0;bottom:0;height:228px;background:linear-gradient(180deg,rgba(5,16,24,.97),rgba(1,6,10,.98));border:1px solid rgba(120,243,255,.34);border-bottom:none;color:#d9f7ff;font-family:monospace;z-index:30;gap:8px;padding:8px;box-shadow:0 -18px 38px rgba(0,0,0,.42)}
     #telegramDock.show{display:flex}
     #telegramDock.hide-dock{display:none}
@@ -186,6 +193,7 @@
   <div class="comp-box" style="border-color:#cc2222"><span class="comp-name">JTI</span><span class="comp-pct" id="compJTI">0%</span></div>
   <div class="comp-box" style="border-color:#2266aa"><span class="comp-name">PM</span><span class="comp-pct" id="compPM">0%</span></div>
   <div class="comp-box" style="border-color:#333399"><span class="comp-name">BAT</span><span class="comp-pct" id="compBAT">0%</span></div>
+  <button class="btn-livecam" id="btnLiveCam">📷 LiveCam</button>
   <div class="spacer"></div>
   <button class="btn-cli" id="btnCLI">&gt; CLI</button>
   <button class="btn-telegram" id="btnTelegram">Telegram</button>
@@ -199,7 +207,9 @@
 <audio id="bgMusic" loop preload="auto"><source src="music/titi.mp3" type="audio/mpeg"></audio>
 <video id="dsVideo" preload="auto" playsinline style="display:none"></video>
 <video id="bootVideo" preload="auto" playsinline webkit-playsinline style="display:none"></video>
+<video id="liveCamVideo" autoplay muted playsinline webkit-playsinline style="display:none"></video>
 <canvas id="c" width="800" height="500"></canvas>
+<div id="speechOverlay" aria-hidden="true"></div>
 <div id="eraVerticalDock" aria-label="Selector inferior">
   <div class="evd-head">
     <div class="evd-head-left">
@@ -725,12 +735,34 @@ const dsCanvasEl2=document.getElementById('dsCanvas2');
 const dsC1=document.getElementById('dsCanvas1').getContext('2d');
 const dsC2=document.getElementById('dsCanvas2').getContext('2d');
 const dsVideoEl=document.getElementById('dsVideo');
+const liveCamVideoEl=document.getElementById('liveCamVideo');
+const speechOverlayEl=document.getElementById('speechOverlay');
 dsVideoEl.loop=false;
 let dsFrame=0;
 let dsVideoIdx=0; // current video index
 let dsMode='slides'; // 'slides' | 'video'
 let dsAudioMuted=true; // DS audio starts muted
 let dsAudioOwner=0; // 0 or 1: which screen owns audio when enabled
+const LIVE_CAM={active:false,requesting:false,stream:null,error:'',lastLabel:'',lastStamp:0};
+const LIVE_MOCAP={
+  enabled:true,
+  active:false,
+  confidence:0,
+  energy:0,
+  lean:0,
+  bounce:0,
+  leftArm:0,
+  rightArm:0,
+  head:0,
+  centerX:0.5,
+  centerY:0.45,
+  label:'MOCAP standby',
+  lastFrame:-1,
+  canvas:document.createElement('canvas'),
+  ctx:null,
+  prev:null
+};
+const SPEECH_OVERLAY={items:[]};
 let mgrDanceTimer=0; // Store Manager dances at start of each new video
 let mgrSongBubbleTimer=0; // Timer for "La canción que me gusta !!" bubble
 let managerSayBubble={text:'',timer:0}; // Telegram /say message for Store Manager
@@ -1229,14 +1261,329 @@ function stopAllMedia(){
   G&& (G.admiraTube=null);
 }
 
+function updateLiveCamButtonUi(){
+  const btn=document.getElementById('btnLiveCam');
+  if(!btn) return;
+  btn.classList.toggle('is-active',!!LIVE_CAM.active);
+  btn.classList.toggle('is-busy',!!LIVE_CAM.requesting);
+  btn.textContent=LIVE_CAM.requesting?'📷 LiveCam...':(LIVE_CAM.active?'📷 LiveCam ON':'📷 LiveCam');
+  const mocapText=LIVE_MOCAP.enabled?' · Mocap Novah':'';
+  btn.title=LIVE_CAM.error?('LiveCam: '+LIVE_CAM.error):(LIVE_CAM.active?'LiveCam activa en pantalla principal'+mocapText:'Activar LiveCam en pantalla principal');
+}
+
+function stopLiveCam(opts){
+  const options=opts||{};
+  const stream=LIVE_CAM.stream;
+  if(stream&&stream.getTracks){
+    stream.getTracks().forEach(track=>{
+      try{track.onended=null;}catch(e){}
+      try{track.stop();}catch(e){}
+    });
+  }
+  LIVE_CAM.stream=null;
+  LIVE_CAM.active=false;
+  LIVE_CAM.requesting=false;
+  LIVE_CAM.lastStamp=0;
+  resetLiveMocap();
+  if(!options.keepError) LIVE_CAM.error='';
+  try{
+    if(liveCamVideoEl){
+      liveCamVideoEl.pause();
+      liveCamVideoEl.srcObject=null;
+    }
+  }catch(e){}
+  updateLiveCamButtonUi();
+}
+
+function describeCameraError(error){
+  const name=String(error&&error.name||'');
+  const message=String(error&&error.message||'').trim();
+  const raw=(name+' '+message).trim().toLowerCase();
+  if(raw.includes('notallowederror')||raw.includes('permissiondeniederror')||raw.includes('permission denied')||raw.includes('permission dismissed')||raw.includes('denied permission')){
+    return 'Permiso de cámara denegado';
+  }
+  if(raw.includes('notreadableerror')||raw.includes('trackstarterror')||raw.includes('starting video input failed')||raw.includes('could not start video source')||raw.includes('device in use')||raw.includes('concurrent mic process limit')){
+    return 'La cámara está ocupada por otra app';
+  }
+  if(raw.includes('notfounderror')||raw.includes('devicesnotfounderror')||raw.includes('overconstrainederror')||raw.includes('requested device not found')||raw.includes('no camera')){
+    return 'No hay ninguna cámara disponible';
+  }
+  if(raw.includes('securityerror')||raw.includes('secure context')){
+    return 'El navegador ha bloqueado la cámara';
+  }
+  if(raw.includes('aborterror')){
+    return 'La cámara se ha cancelado antes de arrancar';
+  }
+  return message||'No se pudo activar la cámara';
+}
+
+async function setLiveCamState(on){
+  const targetOn=!!on;
+  if(targetOn===LIVE_CAM.active&&!LIVE_CAM.requesting){
+    updateLiveCamButtonUi();
+    return LIVE_CAM.active;
+  }
+  if(!targetOn){
+    stopLiveCam();
+    showEv('📷 LiveCam OFF','#ff99aa');
+    return false;
+  }
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
+    LIVE_CAM.error='Cámara no soportada en este navegador';
+    updateLiveCamButtonUi();
+    showEv('📷 '+LIVE_CAM.error,P.red);
+    return false;
+  }
+  LIVE_CAM.requesting=true;
+  LIVE_CAM.error='';
+  updateLiveCamButtonUi();
+  try{
+    stopLiveCam({keepError:true});
+    LIVE_CAM.requesting=true;
+    updateLiveCamButtonUi();
+    const stream=await navigator.mediaDevices.getUserMedia({
+      audio:false,
+      video:{facingMode:'user',width:{ideal:1280},height:{ideal:720}}
+    });
+    LIVE_CAM.stream=stream;
+    LIVE_CAM.active=true;
+    LIVE_CAM.requesting=false;
+    if(liveCamVideoEl){
+      liveCamVideoEl.srcObject=stream;
+      liveCamVideoEl.muted=true;
+      liveCamVideoEl.playsInline=true;
+      const p=liveCamVideoEl.play();
+      if(p&&p.catch) await p.catch(()=>{});
+    }
+    stream.getVideoTracks().forEach(track=>{
+      track.onended=()=>{
+        LIVE_CAM.error='La cámara se ha detenido';
+        stopLiveCam({keepError:true});
+        showEv('📷 '+LIVE_CAM.error,P.red);
+      };
+    });
+    showEv('📷 LiveCam ON','#66ddaa');
+    setManagerSayBubble('LiveCam en pantalla');
+    updateLiveCamButtonUi();
+    return true;
+  }catch(e){
+    LIVE_CAM.active=false;
+    LIVE_CAM.requesting=false;
+    LIVE_CAM.error=describeCameraError(e);
+    updateLiveCamButtonUi();
+    showEv('📷 '+LIVE_CAM.error,P.red);
+    return false;
+  }
+}
+
+function toggleLiveCam(){
+  return setLiveCamState(!LIVE_CAM.active);
+}
+
+function clamp01(v){return Math.max(0,Math.min(1,v));}
+function smoothMocap(current,target,amount){
+  return current+(target-current)*amount;
+}
+
+function resetLiveMocap(){
+  LIVE_MOCAP.active=false;
+  LIVE_MOCAP.confidence=0;
+  LIVE_MOCAP.energy=0;
+  LIVE_MOCAP.lean=0;
+  LIVE_MOCAP.bounce=0;
+  LIVE_MOCAP.leftArm=0;
+  LIVE_MOCAP.rightArm=0;
+  LIVE_MOCAP.head=0;
+  LIVE_MOCAP.centerX=0.5;
+  LIVE_MOCAP.centerY=0.45;
+  LIVE_MOCAP.label='MOCAP standby';
+  LIVE_MOCAP.lastFrame=-1;
+  LIVE_MOCAP.prev=null;
+}
+
+function setLiveMocapEnabled(on){
+  LIVE_MOCAP.enabled=!!on;
+  if(!LIVE_MOCAP.enabled) resetLiveMocap();
+  updateLiveCamButtonUi();
+  showEv(LIVE_MOCAP.enabled?'🎛 Mocap Novah ON':'🎛 Mocap Novah OFF',LIVE_MOCAP.enabled?'#78f3ff':'#ff99aa');
+  return LIVE_MOCAP.enabled;
+}
+
+function updateLiveMocap(){
+  if(!LIVE_MOCAP.enabled||!LIVE_CAM.active||!liveCamVideoEl||liveCamVideoEl.readyState<2||!liveCamVideoEl.videoWidth){
+    LIVE_MOCAP.confidence=smoothMocap(LIVE_MOCAP.confidence,0,0.08);
+    LIVE_MOCAP.energy=smoothMocap(LIVE_MOCAP.energy,0,0.08);
+    LIVE_MOCAP.leftArm=smoothMocap(LIVE_MOCAP.leftArm,0,0.08);
+    LIVE_MOCAP.rightArm=smoothMocap(LIVE_MOCAP.rightArm,0,0.08);
+    LIVE_MOCAP.head=smoothMocap(LIVE_MOCAP.head,0,0.08);
+    LIVE_MOCAP.active=LIVE_MOCAP.confidence>0.05;
+    LIVE_MOCAP.label=LIVE_CAM.active?'MOCAP buscando cuerpo':'MOCAP standby';
+    return;
+  }
+  if(LIVE_MOCAP.lastFrame===tt) return;
+  LIVE_MOCAP.lastFrame=tt;
+  if(tt%2!==0) return;
+  const sampleW=72,sampleH=54;
+  const canvas=LIVE_MOCAP.canvas;
+  if(canvas.width!==sampleW||canvas.height!==sampleH){
+    canvas.width=sampleW;canvas.height=sampleH;
+    LIVE_MOCAP.prev=null;
+  }
+  const ctx=LIVE_MOCAP.ctx||(LIVE_MOCAP.ctx=canvas.getContext('2d',{willReadFrequently:true}));
+  ctx.save();
+  ctx.clearRect(0,0,sampleW,sampleH);
+  // Mirror the analysis so user's left/right matches the LiveCam preview.
+  ctx.translate(sampleW,0);
+  ctx.scale(-1,1);
+  ctx.drawImage(liveCamVideoEl,0,0,sampleW,sampleH);
+  ctx.restore();
+  let data;
+  try{data=ctx.getImageData(0,0,sampleW,sampleH).data;}catch(e){return;}
+  const lum=new Uint8Array(sampleW*sampleH);
+  for(let i=0,j=0;i<data.length;i+=4,j++) lum[j]=(data[i]*0.299+data[i+1]*0.587+data[i+2]*0.114)|0;
+  if(!LIVE_MOCAP.prev){
+    LIVE_MOCAP.prev=lum;
+    LIVE_MOCAP.label='MOCAP calibrando';
+    return;
+  }
+  let total=0,left=0,right=0,head=0,torso=0,cxSum=0,cySum=0,count=0;
+  for(let y=0;y<sampleH;y++){
+    for(let x=0;x<sampleW;x++){
+      const idx=y*sampleW+x;
+      const diff=Math.abs(lum[idx]-LIVE_MOCAP.prev[idx]);
+      if(diff<13) continue;
+      const w=diff-12;
+      total+=w;
+      cxSum+=x*w;cySum+=y*w;count+=w;
+      const nx=x/sampleW,ny=y/sampleH;
+      if(ny<0.32&&nx>0.24&&nx<0.76) head+=w;
+      if(ny>=0.24&&ny<0.82&&nx<0.42) left+=w;
+      if(ny>=0.24&&ny<0.82&&nx>0.58) right+=w;
+      if(ny>=0.30&&ny<0.86&&nx>=0.32&&nx<=0.68) torso+=w;
+    }
+  }
+  LIVE_MOCAP.prev=lum;
+  const norm=sampleW*sampleH*18;
+  const energy=clamp01(total/norm);
+  const leftArm=clamp01(left/(norm*0.25));
+  const rightArm=clamp01(right/(norm*0.25));
+  const headMove=clamp01(head/(norm*0.16));
+  const torsoMove=clamp01(torso/(norm*0.32));
+  const centerX=count?cxSum/count/sampleW:0.5;
+  const centerY=count?cySum/count/sampleH:0.45;
+  const leanTarget=Math.max(-1,Math.min(1,((rightArm-leftArm)*0.95+(centerX-0.5)*1.2)));
+  const conf=clamp01(energy*2.2+Math.max(leftArm,rightArm)*0.55+torsoMove*0.35);
+  LIVE_MOCAP.energy=smoothMocap(LIVE_MOCAP.energy,energy,0.28);
+  LIVE_MOCAP.leftArm=smoothMocap(LIVE_MOCAP.leftArm,leftArm,0.32);
+  LIVE_MOCAP.rightArm=smoothMocap(LIVE_MOCAP.rightArm,rightArm,0.32);
+  LIVE_MOCAP.head=smoothMocap(LIVE_MOCAP.head,headMove,0.28);
+  LIVE_MOCAP.lean=smoothMocap(LIVE_MOCAP.lean,leanTarget,0.22);
+  LIVE_MOCAP.bounce=smoothMocap(LIVE_MOCAP.bounce,clamp01(energy*1.7),0.22);
+  LIVE_MOCAP.centerX=smoothMocap(LIVE_MOCAP.centerX,centerX,0.18);
+  LIVE_MOCAP.centerY=smoothMocap(LIVE_MOCAP.centerY,centerY,0.18);
+  LIVE_MOCAP.confidence=smoothMocap(LIVE_MOCAP.confidence,conf,0.18);
+  LIVE_MOCAP.active=LIVE_MOCAP.confidence>0.06;
+  LIVE_MOCAP.label=LIVE_MOCAP.active?'MOCAP Novah live':'MOCAP buscando cuerpo';
+}
+
+function drawLiveMocapOverlay(vW,vH){
+  if(!LIVE_MOCAP.enabled) return;
+  const conf=LIVE_MOCAP.confidence;
+  const cxp=vW*(0.5+LIVE_MOCAP.lean*0.12);
+  const headY=vH*(0.32-LIVE_MOCAP.head*0.06);
+  const shoulderY=vH*0.47;
+  const hipY=vH*0.70;
+  const leftShoulder={x:cxp-vW*0.15,y:shoulderY};
+  const rightShoulder={x:cxp+vW*0.15,y:shoulderY};
+  const head={x:cxp+LIVE_MOCAP.lean*vW*0.04,y:headY};
+  const leftHand={x:leftShoulder.x-vW*(0.08+LIVE_MOCAP.leftArm*0.18),y:shoulderY+vH*0.13-LIVE_MOCAP.leftArm*vH*0.34};
+  const rightHand={x:rightShoulder.x+vW*(0.08+LIVE_MOCAP.rightArm*0.18),y:shoulderY+vH*0.13-LIVE_MOCAP.rightArm*vH*0.34};
+  const alpha=0.28+conf*0.52;
+  cx.save();
+  cx.globalAlpha=alpha;
+  cx.strokeStyle=LIVE_MOCAP.active?'#78f3ff':'#6a8490';
+  cx.lineWidth=1.2;
+  cx.beginPath();
+  cx.moveTo(head.x,head.y+7);cx.lineTo(cxp,shoulderY);
+  cx.moveTo(leftShoulder.x,leftShoulder.y);cx.lineTo(rightShoulder.x,rightShoulder.y);
+  cx.moveTo(cxp,shoulderY);cx.lineTo(cxp,hipY);
+  cx.moveTo(leftShoulder.x,leftShoulder.y);cx.lineTo(leftHand.x,leftHand.y);
+  cx.moveTo(rightShoulder.x,rightShoulder.y);cx.lineTo(rightHand.x,rightHand.y);
+  cx.stroke();
+  [head,leftShoulder,rightShoulder,leftHand,rightHand,{x:cxp,y:hipY}].forEach((p,idx)=>{
+    cx.beginPath();cx.arc(p.x,p.y,idx===0?4:2.5,0,Math.PI*2);
+    cx.fillStyle=idx===0?'#ffe37d':'#78f3ff';cx.fill();
+  });
+  cx.globalAlpha=0.82;
+  cx.fillStyle='rgba(0,0,0,0.48)';cx.fillRect(4,vH-17,vW-8,13);
+  cx.fillStyle=LIVE_MOCAP.active?'#9dffcf':'#9bb4bd';
+  cx.font='bold 7px monospace';cx.textAlign='left';
+  cx.fillText(LIVE_MOCAP.label.toUpperCase(),8,vH-8);
+  cx.textAlign='right';
+  cx.fillText(Math.round(conf*100)+'%',vW-8,vH-8);
+  cx.restore();
+  cx.textAlign='left';
+}
+
+function drawLiveCamScreen(vW,vH){
+  cx.fillStyle='#031018';cx.fillRect(0,0,vW,vH);
+  const hasFrame=LIVE_CAM.active&&liveCamVideoEl&&liveCamVideoEl.readyState>=2&&liveCamVideoEl.videoWidth>0&&liveCamVideoEl.videoHeight>0;
+  if(hasFrame){
+    updateLiveMocap();
+    const srcW=liveCamVideoEl.videoWidth;
+    const srcH=liveCamVideoEl.videoHeight;
+    const srcAspect=srcW/srcH;
+    const dstAspect=vW/vH;
+    let sx=0, sy=0, sw=srcW, sh=srcH;
+    if(srcAspect>dstAspect){
+      sw=Math.round(srcH*dstAspect);
+      sx=Math.round((srcW-sw)/2);
+    } else {
+      sh=Math.round(srcW/dstAspect);
+      sy=Math.round((srcH-sh)/2);
+    }
+    cx.save();
+    cx.translate(vW,0);
+    cx.scale(-1,1);
+    cx.drawImage(liveCamVideoEl,sx,sy,sw,sh,0,0,vW,vH);
+    cx.restore();
+    cx.fillStyle='rgba(0,0,0,0.42)';cx.fillRect(0,0,vW,14);
+    cx.fillStyle='#ff5566';cx.beginPath();cx.arc(10,7,3,0,Math.PI*2);cx.fill();
+    const nowMs=Date.now();
+    if(!LIVE_CAM.lastLabel||nowMs-LIVE_CAM.lastStamp>500){
+      LIVE_CAM.lastStamp=nowMs;
+      LIVE_CAM.lastLabel=new Date(nowMs).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    }
+    cx.fillStyle='#f4fbff';cx.font='bold 8px monospace';cx.textAlign='left';
+    cx.fillText('LIVECAM · '+(window.location.hostname||'localhost').toUpperCase(),18,10);
+    cx.textAlign='right';
+    cx.fillText(LIVE_CAM.lastLabel,vW-6,10);
+    cx.textAlign='left';
+    drawLiveMocapOverlay(vW,vH);
+    return;
+  }
+  const lines=LIVE_CAM.requesting
+    ? ['LIVECAM', 'Solicitando permiso de cámara...']
+    : ['LIVECAM', LIVE_CAM.error||'Activa LiveCam desde la barra superior'];
+  cx.fillStyle='#0a2030';cx.fillRect(0,0,vW,vH);
+  cx.strokeStyle='#1d5260';cx.lineWidth=2;cx.strokeRect(3,3,vW-6,vH-6);
+  cx.textAlign='center';
+  cx.fillStyle='#78f3ff';cx.font='bold 14px monospace';cx.fillText(lines[0],vW/2,34);
+  cx.fillStyle='#dff8ff';cx.font='10px monospace';cx.fillText(lines[1],vW/2,54);
+  cx.fillStyle='#7db1bb';cx.font='8px monospace';cx.fillText('Pantalla principal conectada a la cámara del equipo',vW/2,72);
+  cx.textAlign='left';
+}
+
 // ── HTML BOTTOM BAR — wiring ─────────────────────────────────
 const bbEl=document.getElementById('topBar');
 document.getElementById('btnSave').onclick=()=>{if(G)doAction('save');};
 document.getElementById('btnCLI').onclick=()=>{if(window.toggleCliDock) window.toggleCliDock();};
+document.getElementById('btnLiveCam').onclick=()=>{toggleLiveCam().catch(()=>{});};
 document.getElementById('btnTelegram').onclick=()=>{if(window.toggleTelegramDock) window.toggleTelegramDock();};
 document.getElementById('btnEdit').onclick=()=>{if(G)doAction('editor');};
 document.getElementById('btnMenu').onclick=()=>{if(G)doAction('menu');};
 document.getElementById('btnQuit').onclick=()=>{if(G)doAction('quit');};
+updateLiveCamButtonUi();
 
 // ── Position topBarSub always anchored below Edit/Menu/Quit buttons ──
 function repositionTopBarSub(){
@@ -1246,6 +1593,78 @@ function repositionTopBarSub(){
   const mr=menuBtn.getBoundingClientRect();
   subBar.style.top=(mr.bottom+2)+'px';
   subBar.style.right=(window.innerWidth-mr.right)+'px';
+}
+function escapeHtml(text){
+  return String(text==null?'':text)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&#39;');
+}
+function resetSpeechOverlay(){
+  SPEECH_OVERLAY.items.length=0;
+}
+function queueSpeechBubble(opts){
+  if(!speechOverlayEl||!opts) return;
+  const rawLines=Array.isArray(opts.lines)?opts.lines:[opts.text];
+  const lines=rawLines.filter(line=>line!=null&&String(line).trim()!=='').map(line=>String(line));
+  if(!lines.length) return;
+  SPEECH_OVERLAY.items.push({
+    x:Number.isFinite(opts.x)?opts.x:0,
+    y:Number.isFinite(opts.y)?opts.y:0,
+    w:Math.max(52,Number(opts.w)||96),
+    bg:opts.bg||'#ffffffe8',
+    border:opts.border||'#8a7a60',
+    color:opts.color||'#4a3a20',
+    opacity:opts.opacity==null?1:Math.max(0,Math.min(1,Number(opts.opacity)||0)),
+    align:opts.align==='center'?'center':'left',
+    font:Math.max(6,Number(opts.font)||7),
+    paddingX:Math.max(4,Number(opts.paddingX)||6),
+    paddingY:Math.max(3,Number(opts.paddingY)||4),
+    lineHeight:Math.max(8,Number(opts.lineHeight)||9),
+    lineColors:Array.isArray(opts.lineColors)?opts.lineColors.map(c=>c||opts.color||'#4a3a20'):null,
+    emphasis:!!opts.emphasis,
+    lines,
+  });
+}
+function renderSpeechOverlay(){
+  if(!speechOverlayEl) return;
+  if(!isGameplayUiState(state)||!SPEECH_OVERLAY.items.length){
+    speechOverlayEl.style.display='none';
+    speechOverlayEl.innerHTML='';
+    return;
+  }
+  const rect=cv.getBoundingClientRect();
+  if(!rect.width||!rect.height){
+    speechOverlayEl.style.display='none';
+    speechOverlayEl.innerHTML='';
+    return;
+  }
+  const scaleX=rect.width/W;
+  const scaleY=rect.height/H;
+  const html=SPEECH_OVERLAY.items.map((item,idx)=>{
+    const fontSize=Math.max(10,Math.round(item.font*scaleY));
+    const lineHeight=Math.max(fontSize+2,Math.round(item.lineHeight*scaleY));
+    const padX=Math.max(6,Math.round(item.paddingX*scaleX));
+    const padY=Math.max(4,Math.round(item.paddingY*scaleY));
+    const bubbleW=Math.min(Math.max(72,Math.round(item.w*scaleX)),Math.max(72,Math.round(rect.width)-8));
+    const rawLeft=rect.left+item.x*scaleX;
+    const rawTop=rect.top+item.y*scaleY;
+    const left=Math.max(rect.left+4,Math.min(rect.left+rect.width-bubbleW-4,rawLeft));
+    const top=Math.max(rect.top+4,Math.min(rect.top+rect.height-lineHeight-8,rawTop));
+    const linesHtml=item.lines.map((line,lineIdx)=>{
+      const color=item.lineColors&&item.lineColors[lineIdx]?item.lineColors[lineIdx]:item.color;
+      return '<span class="speech-bubble-line" style="color:'+escapeHtml(color)+'">'+escapeHtml(line)+'</span>';
+    }).join('');
+    return '<div class="speech-bubble'+(item.emphasis?' is-emphasis':'')+'" style="left:'+left.toFixed(1)+'px;top:'+top.toFixed(1)+'px;width:'+bubbleW+'px;background:'+escapeHtml(item.bg)+';border-color:'+escapeHtml(item.border)+';color:'+escapeHtml(item.color)+';opacity:'+item.opacity+';padding:'+padY+'px '+padX+'px;line-height:'+lineHeight+'px;font-size:'+fontSize+'px;text-align:'+item.align+'">'+linesHtml+'</div>';
+  }).join('');
+  speechOverlayEl.innerHTML=html;
+  speechOverlayEl.style.display='block';
+}
+function finalizeFrame(){
+  try{renderSpeechOverlay();}catch(e){}
+  drawTransition();
 }
 function trimHudLabel(text,max=42){
   const clean=String(text||'').replace(/\s+/g,' ').trim();
@@ -1316,6 +1735,7 @@ function updateHtmlBar(){
   try{syncDockLanguage();}catch(e){}
   const show=isGameplayUiState(state);
   bbEl.classList.toggle('show',show);
+  updateLiveCamButtonUi();
   if(!show||!G||!G.staff){resizeCanvas();return;}
   const staff=G.staff||[];
   const ops=getOpsSnapshot();
@@ -1515,6 +1935,86 @@ const GROK={
 };
 let elgatoState={on:false,busy:false,notify:0,error:false,skyRed:false,manualOff:false}; // lamp starts OFF (auto-on at dusk)
 let monitorAlert={active:false,timer:0,msg:'',color:''};
+const LIGHT_OVERRIDE_DEFAULTS={lamp:null,hue:null};
+const LIGHT_OVERRIDE={...LIGHT_OVERRIDE_DEFAULTS};
+function loadLightOverrides(){
+  try{
+    const raw=localStorage.getItem('xtanco_light_override');
+    if(!raw) return;
+    const saved=JSON.parse(raw);
+    if(saved&&typeof saved==='object'){
+      if(typeof saved.lamp==='boolean') LIGHT_OVERRIDE.lamp=saved.lamp;
+      if(typeof saved.hue==='boolean') LIGHT_OVERRIDE.hue=saved.hue;
+    }
+  }catch(e){}
+}
+function saveLightOverrides(){
+  try{
+    localStorage.setItem('xtanco_light_override',JSON.stringify({
+      lamp:typeof LIGHT_OVERRIDE.lamp==='boolean'?LIGHT_OVERRIDE.lamp:null,
+      hue:typeof LIGHT_OVERRIDE.hue==='boolean'?LIGHT_OVERRIDE.hue:null,
+    }));
+  }catch(e){}
+}
+function setLampOverride(value){
+  LIGHT_OVERRIDE.lamp=(typeof value==='boolean')?value:null;
+  if(typeof value==='boolean') elgatoState.manualOff=!value;
+  saveLightOverrides();
+}
+function setHueOverride(value){
+  LIGHT_OVERRIDE.hue=(typeof value==='boolean')?value:null;
+  saveLightOverrides();
+}
+function clearLampOverride(syncHue){
+  LIGHT_OVERRIDE.lamp=null;
+  if(syncHue) LIGHT_OVERRIDE.hue=null;
+  elgatoState.manualOff=false;
+  saveLightOverrides();
+}
+function hasLampOverride(){ return typeof LIGHT_OVERRIDE.lamp==='boolean'; }
+function hasHueOverride(){ return typeof LIGHT_OVERRIDE.hue==='boolean'; }
+function markLightsOffForShutdown(){
+  clearLampOverride(true);
+  elgatoState.on=false;
+  elgatoState.busy=false;
+  elgatoState.manualOff=false;
+  elgatoState.skyRed=false;
+  elgatoState.notify=90;
+  HUE.on=false;
+  HUE.notify=90;
+  HUE.lastSent=0;
+  HUE.sceneKey='';
+  HUE.sceneTick=-9999;
+  if(G) G.lampIntensity=0;
+}
+function powerDownEnvironment(opts){
+  const options=opts||{};
+  if(powerDownEnvironment._done&&options.keepalive) return;
+  if(options.keepalive) powerDownEnvironment._done=true;
+  markLightsOffForShutdown();
+  const body=JSON.stringify({reason:options.reason||'shutdown'});
+  if(isLocalRuntime()){
+    try{
+      if(options.keepalive&&navigator.sendBeacon){
+        const ok=navigator.sendBeacon(`${location.origin}/power/off`,new Blob([body],{type:'application/json'}));
+        if(ok) return;
+      }
+    }catch(e){}
+    try{
+      fetch(`${location.origin}/power/off`,{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body,
+        keepalive:!!options.keepalive,
+      }).catch(()=>{});
+      return;
+    }catch(e){}
+  }
+  try{elgatoFetch('/elgato/lights',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({numberOfLights:1,lights:[{on:0}]})}).catch(()=>{});}catch(e){}
+  try{if(HUE.enabled){HUE.lastSent=0;hueAll({on:false});}}catch(e){}
+}
+powerDownEnvironment._done=false;
+loadLightOverrides();
 
 // ── SHOP TIME SYSTEM ─────────────────────────────────────────
 // Day runs from openHour to closeHour in DAY_DURATION_SEC real seconds
@@ -1615,16 +2115,21 @@ async function elgatoFetch(path,opts){
   throw new Error('Proxy unreachable — run: node elgato-proxy.js');
 }
 
-async function toggleStudioLight(){
+async function applyStudioLightState(newOn,opts){
   if(elgatoState.busy) return;
+  const options=opts||{};
+  const syncHue=options.syncHue!==false;
+  const persistOverride=options.persistOverride!==false;
   elgatoState.busy=true;
   elgatoState.error=false;
   // Always toggle visual state immediately (responsive)
-  const newOn=!elgatoState.on;
+  newOn=!!newOn;
   elgatoState.on=newOn;
-  elgatoState.manualOff=!newOn; // if turning off manually, prevent auto-on
+  if(persistOverride) setLampOverride(newOn);
+  else elgatoState.manualOff=!newOn;
   elgatoState.skyRed=newOn;
   elgatoState.notify=120;
+  if(G) G.lampIntensity=newOn?100:0;
   // Play sound
   try{
     const ac=new(window.AudioContext||window.webkitAudioContext)();
@@ -1647,12 +2152,12 @@ async function toggleStudioLight(){
     console.log('[Elgato] Real light unavailable (game lamp still works)');
   }
   // Also toggle Hue lights (bypass throttle for manual action)
-  if(HUE.enabled){
+  if(syncHue&&HUE.enabled){
     HUE.on=newOn;
     HUE.notify=120;
     HUE.lastSent=0; // force bypass throttle
-    hueManualOverride=true;
-    hueManualTimer=180; // skip auto-sync for 3 seconds
+    HUE.expectedPrimaryOn=newOn;
+    if(persistOverride) setHueOverride(newOn);
     try{
       if(newOn) await hueAll({on:true,bri:254,ct:300});
       else await hueAll({on:false});
@@ -1663,15 +2168,29 @@ async function toggleStudioLight(){
     }
   }
   elgatoState.busy=false;
+  return newOn;
+}
+
+async function toggleStudioLight(){
+  return applyStudioLightState(!elgatoState.on,{syncHue:true,persistOverride:true});
 }
 
 // ── PHILIPS HUE INTEGRATION ─────────────────────────────────
 const HUE_DEFAULT_LIGHTS=(HUE_CONFIG.lights&&typeof HUE_CONFIG.lights==='object'&&!Array.isArray(HUE_CONFIG.lights))
   ? HUE_CONFIG.lights
   : {despacho:9,comedor:8};
+function normalizeHueMode(value){
+  const raw=String(value||'').trim().toLowerCase();
+  return ['evento','event'].includes(raw)?'evento':'ambiente';
+}
+function hueModeLabel(mode){
+  return normalizeHueMode(mode)==='evento'?'EVENTO':'AMBIENTE';
+}
 const HUE_DEFAULTS={
   bridgeIP:typeof HUE_CONFIG.bridgeIP==='string'?HUE_CONFIG.bridgeIP:'',
   apiKey:typeof HUE_CONFIG.apiKey==='string'?HUE_CONFIG.apiKey:'',
+  mode:normalizeHueMode(HUE_CONFIG.mode),
+  primaryLightKey:typeof HUE_CONFIG.primaryLightKey==='string'?HUE_CONFIG.primaryLightKey:'',
   lights:JSON.parse(JSON.stringify(HUE_DEFAULT_LIGHTS)),
   enabled:HUE_CONFIG.enabled!==false,
 };
@@ -1681,15 +2200,272 @@ const HUE={
   on:false,
   notify:0,
   error:false,
+  sceneKey:'',
+  sceneTick:-9999,
+  expectedPrimaryOn:null,
+  realPrimaryOn:null,
+  realPrimaryKey:'',
+  realPrimaryReachable:false,
+  pollBusy:false,
+  pollAt:0,
+};
+const HUE_DISCOVERY={
+  busy:false,
+  lastMessage:'',
+  lastError:'',
+  bridgeCount:0,
+  lightsCount:Object.keys(HUE_DEFAULTS.lights||{}).length,
 };
 // Load/save Hue settings
 function loadHueSettings(){
-  try{const d=localStorage.getItem('xtanco_hue');if(d){const p=JSON.parse(d);HUE.bridgeIP=p.bridgeIP||HUE_DEFAULTS.bridgeIP;HUE.apiKey=p.apiKey||HUE_DEFAULTS.apiKey;HUE.lights=p.lights||JSON.parse(JSON.stringify(HUE_DEFAULTS.lights));HUE.enabled=p.enabled!==false;}}catch(e){}
+  try{
+    const d=localStorage.getItem('xtanco_hue');
+    if(d){
+      const p=JSON.parse(d);
+      HUE.bridgeIP=p.bridgeIP||HUE_DEFAULTS.bridgeIP;
+      HUE.apiKey=p.apiKey||HUE_DEFAULTS.apiKey;
+      HUE.mode=normalizeHueMode(p.mode||HUE_DEFAULTS.mode);
+      HUE.primaryLightKey=p.primaryLightKey||HUE_DEFAULTS.primaryLightKey;
+      HUE.lights=p.lights||JSON.parse(JSON.stringify(HUE_DEFAULTS.lights));
+      HUE.enabled=p.enabled!==false;
+    }
+  }catch(e){}
 }
 function saveHueSettings(){
-  try{localStorage.setItem('xtanco_hue',JSON.stringify({bridgeIP:HUE.bridgeIP,apiKey:HUE.apiKey,lights:HUE.lights,enabled:HUE.enabled}));}catch(e){}
+  try{
+    localStorage.setItem('xtanco_hue',JSON.stringify({
+      bridgeIP:HUE.bridgeIP,
+      apiKey:HUE.apiKey,
+      mode:HUE.mode,
+      primaryLightKey:HUE.primaryLightKey,
+      lights:HUE.lights,
+      enabled:HUE.enabled
+    }));
+  }catch(e){}
 }
 loadHueSettings();
+
+function isLocalRuntime(){
+  return location.hostname==='localhost'||location.hostname==='127.0.0.1';
+}
+
+async function hueProxyJson(path,opts){
+  if(!isLocalRuntime()) return {ok:false,message:'Hue real requiere proxy local'};
+  const options=opts||{};
+  const res=await fetch(`${location.origin}${path}`,{
+    method:options.method||'GET',
+    headers:{'Content-Type':'application/json',...(options.headers||{})},
+    body:options.body||undefined,
+    signal:AbortSignal.timeout(options.timeout||2500),
+  });
+  const data=await res.json().catch(()=>({ok:false,message:'Respuesta no válida del proxy Hue'}));
+  if(!res.ok){
+    if(data&&typeof data==='object') return {...data,ok:false};
+    return {ok:false,message:`Hue proxy HTTP ${res.status}`};
+  }
+  return (data&&typeof data==='object')?data:{ok:true,data};
+}
+
+function applyHueProxyPayload(payload){
+  if(!payload||typeof payload!=='object') return;
+  if(typeof payload.bridgeIP==='string'&&payload.bridgeIP) HUE.bridgeIP=payload.bridgeIP;
+  if(typeof payload.apiKey==='string'&&payload.apiKey) HUE.apiKey=payload.apiKey;
+  if(payload.mode!==undefined) HUE.mode=normalizeHueMode(payload.mode);
+  if(typeof payload.primaryLightKey==='string') HUE.primaryLightKey=payload.primaryLightKey;
+  if(payload.lightsMap&&typeof payload.lightsMap==='object'&&!Array.isArray(payload.lightsMap)){
+    HUE.lights=JSON.parse(JSON.stringify(payload.lightsMap));
+    HUE_DISCOVERY.lightsCount=Object.keys(HUE.lights).length;
+  }
+  if(typeof payload.enabled==='boolean') HUE.enabled=payload.enabled;
+  saveHueSettings();
+}
+
+function scoreHuePrimaryCandidate(light){
+  const text=`${light&&light.key?light.key:''} ${light&&light.name?light.name:''}`.toLowerCase();
+  if(!text.trim()) return 0;
+  if(HUE.primaryLightKey&&light&&light.key===HUE.primaryLightKey) return 100;
+  if(/lamparita_inalambrica|lamparita|go table lamp|go_table_lamp|hue go/.test(text)) return 95;
+  if(/mesa|table|desk|escritorio/.test(text)) return 80;
+  if(/lampara|lamp/.test(text)) return 65;
+  return 10;
+}
+
+function chooseHuePrimaryLight(lights){
+  const list=Array.isArray(lights)?lights.filter(Boolean):[];
+  if(!list.length) return null;
+  if(HUE.primaryLightKey){
+    const exact=list.find(light=>light.key===HUE.primaryLightKey);
+    if(exact) return exact;
+  }
+  let best=list[0];
+  let bestScore=scoreHuePrimaryCandidate(best);
+  for(const light of list.slice(1)){
+    const score=scoreHuePrimaryCandidate(light);
+    if(score>bestScore){best=light;bestScore=score;}
+  }
+  if(best&&best.key&&!HUE.primaryLightKey){
+    HUE.primaryLightKey=best.key;
+    saveHueSettings();
+  }
+  return best||null;
+}
+
+function noteExpectedHueState(state){
+  if(state&&typeof state.on==='boolean') HUE.expectedPrimaryOn=!!state.on;
+}
+
+function getAutoLampTargetOn(){
+  if(!G) return false;
+  if(G.dayEnded) return false;
+  const djOn=!!(G.staff&&G.staff.some(st=>st.hired&&st.role===4));
+  if(djOn) return true;
+  const h=Number(G.gameTime)||0;
+  const closeHour=shopTimeSettings.closeHour||21;
+  return h>=17&&h<closeHour;
+}
+
+function getLampAuthorityTargetOn(){
+  if(hasHueOverride()) return !!LIGHT_OVERRIDE.hue;
+  if(hasLampOverride()) return !!LIGHT_OVERRIDE.lamp;
+  return getAutoLampTargetOn();
+}
+
+function applyPhysicalLampState(on,opts){
+  const options=opts||{};
+  const nextOn=!!on;
+  setLampOverride(nextOn);
+  setHueOverride(nextOn);
+  elgatoState.on=nextOn;
+  elgatoState.manualOff=!nextOn;
+  elgatoState.skyRed=nextOn;
+  elgatoState.notify=90;
+  HUE.on=nextOn;
+  HUE.notify=90;
+  HUE.sceneKey='';
+  HUE.sceneTick=-9999;
+  HUE.expectedPrimaryOn=nextOn;
+  if(G) G.lampIntensity=nextOn?100:0;
+  if(options.announce){
+    showEv(`🔘 Botón físico: lámpara ${nextOn?'ON':'OFF'}`,nextOn?'#88ddaa':'#cc8899');
+  }
+}
+
+async function huePollPhysicalState(force){
+  if(!isLocalRuntime()||!HUE.enabled||!HUE.apiKey||HUE.pollBusy) return;
+  const now=Date.now();
+  if(!force&&now<HUE.pollAt) return;
+  HUE.pollBusy=true;
+  HUE.pollAt=now+700;
+  try{
+    const data=await hueProxyJson('/hue/status',{timeout:2000});
+    if(!data.ok) throw new Error(data.message||'Hue status unavailable');
+    if(typeof data.primaryLightKey==='string'&&data.primaryLightKey) HUE.primaryLightKey=data.primaryLightKey;
+    const lights=Array.isArray(data.lightsDetected)?data.lightsDetected:[];
+    const primary=chooseHuePrimaryLight(lights);
+    if(!primary) return;
+    HUE.realPrimaryKey=primary.key||'';
+    HUE.realPrimaryReachable=primary.reachable!==false;
+    const actualOn=!!primary.on;
+    const previous=HUE.realPrimaryOn;
+    HUE.realPrimaryOn=actualOn;
+    const expected=getLampAuthorityTargetOn();
+    const externalChange=actualOn!==expected;
+    if(externalChange){
+      applyPhysicalLampState(actualOn,{announce:previous!==null&&previous!==actualOn});
+    } else if(previous===null){
+      elgatoState.on=actualOn;
+      HUE.on=actualOn;
+      if(!hasLampOverride()&&!hasHueOverride()&&G) G.lampIntensity=actualOn?100:0;
+    }
+  }catch(e){
+    HUE.error=true;
+  }finally{
+    HUE.pollBusy=false;
+  }
+}
+
+async function hueDiscoverBridge(){
+  HUE_DISCOVERY.busy=true;HUE_DISCOVERY.lastError='';
+  try{
+    const data=await hueProxyJson('/hue/discover');
+    if(!data.ok) throw new Error(data.message||'No se pudo descubrir Hue');
+    const bridges=Array.isArray(data.bridges)?data.bridges:[];
+    HUE_DISCOVERY.bridgeCount=bridges.length;
+    const selected=bridges.find(b=>b.configured)||bridges[0];
+    if(selected&&selected.internalipaddress){
+      HUE.bridgeIP=selected.internalipaddress;
+      saveHueSettings();
+      HUE_DISCOVERY.lastMessage='Hue Bridge detectado en '+selected.internalipaddress;
+      showEv('🟣 '+HUE_DISCOVERY.lastMessage,'#cc99ff');
+    } else {
+      HUE_DISCOVERY.lastMessage='No se ha encontrado ningún Hue Bridge';
+    }
+    return data;
+  }catch(e){
+    HUE_DISCOVERY.lastError=e.message||'Hue discovery failed';
+    showEv('🟣 '+HUE_DISCOVERY.lastError,'#ff66cc');
+    return {ok:false,message:HUE_DISCOVERY.lastError};
+  }finally{
+    HUE_DISCOVERY.busy=false;
+  }
+}
+
+async function hueLinkBridge(){
+  HUE_DISCOVERY.busy=true;HUE_DISCOVERY.lastError='';
+  try{
+    if(!HUE.bridgeIP){
+      const discovered=await hueDiscoverBridge();
+      if(!discovered.ok||!HUE.bridgeIP) throw new Error('No encuentro el Hue Bridge para emparejar');
+    }
+    const data=await hueProxyJson('/hue/link',{
+      method:'POST',
+      body:JSON.stringify({bridgeIP:HUE.bridgeIP,deviceType:'admira_xp#xpaceos'})
+    });
+    if(!data.ok) throw new Error(data.message||'No se pudo vincular Hue');
+    applyHueProxyPayload(data);
+    HUE.enabled=true;
+    HUE_DISCOVERY.lastMessage='Hue vinculado: '+HUE_DISCOVERY.lightsCount+' luces listas';
+    showEv('🟣 '+HUE_DISCOVERY.lastMessage,'#cc99ff');
+    return data;
+  }catch(e){
+    HUE_DISCOVERY.lastError=e.message||'Hue link failed';
+    showEv('🟣 '+HUE_DISCOVERY.lastError,'#ff66cc');
+    return {ok:false,message:HUE_DISCOVERY.lastError};
+  }finally{
+    HUE_DISCOVERY.busy=false;
+  }
+}
+
+async function hueSyncBridgeLights(){
+  HUE_DISCOVERY.busy=true;HUE_DISCOVERY.lastError='';
+  try{
+    if(!HUE.bridgeIP){
+      const discovered=await hueDiscoverBridge();
+      if(!discovered.ok||!HUE.bridgeIP) throw new Error('No encuentro el Hue Bridge');
+    }
+    const data=await hueProxyJson('/hue/sync-lights',{method:'POST'});
+    if(!data.ok) throw new Error(data.message||'No se pudieron sincronizar las luces Hue');
+    applyHueProxyPayload(data);
+    HUE_DISCOVERY.lastMessage='Hue sincronizado: '+HUE_DISCOVERY.lightsCount+' luces importadas';
+    showEv('🟣 '+HUE_DISCOVERY.lastMessage,'#cc99ff');
+    return data;
+  }catch(e){
+    HUE_DISCOVERY.lastError=e.message||'Hue sync failed';
+    showEv('🟣 '+HUE_DISCOVERY.lastError,'#ff66cc');
+    return {ok:false,message:HUE_DISCOVERY.lastError};
+  }finally{
+    HUE_DISCOVERY.busy=false;
+  }
+}
+
+(async()=>{
+  if(!isLocalRuntime()) return;
+  try{
+    await hueDiscoverBridge();
+    if(HUE.apiKey) await hueSyncBridgeLights();
+    await huePollPhysicalState(true);
+  }catch(e){}
+})();
 
 let hueProxyOk=null; // null=unknown, true=working, false=unreachable
 async function hueSend(lightId,stateObj){
@@ -1727,16 +2503,43 @@ async function hueSend(lightId,stateObj){
   HUE.error=true;hueProxyOk=false;
 }
 async function hueSet(lightId,state){
+  noteExpectedHueState(state);
   if(tt-HUE.lastSent<30) return; // throttle: max every 0.5s
   HUE.lastSent=tt;
   await hueSend(lightId,state);
 }
 async function hueAll(state){
   if(!HUE.enabled) return;
+  noteExpectedHueState(state);
   if(tt-HUE.lastSent<30) return;
   HUE.lastSent=tt;
   const promises=Object.values(HUE.lights).map(id=>hueSend(id,state));
   await Promise.allSettled(promises);
+}
+function hueSetScene(sceneKey,state,onValue){
+  if(HUE.sceneKey===sceneKey&&tt-HUE.sceneTick<90) return;
+  HUE.sceneKey=sceneKey;
+  HUE.sceneTick=tt;
+  if(typeof onValue==='boolean') HUE.on=onValue;
+  HUE.lastSent=0;
+  hueAll(state);
+}
+function setHueMode(mode){
+  const next=normalizeHueMode(mode|| (HUE.mode==='ambiente'?'evento':'ambiente'));
+  HUE.mode=next;
+  HUE.notify=120;
+  HUE.lastSent=0;
+  HUE.sceneKey='';
+  HUE.sceneTick=-9999;
+  saveHueSettings();
+  const msg='Hue modo '+hueModeLabel(next);
+  HUE_DISCOVERY.lastMessage=msg;
+  showEv('🟣 '+msg,next==='evento'?'#ff88aa':'#cc99ff');
+  try{
+    if(next==='evento') hueAll({on:false});
+    else if(G&&G.gameTime!=null) hueSyncWithGame();
+  }catch(e){}
+  return next;
 }
 async function hueToggle(){
   const newOn=!HUE.on;
@@ -1749,51 +2552,83 @@ async function hueToggle(){
   }
 }
 // Sync Hue lights with game state (called from updateGame, throttled)
-let hueManualOverride=false; // true when user manually toggled — skip auto-sync briefly
-let hueManualTimer=0;
 function hueSyncWithGame(){
   if(!HUE.enabled) return;
   if(!G||!G.gameTime) return;
-  // If user just toggled manually, skip auto-sync for 3 seconds
-  if(hueManualOverride){
-    hueManualTimer--;
-    if(hueManualTimer<=0) hueManualOverride=false;
-    else return;
+  if(hasHueOverride()){
+    if(LIGHT_OVERRIDE.hue){
+      hueSetScene('manual_hue_on',{on:true,bri:254,ct:300},true);
+    } else {
+      hueSetScene('manual_hue_off',{on:false},false);
+    }
+    return;
   }
   const h=G.gameTime;
+  const closeHour=shopTimeSettings.closeHour||21;
   // DJ strobe: sync Hue with strobe effect (every 30 frames ≈ 0.5s)
   const djOn=G.staff&&G.staff.some(st=>st.hired&&st.role===4);
   if(djOn){
-    if(elgatoState.manualOff) return; // user turned off lights manually — respect it
+    if(hasLampOverride()&&LIGHT_OVERRIDE.lamp===false) return; // user turned lights off manually
     if(tt%30===0){
       const flash=Math.sin(tt*0.3)>0;
-      HUE.lastSent=0; // force send, bypass throttle
-      hueAll({on:true,bri:flash?254:25,xy:[Math.random()*0.3+0.15,Math.random()*0.3+0.1],transitiontime:1});
+      hueSetScene('dj_'+(flash?'high':'low'),{on:true,bri:flash?254:25,xy:[Math.random()*0.3+0.15,Math.random()*0.3+0.1],transitiontime:1},true);
     }
+    return;
+  }
+  if(HUE.mode==='evento'){
+    const thiefOn=!!(G.thief&&G.thief.phase!=='idle');
+    const guardiaOn=!!(G.guardiaCivil&&G.guardiaCivil.phase!=='idle');
+    const promoOn=!!(G.comp&&G.comp.promoTimer>0);
+    const holidayOn=!!(G.holiday&&G.holiday.active);
+    const closingSoon=!!(G.dayEnded||(h>=Math.max(shopTimeSettings.openHour,closeHour-0.5)));
+    if(G.weather&&G.weather.type==='rain'&&thunderFlash>4){
+      hueSetScene('evento_tormenta_'+((tt%40<20)?'a':'b'),{on:true,bri:254,xy:[0.18,0.18],alert:'select',transitiontime:1},true);
+      return;
+    }
+    if(thiefOn){
+      const flash=tt%30<15;
+      hueSetScene('evento_ladron_'+(flash?'a':'b'),{on:true,bri:flash?254:40,xy:[0.675,0.322],transitiontime:1},true);
+      return;
+    }
+    if(guardiaOn){
+      hueSetScene('evento_gc',{on:true,bri:254,xy:[0.16,0.17],transitiontime:2},true);
+      return;
+    }
+    if(promoOn){
+      hueSetScene('evento_promo',{on:true,bri:220,xy:[0.51,0.41],transitiontime:4},true);
+      return;
+    }
+    if(holidayOn){
+      const festive=tt%120<60?{on:true,bri:210,xy:[0.47,0.42],transitiontime:3}:{on:true,bri:210,xy:[0.17,0.7],transitiontime:3};
+      hueSetScene('evento_festivo_'+(tt%120<60?'oro':'verde'),festive,true);
+      return;
+    }
+    if(closingSoon){
+      hueSetScene('evento_cierre',{on:true,bri:180,ct:420,transitiontime:5},true);
+      return;
+    }
+    hueSetScene('evento_idle',{on:false},false);
     return;
   }
   // Normal time-based sync (every 2 seconds)
   if(tt%120!==0) return;
   // Storm: blue flash (priority)
   if(G.weather&&G.weather.type==='rain'&&thunderFlash>4){
-    HUE.lastSent=0;
-    hueAll({on:true,bri:254,xy:[0.18,0.18],alert:'select'});
+    hueSetScene('ambiente_tormenta',{on:true,bri:254,xy:[0.18,0.18],alert:'select'},true);
     return;
   }
   // Night: warm white, full brightness
   if(h>=19){
-    HUE.on=true;
-    hueAll({on:true,bri:254,ct:366});
+    hueSetScene('ambiente_noche',{on:true,bri:254,ct:366},true);
   }
   // Late afternoon: dimmer warm
   else if(h>=17){
-    HUE.on=true;
     const bri=Math.round(100+(h-17)*77); // 100→254
-    hueAll({on:true,bri:bri,ct:340});
+    hueSetScene('ambiente_tarde',{on:true,bri:bri,ct:340},true);
   }
   // Morning/midday: cool daylight
   else {
-    hueAll({on:true,bri:254,ct:250});
+    hueSetScene('ambiente_dia',{on:true,bri:254,ct:250},true);
   }
 }
 
@@ -2520,9 +3355,11 @@ const DEFAULT_STAFF_ZONE_RADIUS=[1,2,2,2,1,2,2,2];
 
 // ── LAYOUT PERSISTENCE ───────────────────────────────────────
 // Startup order is explicit:
-//   1) layout1 = user-approved initial layout
-//   2) layout0 = built-in canonical layout for this client
-//   3) legacy slots as fallback for backwards compatibility
+//   1) current = latest saved editable layout
+//   2) backup = latest safe copy of current
+//   3) initial/layout1 = user-approved startup layout
+//   4) layout0 = built-in canonical layout for this client
+//   5) legacy slots as fallback for backwards compatibility
 function getLayoutSlotKeys(prefix){
   return {
     current: prefix+'_layout_user',
@@ -2558,17 +3395,17 @@ function loadLayout(){
     const keys=getLayoutSlotKeys(prefix);
     syncLayout0();
     let source='slot0';
-    let d=localStorage.getItem(keys.slot1);
-    if(d) source='slot1';
-    if(!d){ d=localStorage.getItem(keys.slot0); source='slot0'; }
-    if(!d){ d=localStorage.getItem(keys.initial); source='initial'; }
+    let d=localStorage.getItem(keys.current);
+    if(d) source='current';
     if(!d){ d=localStorage.getItem(keys.backup); source='backup'; }
-    if(!d){ d=localStorage.getItem(keys.current); source='current'; }
+    if(!d){ d=localStorage.getItem(keys.initial); source='initial'; }
+    if(!d){ d=localStorage.getItem(keys.slot1); source='slot1'; }
+    if(!d){ d=localStorage.getItem(keys.slot0); source='slot0'; }
+    if(!d&&prefix==='xtanco') d=localStorage.getItem('xtanco_layout_user'),source='legacy-current';
+    if(!d&&prefix==='xtanco') d=localStorage.getItem('xtanco_layout_backup'),source='legacy-backup';
+    if(!d&&prefix==='xtanco') d=localStorage.getItem('xtanco_layout_initial'),source='legacy-initial';
     if(!d&&prefix==='xtanco') d=localStorage.getItem('xtanco_layout_slot1'),source='legacy-slot1';
     if(!d&&prefix==='xtanco') d=localStorage.getItem('xtanco_layout_slot0'),source='legacy-slot0';
-    if(!d&&prefix==='xtanco') d=localStorage.getItem('xtanco_layout_initial'),source='legacy-initial';
-    if(!d&&prefix==='xtanco') d=localStorage.getItem('xtanco_layout_backup'),source='legacy-backup';
-    if(!d&&prefix==='xtanco') d=localStorage.getItem('xtanco_layout_user'),source='legacy-current';
     if(d){
       const saved=JSON.parse(d);
       if(Array.isArray(saved)&&saved.length>0){
@@ -2601,9 +3438,10 @@ function loadLayout(){
         }
         console.log('[Layout] ✓ Loaded '+source+' ('+shopLayout.length+' items)');
         // Also load staff positions
-        const spKey=source==='slot1'?keys.slot1StaffPos:source==='slot0'?keys.slot0StaffPos:keys.staffPos;
-        const szKey=source==='slot1'?keys.slot1StaffZones:source==='slot0'?keys.slot0StaffZones:keys.staffZones;
-        try{const sp=localStorage.getItem(spKey);if(sp) shopStaffPos=JSON.parse(sp);else shopStaffPos=(source==='slot0'?JSON.parse(JSON.stringify(DEFAULT_STAFF_POS)):null);}catch(e){}
+        const usesStartupStaff=source==='initial'||source==='slot1'||source==='legacy-initial'||source==='legacy-slot1';
+        const spKey=usesStartupStaff?keys.slot1StaffPos:source==='slot0'||source==='legacy-slot0'?keys.slot0StaffPos:keys.staffPos;
+        const szKey=usesStartupStaff?keys.slot1StaffZones:source==='slot0'||source==='legacy-slot0'?keys.slot0StaffZones:keys.staffZones;
+        try{const sp=localStorage.getItem(spKey);if(sp) shopStaffPos=JSON.parse(sp);else shopStaffPos=(source==='slot0'||source==='legacy-slot0'?JSON.parse(JSON.stringify(DEFAULT_STAFF_POS)):null);}catch(e){}
         try{const sz=localStorage.getItem(szKey);if(sz) shopStaffZones=JSON.parse(sz);else shopStaffZones=null;}catch(e){}
         return;
       }
@@ -2623,6 +3461,7 @@ function saveLayout(){
     localStorage.setItem(keys.backup,data);
     if(shopStaffPos) localStorage.setItem(keys.staffPos,JSON.stringify(shopStaffPos));
     if(shopStaffZones) localStorage.setItem(keys.staffZones,JSON.stringify(shopStaffZones));
+    try{if(typeof buildWalkGrid==='function') buildWalkGrid();}catch(gridErr){}
     console.log('[Layout] ✓ Saved current layout ('+shopLayout.length+' items)');
   }catch(e){console.warn('[Layout] Save error:',e);}
 }
@@ -2631,6 +3470,7 @@ function saveLayoutSlot1(){
   try{
     const prefix=getLayoutStoragePrefix();
     const keys=getLayoutSlotKeys(prefix);
+    localStorage.setItem(keys.initial,data);
     localStorage.setItem(keys.slot1,data);
     localStorage.setItem(keys.current,data);
     localStorage.setItem(keys.backup,data);
@@ -2638,6 +3478,7 @@ function saveLayoutSlot1(){
     else localStorage.setItem(keys.slot1StaffPos,JSON.stringify(getFactoryStaffPosSnapshot()));
     if(shopStaffZones) localStorage.setItem(keys.slot1StaffZones,JSON.stringify(shopStaffZones));
     else localStorage.removeItem(keys.slot1StaffZones);
+    try{if(typeof buildWalkGrid==='function') buildWalkGrid();}catch(gridErr){}
     console.log('[Layout] ✓ Saved Layout1 ('+shopLayout.length+' items)');
     return true;
   }catch(e){console.warn('[Layout] Layout1 save error:',e);}
@@ -2716,6 +3557,7 @@ function resetToFactory(){
   const keys=getLayoutSlotKeys(prefix);
   localStorage.removeItem(keys.current);
   localStorage.removeItem(keys.backup);
+  localStorage.removeItem(keys.initial);
   localStorage.removeItem(keys.slot1);
   shopLayout=JSON.parse(JSON.stringify(DEFAULT_LAYOUT));
   shopStaffPos=JSON.parse(JSON.stringify(DEFAULT_STAFF_POS));
@@ -2741,7 +3583,8 @@ function importLayout(file){
 }
 loadLayout();
 // Auto-save layout when leaving the page
-window.addEventListener('beforeunload',()=>{saveLayout();});
+window.addEventListener('beforeunload',()=>{saveLayout();stopLiveCam({keepError:true});powerDownEnvironment({reason:'beforeunload',keepalive:true});});
+window.addEventListener('pagehide',()=>{stopLiveCam({keepError:true});powerDownEnvironment({reason:'pagehide',keepalive:true});});
 // Also auto-save every 30 seconds during gameplay
 setInterval(()=>{if(state===S.GAME||state===S.EDITOR)saveLayout();},30000);
 
@@ -2760,20 +3603,105 @@ const FURNITURE_SIZE={
   floorLamp:[1,1], rug:[2,2], djBooth:[2,1], tablet:[1,1], turnKiosk:[1,1], aroma:[1,1],
 };
 
+function gridKey(col,row){return Math.round(col)+','+Math.round(row);}
+function isGridInside(col,row){return col>=0&&col<ISO.cols&&row>=0&&row<ISO.rows;}
+function getFurnitureFootprint(item){
+  const base=FURNITURE_SIZE[item.type]||[1,1];
+  const rot=((item.rot||0)%4+4)%4;
+  let w=Math.max(1,Math.ceil(base[0]*Math.max(0.2,item.sx||1)));
+  let d=Math.max(1,Math.ceil(base[1]*Math.max(0.2,item.sy||1)));
+  if(rot%2===1){const tmp=w;w=d;d=tmp;}
+  return {col:Math.round(item.col),row:Math.round(item.row),w,d};
+}
+
 // Check if a tile is blocked by furniture
 function isTileBlocked(col,row){
   if(!shopFurnitureVisible) return false;
   const c=Math.round(col), r=Math.round(row);
   for(const item of shopLayout){
     if(item.type==='rug'||item.type==='led'||item.type==='tft'||item.type==='aroma') continue; // walkable / wall-mounted
-    const sz=FURNITURE_SIZE[item.type]||[1,1];
-    if(c>=item.col && c<item.col+sz[0] && r>=item.row && r<item.row+sz[1]) return true;
+    const fp=getFurnitureFootprint(item);
+    if(c>=fp.col && c<fp.col+fp.w && r>=fp.row && r<fp.row+fp.d) return true;
   }
   return false;
 }
 
+function isGridWalkable(col,row){
+  const c=Math.round(col),r=Math.round(row);
+  if(!walkGrid) buildWalkGrid();
+  return isGridInside(c,r)&&walkGrid&&walkGrid[c]&&walkGrid[c][r]===true;
+}
+
+function actorTile(actor,kind){
+  if(!actor) return null;
+  const ox=kind==='customer'?5:7;
+  const oy=20;
+  const t=screenToIso((actor.x||0)+ox,(actor.y||0)+oy);
+  const col=Math.round(t.col),row=Math.round(t.row);
+  return isGridInside(col,row)?{col,row}:null;
+}
+
+function buildDynamicOccupancy(ignoreActor){
+  const occupied=new Set();
+  const add=(actor,kind)=>{
+    if(!actor||actor===ignoreActor) return;
+    const tile=actorTile(actor,kind);
+    if(tile) occupied.add(gridKey(tile.col,tile.row));
+  };
+  if(G&&Array.isArray(G.staff)){
+    for(const s of G.staff){
+      if(s&&(s.hired||s.fired)&&!s.hidden) add(s,'staff');
+    }
+  }
+  if(G&&Array.isArray(G.custs)){
+    for(const c of G.custs){
+      if(c&&c.st!=='gone') add(c,'customer');
+    }
+  }
+  if(G&&G.thief&&G.thief.phase&&G.thief.phase!=='idle') add(G.thief,'staff');
+  if(G&&G.guardiaCivil&&G.guardiaCivil.phase&&G.guardiaCivil.phase!=='idle') add(G.guardiaCivil,'staff');
+  if(G&&G.opinador&&G.opinador.phase&&G.opinador.phase!=='idle') add(G.opinador,'staff');
+  return occupied;
+}
+
+function isTileOccupiedByOther(col,row,actor){
+  const tile=actorTile(actor,actor&&actor.st?'customer':'staff');
+  const key=gridKey(col,row);
+  if(tile&&key===gridKey(tile.col,tile.row)) return false;
+  return buildDynamicOccupancy(actor).has(key);
+}
+
+function canActorStepToTile(col,row,actor){
+  const c=Math.round(col),r=Math.round(row);
+  if(!isGridWalkable(c,r)) return false;
+  return !isTileOccupiedByOther(c,r,actor);
+}
+
+function findNearestWalkableTile(col,row,opts={}){
+  if(!walkGrid) buildWalkGrid();
+  const wanted={col:clampGridCol(col),row:clampGridRow(row)};
+  const from=opts.from||wanted;
+  const occupied=opts.avoidPeople===false?null:buildDynamicOccupancy(opts.ignore||null);
+  let best=null;
+  for(let radius=0;radius<=Math.max(ISO.cols,ISO.rows);radius++){
+    for(let dc=-radius;dc<=radius;dc++){
+      for(let dr=-radius;dr<=radius;dr++){
+        if(Math.abs(dc)!==radius&&Math.abs(dr)!==radius) continue;
+        const c=wanted.col+dc,r=wanted.row+dr;
+        if(!isGridWalkable(c,r)) continue;
+        const key=gridKey(c,r);
+        if(occupied&&occupied.has(key)) continue;
+        const score=Math.abs(c-wanted.col)+Math.abs(r-wanted.row)+0.25*(Math.abs(c-from.col)+Math.abs(r-from.row));
+        if(!best||score<best.score) best={col:c,row:r,score};
+      }
+    }
+    if(best) return {col:best.col,row:best.row};
+  }
+  return null;
+}
+
 // Full walkability check: on floor grid AND not blocked by furniture
-function canWalkTo(screenX,screenY){
+function canWalkTo(screenX,screenY,opts={}){
   const samples=[
     [0,0],
     [-8,0],[8,0],
@@ -2785,6 +3713,8 @@ function canWalkTo(screenX,screenY){
     if(tile.col<0||tile.col>=ISO.cols||tile.row<0||tile.row>=ISO.rows) return false;
     if(isTileBlocked(tile.col,tile.row)) return false;
   }
+  const center=screenToIso(screenX,screenY);
+  if(opts.ignore&&isTileOccupiedByOther(Math.round(center.col),Math.round(center.row),opts.ignore)) return false;
   return true;
 }
 
@@ -2794,11 +3724,19 @@ function buildWalkGrid(){
   walkGrid=[];
   for(let c=0;c<ISO.cols;c++){walkGrid[c]=[];for(let r=0;r<ISO.rows;r++) walkGrid[c][r]=!isTileBlocked(c,r);}
 }
-function astarPath(sc,sr,ec,er){
+function astarPath(sc,sr,ec,er,opts={}){
   if(!walkGrid) buildWalkGrid();
-  if(sc<0||sc>=ISO.cols||sr<0||sr>=ISO.rows) return null;
-  if(ec<0||ec>=ISO.cols||er<0||er>=ISO.rows) return null;
+  sc=clampGridCol(sc);sr=clampGridRow(sr);ec=clampGridCol(ec);er=clampGridRow(er);
+  if(!isGridWalkable(sc,sr)){
+    const start=findNearestWalkableTile(sc,sr,{from:{col:ec,row:er},ignore:opts.ignore,avoidPeople:false});
+    if(!start) return null;
+    sc=start.col;sr=start.row;
+  }
+  const target=findNearestWalkableTile(ec,er,{from:{col:sc,row:sr},ignore:opts.ignore,avoidPeople:opts.avoidPeople!==false});
+  if(!target) return null;
+  ec=target.col;er=target.row;
   const key=(c,r)=>c+','+r;
+  const occupied=opts.avoidPeople===false?new Set():buildDynamicOccupancy(opts.ignore||null);
   const open=[{c:sc,r:sr,g:0,h:Math.abs(ec-sc)+Math.abs(er-sr),p:null}];
   const closed=new Set();
   while(open.length>0){
@@ -2812,7 +3750,9 @@ function astarPath(sc,sr,ec,er){
       const nc=cur.c+dc,nr=cur.r+dr;
       if(nc<0||nc>=ISO.cols||nr<0||nr>=ISO.rows)continue;
       if(closed.has(key(nc,nr)))continue;
-      if(!(nc===ec&&nr===er)&&walkGrid[nc]&&!walkGrid[nc][nr])continue;
+      if(!isGridWalkable(nc,nr))continue;
+      const nKey=key(nc,nr);
+      if(occupied.has(nKey)&&!(nc===sc&&nr===sr)&&!(nc===ec&&nr===er))continue;
       const g=cur.g+1,h=Math.abs(ec-nc)+Math.abs(er-nr);
       const existing=open.find(o=>o.c===nc&&o.r===nr);
       if(existing){if(g<existing.g){existing.g=g;existing.p=cur;}}
@@ -2820,6 +3760,36 @@ function astarPath(sc,sr,ec,er){
     }
   }
   return null;
+}
+
+function planActorPath(actor,targetCol,targetRow,pathProp='path',idxProp='pathIdx'){
+  if(!actor) return null;
+  const cur=actorTile(actor,actor.st?'customer':'staff')||{col:ISO.cols-1,row:3};
+  const path=astarPath(cur.col,cur.row,targetCol,targetRow,{ignore:actor})||[];
+  actor[pathProp]=path;
+  actor[idxProp]=0;
+  return path;
+}
+
+function stepActorPath(actor,pathProp='path',idxProp='pathIdx',speed=1,animEvery=8){
+  const path=actor&&actor[pathProp];
+  if(!path||actor[idxProp]>=path.length) return 'done';
+  const wp=path[actor[idxProp]];
+  if(!canActorStepToTile(wp.col,wp.row,actor)) return 'blocked';
+  const iso=toIso(wp.col,wp.row);
+  const tx=iso.x-7,ty=iso.y-20;
+  const dx=tx-actor.x,dy=ty-actor.y;
+  const d=Math.sqrt(dx*dx+dy*dy);
+  if(d<3){
+    actor[idxProp]++;
+    return actor[idxProp]>=path.length?'done':'next';
+  }
+  actor.x+=dx/d*speed;
+  actor.y+=dy/d*speed;
+  actor.dir=dx<0?-1:1;
+  actor.aTimer=(actor.aTimer||0)+1;
+  if(actor.aTimer>=animEvery){actor.aTimer=0;actor.aFrame=((actor.aFrame||0)+1)%2;}
+  return 'moving';
 }
 
 // ── GAME STATE ────────────────────────────────────────────────
@@ -3815,26 +4785,41 @@ function doAction(id){
     SFX.eventChime();return;
   }
   if(id==='time_am'){
-    G.gameTime=9;elgatoState.on=false;G.lampIntensity=0;
-    try{elgatoFetch('/elgato/lights',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({numberOfLights:1,lights:[{on:0}]})});}catch(e){}
+    G.gameTime=9;
+    if(!hasLampOverride()){
+      elgatoState.on=false;G.lampIntensity=0;
+      try{elgatoFetch('/elgato/lights',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({numberOfLights:1,lights:[{on:0}]})});}catch(e){}
+    }
     // Hue: mañana → apagada
-    HUE.on=false;HUE.notify=90;HUE.lastSent=0;hueManualOverride=true;hueManualTimer=180;
-    try{hueAll({on:false});}catch(e){}
+    HUE.notify=90;HUE.lastSent=0;
+    if(!hasHueOverride()){
+      HUE.on=false;
+      try{hueAll({on:false});}catch(e){}
+    }
     showEv('🌅 '+(lang==='es'?'Mañana: luz natural':'Morning: daylight'),'#ffbb44');SFX.eventChime();return;
   }
   if(id==='time_pm'){
     G.gameTime=14;
     // Hue: tarde → 50% cálida
-    HUE.on=true;HUE.notify=90;HUE.lastSent=0;hueManualOverride=true;hueManualTimer=180;
-    try{hueAll({on:true,bri:127,ct:340});}catch(e){}
+    HUE.notify=90;HUE.lastSent=0;
+    if(!hasHueOverride()){
+      HUE.on=true;
+      try{hueAll({on:true,bri:127,ct:340});}catch(e){}
+    }
     showEv('☀️ '+(lang==='es'?'Tarde: tabaco y lotería':'Afternoon: tobacco & lottery'),'#ee8833');SFX.eventChime();return;
   }
   if(id==='time_night'){
-    G.gameTime=19;elgatoState.on=true;elgatoState.manualOff=false;G.lampIntensity=100;
-    try{elgatoFetch('/elgato/lights',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({numberOfLights:1,lights:[{on:1,brightness:100}]})});}catch(e){}
+    G.gameTime=19;
+    if(!hasLampOverride()){
+      elgatoState.on=true;elgatoState.manualOff=false;G.lampIntensity=100;
+      try{elgatoFetch('/elgato/lights',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({numberOfLights:1,lights:[{on:1,brightness:100}]})});}catch(e){}
+    }
     // Hue: noche → 100% cálida
-    HUE.on=true;HUE.notify=90;HUE.lastSent=0;hueManualOverride=true;hueManualTimer=180;
-    try{hueAll({on:true,bri:254,ct:366});}catch(e){}
+    HUE.notify=90;HUE.lastSent=0;
+    if(!hasHueOverride()){
+      HUE.on=true;
+      try{hueAll({on:true,bri:254,ct:366});}catch(e){}
+    }
     showEv('🌙 '+(lang==='es'?'Noche: luces encendidas':'Night: lights on'),'#8866bb');SFX.eventChime();return;
   }
   if(id==='weather_0'){G.weather={type:null,timer:0};showEv('🌤 '+(lang==='es'?'Tiempo normal':'Normal weather'),'#aaaaaa');return;}
@@ -3891,7 +4876,11 @@ function doAction(id){
   if(id==='setTab1'){settingsTab=1;return;}
   if(id==='setBack'){saveShopSettings();saveHueSettings();state=S.MENU;return;}
   // ── Hue settings actions ──
-  if(id==='hueToggleEnabled'){HUE.enabled=!HUE.enabled;return;}
+  if(id==='hueToggleEnabled'){HUE.enabled=!HUE.enabled;saveHueSettings();return;}
+  if(id==='hueDiscover'){hueDiscoverBridge();return;}
+  if(id==='hueLink'){hueLinkBridge();return;}
+  if(id==='hueSyncLights'){hueSyncBridgeLights();return;}
+  if(id==='hueModeToggle'){setHueMode();return;}
   if(id==='hueIpDown'){
     const p=(HUE.bridgeIP&&HUE.bridgeIP.split('.').length===4?HUE.bridgeIP.split('.'):['192','168','1','37']);let o=parseInt(p[3],10)||37;o=Math.max(1,o-1);p[3]=String(o);HUE.bridgeIP=p.join('.');return;
   }
@@ -3934,7 +4923,7 @@ function doAction(id){
   if(id==='menu'){uiOpen=!uiOpen;return;}
   if(id==='closeUI'){uiOpen=false;return;}
   if(id==='save'){saveGame();showEv('💾 Saved!','#88aa55');SFX.cashRegister();return;}
-  if(id==='quit'){saveGame();stopAllMedia();goToHomeMenu();return;}
+  if(id==='quit'){saveGame();stopLiveCam({keepError:true});powerDownEnvironment({reason:'quit'});stopAllMedia();goToHomeMenu();return;}
   if(id==='editor'){state=S.EDITOR;edSelIdx=-1;edStaffSelIdx=-1;edMode='furniture';return;}
   // ── Editor actions ──
   if(id==='edSave'){saveLayout();edSaveNotify=90;playSaveBeep();return;}
@@ -4082,13 +5071,27 @@ function endWeek(){
   G.gameTime=shopTimeSettings.openHour;
   G.dayEnded=false;
   G.weekTimer=0;
-  // Turn off lamp for new morning — reset manual override
-  elgatoState.manualOff=false;
-  elgatoState.on=false;
-  try{elgatoFetch('/elgato/lights',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({numberOfLights:1,lights:[{on:0}]})});}catch(e){}
-  // Reset Hue to cool daylight for morning
-  HUE.on=false;
-  try{hueAll({on:true,bri:254,ct:250});}catch(e){}
+  // Preserve manual override if the user explicitly forced the light state.
+  if(hasLampOverride()){
+    elgatoState.on=LIGHT_OVERRIDE.lamp;
+    elgatoState.manualOff=!LIGHT_OVERRIDE.lamp;
+    G.lampIntensity=LIGHT_OVERRIDE.lamp?100:0;
+    try{elgatoFetch('/elgato/lights',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({numberOfLights:1,lights:[{on:LIGHT_OVERRIDE.lamp?1:0,brightness:LIGHT_OVERRIDE.lamp?100:0}]})});}catch(e){}
+  } else {
+    elgatoState.manualOff=false;
+    elgatoState.on=false;
+    try{elgatoFetch('/elgato/lights',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({numberOfLights:1,lights:[{on:0}]})});}catch(e){}
+  }
+  if(hasHueOverride()){
+    HUE.on=LIGHT_OVERRIDE.hue;
+    try{
+      if(LIGHT_OVERRIDE.hue) hueAll({on:true,bri:254,ct:300});
+      else hueAll({on:false});
+    }catch(e){}
+  } else {
+    HUE.on=false;
+    try{hueAll({on:true,bri:254,ct:250});}catch(e){}
+  }
   assignMission('week');
   G.week++;
   if(G.week>CFG.WEEKS_PER_YEAR){
@@ -4270,7 +5273,9 @@ function updateStaffNav(s){
     const cur=screenToIso(s.x+7,s.y+20);
     const cCol=Math.max(0,Math.min(ISO.cols-1,Math.round(cur.col)));
     const cRow=Math.max(0,Math.min(ISO.rows-1,Math.round(cur.row)));
-    s.navPath=astarPath(cCol,cRow,tCol,tRow);
+    const target=findNearestWalkableTile(tCol,tRow,{from:{col:cCol,row:cRow},ignore:s});
+    if(target){tCol=target.col;tRow=target.row;}
+    s.navPath=astarPath(cCol,cRow,tCol,tRow,{ignore:s});
     s.navPathIdx=0;
     s.navTarget={col:tCol,row:tRow};
   }
@@ -4278,6 +5283,11 @@ function updateStaffNav(s){
   // Move one step along path
   if(s.navPath&&s.navPathIdx<s.navPath.length){
     const wp=s.navPath[s.navPathIdx];
+    if(!canActorStepToTile(wp.col,wp.row,s)){
+      if(s.navTick%35===0) s.navTarget=null;
+      s.isWalking=false;
+      return;
+    }
     const wIso=toIso(wp.col,wp.row);
     const dx=(wIso.x-7)-s.x, dy=(wIso.y-20)-s.y;
     const d=Math.sqrt(dx*dx+dy*dy);
@@ -4303,24 +5313,31 @@ function updateGame(){
   try{hueSyncWithGame();}catch(e){}
   // Progressive lighting: afternoon gradual, night full
   let lampIntensity=0;
-  if(G.gameTime>=19&&G.gameTime<shopTimeSettings.closeHour&&!G.dayEnded){
-    lampIntensity=100; // Night: full brightness
-  } else if(G.gameTime>=17&&G.gameTime<19&&!G.dayEnded){
-    lampIntensity=Math.min(80,20+(G.gameTime-17)*30); // Late afternoon: gradual 20→80%
-  }
-  // If manually turned off, intensity is 0 visually
-  if(elgatoState.manualOff) lampIntensity=0;
-  // DJ strobe effect: lamp flashes on/off rapidly (visual always, real lights respect manualOff)
-  const djOn=G.staff&&G.staff.some(st=>st.hired&&st.role===4);
-  if(djOn){
-    if(!elgatoState.manualOff){
-      elgatoState.on=true;
+  const lampForced=hasLampOverride()?LIGHT_OVERRIDE.lamp:null;
+  if(typeof lampForced==='boolean'){
+    elgatoState.on=lampForced;
+    elgatoState.manualOff=!lampForced;
+    lampIntensity=lampForced?100:0;
+  } else {
+    if(G.gameTime>=19&&G.gameTime<shopTimeSettings.closeHour&&!G.dayEnded){
+      lampIntensity=100; // Night: full brightness
+    } else if(G.gameTime>=17&&G.gameTime<19&&!G.dayEnded){
+      lampIntensity=Math.min(80,20+(G.gameTime-17)*30); // Late afternoon: gradual 20→80%
     }
-    lampIntensity=Math.sin(tt*0.3)>0?100:10;
+    // If manually turned off, intensity is 0 visually
+    if(elgatoState.manualOff) lampIntensity=0;
+    // DJ strobe effect: lamp flashes on/off rapidly (visual always, real lights respect manualOff)
+    const djOn=G.staff&&G.staff.some(st=>st.hired&&st.role===4);
+    if(djOn){
+      if(!elgatoState.manualOff){
+        elgatoState.on=true;
+      }
+      lampIntensity=Math.sin(tt*0.3)>0?100:10;
+    }
   }
   G.lampIntensity=lampIntensity;
   // Auto-turn on lamp when intensity > 0 (only if not manually turned off)
-  if(lampIntensity>0&&!elgatoState.on&&!elgatoState.manualOff){
+  if(!hasLampOverride()&&lampIntensity>0&&!elgatoState.on&&!elgatoState.manualOff){
     elgatoState.on=true;
     elgatoState.manualOff=false;
     elgatoState.notify=60;
@@ -4357,7 +5374,7 @@ function updateGame(){
       const newX=mgr.x+mx, newY=mgr.y+my;
       // Collision: check feet position against floor + furniture
       const feetX=newX+7, feetY=newY+25;
-      if(canWalkTo(feetX,feetY)){
+      if(canWalkTo(feetX,feetY,{ignore:mgr})){
         mgr.x=newX;
         mgr.y=newY;
       }
@@ -4568,29 +5585,30 @@ function updateGame(){
       if(th.cooldown>0) th.cooldown--;
       else if(!G.dayEnded&&!G.rush.active&&!G.inspect.active){
         // Pick a target tile near shelves/counter to steal from
-        th.targetCol=3+Math.floor(Math.random()*6);
-        th.targetRow=1+Math.floor(Math.random()*4);
+        const stealTarget=findNearestWalkableTile(3+Math.floor(Math.random()*6),1+Math.floor(Math.random()*4),{from:{col:ISO.cols-1,row:3},ignore:th})||{col:5,row:3};
+        th.targetCol=stealTarget.col;
+        th.targetRow=stealTarget.row;
         th.phase='sneaking';
         th.x=startX2;th.y=startY2;
         th.aFrame=0;th.aTimer=0;th.caught=false;th.lootTimer=0;
+        th.path=astarPath(ISO.cols-1,3,th.targetCol,th.targetRow,{ignore:th})||[];
+        th.pathIdx=0;th.pathMode='steal';
         G.doorOpen=60;
         showEv('🚨 '+(lang==='es'?'¡Un ladrón ha entrado en la tienda!':'A thief entered the shop!'),P.red);
         SFX.inspectionAlarm();
       }
     } else if(th.phase==='sneaking'){
       // Move toward target
-      const tIso=toIso(th.targetCol,th.targetRow);
-      const dx=tIso.x-7-th.x, dy=tIso.y-20-th.y;
-      const dist=Math.sqrt(dx*dx+dy*dy);
-      if(dist<3){
-        th.x=tIso.x-7;th.y=tIso.y-20;
-        th.phase='looting';th.lootTimer=180; // 3 seconds to steal
-      } else {
-        const spd=0.8; // slower than delivery, sneaking
-        th.x+=dx/dist*spd;th.y+=dy/dist*spd;
-        th.dir=dx<0?-1:1;
+      if(!th.path||th.pathMode!=='steal') {
+        th.path=astarPath(ISO.cols-1,3,th.targetCol,th.targetRow,{ignore:th})||[];
+        th.pathIdx=0;th.pathMode='steal';
       }
-      th.aTimer++;if(th.aTimer>=10){th.aTimer=0;th.aFrame=(th.aFrame+1)%2;}
+      const moved=stepActorPath(th,'path','pathIdx',0.8,10);
+      if(moved==='done'){
+        th.phase='looting';th.lootTimer=180; // 3 seconds to steal
+      } else if(moved==='blocked'){
+        th.path=null;th.pathMode='';
+      }
       // Check if Store Manager (staff[0]) is near → catch thief!
       const mgr=G.staff&&G.staff[0];
       if(mgr&&mgr.hired){
@@ -4631,19 +5649,22 @@ function updateGame(){
         th.phase='fleeing';
       }
     } else if(th.phase==='fleeing'){
+      if(!th.path||th.pathMode!=='exit'){
+        planActorPath(th,ISO.cols-1,3,'path','pathIdx');
+        th.pathMode='exit';
+      }
+      G.doorOpen=60;
+      const moved=stepActorPath(th,'path','pathIdx',th.caught?2.2:1.5,5);
       const dx2=startX2-th.x, dy2=startY2-th.y;
       const dist2=Math.sqrt(dx2*dx2+dy2*dy2);
-      G.doorOpen=60;
-      if(dist2<3||th.x>810){
+      if(moved==='done'||dist2<3||th.x>810){
         th.phase='idle';
         th.cooldown=4800+Math.floor(Math.random()*2400); // ~80-120 sec between thieves
         th.x=startX2;th.y=startY2;
-      } else {
-        const spd2=th.caught?2.2:1.5; // runs faster if caught
-        th.x+=dx2/dist2*spd2;th.y+=dy2/dist2*spd2;
-        th.dir=dx2<0?-1:1;
+        th.path=null;th.pathIdx=0;th.pathMode='';
+      } else if(moved==='blocked'){
+        th.path=null;th.pathMode='';
       }
-      th.aTimer++;if(th.aTimer>=5){th.aTimer=0;th.aFrame=(th.aFrame+1)%2;}
     }
   }
 
@@ -4674,6 +5695,21 @@ function updateGame(){
       if(isNearDoorSensor(c.x,c.y,140,96)) G.doorOpen=Math.max(G.doorOpen||0,85);
       if(c.path&&c.pathIdx<c.path.length){
         const wp=c.path[c.pathIdx];const wpIso=toIso(wp.col,wp.row);
+        if(!canActorStepToTile(wp.col,wp.row,c)){
+          if((c.dwellTicks|0)%35===0){
+            const curTile=screenToIso(c.x+5,c.y+20);
+            const target=c.path[c.path.length-1]||wp;
+            c.path=astarPath(
+              Math.max(0,Math.min(ISO.cols-1,Math.round(curTile.col))),
+              Math.max(0,Math.min(ISO.rows-1,Math.round(curTile.row))),
+              target.col,
+              target.row,
+              {ignore:c}
+            )||c.path;
+            c.pathIdx=0;
+          }
+          continue;
+        }
         const wtx=wpIso.x-7,wty=wpIso.y-20;
         const dx=wtx-c.x,dy=wty-c.y,d=Math.sqrt(dx*dx+dy*dy);
         if(d<3){
@@ -4684,7 +5720,7 @@ function updateGame(){
               c.ticketPicked=true;
               c.bMsg='Turno '+String(c.queueNumber).padStart(3,'0');c.bTimer=170;
               const queueTarget=getQueueTarget(0);
-              c.path=astarPath(wp.col,wp.row,queueTarget.col,queueTarget.row)||[];
+              c.path=astarPath(wp.col,wp.row,queueTarget.col,queueTarget.row,{ignore:c})||[];
               c.pathIdx=0;
             }else if(c.wantsTurn){
               c.st='queue';
@@ -4708,7 +5744,8 @@ function updateGame(){
               Math.max(0,Math.min(ISO.cols-1,Math.round(curTile.col))),
               Math.max(0,Math.min(ISO.rows-1,Math.round(curTile.row))),
               queueTarget.col,
-              queueTarget.row
+              queueTarget.row,
+              {ignore:c}
             )||[];
             c.pathIdx=0;
           }else if(c.wantsTurn){
@@ -4720,7 +5757,7 @@ function updateGame(){
         }
         else{
           const nx=c.x+dx/d*wSpd,ny=c.y+dy/d*wSpd;
-          if(canWalkTo(nx+5,ny+20)){c.x=nx;c.y=ny;c.dir=dx<0?-1:1;}
+          if(canWalkTo(nx+5,ny+20,{ignore:c})){c.x=nx;c.y=ny;c.dir=dx<0?-1:1;}
           else{c.st='browse';c.timer=Math.round((30+Math.random()*40)*browseBase*(c.persona==='curious'?1.4:1));}
         }
       }
@@ -4734,7 +5771,9 @@ function updateGame(){
       const qtx=targetIso.x-7, qty=targetIso.y-20;
       const dx=qtx-c.x,dy=qty-c.y,d=Math.sqrt(dx*dx+dy*dy);
       if(d>3){
-        c.x+=dx/d*1.05;c.y+=dy/d*1.05;c.dir=dx<0?-1:1;
+        if(canActorStepToTile(spot.col,spot.row,c)){
+          c.x+=dx/d*1.05;c.y+=dy/d*1.05;c.dir=dx<0?-1:1;
+        }
       }else if(idx===0&&G.turns&&(G.turns.servingId===null||G.turns.servingId===c.id)){
         G.turns.current=c.queueNumber||0;
         G.turns.servingId=c.id;
@@ -4750,7 +5789,9 @@ function updateGame(){
       const btx=targetIso.x-7,bty=targetIso.y-20;
       const dx=btx-c.x,dy=bty-c.y,d=Math.sqrt(dx*dx+dy*dy);
       if(d>3){
-        c.x+=dx/d*1.1;c.y+=dy/d*1.1;c.dir=dx<0?-1:1;
+        if(canActorStepToTile(spot.col,spot.row,c)){
+          c.x+=dx/d*1.1;c.y+=dy/d*1.1;c.dir=dx<0?-1:1;
+        }
       }else{
         c.serviceTimer=(c.serviceTimer|0)-1;
         if(c.serviceTimer<=0){
@@ -4764,6 +5805,12 @@ function updateGame(){
       }
       if(c.roamPath&&c.roamIdx<c.roamPath.length){
         const rp=c.roamPath[c.roamIdx];
+        if(!canActorStepToTile(rp.col,rp.row,c)){
+          c.roamPath=null;
+          c.roamIdx=0;
+          c.roamCooldown=45+Math.floor(Math.random()*80);
+          continue;
+        }
         const rpIso=toIso(rp.col,rp.row);
         const rtx=rpIso.x-7,rty=rpIso.y-20;
         const dx=rtx-c.x,dy=rty-c.y,d=Math.sqrt(dx*dx+dy*dy);
@@ -4786,7 +5833,8 @@ function updateGame(){
             Math.max(0,Math.min(ISO.cols-1,Math.round(curTile.col))),
             Math.max(0,Math.min(ISO.rows-1,Math.round(curTile.row))),
             roamTarget.col,
-            roamTarget.row
+            roamTarget.row,
+            {ignore:c}
           );
           c.roamIdx=0;
         }
@@ -4804,6 +5852,20 @@ function updateGame(){
     } else if(c.st==='leave'){
       if(c.leavePath&&c.leaveIdx<c.leavePath.length){
         const lp=c.leavePath[c.leaveIdx];const lpIso=toIso(lp.col,lp.row);
+        if(!canActorStepToTile(lp.col,lp.row,c)){
+          if((c.dwellTicks|0)%35===0){
+            const curTile=screenToIso(c.x+5,c.y+20);
+            c.leavePath=astarPath(
+              Math.max(0,Math.min(ISO.cols-1,Math.round(curTile.col))),
+              Math.max(0,Math.min(ISO.rows-1,Math.round(curTile.row))),
+              ISO.cols-1,
+              3,
+              {ignore:c}
+            )||c.leavePath;
+            c.leaveIdx=0;
+          }
+          continue;
+        }
         const ltx=lpIso.x-7,lty=lpIso.y-20;
         const dx=ltx-c.x,dy=lty-c.y,d=Math.sqrt(dx*dx+dy*dy);
         if(d<3){c.leaveIdx++;} else{c.x+=dx/d*1.6;c.y+=dy/d*1.6;c.dir=dx<0?-1:1;}
@@ -4853,7 +5915,7 @@ function updateGame(){
         }
         else{
           const nx=c.x+dx/d*1.6,ny=c.y+dy/d*1.6;
-          if(canWalkTo(nx+5,ny+20)){c.x=nx;c.y=ny;c.dir=dx<0?-1:1;}
+          if(canWalkTo(nx+5,ny+20,{ignore:c})){c.x=nx;c.y=ny;c.dir=dx<0?-1:1;}
           else{c.x+=dx/d*0.5;c.y+=dy/d*0.5;c.dir=dx<0?-1:1;}
         }
       }
@@ -4870,17 +5932,23 @@ function updateGame(){
     const patrolX=patrolIso.x-7, patrolY=patrolIso.y-20;
 
     if(gc.phase==='entering'){
-      const dx=patrolX-gc.x,dy=patrolY-gc.y;
-      const dist=Math.sqrt(dx*dx+dy*dy);
-      G.doorOpen=60;
-      if(dist<3){
-        gc.x=patrolX;gc.y=patrolY;gc.baseX=patrolX;gc.baseY=patrolY;gc.phase='patrolling';gc.patrolTimer=1800;
-        showEv('👮 Guardia Civil vigilando la tienda','#55aa55');
-      } else {
-        const spd=1.35;
-        gc.x+=dx/dist*spd;gc.y+=dy/dist*spd;gc.dir=dx<0?-1:1;
+      if(!gc.path||gc.pathMode!=='patrol'){
+        const target=findNearestWalkableTile(gc.targetCol||9,gc.targetRow||3,{from:{col:ISO.cols-1,row:3},ignore:gc})||{col:gc.targetCol||9,row:gc.targetRow||3};
+        gc.targetCol=target.col;gc.targetRow=target.row;
+        planActorPath(gc,gc.targetCol,gc.targetRow,'path','pathIdx');
+        gc.pathMode='patrol';
       }
-      gc.aTimer++;if(gc.aTimer>=8){gc.aTimer=0;gc.aFrame=(gc.aFrame+1)%2;}
+      G.doorOpen=60;
+      const moved=stepActorPath(gc,'path','pathIdx',1.35,8);
+      if(moved==='done'){
+        const finalPatrolIso=toIso(gc.targetCol||9,gc.targetRow||3);
+        const finalPatrolX=finalPatrolIso.x-7,finalPatrolY=finalPatrolIso.y-20;
+        gc.x=finalPatrolX;gc.y=finalPatrolY;gc.baseX=finalPatrolX;gc.baseY=finalPatrolY;gc.phase='patrolling';gc.patrolTimer=1800;
+        gc.path=null;gc.pathMode='';
+        showEv('👮 Guardia Civil vigilando la tienda','#55aa55');
+      } else if(moved==='blocked'){
+        gc.path=null;gc.pathMode='';
+      }
     } else if(gc.phase==='patrolling'){
       if(gc.patrolTimer>0) gc.patrolTimer--;
       gc.x=(gc.baseX||gc.x)+Math.sin(tt*0.025)*1.2;
@@ -4899,16 +5967,20 @@ function updateGame(){
       }
       if(gc.patrolTimer<=0&&gc.autoLeave) gc.phase='leaving';
     } else if(gc.phase==='leaving'){
+      if(!gc.path||gc.pathMode!=='exit'){
+        planActorPath(gc,ISO.cols-1,3,'path','pathIdx');
+        gc.pathMode='exit';
+      }
+      G.doorOpen=60;
+      const moved=stepActorPath(gc,'path','pathIdx',1.5,8);
       const dx=startX3-gc.x,dy=startY3-gc.y;
       const dist=Math.sqrt(dx*dx+dy*dy);
-      G.doorOpen=60;
-      if(dist<3||gc.x>810){
+      if(moved==='done'||dist<3||gc.x>810){
         gc.phase='idle';gc.x=startX3;gc.y=startY3;gc.autoLeave=false;
-      } else {
-        const spd=1.5;
-        gc.x+=dx/dist*spd;gc.y+=dy/dist*spd;gc.dir=dx<0?-1:1;
+        gc.path=null;gc.pathMode='';
+      } else if(moved==='blocked'){
+        gc.path=null;gc.pathMode='';
       }
-      gc.aTimer++;if(gc.aTimer>=8){gc.aTimer=0;gc.aFrame=(gc.aFrame+1)%2;}
     }
   }
 
@@ -4921,17 +5993,21 @@ function updateGame(){
     const kp=getTabletPos();
     const targetX=kp.x-10,targetY=kp.y-16;
     if(op.phase==='entering'){
-      const dx=targetX-op.x,dy=targetY-op.y;
-      const dist=Math.sqrt(dx*dx+dy*dy);
-      G.doorOpen=60;
-      if(dist<3){
-        op.x=targetX;op.y=targetY;op.phase='voting';op.voteTimer=70;
-        op.bTimer=90;op.bMsg=op.opinion||'Voy a opinar';
-      } else {
-        const spd=1.45;
-        op.x+=dx/dist*spd;op.y+=dy/dist*spd;op.dir=dx<0?-1:1;
+      if(!op.path||op.pathMode!=='tablet'){
+        const targetTile=screenToIso(targetX+7,targetY+20);
+        const target=findNearestWalkableTile(targetTile.col,targetTile.row,{from:{col:ISO.cols-1,row:3},ignore:op})||{col:clampGridCol(targetTile.col),row:clampGridRow(targetTile.row)};
+        planActorPath(op,target.col,target.row,'path','pathIdx');
+        op.pathMode='tablet';
       }
-      op.aTimer++;if(op.aTimer>=8){op.aTimer=0;op.aFrame=(op.aFrame+1)%2;}
+      G.doorOpen=60;
+      const moved=stepActorPath(op,'path','pathIdx',1.45,8);
+      if(moved==='done'){
+        op.phase='voting';op.voteTimer=70;
+        op.path=null;op.pathMode='';
+        op.bTimer=90;op.bMsg=op.opinion||'Voy a opinar';
+      } else if(moved==='blocked'){
+        op.path=null;op.pathMode='';
+      }
     } else if(op.phase==='voting'){
       op.voteTimer--;
       if(op.voteTimer===38){
@@ -4956,16 +6032,20 @@ function updateGame(){
         op.bMsg=['¡Gracias!','Apuntado','Hasta luego'][op.voteFace||0];
       }
     } else if(op.phase==='leaving'){
+      if(!op.path||op.pathMode!=='exit'){
+        planActorPath(op,ISO.cols-1,3,'path','pathIdx');
+        op.pathMode='exit';
+      }
+      G.doorOpen=60;
+      const moved=stepActorPath(op,'path','pathIdx',1.55,8);
       const dx=startX4-op.x,dy=startY4-op.y;
       const dist=Math.sqrt(dx*dx+dy*dy);
-      G.doorOpen=60;
-      if(dist<3||op.x>810){
+      if(moved==='done'||dist<3||op.x>810){
         op.phase='idle';op.x=startX4;op.y=startY4;op.bTimer=0;op.bMsg='';
-      } else {
-        const spd=1.55;
-        op.x+=dx/dist*spd;op.y+=dy/dist*spd;op.dir=dx<0?-1:1;
+        op.path=null;op.pathMode='';
+      } else if(moved==='blocked'){
+        op.path=null;op.pathMode='';
       }
-      op.aTimer++;if(op.aTimer>=8){op.aTimer=0;op.aFrame=(op.aFrame+1)%2;}
     }
     if(op.bTimer>0) op.bTimer--;
   }
@@ -5026,7 +6106,10 @@ function spawnCust(isVip){
     tCol=2+Math.random()*6|0;
     tRow=1+Math.random()*4|0;
     attempts++;
-  }while(isTileBlocked(tCol,tRow)&&attempts<20);
+  }while(!isGridWalkable(tCol,tRow)&&attempts<20);
+  const entryTarget=findNearestWalkableTile(tCol,tRow,{from:{col:ISO.cols-1,row:3}});
+  if(!entryTarget) return;
+  tCol=entryTarget.col;tRow=entryTarget.row;
   const tIso=toIso(tCol,tRow);
   const path=astarPath(ISO.cols-1,3,tCol,tRow);
   const turnTarget=wantsTurn?getTurnKioskTarget():null;
@@ -5133,22 +6216,30 @@ function getQueueTarget(index=0){
   const counter=shopLayout.find(item=>item.type==='counter');
   const baseCol=counter?counter.col+1:2;
   const baseRow=counter?counter.row+2:4;
-  return {
+  const target={
     col:clampGridCol(baseCol),
     row:clampGridRow(baseRow+Math.min(index,3))
   };
+  return findNearestWalkableTile(target.col,target.row,{avoidPeople:false})||target;
 }
 
 function getTurnKioskTarget(){
   const kiosk=shopLayout.find(item=>item.type==='turnKiosk');
   const baseCol=kiosk?kiosk.col-1:11;
   const baseRow=kiosk?kiosk.row:6;
-  return {col:clampGridCol(baseCol),row:clampGridRow(baseRow)};
+  const target={col:clampGridCol(baseCol),row:clampGridRow(baseRow)};
+  return findNearestWalkableTile(target.col,target.row,{avoidPeople:false})||target;
 }
 
 function startCustomerLeave(c){
   const curTile=screenToIso(c.x+5,c.y+20);
-  c.leavePath=astarPath(Math.max(0,Math.min(ISO.cols-1,curTile.col)),Math.max(0,Math.min(ISO.rows-1,curTile.row)),ISO.cols-1,3);
+  c.leavePath=astarPath(
+    Math.max(0,Math.min(ISO.cols-1,Math.round(curTile.col))),
+    Math.max(0,Math.min(ISO.rows-1,Math.round(curTile.row))),
+    ISO.cols-1,
+    3,
+    {ignore:c}
+  );
   c.leaveIdx=0;
   const dp=getDoorThresholdPos(), outsideDp=getDoorOutsidePos();
   c.st='leave';c.tx=dp.x;c.ty=dp.y;c.exitTx=outsideDp.x;c.exitTy=outsideDp.y;c.exitLeg=false;c.roamPath=null;c.roamIdx=0;
@@ -5237,19 +6328,57 @@ function isNearDoorSensor(x,y,padX=72,padY=60){
   return Math.abs(x-doorPos.x)<=padX&&Math.abs(y-doorPos.y)<=padY;
 }
 
+function isDoorThresholdTile(col,row){
+  return col>=ISO.cols-1.4&&col<=ISO.cols+1.15&&row>=1.75&&row<=4.35;
+}
+
+function actorTouchesDoor(actor,kind='staff'){
+  if(!actor) return false;
+  const ox=kind==='customer'?5:7;
+  const oy=20;
+  const points=[
+    {x:actor.x,y:actor.y},
+    {x:actor.x+ox,y:actor.y+oy},
+    {x:actor.tx,y:actor.ty},
+    {x:actor.exitTx,y:actor.exitTy},
+    {x:actor.fireTx,y:actor.fireTy},
+  ];
+  for(const point of points){
+    if(!Number.isFinite(point.x)||!Number.isFinite(point.y)) continue;
+    if(isNearDoorSensor(point.x,point.y,150,118)) return true;
+    const tile=screenToIso(point.x+ox,point.y+oy);
+    if(isDoorThresholdTile(tile.col,tile.row)) return true;
+  }
+  const paths=['path','leavePath','navPath'];
+  const idxs={path:'pathIdx',leavePath:'leaveIdx',navPath:'navPathIdx'};
+  for(const pathName of paths){
+    const path=actor[pathName],idx=actor[idxs[pathName]]||0;
+    if(!path||!path.length) continue;
+    for(let i=Math.max(0,idx-1);i<Math.min(path.length,idx+3);i++){
+      const wp=path[i];
+      if(wp&&isDoorThresholdTile(wp.col,wp.row)) return true;
+    }
+  }
+  return false;
+}
+
 function shouldDoorBeOpen(){
   if(!G) return false;
   if(G.doorMode==='open') return true;
   if(G.doorMode==='close') return false;
+  if((G.doorOpen||0)>0) return true;
   if(G.custs&&G.custs.some(c=>{
     const traffic=c.st==='walk'||c.st==='leave';
-    return isNearDoorSensor(c.x,c.y,traffic?138:92,traffic?96:72)
+    return actorTouchesDoor(c,'customer')
+      || isNearDoorSensor(c.x,c.y,traffic?138:92,traffic?96:72)
       || isNearDoorSensor(c.tx||c.x,c.ty||c.y,traffic?138:92,traffic?96:72)
       || isNearDoorSensor(c.exitTx||c.x,c.exitTy||c.y,traffic?138:92,traffic?96:72);
   })) return true;
-  if(G.staff&&G.staff.some(s=>(s.fired||(s.hired&&s.isWalking))&&isNearDoorSensor(s.x,s.y))) return true;
-  if(G.saca&&G.saca.phase!=='idle'&&isNearDoorSensor(G.saca.x,G.saca.y,96,72)) return true;
-  if(G.thief&&G.thief.phase!=='idle'&&isNearDoorSensor(G.thief.x,G.thief.y,84,64)) return true;
+  if(G.staff&&G.staff.some(s=>(s.fired||(s.hired&&s.isWalking))&&actorTouchesDoor(s,'staff'))) return true;
+  if(G.saca&&G.saca.phase!=='idle'&&actorTouchesDoor(G.saca,'staff')) return true;
+  if(G.thief&&G.thief.phase!=='idle'&&actorTouchesDoor(G.thief,'staff')) return true;
+  if(G.guardiaCivil&&G.guardiaCivil.phase!=='idle'&&actorTouchesDoor(G.guardiaCivil,'staff')) return true;
+  if(G.opinador&&G.opinador.phase!=='idle'&&actorTouchesDoor(G.opinador,'staff')) return true;
   return false;
 }
 
@@ -5281,7 +6410,7 @@ function updateDoorAnimation(){
   if(!G) return;
   if(typeof G.doorAnim!=='number') G.doorAnim=0;
   const target=shouldDoorBeOpen()?1:0;
-  const speed=target>G.doorAnim?0.26:0.18;
+  const speed=target>G.doorAnim?0.11:0.18;
   G.doorAnim+=(target-G.doorAnim)*speed;
   if(Math.abs(G.doorAnim-target)<0.02) G.doorAnim=target;
 }
@@ -7268,7 +8397,12 @@ const HELP_PAGES={
     '  xtAPI.restock(slot) / restockAll()',
     '  xtAPI.advertise(0|1|2)',
     '  xtAPI.visit(Com|Tec|Del|GC)',
-    '  xtAPI.save() / xtAPI.help()',
+    '  xtAPI.save() / xtAPI.help()','',
+    'SLASH COMMANDS:',
+    '  xtAPI.command("/music")',
+    '  xtAPI.command("/music on")',
+    '  xtAPI.command("/ladron")',
+    '  xtAPI.command("/lluvia off")',
   ]},
   ],
   en:[
@@ -7597,10 +8731,29 @@ function drawSettings(){
     const keyMask=HUE.apiKey?HUE.apiKey.slice(0,8)+'...'+HUE.apiKey.slice(-4):'(no configurada)';
     tx(keyMask,bx+88,topY+150,'#aa88cc',8);
 
+    // Discovery / pairing row
+    const hueBtnY=topY+162;
+    r(bx+10,hueBtnY,86,20,'#1a2a2a');rx(bx+10,hueBtnY,86,20,'#55ccff',1);
+    tx('AUTO',bx+53,hueBtnY+14,'#88ddff',8,'center');
+    BTNS['hueDiscover']={x:bx+10,y:hueBtnY,w:86,h:20};
+    r(bx+104,hueBtnY,86,20,'#2a1a3a');rx(bx+104,hueBtnY,86,20,'#cc88ff',1);
+    tx('LINK',bx+147,hueBtnY+14,'#ddb0ff',8,'center');
+    BTNS['hueLink']={x:bx+104,y:hueBtnY,w:86,h:20};
+    r(bx+198,hueBtnY,92,20,'#1a2a1a');rx(bx+198,hueBtnY,92,20,'#66cc88',1);
+    tx('SYNC',bx+244,hueBtnY+14,'#99eeaa',8,'center');
+    BTNS['hueSyncLights']={x:bx+198,y:hueBtnY,w:92,h:20};
+
+    const hueStatusText=(HUE.mode==='evento'?'[EVENTO] ':'[AMBIENTE] ')+(HUE_DISCOVERY.busy
+      ? 'Trabajando con Hue...'
+      : (HUE_DISCOVERY.lastError
+          ? ('⚠ '+HUE_DISCOVERY.lastError)
+          : (HUE_DISCOVERY.lastMessage||('Bridge: '+(HUE.bridgeIP||'pendiente')))));
+    tx(hueStatusText,bx+8,topY+194,HUE_DISCOVERY.lastError?'#ff8899':'#8a8070',8);
+
     // Lights configuration
-    tx('Luces configuradas:',bx,topY+178,'#c0b898',10);
+    tx('Luces configuradas:',bx,topY+214,'#c0b898',10);
     const lightEntries=Object.entries(HUE.lights);
-    let ly=topY+188;
+    let ly=topY+224;
     for(let i=0;i<lightEntries.length;i++){
       const [name,id]=lightEntries[i];
       r(bx+10,ly,bw-20,22,'#1a1a28');rx(bx+10,ly,bw-20,22,'#6644aa',1);
@@ -7625,21 +8778,30 @@ function drawSettings(){
       BTNS['hueRemoveLight']={x:bx+120,y:ly,w:100,h:20};
     }
 
-    // Test all Hue lights
+    // Test + mode row
     ly+=30;
-    r(bx+10,ly,bw-20,24,'#2a1a3a');rx(bx+10,ly,bw-20,24,'#aa66cc',1);
-    tx('🟣 TEST — Parpadear todas las Hue',bx+bw/2,ly+17,'#cc99ff',9,'center');
-    BTNS['hueTestAll']={x:bx+10,y:ly,w:bw-20,h:24};
+    const hueTestW=bw-142;
+    r(bx+10,ly,hueTestW,24,'#2a1a3a');rx(bx+10,ly,hueTestW,24,'#aa66cc',1);
+    tx('🟣 TEST — Parpadear',bx+10+hueTestW/2,ly+17,'#cc99ff',9,'center');
+    BTNS['hueTestAll']={x:bx+10,y:ly,w:hueTestW,h:24};
+    const modeCol=HUE.mode==='evento'?'#ff88aa':'#88ccff';
+    const modeFill=HUE.mode==='evento'?'#3a1524':'#13243a';
+    const modeX=bx+20+hueTestW;
+    const modeW=bw-30-hueTestW;
+    r(modeX,ly,modeW,24,modeFill);rx(modeX,ly,modeW,24,modeCol,1);
+    tx('Modo: '+hueModeLabel(HUE.mode),modeX+modeW/2,ly+17,modeCol,8,'center');
+    BTNS['hueModeToggle']={x:modeX,y:ly,w:modeW,h:24};
 
     // Status info
     ly+=34;
-    tx('Las luces se sincronizan con la hora del juego:',bx,ly,'#8a8070',8);
-    tx('  Mañana → OFF  |  Tarde → 50%  |  Noche → 100%',bx,ly+13,'#8a8070',8);
-    tx('  Tormenta → flash azul  |  DJ → strobe colores',bx,ly+26,'#8a8070',8);
-    tx('  Tecla L / Click lámpara → toggle Elgato + Hue',bx,ly+39,'#8a8070',8);
+    tx('Ambiente → día frío · tarde cálida · noche intensa',bx,ly,'#8a8070',8);
+    tx('Evento → ladrón rojo · promo oro · cierre ámbar',bx,ly+13,'#8a8070',8);
+    tx('Tormenta y DJ mandan en ambos modos · /huemode alterna',bx,ly+26,'#8a8070',8);
+    tx('Tecla L / clic lámpara → toggle manual Elgato + Hue',bx,ly+39,'#8a8070',8);
+    tx('AUTO detecta bridge · LINK crea key · SYNC importa luces',bx,ly+52,'#8a8070',8);
     // HTTPS warning
     if(location.protocol==='https:'){
-      ly+=50;
+      ly+=64;
       r(bx,ly,bw,30,'#3a1a0a');rx(bx,ly,bw,30,'#cc6633',1);
       tx('⚠ Luces reales requieren proxy local:',bx+8,ly+12,'#ffaa66',8);
       tx('  usa xtanco.config.local.json + node elgato-proxy.js',bx+8,ly+24,'#ffcc88',8);
@@ -8027,9 +9189,6 @@ function drawShop(){
       if(G.rush.active){
         const pulse=0.05*Math.sin(tt*.08);
         floorCol=`rgba(182,188,192,${0.9+pulse})`;
-      }
-      if(G.inspect.active&&G.inspect.timer>100){
-        floorCol='#c3afb2';
       }
       drawIsoFloorTile(col,row,floorCol,'#aab4be22');
     }
@@ -8683,8 +9842,15 @@ function drawGlassDoor(){
   const doorH=ISO.wallH*0.75;
   // doorAmt follows the real traffic sensor, so the glass reacts to the threshold.
   const doorAmt=G&&typeof G.doorAnim==='number'?G.doorAnim:(G&&G.doorOpen>0?1:0);
-  const sdx=(dm.x-dt.x)*doorAmt*0.97;
-  const sdy=(dm.y-dt.y)*doorAmt*0.97;
+  const slide=doorAmt*0.97;
+  const rightInner={
+    x:dm.x+(dt.x-dm.x)*slide,
+    y:dm.y+(dt.y-dm.y)*slide
+  };
+  const leftInner={
+    x:dm.x+(db.x-dm.x)*slide,
+    y:dm.y+(db.y-dm.y)*slide
+  };
 
   // ── DOOR FRAME — filled dark-wood surround with slight depth ──
   const fw=4; // frame width
@@ -8717,32 +9883,40 @@ function drawGlassDoor(){
   cx.lineTo(db.x+fw,db.y-doorH+2); cx.lineTo(dt.x-fw,dt.y-doorH+2);
   cx.closePath(); cx.fill();
 
-  // ── OPEN VOID — fill FULL opening with dark exterior, fades in as door opens ──
+  // ── OPEN PASSAGE — keep the threshold readable instead of painting a dark wall ──
   if(doorAmt>0.04){
-    // Dark street/exterior behind door
-    cx.globalAlpha=Math.min(0.90,doorAmt*0.95);
-    cx.fillStyle='#0d1822';
+    const passageA=Math.min(0.18,0.05+doorAmt*0.10);
+    cx.globalAlpha=passageA;
+    cx.fillStyle='#8ad7ec';
     cx.beginPath();
     cx.moveTo(dt.x,dt.y); cx.lineTo(db.x,db.y);
     cx.lineTo(db.x,db.y-doorH); cx.lineTo(dt.x,dt.y-doorH);
     cx.closePath(); cx.fill();
-    // Subtle warm daylight glow near center (street light feel)
-    if(doorAmt>0.5){
-      const glowA=(doorAmt-0.5)*0.22;
+
+    // Bright threshold cue: if it is open, the player should read it as passable.
+    cx.globalAlpha=Math.min(0.55,doorAmt*0.5);
+    cx.fillStyle='#bcefff';
+    cx.beginPath();
+    cx.moveTo(dt.x,dt.y+1); cx.lineTo(db.x,db.y+1);
+    cx.lineTo(db.x,db.y+5); cx.lineTo(dt.x,dt.y+5);
+    cx.closePath(); cx.fill();
+
+    if(doorAmt>0.48){
+      const glowA=(doorAmt-0.48)*0.24;
       cx.globalAlpha=glowA;
-      cx.fillStyle='#4a7a99';
+      cx.fillStyle='#dff8ff';
       cx.beginPath();
-      cx.moveTo(dm.x-8,dm.y); cx.lineTo(dm.x+8,dm.y);
-      cx.lineTo(dm.x+8,dm.y-doorH); cx.lineTo(dm.x-8,dm.y-doorH);
+      cx.moveTo(dm.x-10,dm.y+1); cx.lineTo(dm.x+10,dm.y+1);
+      cx.lineTo(dm.x+10,dm.y-doorH*0.18); cx.lineTo(dm.x-10,dm.y-doorH*0.18);
       cx.closePath(); cx.fill();
     }
     cx.globalAlpha=1;
   }
 
   // Glass panels fade OUT as door opens (glassA→0 when fully open)
-  const glassA=0.52*Math.max(0,1-doorAmt*1.1);
+  const glassA=0.52*Math.max(0,1-doorAmt*1.65);
 
-  // ── RIGHT PANEL (slides outward + fades) ──
+  // ── RIGHT PANEL — outer edge fixed, inner edge slides toward the center when closing ──
   cx.save();
   // Clip to door opening area
   cx.beginPath();
@@ -8751,87 +9925,88 @@ function drawGlassDoor(){
   cx.closePath(); cx.clip();
   // Glass fill with gradient
   cx.globalAlpha=glassA;
-  const gRight=cx.createLinearGradient(dt.x+sdx,0,dm.x,0);
+  const gRight=cx.createLinearGradient(dt.x,0,rightInner.x,0);
   gRight.addColorStop(0,'#b8d8ee');
   gRight.addColorStop(0.5,'#88bbdd');
   gRight.addColorStop(1,'#669dbb');
   cx.fillStyle=gRight;
   cx.beginPath();
-  cx.moveTo(dt.x+sdx,dt.y+sdy); cx.lineTo(dm.x,dm.y);
-  cx.lineTo(dm.x,dm.y-doorH); cx.lineTo(dt.x+sdx,dt.y-doorH+sdy);
+  cx.moveTo(dt.x,dt.y); cx.lineTo(rightInner.x,rightInner.y);
+  cx.lineTo(rightInner.x,rightInner.y-doorH); cx.lineTo(dt.x,dt.y-doorH);
   cx.closePath(); cx.fill();
   // Reflection highlight
   cx.globalAlpha=glassA*0.38;
   cx.fillStyle='#ffffff';
+  const rSpanX=rightInner.x-dt.x, rSpanY=rightInner.y-dt.y;
   cx.beginPath();
-  cx.moveTo(dt.x+sdx,dt.y-doorH+sdy);
-  cx.lineTo(dt.x+sdx+(dm.x-dt.x-sdx)*0.3,dt.y-doorH+sdy+(dm.y-dt.y-sdy)*0.3);
-  cx.lineTo(dt.x+sdx+(dm.x-dt.x-sdx)*0.28,dt.y-doorH*0.2+sdy+(dm.y-dt.y-sdy)*0.28);
+  cx.moveTo(dt.x,dt.y-doorH);
+  cx.lineTo(dt.x+rSpanX*0.3,dt.y-doorH+rSpanY*0.3);
+  cx.lineTo(dt.x+rSpanX*0.28,dt.y-doorH*0.2+rSpanY*0.28);
   cx.closePath(); cx.fill();
   // Panel stroke
   cx.globalAlpha=glassA*0.95;
   cx.strokeStyle='#5a4a38';cx.lineWidth=0.8;
   cx.beginPath();
-  cx.moveTo(dt.x+sdx,dt.y+sdy); cx.lineTo(dm.x,dm.y);
-  cx.lineTo(dm.x,dm.y-doorH); cx.lineTo(dt.x+sdx,dt.y-doorH+sdy);
+  cx.moveTo(dt.x,dt.y); cx.lineTo(rightInner.x,rightInner.y);
+  cx.lineTo(rightInner.x,rightInner.y-doorH); cx.lineTo(dt.x,dt.y-doorH);
   cx.closePath(); cx.stroke();
   // Handle (golden, near center divider) — only visible when closed
   cx.globalAlpha=Math.max(0,1-doorAmt*2);
-  const thx=dm.x+(dt.x+sdx-dm.x)*0.18, thy=(dm.y+sdy*0.18)-doorH*0.45;
+  const thx=rightInner.x+(dt.x-rightInner.x)*0.18, thy=(rightInner.y+(dt.y-rightInner.y)*0.18)-doorH*0.45;
   cx.fillStyle='#c8a040';cx.fillRect(thx-1.5,thy-6,3,12);
   cx.strokeStyle='#8a6820';cx.lineWidth=0.7;cx.strokeRect(thx-1.5,thy-6,3,12);
   // Logo — only visible when closed
   cx.globalAlpha=0.65*Math.max(0,1-doorAmt*2);
-  drawXtancoLogo((dt.x+sdx+dm.x)/2, ((dt.y+sdy+dm.y)/2)-doorH*0.38);
+  drawXtancoLogo((dt.x+rightInner.x)/2, ((dt.y+rightInner.y)/2)-doorH*0.62);
   cx.restore();
 
-  // ── LEFT PANEL (slides toward center from other side) ──
+  // ── LEFT PANEL — outer edge fixed, inner edge slides toward the center when closing ──
   cx.save();
   cx.beginPath();
   cx.moveTo(dm.x,dm.y); cx.lineTo(db.x,db.y);
   cx.lineTo(db.x,db.y-doorH); cx.lineTo(dm.x,dm.y-doorH);
   cx.closePath(); cx.clip();
   cx.globalAlpha=glassA;
-  const gLeft=cx.createLinearGradient(dm.x,0,db.x-sdx,0);
+  const gLeft=cx.createLinearGradient(leftInner.x,0,db.x,0);
   gLeft.addColorStop(0,'#669dbb');
   gLeft.addColorStop(0.5,'#88bbdd');
   gLeft.addColorStop(1,'#b8d8ee');
   cx.fillStyle=gLeft;
   cx.beginPath();
-  cx.moveTo(db.x-sdx,db.y-sdy); cx.lineTo(dm.x,dm.y);
-  cx.lineTo(dm.x,dm.y-doorH); cx.lineTo(db.x-sdx,db.y-doorH-sdy);
+  cx.moveTo(leftInner.x,leftInner.y); cx.lineTo(db.x,db.y);
+  cx.lineTo(db.x,db.y-doorH); cx.lineTo(leftInner.x,leftInner.y-doorH);
   cx.closePath(); cx.fill();
   cx.globalAlpha=glassA*0.35;
   cx.fillStyle='#ffffff';
+  const lSpanX=leftInner.x-db.x, lSpanY=leftInner.y-db.y;
   cx.beginPath();
-  cx.moveTo(db.x-sdx,db.y-doorH-sdy);
-  cx.lineTo(db.x-sdx+(dm.x-db.x+sdx)*0.3,db.y-doorH-sdy+(dm.y-db.y+sdy)*0.3);
-  cx.lineTo(db.x-sdx+(dm.x-db.x+sdx)*0.28,db.y-doorH*0.2-sdy+(dm.y-db.y+sdy)*0.28);
+  cx.moveTo(db.x,db.y-doorH);
+  cx.lineTo(db.x+lSpanX*0.3,db.y-doorH+lSpanY*0.3);
+  cx.lineTo(db.x+lSpanX*0.28,db.y-doorH*0.2+lSpanY*0.28);
   cx.closePath(); cx.fill();
   cx.globalAlpha=glassA*0.95;
   cx.strokeStyle='#5a4a38';cx.lineWidth=0.8;
   cx.beginPath();
-  cx.moveTo(db.x-sdx,db.y-sdy); cx.lineTo(dm.x,dm.y);
-  cx.lineTo(dm.x,dm.y-doorH); cx.lineTo(db.x-sdx,db.y-doorH-sdy);
+  cx.moveTo(leftInner.x,leftInner.y); cx.lineTo(db.x,db.y);
+  cx.lineTo(db.x,db.y-doorH); cx.lineTo(leftInner.x,leftInner.y-doorH);
   cx.closePath(); cx.stroke();
   cx.globalAlpha=Math.max(0,1-doorAmt*2);
-  const bhx=dm.x+(db.x-sdx-dm.x)*0.18, bhy=(dm.y-sdy*0.18)-doorH*0.45;
+  const bhx=leftInner.x+(db.x-leftInner.x)*0.18, bhy=(leftInner.y+(db.y-leftInner.y)*0.18)-doorH*0.45;
   cx.fillStyle='#c8a040';cx.fillRect(bhx-1.5,bhy-6,3,12);
   cx.strokeStyle='#8a6820';cx.lineWidth=0.7;cx.strokeRect(bhx-1.5,bhy-6,3,12);
   cx.globalAlpha=0.65*Math.max(0,1-doorAmt*2);
-  drawXtancoLogo((db.x-sdx+dm.x)/2, ((db.y-sdy+dm.y)/2)-doorH*0.38);
+  drawXtancoLogo((db.x+leftInner.x)/2, ((db.y+leftInner.y)/2)-doorH*0.62);
   cx.restore();
 
   cx.globalAlpha=1;
 
   // ── CENTER DIVIDER POST ──
-  cx.fillStyle='#3a2410';
-  cx.fillRect(dm.x-2,dm.y-doorH,4,doorH+2);
-
-  // ── OPEN label (only when fully closed) ──
-  if(doorAmt<0.08){
-    const oCx=(dt.x+db.x)/2, oCy=(dt.y+db.y)/2-doorH*0.22;
-    tx('OPEN',oCx,oCy,'#2a664488',8,'center');
+  const dividerA=Math.max(0,1-doorAmt/0.18);
+  if(dividerA>0){
+    cx.globalAlpha=dividerA;
+    cx.fillStyle='#3a2410';
+    cx.fillRect(dm.x-2,dm.y-doorH,4,doorH+2);
+    cx.globalAlpha=1;
   }
 }
 
@@ -9235,7 +10410,9 @@ function drawAltadisTFT(){
   const cX=vW/2, cY=vH/2;
   const sH=vH;
 
-  if(G&&G.thief&&G.thief.phase!=='idle'){
+  if(LIVE_CAM.active||LIVE_CAM.requesting){
+    drawLiveCamScreen(vW,vH);
+  } else if(G&&G.thief&&G.thief.phase!=='idle'){
     drawSecurityCCTV(vW,vH);
   } else if(G&&G.tftGrokArt){
     drawTftGrokArt(G.tftGrokArt,vW,vH);
@@ -9974,15 +11151,27 @@ function drawIsoDoor(col,row){
   // Welcome mat
   const mp=toIso(col,row+0.5);
   cx.globalAlpha=0.4;r(mp.x-12,mp.y-2,24,6,'#885533');cx.globalAlpha=1;
-  tx('OPEN',p.x,p.y-12,'#4a3018',6,'center');
 }
 
 // ── DECORATION ───────────────────────────────────────────────
 
+function getFloorLampVisualState(){
+  const baseIntensity=G?Math.max(0,Math.min(100,Number(G.lampIntensity)||0))/100:0;
+  const hueOn=!!(HUE&&HUE.enabled&&HUE.on);
+  const realOn=!!elgatoState.on||hueOn;
+  let intensity=baseIntensity;
+  // Si la luz real está encendida fuera del ciclo horario,
+  // mantenemos también encendida su representación dentro del juego.
+  if(realOn&&intensity<=0){
+    intensity=(HUE&&HUE.mode==='evento')?0.92:(hueOn?0.78:0.72);
+  }
+  intensity=Math.max(0,Math.min(1,intensity));
+  return {isOn:realOn&&intensity>0.02,intensity};
+}
+
 function drawIsoFloorLamp(col,row){
   const p=toIso(col,row);
-  const isOn=elgatoState.on;
-  const intensity=G?G.lampIntensity/100:0; // 0.0→1.0
+  const {isOn,intensity}=getFloorLampVisualState();
 
   // ── Halo de luz en el suelo (proporcional a intensidad) ──
   if(isOn&&intensity>0){
@@ -10107,14 +11296,15 @@ function drawIsoDJBooth(col,row){
   const boothH=26;
   const djOn=G&&G.staff&&G.staff.some(s=>s.hired&&s.role===4);
   const party=G&&G.tftParty>0;
+  const mocapOn=LIVE_MOCAP&&LIVE_MOCAP.enabled&&LIVE_MOCAP.confidence>0.08;
 
   // Base: matte black with subtle neon edge
   drawIsoBlock(col,row,2,1,boothH,'#2a2a3a','#14141e','#1e1e2c',null);
 
   // LED strip along front isometric edge
   const eFront0=toIso(col,row), eFront1=toIso(col+2,row);
-  const ledCol=party?['#ff44cc','#44ffcc','#ffcc44','#cc44ff'][Math.floor(tt/8)%4]:djOn?'#4466ff':'#333355';
-  if(djOn){glow(ledCol,party?16:6);}
+  const ledCol=mocapOn?['#78f3ff','#9dffcf','#ff7ae6'][Math.floor(tt/6)%3]:(party?['#ff44cc','#44ffcc','#ffcc44','#cc44ff'][Math.floor(tt/8)%4]:djOn?'#4466ff':'#333355');
+  if(djOn){glow(ledCol,party||mocapOn?16:6);}
   cx.strokeStyle=ledCol;cx.lineWidth=2;
   cx.beginPath();cx.moveTo(eFront0.x,eFront0.y);cx.lineTo(eFront1.x,eFront1.y);cx.stroke();
   nog();
@@ -10211,6 +11401,15 @@ function drawIsoDJBooth(col,row){
     cx.globalAlpha=0.18+0.12*Math.abs(Math.sin(tt*0.15));
     glow(pCol,20);
     cx.beginPath();cx.arc(pl.x,pl.y-boothH-30,22,0,Math.PI*2);cx.fillStyle=pCol;cx.fill();
+    nog();cx.globalAlpha=1;
+  }
+  if(mocapOn){
+    const mp=toIso(col+1,row+0.48);
+    const pulse=0.15+LIVE_MOCAP.confidence*0.22+Math.abs(Math.sin(tt*0.12))*0.08;
+    cx.globalAlpha=pulse;
+    glow('#78f3ff',18);
+    cx.beginPath();cx.ellipse(mp.x,mp.y-boothH-8,34,10,0,0,Math.PI*2);
+    cx.fillStyle='#78f3ff';cx.fill();
     nog();cx.globalAlpha=1;
   }
 }
@@ -10342,10 +11541,63 @@ function drawIsoMagazineRack(col,row){
 }
 
 // ── DRAW STAFF (ISOMETRIC) ───────────────────────────────────
+function isNovahMocapActive(){
+  return !!(LIVE_CAM.active&&LIVE_MOCAP.enabled&&LIVE_MOCAP.confidence>0.07);
+}
+
+function drawNovahMocap(s){
+  const pose=LIVE_MOCAP;
+  const energy=clamp01(pose.energy*1.45+pose.confidence*0.45);
+  const lean=Math.max(-1,Math.min(1,pose.lean));
+  const sway=lean*5;
+  const bounce=-Math.abs(Math.sin(tt*0.16))*energy*4-pose.bounce*2;
+  const dir=lean<-0.18?-1:1;
+  const fr=((pose.leftArm+pose.rightArm+energy)>0.18)?Math.floor(tt/4)%2:Math.floor(tt/10)%2;
+  const px=s.x+sway;
+  const py=s.y+bounce;
+  chibi(px,py,dir,s.shirt,s.hair,fr,true,tt,1,true,s.look);
+
+  const skinCol=s.look&&s.look.skin!=null?P.skins[s.look.skin%P.skins.length]:P.skin;
+  const shirtCol='#ddaa22';
+  const leftPower=clamp01(pose.leftArm+energy*0.28);
+  const rightPower=clamp01(pose.rightArm+energy*0.28);
+  const leftShoulder={x:px+1,y:py+11};
+  const rightShoulder={x:px+13,y:py+11};
+  const leftHand={
+    x:px-4-leftPower*7+lean*3,
+    y:py+18-leftPower*19+Math.sin(tt*0.12)*2*energy
+  };
+  const rightHand={
+    x:px+18+rightPower*7+lean*3,
+    y:py+18-rightPower*19-Math.cos(tt*0.11)*2*energy
+  };
+  cx.save();
+  cx.lineCap='round';
+  cx.lineJoin='round';
+  cx.strokeStyle=shirtCol;
+  cx.lineWidth=3;
+  glow('#78f3ff',4+pose.confidence*8);
+  cx.beginPath();
+  cx.moveTo(leftShoulder.x,leftShoulder.y);
+  cx.quadraticCurveTo(px-5,py+14-leftPower*10,leftHand.x,leftHand.y);
+  cx.moveTo(rightShoulder.x,rightShoulder.y);
+  cx.quadraticCurveTo(px+19,py+14-rightPower*10,rightHand.x,rightHand.y);
+  cx.stroke();
+  nog();
+  cx.fillStyle=skinCol;
+  cx.beginPath();cx.arc(leftHand.x,leftHand.y,2,0,Math.PI*2);cx.fill();
+  cx.beginPath();cx.arc(rightHand.x,rightHand.y,2,0,Math.PI*2);cx.fill();
+  cx.globalAlpha=0.52+pose.confidence*0.35;
+  tx('MOCAP',px+7,py-12,'#78f3ff',5,'center');
+  cx.globalAlpha=1;
+  cx.restore();
+}
+
 function drawIsoStaff(s){
   const dir=s.dir||1;
   const isPlayer=G.staff&&s===G.staff[0];
   const isDJRole=!isPlayer&&s.role===4;
+  const novahMocapActive=!isPlayer&&isDJRole&&!s.isWalking&&isNovahMocapActive();
   // Player indicator
   if(isPlayer){
     const bob=Math.sin(tt*0.08)*3;
@@ -10354,7 +11606,9 @@ function drawIsoStaff(s){
     cx.globalAlpha=1;
   }
   // DJ scratch gesture: lean toward booth (booth is above/behind, DJ is in front)
-  if(!isPlayer&&s.role===4&&s.djScratch>0){
+  if(novahMocapActive){
+    drawNovahMocap(s);
+  } else if(!isPlayer&&s.role===4&&s.djScratch>0){
     const phase=s.djScratch/37; // 1→0 as gesture completes (longer scratch)
     const lean=Math.sin(phase*Math.PI)*6; // arc: lean toward booth and back
     // DJ is in front of booth (row+1), booth is up-right → lean up-right toward decks
@@ -10411,11 +11665,22 @@ function drawIsoStaff(s){
     const borderCol=isFiring?'#cc3333':'#4466cc';
     const bw2=Math.max(msg1.length,msg2.length)*5+14;
     const bh2=22,bx3=s.x+7-bw2/2,by3=s.y-38;
-    r(bx3,by3,bw2,bh2,'#ffffffee');rx(bx3,by3,bw2,bh2,borderCol,1.5);
-    cx.fillStyle='#ffffffee';
-    cx.beginPath();cx.moveTo(s.x+4,by3+bh2);cx.lineTo(s.x+10,by3+bh2);cx.lineTo(s.x+7,by3+bh2+5);cx.closePath();cx.fill();
-    tx(msg1,bx3+bw2/2,by3+9,borderCol,7,'center');
-    tx(msg2,bx3+bw2/2,by3+18,isFiring?'#cc3333':'#cc4444',6,'center');
+    queueSpeechBubble({
+      x:bx3,
+      y:by3,
+      w:bw2,
+      lines:[msg1,msg2],
+      bg:'#ffffffee',
+      border:borderCol,
+      color:borderCol,
+      align:'center',
+      font:7,
+      lineHeight:9,
+      paddingX:7,
+      paddingY:4,
+      lineColors:[borderCol,isFiring?'#cc3333':'#cc4444'],
+      emphasis:true,
+    });
   }
   // Energy bar
   r(s.x-1,s.y+28,16,3,'#c0b8a0');
@@ -10442,18 +11707,38 @@ function drawIsoStaff(s){
     const bw=Math.min(230,maxLen*5+22),bh=12+shown.length*9;
     const bx2=Math.max(4,Math.min(W-bw-4,s.x+7-bw/2));
     const by2=Math.max(6,s.y-32-bh);
-    const tailX=Math.max(bx2+8,Math.min(bx2+bw-12,s.x+7));
-    r(bx2,by2,bw,bh,'#f7fbffee');rx(bx2,by2,bw,bh,'#55ccff',1.5);
-    cx.fillStyle='#f7fbffee';
-    cx.beginPath();cx.moveTo(tailX-4,by2+bh);cx.lineTo(tailX+6,by2+bh);cx.lineTo(s.x+7,by2+bh+7);cx.closePath();cx.fill();
-    rx(bx2,by2,bw,bh,'#55ccff',1.5);
-    shown.forEach((l,i)=>tx(l,bx2+bw/2,by2+10+i*9,'#12313a',7,'center'));
+    queueSpeechBubble({
+      x:bx2,
+      y:by2,
+      w:bw,
+      lines:shown,
+      bg:'#f7fbffee',
+      border:'#55ccff',
+      color:'#12313a',
+      align:'center',
+      font:7,
+      lineHeight:9,
+      paddingX:11,
+      paddingY:7,
+      emphasis:true,
+    });
   } else if(djActive){
     // DJ mode: always show "Altadis Party!!" bubble
     const msg='Altadis Party!!';
     const bw=msg.length*6+8,bh=14,bx2=s.x+7-bw/2,by2=s.y-24;
-    r(bx2,by2,bw,bh,'#ff44ccdd');rx(bx2,by2,bw,bh,'#cc22aa',1);
-    tx(msg,bx2+4,by2+10,'#ffffff',8);r(s.x+4,by2+bh,4,4,'#ff44ccdd');
+    queueSpeechBubble({
+      x:bx2,
+      y:by2,
+      w:bw,
+      text:msg,
+      bg:'#ff44ccdd',
+      border:'#cc22aa',
+      color:'#ffffff',
+      font:8,
+      paddingX:6,
+      paddingY:4,
+      emphasis:true,
+    });
   } else if(s.role===3 && mgrSongBubbleTimer>0){
     // Store Manager: song announcement (PRIORITY over selling bubble)
     mgrSongBubbleTimer--;
@@ -10466,18 +11751,38 @@ function drawIsoStaff(s){
     const maxLen=Math.max(msg1.length,msg2.length,msg3.length);
     const bw=maxLen*5+14,bh=30,bx2=s.x+7-bw/2,by2=s.y-38;
     const pulse=Math.sin(tt*0.15)*0.3+0.7;
-    r(bx2,by2,bw,bh,'#ff44aadd');rx(bx2,by2,bw,bh,'#ffcc00',1.5);
-    cx.globalAlpha=pulse;
-    tx(msg1,bx2+bw/2,by2+9,'#ffffff',6,'center');
-    tx(msg2,bx2+bw/2,by2+17,'#ffffff',6,'center');
-    cx.globalAlpha=1;
-    tx(msg3,bx2+bw/2,by2+26,'#ffee44',7,'center');
-    r(s.x+4,by2+bh,4,4,'#ff44aadd');
+    queueSpeechBubble({
+      x:bx2,
+      y:by2,
+      w:bw,
+      lines:[msg1,msg2,msg3],
+      bg:'#ff44aadd',
+      border:'#ffcc00',
+      color:'#ffffff',
+      align:'center',
+      font:6,
+      lineHeight:9,
+      paddingX:8,
+      paddingY:5,
+      lineColors:['#ffffff','#ffffff','#ffee44'],
+      opacity:pulse,
+      emphasis:true,
+    });
   } else if(s.bTimer>0){
     const msg=T().bubble[s.bIdx]||'!';
     const bw=msg.length*6+8,bh=14,bx2=s.x+7-bw/2,by2=s.y-24;
-    r(bx2,by2,bw,bh,'#ffffffe8');rx(bx2,by2,bw,bh,'#8a7a60',1);
-    tx(msg,bx2+4,by2+10,'#4a3a20',8);r(s.x+4,by2+bh,4,4,'#ffffffe8');
+    queueSpeechBubble({
+      x:bx2,
+      y:by2,
+      w:bw,
+      text:msg,
+      bg:'#ffffffe8',
+      border:'#8a7a60',
+      color:'#4a3a20',
+      font:8,
+      paddingX:6,
+      paddingY:4,
+    });
   } else if(s.role===3 && videoPlaying && !videoPaused && dsMode==='video'){
     // Store Manager shows current DS video title in bubble
     const dsN=VIDEO_LIST[dsVideoIdx]||'';
@@ -10485,8 +11790,18 @@ function drawIsoStaff(s){
     const songT=dashI>0?dsN.substring(dashI+3):dsN;
     const msg='♪ '+songT;
     const bw=msg.length*5.5+10,bh=14,bx2=s.x+7-bw/2,by2=s.y-24;
-    r(bx2,by2,bw,bh,'#2a1a3add');rx(bx2,by2,bw,bh,'#cc99ff',1);
-    tx(msg,bx2+4,by2+10,'#eeddff',7);r(s.x+4,by2+bh,4,4,'#2a1a3add');
+    queueSpeechBubble({
+      x:bx2,
+      y:by2,
+      w:bw,
+      text:msg,
+      bg:'#2a1a3add',
+      border:'#cc99ff',
+      color:'#eeddff',
+      font:7,
+      paddingX:6,
+      paddingY:4,
+    });
   }
   if(G.rush.active&&s.bTimer>0){tx('⚡',s.x+14,s.y-26,'#ff8800',10);}
 }
@@ -10531,13 +11846,19 @@ function drawIsoCust(c){
     const by2=c.y-28;
     const borderCol=c.vip?'#daa520':'#8a7a60';
     const bgCol=c.vip?'#fffbe8ee':'#ffffffe8';
-    cx.globalAlpha=Math.min(1,c.bTimer/12);
-    r(bx2,by2,bw,bh,bgCol);
-    rx(bx2,by2,bw,bh,borderCol,1);
-    // Pointer triangle
-    r(c.x+4,by2+bh,4,4,bgCol);
-    tx(msg,bx2+6,by2+10,c.vip?'#8B6914':'#4a3a20',7);
-    cx.globalAlpha=1;
+    queueSpeechBubble({
+      x:bx2,
+      y:by2,
+      w:bw,
+      text:msg,
+      bg:bgCol,
+      border:borderCol,
+      color:c.vip?'#8B6914':'#4a3a20',
+      font:7,
+      paddingX:6,
+      paddingY:4,
+      opacity:Math.min(1,c.bTimer/12),
+    });
   }
 }
 
@@ -10740,12 +12061,19 @@ function drawIsoOpinador(op){
     const msg=op.bMsg;
     const bw=Math.min(110,msg.length*5.5+12),bh=14;
     const bx=x+7-bw/2,by=y-28;
-    cx.globalAlpha=Math.min(1,op.bTimer/12);
-    r(bx,by,bw,bh,'#eef8ffee');
-    rx(bx,by,bw,bh,'#55ccff',1);
-    tx(msg.slice(0,22),bx+6,by+10,'#1a3344',7);
-    r(x+4,by+bh,4,4,'#eef8ffee');
-    cx.globalAlpha=1;
+    queueSpeechBubble({
+      x:bx,
+      y:by,
+      w:bw,
+      text:msg.slice(0,22),
+      bg:'#eef8ffee',
+      border:'#55ccff',
+      color:'#1a3344',
+      font:7,
+      paddingX:6,
+      paddingY:4,
+      opacity:Math.min(1,op.bTimer/12),
+    });
   }
 }
 
@@ -11036,7 +12364,7 @@ function retargetCustomerToQueue(c,index=0){
   const fromCol=Math.max(0,Math.min(ISO.cols-1,Math.round(curTile.col)));
   const fromRow=Math.max(0,Math.min(ISO.rows-1,Math.round(curTile.row)));
   const target=getQueueTarget(index);
-  c.path=astarPath(fromCol,fromRow,target.col,target.row)||[];
+  c.path=astarPath(fromCol,fromRow,target.col,target.row,{ignore:c})||[];
   c.pathIdx=0;
   c.roamPath=null;
   c.roamIdx=0;
@@ -12596,6 +13924,10 @@ function drawDemoCountdown(){
 function loop(){
   requestAnimationFrame(loop);
   tt++;
+  resetSpeechOverlay();
+  try{
+    if(isLocalRuntime()&&(state===S.GAME||state===S.PAUSE||state===S.SETTINGS)) huePollPhysicalState(false);
+  }catch(e){}
 
   // Always update HTML bar + video position first
   try{updateHtmlBar();}catch(e){}
@@ -12607,6 +13939,7 @@ function loop(){
   try{updateEraVerticalDock();}catch(e){}
   try{syncHomeMusic();}catch(e){}
   try{if(videoPlaying){updateVideoPosition();updateDSCanvases();}}catch(e){}
+  try{updateLiveMocap();}catch(e){}
 
   // No auto-start from selection screens:
   // the game should only begin after an explicit action that enters gameplay.
@@ -12622,22 +13955,22 @@ function loop(){
   for(const k in BTNS) delete BTNS[k];
   updateTransition();
 
-  if(state===S.ERA_SEL){drawEraSelect();drawTransition();return;}
-  if(state===S.PRELOAD){drawPreload();drawTransition();return;}
+  if(state===S.ERA_SEL){drawEraSelect();finalizeFrame();return;}
+  if(state===S.PRELOAD){drawPreload();finalizeFrame();return;}
   if(state===S.MENU){
     drawMenu();drawDemoCountdown();drawDemoBadge();
     if(demoMode) demoUpdate();
-    drawTransition();return;
+    finalizeFrame();return;
   }
-  if(state===S.INTRO){drawIntro();drawTransition();return;}
-  if(state===S.CLIENT_SEL){drawClientSelect();drawTransition();return;}
-  if(state===S.MODEL_SEL){drawModelSelect();drawDemoBadge();if(demoMode)demoUpdate();drawTransition();return;}
-  if(state===S.TUT){drawTutorial();drawDemoBadge();if(demoMode)demoUpdate();drawTransition();return;}
-  if(state===S.YEAR_END){drawYearEnd();drawTransition();return;}
-  if(state===S.GAME_END){drawGameEnd();drawTransition();return;}
-  if(state===S.EDITOR){drawEditor();drawTransition();return;}
-  if(state===S.SETTINGS){drawSettings();drawTransition();return;}
-  if(state===S.HELP){drawHelp();drawTransition();return;}
+  if(state===S.INTRO){drawIntro();finalizeFrame();return;}
+  if(state===S.CLIENT_SEL){drawClientSelect();finalizeFrame();return;}
+  if(state===S.MODEL_SEL){drawModelSelect();drawDemoBadge();if(demoMode)demoUpdate();finalizeFrame();return;}
+  if(state===S.TUT){drawTutorial();drawDemoBadge();if(demoMode)demoUpdate();finalizeFrame();return;}
+  if(state===S.YEAR_END){drawYearEnd();finalizeFrame();return;}
+  if(state===S.GAME_END){drawGameEnd();finalizeFrame();return;}
+  if(state===S.EDITOR){drawEditor();finalizeFrame();return;}
+  if(state===S.SETTINGS){drawSettings();finalizeFrame();return;}
+  if(state===S.HELP){drawHelp();finalizeFrame();return;}
   if(state===S.PAUSE){
     r(0,0,W,H,P.bg);
     cx.save();try{drawCityBg();}catch(e){}cx.restore();
@@ -12647,7 +13980,7 @@ function loop(){
     cx.save();try{drawUI();}catch(e){}cx.restore();
     drawPause();
     cx.save();try{if(codexMapOpen)drawCodexMapOverlay();}catch(e){}cx.restore();
-    drawTransition();return;
+    finalizeFrame();return;
   }
   // GAME
   if(demoMode) demoUpdate();
@@ -12668,7 +14001,7 @@ function loop(){
   cx.save();try{drawMobileControls();}catch(e){}cx.restore();
   cx.save();try{drawNPCEditor();}catch(e){}cx.restore();
   cx.save();try{if(codexMapOpen)drawCodexMapOverlay();}catch(e){}cx.restore();
-  drawTransition();
+  finalizeFrame();
 }
 loop();
 
@@ -12678,12 +14011,17 @@ loop();
 // ═══════════════════════════════════════════════════════════════
 window.xtAPI = (function(){
   const ROLE_NAMES = {0:'cajero',1:'repositor',2:'azafata',3:'manager',4:'dj'};
+  const BRAND_NAMES = ['Altadis','JTI','PM','BAT'];
   const ROLE_LOOKUP = {};
   Object.entries(ROLE_NAMES).forEach(([k,v])=>{ ROLE_LOOKUP[v]=+k; });
   ROLE_LOOKUP['cashier']=0; ROLE_LOOKUP['cajera']=0;
   ROLE_LOOKUP['stocker']=1; ROLE_LOOKUP['repositora']=1; ROLE_LOOKUP['reponedor']=1;
   ROLE_LOOKUP['hostess']=2;
   ROLE_LOOKUP['store manager']=3; ROLE_LOOKUP['encargado']=3;
+
+  function noGame(){
+    return {ok:false,message:'No hay partida en curso'};
+  }
 
   function prodName(i){
     try{ return getProductLabel(i); }catch(e){ return 'Producto '+i; }
@@ -12763,6 +14101,267 @@ window.xtAPI = (function(){
     return ref.staff.name+' cubre zona '+zoneCol+','+zoneRow+' radio '+zoneRadius;
   }
 
+  function parseBinaryValue(value){
+    if(value==null) return null;
+    const raw=String(value).trim();
+    if(!raw) return null;
+    const v=raw.toLowerCase();
+    if(['on','1','true','yes','si','sí','activar','activa','encender','enciende','enable','enabled','abrir','abre','start','play'].includes(v)) return true;
+    if(['off','0','false','no','desactivar','desactiva','apagar','apaga','disable','disabled','cerrar','cierra','stop','pause'].includes(v)) return false;
+    return undefined;
+  }
+
+  function isAutoValue(value){
+    const raw=String(value==null?'':value).trim().toLowerCase();
+    return ['auto','automatico','automático','automatic'].includes(raw);
+  }
+
+  function resolveBinaryRequest(label,arg,current){
+    const parsed=parseBinaryValue(arg);
+    if(parsed===undefined){
+      return {ok:false,message:'Parámetro no válido para '+label+'. Usa ON, OFF o ningún parámetro para alternar.'};
+    }
+    return {ok:true,value:parsed===null?!current:parsed};
+  }
+
+  function binaryResponse(label,on){
+    return {ok:true,message:label+' '+(on?'ON':'OFF'),data:{on:!!on}};
+  }
+
+  function getFlags(){
+    return {
+      music: !bgMusic.paused,
+      sfx: !!(G&&G.sfxVolume>0),
+      ds: !!(videoPlaying&&!videoPaused),
+      dsAudio: !dsAudioMuted,
+      lamp: !!elgatoState.on,
+      lampOverride: hasLampOverride()?LIGHT_OVERRIDE.lamp:'auto',
+      hue: !!HUE.on,
+      hueOverride: hasHueOverride()?LIGHT_OVERRIDE.hue:'auto',
+      huePrimary: HUE.realPrimaryKey||HUE.primaryLightKey||'',
+      huePrimaryOn: HUE.realPrimaryOn,
+      liveCam: !!LIVE_CAM.active,
+      mocap: !!LIVE_MOCAP.enabled,
+      ac: !!acOn,
+      aroma: !!aromaOn,
+      thief: !!(G&&G.thief&&G.thief.phase!=='idle'),
+      saca: !!(G&&G.saca&&G.saca.phase!=='idle'),
+      holiday: !!(G&&G.holiday&&G.holiday.active),
+      rain: !!(G&&G.weather&&G.weather.type==='rain'),
+      sun: !!(G&&G.weather&&G.weather.type==='sun'),
+      rivalPromo: !!(G&&G.comp&&G.comp.promoTimer>0),
+      hueMode: HUE.mode,
+    };
+  }
+
+  function setMusicState(on){
+    const current=!bgMusic.paused;
+    if(current!==on){
+      if(on){
+        bgMusic.play().catch(()=>{});
+        initEQAnalyser();
+      } else {
+        bgMusic.pause();
+      }
+    }
+    return !!on;
+  }
+
+  function setSfxState(on){
+    G.sfxVolume=on?0.7:0;
+    return !!on;
+  }
+
+  function setDSState(on){
+    if(on){
+      if(!videoPlaying||videoPaused) toggleVideoPause();
+    } else if(videoPlaying&&!videoPaused){
+      toggleVideoPause();
+    }
+    return !!on;
+  }
+
+  function setDSAudioState(on){
+    if((!dsAudioMuted)!==!!on) toggleDSAudio();
+    return !!on;
+  }
+
+  function setLampState(on){
+    applyStudioLightState(!!on,{syncHue:true,persistOverride:true});
+    return !!on;
+  }
+  function setLampAuto(){
+    clearLampOverride(true);
+    HUE.expectedPrimaryOn=null;
+    HUE.sceneKey='';
+    HUE.sceneTick=-9999;
+    showEv('💡 Luz en automático','#88ccff');
+    return {ok:true,message:'Luz AUTO',data:{mode:'auto'}};
+  }
+
+  function setHueState(on){
+    setHueOverride(!!on);
+    HUE.on=!!on;
+    HUE.notify=120;
+    HUE.lastSent=0;
+    HUE.sceneKey='';
+    HUE.sceneTick=-9999;
+    try{
+      if(on) hueAll({on:true,bri:254,ct:300});
+      else hueAll({on:false});
+    }catch(e){}
+    return !!on;
+  }
+  function setHueAuto(){
+    setHueOverride(null);
+    HUE.expectedPrimaryOn=null;
+    HUE.sceneKey='';
+    HUE.sceneTick=-9999;
+    showEv('🟣 Hue en automático','#cc99ff');
+    return {ok:true,message:'Hue AUTO',data:{mode:'auto'}};
+  }
+
+  function setACState(on){
+    acOn=!!on;
+    return !!on;
+  }
+
+  function setAromaState(on){
+    aromaOn=!!on;
+    return !!on;
+  }
+
+  function twoHourTimer(){
+    const dayHours=Math.max(1,shopTimeSettings.closeHour-shopTimeSettings.openHour);
+    const framesPerDay=Math.max(60,shopTimeSettings.dayDurationSec*60);
+    return Math.max(120,Math.floor(framesPerDay/dayHours*2));
+  }
+
+  function setRainState(on){
+    if(on){
+      G.weather={type:'rain',timer:twoHourTimer()};
+      showEv('🌧 '+(lang==='es'?'¡Tormenta activada!':'Storm activated!'),'#6688aa');
+      try{hueAll({on:true,bri:254,xy:[0.18,0.18],alert:'lselect'});}catch(e){}
+    } else if(G.weather&&G.weather.type==='rain'){
+      G.weather={type:null,timer:0};
+      showEv('🌤 '+(lang==='es'?'Tiempo normal':'Normal weather'),'#aaaaaa');
+    }
+    return !!on;
+  }
+
+  function setSunState(on){
+    if(on){
+      G.weather={type:'sun',timer:twoHourTimer()};
+      acOn=true;
+      showEv('☀ '+(lang==='es'?'¡Sol activado! AC encendido':'Sun activated! AC on'),'#ddaa33');
+    } else if(G.weather&&G.weather.type==='sun'){
+      G.weather={type:null,timer:0};
+      showEv('🌤 '+(lang==='es'?'Tiempo normal':'Normal weather'),'#aaaaaa');
+    }
+    return !!on;
+  }
+
+  function setHolidayState(on){
+    if(on){
+      G.holiday={active:true,timer:twoHourTimer(),name:lang==='es'?'Festivo':'Holiday'};
+      showEv('🎉 '+(lang==='es'?'Festivo activado':'Holiday activated'),'#cc8800');
+    } else {
+      G.holiday={active:false,timer:0,name:''};
+      showEv('🎉 '+(lang==='es'?'Festivo desactivado':'Holiday deactivated'),'#888888');
+    }
+    return !!on;
+  }
+
+  function setRivalPromoState(on){
+    if(on){
+      const brand=Math.floor(Math.random()*BRAND_NAMES.length);
+      G.comp.promoBrand=brand;
+      G.comp.promoTimer=CFG.COMP_PROMO_DURATION;
+      showEv('📣 '+(lang==='es'?'Promo rival: ':'Rival promo: ')+BRAND_NAMES[brand],P.red);
+    } else {
+      G.comp.promoTimer=0;
+      G.comp.promoBrand=-1;
+      showEv('📣 '+(lang==='es'?'Promo rival cancelada':'Rival promo cleared'),P.neon2);
+    }
+    return !!on;
+  }
+
+  function resetThiefPosition(th){
+    const doorIso=toIso(ISO.cols,3);
+    th.x=820;
+    th.y=doorIso.y-20;
+    th.dir=-1;
+    th.aFrame=0;
+    th.aTimer=0;
+    th.lootTimer=0;
+    th.caught=false;
+    th.path=null;
+    th.pathIdx=0;
+    th.pathMode='';
+  }
+
+  function setThiefState(on){
+    const th=G.thief;
+    if(on){
+      if(th.phase==='idle'){
+        const target=findNearestWalkableTile(3+Math.floor(Math.random()*6),1+Math.floor(Math.random()*4),{from:{col:ISO.cols-1,row:3},ignore:th})||{col:5,row:3};
+        th.targetCol=target.col;
+        th.targetRow=target.row;
+        th.phase='sneaking';
+        resetThiefPosition(th);
+        th.path=astarPath(ISO.cols-1,3,th.targetCol,th.targetRow,{ignore:th})||[];
+        th.pathIdx=0;th.pathMode='steal';
+        G.doorOpen=60;
+        showEv('🚨 '+(lang==='es'?'¡Un ladrón ha entrado en la tienda!':'A thief entered the shop!'),P.red);
+        SFX.inspectionAlarm();
+      }
+    } else {
+      th.phase='idle';
+      th.cooldown=4800+Math.floor(Math.random()*2400);
+      resetThiefPosition(th);
+      showEv('🛡 '+(lang==='es'?'Ladrón desactivado':'Thief cleared'),P.green);
+    }
+    return !!on;
+  }
+
+  function resetSacaPosition(saca){
+    const doorIso=toIso(ISO.cols,3);
+    saca.x=820;
+    saca.y=doorIso.y-20;
+    saca.dir=-1;
+    saca.aFrame=0;
+    saca.aTimer=0;
+    saca.unloadTimer=0;
+  }
+
+  function setSacaState(on){
+    const saca=G.saca;
+    if(on){
+      if(saca.phase==='idle'){
+        saca.phase='incoming';
+        resetSacaPosition(saca);
+        saca.boxes=6;
+        G.doorOpen=9999;
+        showEv('🚚 '+(lang==='es'?'¡Llega La Saca!':'Delivery arriving!'),'#cc7700');
+        SFX.restockThud();
+      }
+    } else {
+      saca.phase='idle';
+      saca.cooldown=2400+Math.floor(Math.random()*1200);
+      saca.boxes=0;
+      resetSacaPosition(saca);
+      showEv('🚚 '+(lang==='es'?'La Saca desactivada':'Delivery cleared'),'#888888');
+    }
+    return !!on;
+  }
+
+  function runBinaryCommand(label,arg,currentFn,setFn,needsGame){
+    if(needsGame&&!G) return noGame();
+    const req=resolveBinaryRequest(label,arg,currentFn());
+    if(!req.ok) return req;
+    return binaryResponse(label,setFn(req.value));
+  }
+
   const api = {
     // ── CONSULTAS ──────────────────────────────────────────────
     status: function(){
@@ -12782,7 +14381,13 @@ window.xtAPI = (function(){
         state: state,
         staffCount: G.staff?G.staff.filter(s=>s.hired).length:0,
         staffTotal: G.staff?G.staff.length:0,
+        flags: getFlags(),
       }};
+    },
+
+    flags: function(){
+      if(!G) return {ok:false,message:'No hay partida en curso'};
+      return {ok:true,data:getFlags()};
     },
 
     staff: function(){
@@ -12887,6 +14492,143 @@ window.xtAPI = (function(){
       return {ok:true,message:'Partida guardada'};
     },
 
+    hueStatus: function(){
+      return {ok:true,data:{
+        enabled:HUE.enabled,
+        on:HUE.on,
+        mode:HUE.mode,
+        lampOverride: hasLampOverride()?LIGHT_OVERRIDE.lamp:'auto',
+        hueOverride: hasHueOverride()?LIGHT_OVERRIDE.hue:'auto',
+        primaryLightKey:HUE.primaryLightKey,
+        realPrimaryKey:HUE.realPrimaryKey,
+        realPrimaryOn:HUE.realPrimaryOn,
+        realPrimaryReachable:HUE.realPrimaryReachable,
+        bridge:HUE.bridgeIP,
+        lights:HUE.lights,
+        discovery:HUE_DISCOVERY,
+        error:HUE.error,
+      }};
+    },
+    hueDiscover: function(){ return hueDiscoverBridge(); },
+    hueLink: function(){ return hueLinkBridge(); },
+    hueSync: function(){ return hueSyncBridgeLights(); },
+    hueMode: function(mode){
+      const raw=String(mode||'').trim().toLowerCase();
+      if(raw&&!['ambiente','ambient','evento','event'].includes(raw)){
+        return {ok:false,message:'Modo Hue no válido. Usa ambiente, evento o ningún parámetro para alternar.'};
+      }
+      const next=setHueMode(raw);
+      return {ok:true,message:'Hue modo '+hueModeLabel(next),data:{mode:next}};
+    },
+    liveCamStatus: function(){
+      return {ok:true,data:{
+        active:LIVE_CAM.active,
+        requesting:LIVE_CAM.requesting,
+        error:LIVE_CAM.error,
+        mocapEnabled:LIVE_MOCAP.enabled,
+        mocapActive:LIVE_MOCAP.active,
+        mocapConfidence:Math.round(LIVE_MOCAP.confidence*100),
+        mocapEnergy:Math.round(LIVE_MOCAP.energy*100),
+      }};
+    },
+    toggleLiveCam: function(){ return toggleLiveCam(); },
+
+    command: function(input){
+      const raw=String(input||'').trim();
+      if(!raw) return {ok:false,message:'Indica un comando. Ejemplo: /music, /ladron on, /sol off'};
+      const normalized=raw.startsWith('/')?raw.slice(1):raw;
+      const parts=normalized.split(/\s+/).filter(Boolean);
+      const cmd=(parts.shift()||'').toLowerCase();
+      const arg=parts.join(' ');
+      const head=(parts[0]||'').toLowerCase();
+      const tierMap={basica:0,'básica':0,basic:0,media:1,medium:1,premium:2};
+      const visitMap={com:'Com',comercial:'Com',tec:'Tec',tecnico:'Tec','técnico':'Tec',del:'Del',delegacion:'Del','delegación':'Del',gc:'GC',guardia:'GC','guardia-civil':'GC'};
+
+      if(['music','musica','música'].includes(cmd)){
+        if(['next','siguiente'].includes(head)) return api.nextTrack();
+        if(['prev','anterior','previous'].includes(head)) return api.prevTrack();
+        return runBinaryCommand('Música',arg,()=>!bgMusic.paused,setMusicState,false);
+      }
+      if(['sfx','fx','efectos'].includes(cmd)) return runBinaryCommand('FX',arg,()=>!!(G&&G.sfxVolume>0),setSfxState,true);
+      if(['ds','pantalla','video','signage','monitor'].includes(cmd)) return runBinaryCommand('Pantalla',arg,()=>!!(videoPlaying&&!videoPaused),setDSState,false);
+      if(['dsaudio','audio','monitoraudio'].includes(cmd)) return runBinaryCommand('Audio DS',arg,()=>!dsAudioMuted,setDSAudioState,false);
+      if(['livecam','cam','camera','camara','cámara','webcam'].includes(cmd)) return {ok:false,message:'LiveCam requiere ejecución asíncrona. Usa /livecam en la consola o el botón superior.'};
+      if(['mocap','novahmocap','motioncap','motioncapture'].includes(cmd)) return runBinaryCommand('Mocap Novah',arg,()=>!!LIVE_MOCAP.enabled,setLiveMocapEnabled,false);
+      if(['luz','luces','lamp','lampara','lámpara','light'].includes(cmd)){
+        if(isAutoValue(arg)) return setLampAuto();
+        return runBinaryCommand('Luz',arg,()=>!!elgatoState.on,setLampState,false);
+      }
+      if(['hue'].includes(cmd)){
+        if(['modo','mode'].includes(head)) return api.hueMode(parts.slice(1).join(' '));
+        if(isAutoValue(arg)) return setHueAuto();
+        return runBinaryCommand('Hue',arg,()=>!!HUE.on,setHueState,false);
+      }
+      if(['huemode','huemodo'].includes(cmd)) return api.hueMode(arg);
+      if(['ac','aire','aireacondicionado'].includes(cmd)) return runBinaryCommand('AC',arg,()=>!!acOn,setACState,false);
+      if(['aroma','aromatizador'].includes(cmd)) return runBinaryCommand('Aroma',arg,()=>!!aromaOn,setAromaState,false);
+      if(['ladron','ladrón','thief'].includes(cmd)) return runBinaryCommand('Ladrón',arg,()=>!!(G&&G.thief&&G.thief.phase!=='idle'),setThiefState,true);
+      if(['guardiacivil','guardia-civil','guardia','gc'].includes(cmd)){
+        if(!G) return noGame();
+        const current=!!(G.guardiaCivil&&G.guardiaCivil.phase!=='idle');
+        const req=resolveBinaryRequest('Guardia Civil',arg,current);
+        if(!req.ok) return req;
+        return {ok:true,message:setGuardiaCivilCommand(req.value?'on':'off'),data:{on:req.value}};
+      }
+      if(['dj','djnovah','novah'].includes(cmd)){
+        if(!G) return noGame();
+        const slot=G.staff?G.staff.findIndex(s=>s.role===4):-1;
+        const dj=slot>=0?G.staff[slot]:null;
+        const current=!!(dj&&dj.hired&&!dj.fired);
+        const req=resolveBinaryRequest('DJ',arg,current);
+        if(!req.ok) return req;
+        return {ok:true,message:setDJCommand(req.value?'on':'off'),data:{on:req.value}};
+      }
+      if(['opinador','opinion','opinión'].includes(cmd)){
+        if(!G) return noGame();
+        const parsed=parseBinaryValue(arg);
+        const current=!!(G.opinador&&G.opinador.phase!=='idle');
+        if(parsed===undefined&&String(arg||'').trim()){
+          return {ok:true,message:setOpinadorCommand(arg)};
+        }
+        const next=parsed===null?!current:parsed;
+        return {ok:true,message:setOpinadorCommand(next?'on':'off'),data:{on:next}};
+      }
+      if(['mobiliario','furniture','muebles'].includes(cmd)){
+        const req=resolveBinaryRequest('Mobiliario',arg,shopFurnitureVisible!==false);
+        if(!req.ok) return req;
+        return {ok:true,message:setFurnitureVisibility(req.value),data:{on:req.value}};
+      }
+      if(['saca','delivery','reparto'].includes(cmd)) return runBinaryCommand('La Saca',arg,()=>!!(G&&G.saca&&G.saca.phase!=='idle'),setSacaState,true);
+      if(['festivo','holiday'].includes(cmd)) return runBinaryCommand('Festivo',arg,()=>!!(G&&G.holiday&&G.holiday.active),setHolidayState,true);
+      if(['lluvia','rain'].includes(cmd)) return runBinaryCommand('Lluvia',arg,()=>!!(G&&G.weather&&G.weather.type==='rain'),setRainState,true);
+      if(['sol','sun'].includes(cmd)) return runBinaryCommand('Sol',arg,()=>!!(G&&G.weather&&G.weather.type==='sun'),setSunState,true);
+      if(['promo','promorival','rivalpromo','rival'].includes(cmd)) return runBinaryCommand('Promo rival',arg,()=>!!(G&&G.comp&&G.comp.promoTimer>0),setRivalPromoState,true);
+      if(['estado','status'].includes(cmd)) return api.status();
+      if(['personal','staff'].includes(cmd)) return api.staff();
+      if(['stock'].includes(cmd)) return api.stock();
+      if(['save','guardar'].includes(cmd)) return api.save();
+      if(['ayuda','help'].includes(cmd)) return api.help();
+
+      if(['publicidad','advertise'].includes(cmd)){
+        if(!arg) return {ok:false,message:'Uso: /publicidad básica|media|premium'};
+        const tier=tierMap[head];
+        if(tier===undefined) return {ok:false,message:'Publicidad no válida. Usa básica, media o premium'};
+        return api.advertise(tier);
+      }
+
+      if(['visita','visit'].includes(cmd)){
+        if(!arg) return {ok:false,message:'Uso: /visita com|tec|del|gc'};
+        const type=visitMap[head];
+        if(!type) return {ok:false,message:'Visita no válida. Usa com, tec, del o gc'};
+        return api.visit(type);
+      }
+
+      return {ok:false,message:'Comando no reconocido: '+raw};
+    },
+
+    slash: function(input){ return api.command(input); },
+    run: function(input){ return api.command(input); },
+
     toggleMusic: function(){ doAction('musicToggle'); return {ok:true,message:'Música toggled'}; },
     nextTrack: function(){ doAction('musicNext'); return {ok:true,message:'Siguiente canción: '+(G?G.nowPlaying:'')}; },
     prevTrack: function(){ doAction('musicPrev'); return {ok:true,message:'Canción anterior: '+(G?G.nowPlaying:'')}; },
@@ -12968,6 +14710,8 @@ window.xtAPI = (function(){
         musica: ['toggleMusic()','nextTrack()','prevTrack()','toggleLamp()'],
         helpers: ['hireByRole(rol)','hireByName(nombre)','restockByName(nombre)','restockAll()','hireAll()','trainAll()'],
         atajos: ['hireDJ()','hireCashier()','hireHostess()','hireManager()','hireStorcker()'],
+        hue: ['hueStatus()','hueDiscover()','hueLink()','hueSync()','hueMode("ambiente|evento")'],
+        slash: ['command("/music")','command("/lamp off")','command("/lamp auto")','command("/ladron")','command("/huemode evento")','command("/visita gc")'],
       }};
     },
   };
@@ -13457,6 +15201,7 @@ window.xtAPI = (function(){
       'Opinador: '+(G&&G.opinador?G.opinador.phase:'n/a'),
       'AdmiraLive: '+(G&&G.admiraLiveMsg?G.admiraLiveMsg:'off'),
       'AdmiraTube: '+(G&&G.admiraTube&&G.admiraTube.active?(G.admiraTube.videoId+' ('+(G.admiraTube.screens||2)+' pantallas, audio '+(G.admiraTube.audio!==false?'on':'off')+')'):'off'),
+      'LiveCam: '+(LIVE_CAM.active?'ON':'OFF'),
       'Lámpara: '+(elgatoState.on?'ON':'OFF'),
       'AC: '+(acOn?'ON':'OFF'),
       'Aroma: '+(aromaOn?'ON':'OFF'),
@@ -13567,6 +15312,11 @@ window.xtAPI = (function(){
     return 'Reloj actualizado a '+String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');
   }
 
+  function binaryToggleArg(raw,currentOn){
+    const clean=String(raw||'').trim().toLowerCase();
+    return clean|| (currentOn?'off':'on');
+  }
+
   function ensureThief(){
     if(!G.thief) G.thief={phase:'idle',cooldown:3600,x:820,y:0,dir:-1,aFrame:0,aTimer:0,targetCol:5,targetRow:3,path:null,pathIdx:0,lootTimer:0,caught:false};
     return G.thief;
@@ -13574,15 +15324,18 @@ window.xtAPI = (function(){
 
   function setThiefCommand(arg){
     const err=needsGame();if(err)return err;
-    const clean=String(arg||'').trim().toLowerCase();
     const th=ensureThief();
+    const clean=binaryToggleArg(arg,th.phase!=='idle');
     const doorIso=toIso(ISO.cols,3);
     const startX=820,startY=doorIso.y-20;
     if(['on','entrar','entra','start','robar','ladron','ladrón'].includes(clean)){
-      th.targetCol=3+Math.floor(Math.random()*6);
-      th.targetRow=1+Math.floor(Math.random()*4);
+      const target=findNearestWalkableTile(3+Math.floor(Math.random()*6),1+Math.floor(Math.random()*4),{from:{col:ISO.cols-1,row:3},ignore:th})||{col:5,row:3};
+      th.targetCol=target.col;
+      th.targetRow=target.row;
       th.phase='sneaking';
       th.x=startX;th.y=startY;th.dir=-1;th.aFrame=0;th.aTimer=0;th.caught=false;th.lootTimer=0;th.cooldown=9999;
+      th.path=astarPath(ISO.cols-1,3,th.targetCol,th.targetRow,{ignore:th})||[];
+      th.pathIdx=0;th.pathMode='steal';
       G.doorOpen=80;
       showEv('🚨 ¡Ladrón entrando! CCTV en pantalla principal',P.red);
       SFX.inspectionAlarm();
@@ -13594,11 +15347,12 @@ window.xtAPI = (function(){
       th.phase='fleeing';
       th.caught=true;
       th.cooldown=9999;
+      th.path=null;th.pathIdx=0;th.pathMode='';
       G.doorOpen=80;
       showEv('🛡 Ladrón expulsado','#55ccff');
       return 'Ladrón saliendo de la tienda';
     }
-    return 'Uso: /ladron on | /ladron off';
+    return 'Uso: /ladron [on|off]';
   }
 
   function ensureGuardiaCivil(){
@@ -13608,14 +15362,15 @@ window.xtAPI = (function(){
 
   function setGuardiaCivilCommand(arg){
     const err=needsGame();if(err)return err;
-    const clean=String(arg||'').trim().toLowerCase();
     const gc=ensureGuardiaCivil();
+    const clean=binaryToggleArg(arg,gc.phase!=='idle');
     const doorIso=toIso(ISO.cols,3);
     const startX=820,startY=doorIso.y-20;
     if(['on','entrar','entra','start','vigilar','guardia','gc'].includes(clean)){
       gc.targetCol=9;gc.targetRow=3;
       gc.phase='entering';
       gc.x=startX;gc.y=startY;gc.dir=-1;gc.aFrame=0;gc.aTimer=0;gc.patrolTimer=2400;gc.autoLeave=false;
+      gc.path=null;gc.pathIdx=0;gc.pathMode='';
       gc.baseX=0;gc.baseY=0;
       G.doorOpen=80;
       monitorAlert={active:true,timer:240,msg:'GUARDIA CIVIL',color:'#1d4d28'};
@@ -13627,19 +15382,20 @@ window.xtAPI = (function(){
       if(gc.phase==='idle') return 'No hay Guardia Civil activo';
       gc.phase='leaving';
       gc.autoLeave=false;
+      gc.path=null;gc.pathIdx=0;gc.pathMode='';
       G.doorOpen=80;
       showEv('👮 Guardia Civil saliendo','#55ccff');
       return 'Guardia Civil saliendo de la tienda';
     }
-    return 'Uso: /guardiacivil on | /guardiacivil off';
+    return 'Uso: /guardiacivil [on|off]';
   }
 
   function setDJCommand(arg){
     const err=needsGame();if(err)return err;
-    const clean=String(arg||'').trim().toLowerCase();
     const slot=G.staff?G.staff.findIndex(s=>s.role===4):-1;
     if(slot<0) return 'No hay slot DJ en este modelo de tienda';
     const dj=G.staff[slot];
+    const clean=binaryToggleArg(arg,!!(dj.hired&&!dj.fired));
     if(['on','start','contratar','entra','entrar','dj','novah'].includes(clean||'on')){
       if(dj.hired&&!dj.fired) return 'DJ ya está activo';
       if(dj.hired&&dj.fired){
@@ -13659,7 +15415,7 @@ window.xtAPI = (function(){
       doAction('fire'+slot);
       return 'DJ saliendo de la tienda';
     }
-    return 'Uso: /dj on | /dj off';
+    return 'Uso: /dj [on|off]';
   }
 
   function ensureOpinador(){
@@ -13670,13 +15426,14 @@ window.xtAPI = (function(){
   function setOpinadorCommand(arg){
     const err=needsGame();if(err)return err;
     const clean=String(arg||'').trim();
-    const low=clean.toLowerCase();
     const op=ensureOpinador();
+    const low=clean?clean.toLowerCase():binaryToggleArg(arg,op.phase!=='idle');
     const doorIso=toIso(ISO.cols,3);
     const startX=820,startY=doorIso.y-20;
     if(['off','stop','salir','sale','fuera','idle'].includes(low)){
       if(op.phase==='idle') return 'No hay opinador activo';
       op.phase='leaving';op.bTimer=60;op.bMsg='Me voy';G.doorOpen=80;
+      op.path=null;op.pathIdx=0;op.pathMode='';
       return 'Opinador saliendo de la tienda';
     }
     if(!low||low==='on'||low.startsWith('on ')||['happy','feliz','positivo','neutral','sad','triste','negativo','malo','bueno'].some(w=>low.includes(w))){
@@ -13692,6 +15449,7 @@ window.xtAPI = (function(){
       ];
       op.phase='entering';
       op.x=startX;op.y=startY;op.dir=-1;op.aFrame=0;op.aTimer=0;op.voteTimer=0;op.voteFace=face;
+      op.path=null;op.pathIdx=0;op.pathMode='';
       op.look={shirt:2+Math.floor(Math.random()*5),hair:Math.floor(Math.random()*6),skin:Math.floor(Math.random()*6),pants:Math.floor(Math.random()*3),shoes:0,accessory:Math.random()<0.45?1:0};
       op.opinion=clean.replace(/^on\s*/i,'').trim()||opinions[face][Math.floor(Math.random()*opinions[face].length)];
       op.bTimer=80;op.bMsg='Voy al tótem';
@@ -13699,7 +15457,7 @@ window.xtAPI = (function(){
       showEv('💬 Opinador entrando hacia el tótem','#55ccff');
       return 'Opinador activado: entra, opina en el tótem y se marcha';
     }
-    return 'Uso: /opinador on | /opinador off | /opinador happy|neutral|sad';
+    return 'Uso: /opinador [on|off|happy|neutral|sad]';
   }
 
   function setLoyaltyCardCommand(){
@@ -13782,11 +15540,12 @@ window.xtAPI = (function(){
       {title:'Consulta',items:['/status','/staff','/stock','/turno','/turno 12']},
       {title:'Equipo y stock',items:['/hire 1','/hire dj','/hire all','/train 1','/train all','/restock 2','/restock all','/restock prensa']},
       {title:'Tienda',items:['/ad 0','/ad 1','/ad 2','/upgrade','/visit com','/visit tec','/visit del','/visit gc','/save']},
-      {title:'Tiempo y ambiente',items:['/reloj 14:30','/reloj 14 30','/time am','/time pm','/time night','/weather normal','/weather rain','/weather sun','/lamp']},
+      {title:'Tiempo y ambiente',items:['/reloj 14:30','/reloj 14 30','/time am','/time pm','/time night','/weather normal','/weather rain','/weather sun','/lamp','/lamp auto','/hue','/hue auto']},
+      {title:'Pantalla y directo',items:['/livecam','/livecam off','/mocap','/mocap off','/AdmiraLive texto','/AdmiraLive off','/AdmiraTube URL 2 audio','/AdmiraTube off','/say texto']},
       {title:'Escena en vivo',items:['/dj on','/dj off','/ladron on','/ladron off','/guardiacivil on','/guardiacivil off','/opinador on','/opinador off','/door open','/door close','/door auto']},
-      {title:'Paneles y contenido',items:['/AdmiraLive texto','/AdmiraLive off','/AdmiraTube URL 2 audio','/AdmiraTube off','/say texto','/grok pregunta','/draw dibujo']},
+      {title:'IA y contenido',items:['/grok pregunta','/draw dibujo']},
       {title:'Ajustes rápidos',items:['/money 12000','/sat 90','/fame 80','/set week 12','/set year 2','/set revenue 5000','/set storeLevel 2','/set customers 30']},
-      {title:'Música y layout',items:['/song 1','/song bad bunny','/music','/next','/prev','/equipo inicio ana 3 4','/equipo zona dj 12 2 2','/mobiliario on','/mobiliario off']},
+      {title:'Musica y layout',items:['/song 1','/song bad bunny','/music','/next','/prev','/equipo inicio ana 3 4','/equipo zona dj 12 2 2','/mobiliario inicio','/mobiliario on','/mobiliario off']},
     ];
   }
 
@@ -13846,11 +15605,22 @@ window.xtAPI = (function(){
         return 'Uso: /equipo inicio <staff> <col> <row> | /equipo zona <staff> <col> <row> <radio>';
       }
       if(cmd==='mobiliario'||cmd==='furniture'||cmd==='muebles'){
-        const clean=arg.toLowerCase().trim();
+        const clean=binaryToggleArg(arg,shopFurnitureVisible!==false);
         if(['inicio','start','home','base','reset','origen'].includes(clean)) return restoreSavedFurnitureLayout();
         if(['on','show','mostrar','visible','restore','restaurar'].includes(clean)) return setFurnitureVisibility(true);
         if(['off','hide','ocultar','invisible','none','desaparecer'].includes(clean)) return setFurnitureVisibility(false);
         return 'Uso: /mobiliario inicio | /mobiliario on | /mobiliario off';
+      }
+      if(['livecam','cam','camera','camara','cámara','webcam'].includes(cmd)){
+        const req=resolveBinaryRequest('LiveCam',arg,!!LIVE_CAM.active);
+        if(!req.ok) return req.message;
+        const next=await setLiveCamState(req.value);
+        return next?'LiveCam activada en la pantalla principal':'LiveCam desactivada';
+      }
+      if(['mocap','novahmocap','motioncap','motioncapture'].includes(cmd)){
+        const req=resolveBinaryRequest('Mocap Novah',arg,!!LIVE_MOCAP.enabled);
+        if(!req.ok) return req.message;
+        return setLiveMocapEnabled(req.value)?'Mocap Novah activado':'Mocap Novah desactivado';
       }
       if(cmd==='reloj'||cmd==='clock') return setClockTime(arg);
       if(cmd==='turno'||cmd==='turn'||cmd==='ticket') return callTurnNumber(arg);
@@ -13908,8 +15678,8 @@ window.xtAPI = (function(){
         return setGameField('time',arg);
       }
       if(cmd==='door'||cmd==='puerta') return setDoorMode(arg);
-      if(cmd==='lamp'||cmd==='luz') return api.toggleLamp().message;
-      if(cmd==='music'||cmd==='musica') return api.toggleMusic().message;
+      if(cmd==='lamp'||cmd==='luz') return api.command('/luz'+(arg?' '+arg:'')).message;
+      if(cmd==='music'||cmd==='musica') return api.command('/music'+(arg?' '+arg:'')).message;
       if(cmd==='next') return api.nextTrack().message;
       if(cmd==='prev') return api.prevTrack().message;
       if(cmd==='save') return api.save().message;
@@ -13974,7 +15744,7 @@ window.xtAPI = (function(){
   }
 
   window.xtAPI.telegramSend=telegramSend;
-  window.xtAPI.telegramStatus=function(){return {ok:true,message:'Telegram bridge',data:{enabled:TELEGRAM.enabled,lastCommandId:TELEGRAM.lastCommandId,lastError:TELEGRAM.lastError,bridgeMode:BRIDGE_MODE,telegramOrigin:telegramUrl(''),grokOrigin:grokUrl(''),lastLatencyMs:Math.round(TELEGRAM.lastLatencyMs||0),lastMessageMeta:TELEGRAM.lastMessageMeta,bridgeStatus:TELEGRAM.bridgeStatus}};};
+  window.xtAPI.telegramStatus=function(){return {ok:true,message:'Telegram bridge',data:{enabled:TELEGRAM.enabled,lastCommandId:TELEGRAM.lastCommandId,lastError:TELEGRAM.lastError,bridgeMode:TELEGRAM.bridgeMode,telegramOrigin:telegramUrl(''),grokOrigin:grokUrl(''),lastLatencyMs:Math.round(TELEGRAM.lastLatencyMs||0),lastMessageMeta:TELEGRAM.lastMessageMeta,bridgeStatus:TELEGRAM.bridgeStatus}};};
 
   function shouldAnnounceOnline(){
     const key='xtanco_tg_online_announce_at';
@@ -14168,7 +15938,7 @@ window.xtAPI = (function(){
       appendTelegramLog(res.ok?'bot':'err','AdmiraXPBot',res.ok?'Online enviado a Telegram':res.message);
     });
   }
-  console.log('%cTelegram bridge ready — '+modeLabel(BRIDGE_MODE),'color:#55ccff;font-size:14px;font-weight:bold');
+  console.log('%cTelegram bridge ready — '+modeLabel(TELEGRAM.bridgeMode),'color:#55ccff;font-size:14px;font-weight:bold');
 })();
 </script>
 </body>

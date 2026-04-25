@@ -15,6 +15,8 @@ const DEFAULT_CONFIG = {
   hue: {
     bridgeIP: '',
     apiKey: '',
+    mode: 'ambiente',
+    primaryLightKey: '',
     lights: {
       despacho: 9,
       comedor: 8,
@@ -84,6 +86,11 @@ function normalizeLights(value) {
   return entries.length ? Object.fromEntries(entries) : { ...DEFAULT_CONFIG.hue.lights };
 }
 
+function normalizeHueMode(value) {
+  const mode = String(value || '').trim().toLowerCase();
+  return ['evento', 'event'].includes(mode) ? 'evento' : 'ambiente';
+}
+
 function normalizeStringList(value) {
   if (Array.isArray(value)) return value.map(v => String(v).trim()).filter(Boolean);
   if (typeof value === 'string') return value.split(',').map(v => v.trim()).filter(Boolean);
@@ -97,6 +104,8 @@ const CONFIG = {
   elgatoPort: resolveNumber('XTANCO_ELGATO_PORT', FILE_CONFIG.elgato && FILE_CONFIG.elgato.port, DEFAULT_CONFIG.elgato.port),
   hueBridgeIp: resolveString('XTANCO_HUE_BRIDGE_IP', FILE_CONFIG.hue && FILE_CONFIG.hue.bridgeIP, DEFAULT_CONFIG.hue.bridgeIP),
   hueApiKey: resolveString('XTANCO_HUE_API_KEY', FILE_CONFIG.hue && FILE_CONFIG.hue.apiKey, DEFAULT_CONFIG.hue.apiKey),
+  hueMode: normalizeHueMode(resolveString('XTANCO_HUE_MODE', FILE_CONFIG.hue && FILE_CONFIG.hue.mode, DEFAULT_CONFIG.hue.mode)),
+  huePrimaryLightKey: resolveString('XTANCO_HUE_PRIMARY_LIGHT', FILE_CONFIG.hue && FILE_CONFIG.hue.primaryLightKey, DEFAULT_CONFIG.hue.primaryLightKey),
   hueLights: normalizeLights(FILE_CONFIG.hue && FILE_CONFIG.hue.lights),
   hueEnabled: resolveBoolean('XTANCO_HUE_ENABLED', FILE_CONFIG.hue && FILE_CONFIG.hue.enabled, DEFAULT_CONFIG.hue.enabled),
   telegramBotToken: resolveString('XTANCO_TELEGRAM_BOT_TOKEN', FILE_CONFIG.telegram && FILE_CONFIG.telegram.botToken, DEFAULT_CONFIG.telegram.botToken),
@@ -118,6 +127,268 @@ const CONFIG = {
 
 if (CONFIG.telegramChatId && !CONFIG.telegramAllowedChatIds.includes(CONFIG.telegramChatId)) {
   CONFIG.telegramAllowedChatIds.push(CONFIG.telegramChatId);
+}
+
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function mergeDeep(base, patch) {
+  if (!isPlainObject(base) || !isPlainObject(patch)) return patch;
+  const out = { ...base };
+  for (const [key, value] of Object.entries(patch)) {
+    if (isPlainObject(value) && isPlainObject(out[key])) out[key] = mergeDeep(out[key], value);
+    else out[key] = value;
+  }
+  return out;
+}
+
+function applyHueConfig(nextHue) {
+  if (!isPlainObject(nextHue)) return;
+  if (typeof nextHue.bridgeIP === 'string') CONFIG.hueBridgeIp = nextHue.bridgeIP.trim();
+  if (typeof nextHue.apiKey === 'string') CONFIG.hueApiKey = nextHue.apiKey.trim();
+  if (nextHue.mode !== undefined) CONFIG.hueMode = normalizeHueMode(nextHue.mode);
+  if (typeof nextHue.primaryLightKey === 'string') CONFIG.huePrimaryLightKey = nextHue.primaryLightKey.trim();
+  if (typeof nextHue.enabled === 'boolean') CONFIG.hueEnabled = nextHue.enabled;
+  if (nextHue.lights !== undefined) CONFIG.hueLights = normalizeLights(nextHue.lights);
+}
+
+function persistConfigPatch(patch) {
+  const current = loadFileConfig();
+  const next = mergeDeep(current, patch);
+  fs.writeFileSync(LOCAL_CONFIG_PATH, `${JSON.stringify(next, null, 2)}\n`, 'utf8');
+  if (patch && patch.hue) applyHueConfig(next.hue);
+  return next;
+}
+
+function normalizeHueLightName(name, fallbackId, usedKeys) {
+  let key = String(name || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+  if (!key) key = `light_${fallbackId}`;
+  let finalKey = key;
+  let suffix = 2;
+  while (usedKeys.has(finalKey)) {
+    finalKey = `${key}_${suffix++}`;
+  }
+  usedKeys.add(finalKey);
+  return finalKey;
+}
+
+function buildHueLightsMap(lightsPayload) {
+  const usedKeys = new Set();
+  const lightsMap = {};
+  const lightsList = [];
+  for (const [id, light] of Object.entries(lightsPayload || {})) {
+    const safeId = Number(id);
+    if (!Number.isFinite(safeId)) continue;
+    const name = light && light.name ? light.name : `Light ${id}`;
+    const key = normalizeHueLightName(name, id, usedKeys);
+    lightsMap[key] = safeId;
+    lightsList.push({
+      id: safeId,
+      key,
+      name,
+      reachable: Boolean(light && light.state && light.state.reachable),
+      on: Boolean(light && light.state && light.state.on),
+      type: light && light.type ? light.type : '',
+      productname: light && light.productname ? light.productname : '',
+    });
+  }
+  lightsList.sort((a, b) => a.id - b.id);
+  return { lightsMap, lightsList };
+}
+
+function hueBridgeRequest({ bridgeIp, requestPath, method = 'GET', body = null, timeout = 3000 }) {
+  return new Promise((resolve, reject) => {
+    if (!bridgeIp) {
+      reject(new Error('Hue bridge IP not configured'));
+      return;
+    }
+
+    const payload = body == null
+      ? ''
+      : typeof body === 'string'
+        ? body
+        : JSON.stringify(body);
+
+    const options = {
+      hostname: bridgeIp,
+      port: 80,
+      path: requestPath,
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(payload),
+      },
+      timeout,
+    };
+
+    const proxyReq = http.request(options, proxyRes => {
+      let raw = '';
+      proxyRes.on('data', chunk => raw += chunk);
+      proxyRes.on('end', () => {
+        let parsed = raw;
+        try {
+          parsed = JSON.parse(raw);
+        } catch (error) {
+          // keep raw text for XML or plain responses
+        }
+        resolve({ statusCode: proxyRes.statusCode || 0, body: parsed, raw });
+      });
+    });
+
+    proxyReq.on('error', reject);
+    proxyReq.on('timeout', () => {
+      proxyReq.destroy();
+      reject(new Error('Hue timeout'));
+    });
+
+    if (payload && (method === 'POST' || method === 'PUT')) proxyReq.write(payload);
+    proxyReq.end();
+  });
+}
+
+function hueApiRequest(requestPath, method = 'GET', body = null, bridgeIp = CONFIG.hueBridgeIp, apiKey = CONFIG.hueApiKey) {
+  if (!bridgeIp || !apiKey) {
+    return Promise.reject(new Error('Hue bridge or API key not configured'));
+  }
+  return hueBridgeRequest({
+    bridgeIp,
+    requestPath: `/api/${apiKey}${requestPath}`,
+    method,
+    body,
+  });
+}
+
+function elgatoRequest(requestPath, method = 'GET', body = null, timeout = 3000) {
+  return new Promise((resolve, reject) => {
+    if (!CONFIG.elgatoIp) {
+      reject(new Error('Elgato IP not configured'));
+      return;
+    }
+
+    const payload = body == null
+      ? ''
+      : typeof body === 'string'
+        ? body
+        : JSON.stringify(body);
+
+    const options = {
+      hostname: CONFIG.elgatoIp,
+      port: CONFIG.elgatoPort,
+      path: requestPath,
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(payload),
+      },
+      timeout,
+    };
+
+    const proxyReq = http.request(options, proxyRes => {
+      let raw = '';
+      proxyRes.on('data', chunk => raw += chunk);
+      proxyRes.on('end', () => {
+        let parsed = raw;
+        try {
+          parsed = JSON.parse(raw);
+        } catch (error) {
+          // keep raw response
+        }
+        resolve({ statusCode: proxyRes.statusCode || 0, body: parsed, raw });
+      });
+    });
+
+    proxyReq.on('error', reject);
+    proxyReq.on('timeout', () => {
+      proxyReq.destroy();
+      reject(new Error('Elgato timeout'));
+    });
+
+    if (payload && (method === 'POST' || method === 'PUT')) proxyReq.write(payload);
+    proxyReq.end();
+  });
+}
+
+function discoverHueBridges() {
+  return new Promise(resolve => {
+    const knownIps = new Set();
+    if (CONFIG.hueBridgeIp) knownIps.add(CONFIG.hueBridgeIp);
+
+    const req = https.request({
+      hostname: 'discovery.meethue.com',
+      port: 443,
+      path: '/',
+      method: 'GET',
+      timeout: 3000,
+    }, apiRes => {
+      let raw = '';
+      apiRes.on('data', chunk => raw += chunk);
+      apiRes.on('end', async () => {
+        let bridges = [];
+        try {
+          const discovered = JSON.parse(raw || '[]');
+          if (Array.isArray(discovered)) {
+            for (const entry of discovered) {
+              if (entry && typeof entry.internalipaddress === 'string') {
+                knownIps.add(entry.internalipaddress.trim());
+              }
+            }
+          }
+        } catch (error) {
+          // ignore malformed response; we'll still return configured bridge if any
+        }
+
+        for (const bridgeIp of knownIps) {
+          try {
+            const info = await hueBridgeRequest({ bridgeIp, requestPath: '/api/config', method: 'GET', timeout: 1500 });
+            if (info && info.body && typeof info.body === 'object') {
+              bridges.push({
+                internalipaddress: bridgeIp,
+                name: info.body.name || 'Hue Bridge',
+                apiversion: info.body.apiversion || '',
+                modelid: info.body.modelid || '',
+                bridgeid: info.body.bridgeid || '',
+                configured: bridgeIp === CONFIG.hueBridgeIp,
+              });
+              continue;
+            }
+          } catch (error) {
+            // fall through and still include the bridge candidate
+          }
+          bridges.push({
+            internalipaddress: bridgeIp,
+            name: 'Hue Bridge',
+            configured: bridgeIp === CONFIG.hueBridgeIp,
+          });
+        }
+
+        bridges = bridges.filter((bridge, index, arr) =>
+          arr.findIndex(other => other.internalipaddress === bridge.internalipaddress) === index
+        );
+        resolve(bridges);
+      });
+    });
+
+    req.on('error', () => resolve(Array.from(knownIps).map(bridgeIp => ({
+      internalipaddress: bridgeIp,
+      name: 'Hue Bridge',
+      configured: bridgeIp === CONFIG.hueBridgeIp,
+    }))));
+    req.on('timeout', () => {
+      req.destroy();
+      resolve(Array.from(knownIps).map(bridgeIp => ({
+        internalipaddress: bridgeIp,
+        name: 'Hue Bridge',
+        configured: bridgeIp === CONFIG.hueBridgeIp,
+      })));
+    });
+    req.end();
+  });
 }
 
 const MIME = {
@@ -169,6 +440,8 @@ function runtimeConfigScript() {
     hue: {
       bridgeIP: CONFIG.hueBridgeIp,
       apiKey: CONFIG.hueApiKey,
+      mode: CONFIG.hueMode,
+      primaryLightKey: CONFIG.huePrimaryLightKey,
       lights: CONFIG.hueLights,
       enabled: CONFIG.hueEnabled,
     },
@@ -507,6 +780,10 @@ const server = http.createServer((req, res) => {
       port: CONFIG.port,
       elgatoConfigured: Boolean(CONFIG.elgatoIp),
       hueConfigured: Boolean(CONFIG.hueBridgeIp && CONFIG.hueApiKey),
+      hueBridgeIp: CONFIG.hueBridgeIp || '',
+      hueMode: CONFIG.hueMode,
+      huePrimaryLightKey: CONFIG.huePrimaryLightKey || '',
+      hueLightsCount: Object.keys(CONFIG.hueLights || {}).length,
       telegramConfigured: Boolean(CONFIG.telegramBotToken),
       telegramCommandsQueued: TELEGRAM.commands.length,
       grokConfigured: Boolean(CONFIG.grokApiKey),
@@ -521,6 +798,230 @@ const server = http.createServer((req, res) => {
       'Cache-Control': 'no-cache, no-store, must-revalidate',
     });
     res.end(runtimeConfigScript());
+    return;
+  }
+
+  if (requestPath === '/hue/discover' && req.method === 'GET') {
+    setCors(res);
+    discoverHueBridges()
+      .then(bridges => {
+        sendJson(res, 200, {
+          ok: true,
+          bridgeIP: CONFIG.hueBridgeIp || '',
+          bridges,
+        });
+      })
+      .catch(error => {
+        sendJson(res, 500, { ok: false, error: 'Hue discovery failed', message: error.message });
+      });
+    return;
+  }
+
+  if (requestPath === '/hue/status' && req.method === 'GET') {
+    setCors(res);
+    if (!CONFIG.hueBridgeIp) {
+      sendJson(res, 200, {
+        ok: true,
+        configured: false,
+        bridgeIP: '',
+        mode: CONFIG.hueMode,
+        primaryLightKey: CONFIG.huePrimaryLightKey || '',
+        apiKeyPresent: Boolean(CONFIG.hueApiKey),
+        lightsConfigured: CONFIG.hueLights,
+      });
+      return;
+    }
+    const hasKey = Boolean(CONFIG.hueApiKey);
+    const request = hasKey
+      ? hueApiRequest('/lights')
+      : hueBridgeRequest({ bridgeIp: CONFIG.hueBridgeIp, requestPath: '/api/config', method: 'GET' });
+    request
+      .then(result => {
+        const lightsPayload = hasKey && result && result.body && typeof result.body === 'object' ? result.body : null;
+        const normalized = lightsPayload ? buildHueLightsMap(lightsPayload) : { lightsMap: CONFIG.hueLights, lightsList: [] };
+        sendJson(res, 200, {
+          ok: true,
+          configured: hasKey,
+          bridgeIP: CONFIG.hueBridgeIp,
+          mode: CONFIG.hueMode,
+          primaryLightKey: CONFIG.huePrimaryLightKey || '',
+          apiKeyPresent: hasKey,
+          lightsConfigured: CONFIG.hueLights,
+          lightsDetected: normalized.lightsList,
+          lightsSuggested: normalized.lightsMap,
+        });
+      })
+      .catch(error => {
+        sendJson(res, 502, {
+          ok: false,
+          error: 'Hue bridge unreachable',
+          message: error.message,
+          bridgeIP: CONFIG.hueBridgeIp,
+          mode: CONFIG.hueMode,
+          primaryLightKey: CONFIG.huePrimaryLightKey || '',
+          apiKeyPresent: hasKey,
+          lightsConfigured: CONFIG.hueLights,
+        });
+      });
+    return;
+  }
+
+  if (requestPath === '/hue/link' && req.method === 'POST') {
+    setCors(res);
+    collectJsonBody(req, async (error, payload = {}) => {
+      if (error) {
+        sendJson(res, 400, { ok: false, error: 'Invalid JSON', message: error.message });
+        return;
+      }
+
+      const requestedBridgeIp = typeof payload.bridgeIP === 'string' && payload.bridgeIP.trim()
+        ? payload.bridgeIP.trim()
+        : CONFIG.hueBridgeIp;
+      const deviceType = typeof payload.deviceType === 'string' && payload.deviceType.trim()
+        ? payload.deviceType.trim()
+        : 'admira_xp#xpaceos';
+
+      if (!requestedBridgeIp) {
+        sendJson(res, 400, { ok: false, error: 'Hue bridge missing', message: 'Bridge IP is required before pairing.' });
+        return;
+      }
+
+      try {
+        const created = await hueBridgeRequest({
+          bridgeIp: requestedBridgeIp,
+          requestPath: '/api',
+          method: 'POST',
+          body: { devicetype: deviceType },
+        });
+        const body = created.body;
+        if (!Array.isArray(body) || !body[0]) {
+          sendJson(res, 502, { ok: false, error: 'Hue pairing failed', message: 'Unexpected bridge response.' });
+          return;
+        }
+        if (body[0].error) {
+          sendJson(res, body[0].error.type === 101 ? 409 : 400, {
+            ok: false,
+            error: 'Hue pairing failed',
+            message: body[0].error.description || 'Unknown bridge error',
+            bridgeIP: requestedBridgeIp,
+          });
+          return;
+        }
+        const apiKey = body[0].success && body[0].success.username;
+        if (!apiKey) {
+          sendJson(res, 502, { ok: false, error: 'Hue pairing failed', message: 'Bridge did not return an API key.' });
+          return;
+        }
+
+        const lightsResult = await hueBridgeRequest({
+          bridgeIp: requestedBridgeIp,
+          requestPath: `/api/${apiKey}/lights`,
+          method: 'GET',
+        });
+        const normalized = buildHueLightsMap(lightsResult.body);
+        persistConfigPatch({
+          hue: {
+            bridgeIP: requestedBridgeIp,
+            apiKey,
+            mode: CONFIG.hueMode,
+            enabled: true,
+            lights: normalized.lightsMap,
+          },
+        });
+        sendJson(res, 200, {
+          ok: true,
+          message: 'Hue bridge linked',
+          bridgeIP: requestedBridgeIp,
+          mode: CONFIG.hueMode,
+          apiKey,
+          lightsMap: normalized.lightsMap,
+          lights: normalized.lightsList,
+        });
+      } catch (requestError) {
+        sendJson(res, 502, { ok: false, error: 'Hue pairing failed', message: requestError.message, bridgeIP: requestedBridgeIp });
+      }
+    });
+    return;
+  }
+
+  if (requestPath === '/hue/sync-lights' && req.method === 'POST') {
+    setCors(res);
+    if (!CONFIG.hueBridgeIp || !CONFIG.hueApiKey) {
+      sendJson(res, 503, {
+        ok: false,
+        error: 'Hue not configured',
+        message: 'Set or pair the Hue bridge first.',
+      });
+      return;
+    }
+    hueApiRequest('/lights')
+      .then(result => {
+        const normalized = buildHueLightsMap(result.body);
+        persistConfigPatch({
+          hue: {
+            bridgeIP: CONFIG.hueBridgeIp,
+            apiKey: CONFIG.hueApiKey,
+            mode: CONFIG.hueMode,
+            enabled: CONFIG.hueEnabled,
+            lights: normalized.lightsMap,
+          },
+        });
+        sendJson(res, 200, {
+          ok: true,
+          message: `Hue lights synced (${normalized.lightsList.length})`,
+          bridgeIP: CONFIG.hueBridgeIp,
+          mode: CONFIG.hueMode,
+          apiKey: CONFIG.hueApiKey,
+          lightsMap: normalized.lightsMap,
+          lights: normalized.lightsList,
+        });
+      })
+      .catch(error => {
+        sendJson(res, 502, { ok: false, error: 'Hue sync failed', message: error.message });
+      });
+    return;
+  }
+
+  if (requestPath === '/power/off' && req.method === 'POST') {
+    setCors(res);
+    collectJsonBody(req, async (_error, payload = {}) => {
+      const result = {
+        ok: true,
+        reason: typeof payload.reason === 'string' ? payload.reason : 'shutdown',
+        elgato: { attempted: Boolean(CONFIG.elgatoIp), ok: !CONFIG.elgatoIp },
+        hue: { attempted: Boolean(CONFIG.hueBridgeIp && CONFIG.hueApiKey), ok: !(CONFIG.hueBridgeIp && CONFIG.hueApiKey) },
+      };
+
+      if (CONFIG.elgatoIp) {
+        try {
+          await elgatoRequest('/elgato/lights', 'PUT', { numberOfLights: 1, lights: [{ on: 0 }] }, 2000);
+          result.elgato.ok = true;
+        } catch (error) {
+          result.ok = false;
+          result.elgato.ok = false;
+          result.elgato.message = error.message;
+        }
+      }
+
+      if (CONFIG.hueBridgeIp && CONFIG.hueApiKey) {
+        const hueIds = Array.from(new Set(Object.values(CONFIG.hueLights || {}).map(Number).filter(Number.isFinite)));
+        try {
+          if (hueIds.length) {
+            await Promise.allSettled(hueIds.map(lightId => hueApiRequest(`/lights/${lightId}/state`, 'PUT', { on: false })));
+          } else {
+            await hueApiRequest('/groups/0/action', 'PUT', { on: false });
+          }
+          result.hue.ok = true;
+          result.hue.count = hueIds.length;
+        } catch (error) {
+          result.ok = false;
+          result.hue.ok = false;
+          result.hue.message = error.message;
+        }
+      }
+
+      sendJson(res, result.ok ? 200 : 502, result);
+    });
     return;
   }
 
@@ -735,11 +1236,19 @@ const server = http.createServer((req, res) => {
         },
         timeout: 3000,
       };
+      let responded = false;
+      const sendProxyJson = (statusCode, payload) => {
+        if (responded || res.writableEnded) return;
+        responded = true;
+        sendJson(res, statusCode, payload);
+      };
 
       const proxyReq = http.request(options, proxyRes => {
         let body = '';
         proxyRes.on('data', chunk => body += chunk);
         proxyRes.on('end', () => {
+          if (responded || res.writableEnded) return;
+          responded = true;
           res.writeHead(proxyRes.statusCode, { 'Content-Type': 'application/json; charset=utf-8' });
           res.end(body);
           const action = req.method === 'PUT' ? 'LIGHT TOGGLE' : 'LIGHT STATUS';
@@ -749,12 +1258,12 @@ const server = http.createServer((req, res) => {
 
       proxyReq.on('error', error => {
         console.error(`[ERROR] Cannot reach light: ${error.message}`);
-        sendJson(res, 502, { error: 'Light unreachable', message: error.message });
+        sendProxyJson(502, { error: 'Light unreachable', message: error.message });
       });
 
       proxyReq.on('timeout', () => {
         proxyReq.destroy();
-        sendJson(res, 504, { error: 'Timeout' });
+        sendProxyJson(504, { error: 'Timeout' });
       });
 
       if (cleanBody && (req.method === 'PUT' || req.method === 'POST')) {
@@ -793,11 +1302,19 @@ const server = http.createServer((req, res) => {
         },
         timeout: 3000,
       };
+      let responded = false;
+      const sendProxyJson = (statusCode, payload) => {
+        if (responded || res.writableEnded) return;
+        responded = true;
+        sendJson(res, statusCode, payload);
+      };
 
       const proxyReq = http.request(options, proxyRes => {
         let body = '';
         proxyRes.on('data', chunk => body += chunk);
         proxyRes.on('end', () => {
+          if (responded || res.writableEnded) return;
+          responded = true;
           res.writeHead(proxyRes.statusCode, { 'Content-Type': 'application/json; charset=utf-8' });
           res.end(body);
           const isError = body.includes('"error"');
@@ -807,12 +1324,12 @@ const server = http.createServer((req, res) => {
 
       proxyReq.on('error', error => {
         console.error(`[ERROR] Cannot reach Hue bridge: ${error.message}`);
-        sendJson(res, 502, { error: 'Hue bridge unreachable', message: error.message });
+        sendProxyJson(502, { error: 'Hue bridge unreachable', message: error.message });
       });
 
       proxyReq.on('timeout', () => {
         proxyReq.destroy();
-        sendJson(res, 504, { error: 'Hue timeout' });
+        sendProxyJson(504, { error: 'Hue timeout' });
       });
 
       if (cleanBody && (req.method === 'PUT' || req.method === 'POST')) {

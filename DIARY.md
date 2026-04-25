@@ -2,6 +2,25 @@
 
 ---
 
+## [v26.21.04.18] — 2026-04-25
+
+### Cierre de sesión: LiveCam mocap, puerta realista, layout estable y control Hue prioritario
+
+- Añadida **LiveCam** en la barra superior para volcar la cámara del ordenador en la pantalla principal de la pared larga.
+- Añadido **Mocap Novah**: la señal de LiveCam analiza movimiento corporal y lo reproduce en Novah la DJ con brazos, balanceo, energía y overlay de esqueleto.
+- Añadidos comandos `/livecam`, `/mocap`, `/mocap on` y `/mocap off` al CLI/Telegram siguiendo el patrón binario de `/music`.
+- Corregido el orden visual de los bocadillos: los textos de personajes ahora quedan por encima de pantallas, muebles y puerta.
+- Mejorado el mapa de durezas/pathfinding para que clientes y personajes no crucen muebles ni se atraviesen entre ellos.
+- Arreglada la puerta corredera: se abre cuando hay tráfico real, se cierra en la dirección correcta, no muestra texto `OPEN` y oculta la raya central al abrir.
+- Subidos los logos de Xtanco en la puerta para no pisar las manetas.
+- Corregido definitivamente el tinte raro del suelo: inspecciones y estados ya no pintan overlays grandes sobre toda la tienda.
+- Reforzada la persistencia del layout inicial: la partida arranca con el último layout guardado y respeta el mobiliario aprobado.
+- Añadida prioridad del mundo real para Hue: el botón físico manda por encima de automatismos, CLI e interfaz; si nadie interviene, vuelve a mandar el horario del juego.
+- Añadido apagado completo al salir del juego: LiveCam, medios, lámpara y Hue quedan en off.
+- Mejorado el proxy local Hue/Elgato con descubrimiento/sincronización de Hue, selección de luz primaria y estado real de la lámpara.
+
+---
+
 ## [v26.21.04.12] — 2026-04-22
 
 ### Cierre de sesión: interfaz inferior adaptable y aprovechamiento total de pantalla
