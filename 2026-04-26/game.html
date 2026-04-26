@@ -195,7 +195,22 @@
     #dsImportTargetSVG{position:fixed;inset:0;z-index:10000;display:none;pointer-events:none;width:100%;height:100%}
     #dsImportTargetSVG.is-active{display:block}
     #dsImportTargetPoly{fill:rgba(255,216,102,.12);stroke:#ffd866;stroke-width:3;stroke-dasharray:8 6;animation:dsImportPulse 1s linear infinite}
+    #dsImportTargetSVG.is-processing #dsImportTargetPoly{fill:rgba(120,243,255,.18);stroke:#78f3ff}
+    #dsImportTargetSVG.is-done #dsImportTargetPoly{fill:rgba(120,255,160,.20);stroke:#78ffa0;animation:none;stroke-dasharray:none}
     @keyframes dsImportPulse{0%{stroke-dashoffset:0}100%{stroke-dashoffset:-28}}
+    #dsImportStatus{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:10001;display:none;min-width:280px;max-width:80vw;padding:10px 14px;background:rgba(4,16,26,.96);border:1px solid #3a6878;border-radius:10px;color:#dff8ff;font-family:monospace;font-size:12px;box-shadow:0 6px 30px rgba(0,0,0,.6);pointer-events:none}
+    #dsImportStatus.is-active{display:block}
+    #dsImportStatus.is-done{border-color:#78ffa0;color:#dfffe8}
+    #dsImportStatus.is-error{border-color:#ff8866;color:#ffd6cc}
+    #dsImportStatus .ds-status-row{display:flex;align-items:center;gap:8px}
+    #dsImportStatus .ds-status-spinner{width:14px;height:14px;border:2px solid rgba(120,243,255,.25);border-top-color:#78f3ff;border-radius:50%;animation:dsImportSpin .8s linear infinite;flex-shrink:0}
+    #dsImportStatus.is-done .ds-status-spinner{border-color:#78ffa0;border-top-color:transparent;animation:none;background:radial-gradient(circle,#78ffa0 35%,transparent 36%)}
+    #dsImportStatus.is-error .ds-status-spinner{border-color:#ff8866;border-top-color:transparent;animation:none}
+    #dsImportStatus .ds-status-text{flex:1;line-height:1.3}
+    #dsImportStatus .ds-status-bar{margin-top:6px;height:3px;background:#0a2030;border-radius:2px;overflow:hidden}
+    #dsImportStatus .ds-status-bar-fill{height:100%;background:linear-gradient(90deg,#78f3ff,#aef);width:0%;transition:width .25s ease}
+    #dsImportStatus.is-done .ds-status-bar-fill{background:#78ffa0;width:100%!important}
+    @keyframes dsImportSpin{to{transform:rotate(360deg)}}
   </style>
 </head>
 <body>
@@ -243,6 +258,13 @@
   </div>
 </div>
 <svg id="dsImportTargetSVG" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><polygon id="dsImportTargetPoly" points=""></polygon></svg>
+<div id="dsImportStatus" aria-live="polite">
+  <div class="ds-status-row">
+    <div class="ds-status-spinner"></div>
+    <div class="ds-status-text" id="dsImportStatusText">Importando…</div>
+  </div>
+  <div class="ds-status-bar"><div class="ds-status-bar-fill" id="dsImportStatusBar"></div></div>
+</div>
 <video id="bootVideo" preload="auto" playsinline webkit-playsinline style="display:none"></video>
 <video id="liveCamVideo" autoplay muted playsinline webkit-playsinline style="display:none"></video>
 <canvas id="c" width="800" height="500"></canvas>
@@ -1016,21 +1038,28 @@ function dsImportsRegister(record){
 function dsImportsListNames(){
   return VIDEO_LIST.filter(n=>DS_IMPORT.KIND[n]);
 }
-async function dsImportsAddFiles(fileList){
+async function dsImportsAddFiles(fileList,onProgress){
   const files=Array.from(fileList||[]);
+  const eligible=files.filter(f=>dsImportsKindFromMime(f.type));
   const added=[];
-  for(const file of files){
+  let i=0;
+  for(const file of eligible){
+    i++;
     const kind=dsImportsKindFromMime(file.type);
-    if(!kind) continue;
     const id='ds_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8);
     const baseName=dsImportsLabelFromFilename(file.name);
     const ledMessage='  ◆  '+baseName.toUpperCase()+'  ◆  CONTENIDO IMPORTADO  ◆  ';
     const record={id,name:baseName,mime:file.type,kind,blob:file,ledMessage,addedAt:Date.now()};
+    if(onProgress) onProgress({phase:'saving', index:i, total:eligible.length, name:baseName, kind, sizeBytes:file.size});
     try{
       await dsImportsDBPut(record);
       const finalName=dsImportsRegister(record);
       added.push(finalName);
-    }catch(e){ console.warn('[ds-import] save failed',e); }
+      if(onProgress) onProgress({phase:'saved', index:i, total:eligible.length, name:finalName, kind, sizeBytes:file.size});
+    }catch(e){
+      console.warn('[ds-import] save failed',e);
+      if(onProgress) onProgress({phase:'error', index:i, total:eligible.length, name:baseName, error:String(e&&e.message||e)});
+    }
   }
   if(typeof refreshTelegramHelpPanel==='function') refreshTelegramHelpPanel();
   return added;
@@ -1082,24 +1111,116 @@ function dsImportOpenPicker(){
   const inp=document.getElementById('dsImportInput');
   if(inp) inp.click();
 }
+function dsFormatBytes(n){
+  if(!n||n<1024) return (n||0)+' B';
+  if(n<1024*1024) return Math.round(n/1024)+' KB';
+  return (n/(1024*1024)).toFixed(n>10*1024*1024?0:1)+' MB';
+}
+function dsImportSetStatus(kind,text,pct){
+  const box=document.getElementById('dsImportStatus');
+  const t=document.getElementById('dsImportStatusText');
+  const bar=document.getElementById('dsImportStatusBar');
+  if(!box) return;
+  box.classList.add('is-active');
+  box.classList.toggle('is-done', kind==='done');
+  box.classList.toggle('is-error', kind==='error');
+  if(t) t.textContent=text;
+  if(bar && typeof pct==='number') bar.style.width=Math.max(0,Math.min(100,pct))+'%';
+}
+function dsImportHideStatus(delay){
+  const box=document.getElementById('dsImportStatus');
+  if(!box) return;
+  setTimeout(()=>{
+    box.classList.remove('is-active');
+    box.classList.remove('is-done');
+    box.classList.remove('is-error');
+    const bar=document.getElementById('dsImportStatusBar');
+    if(bar) bar.style.width='0%';
+  }, delay||0);
+}
+function dsImportSetSurfaceState(surfaceId, state){
+  const svg=document.getElementById('dsImportTargetSVG');
+  if(!svg) return;
+  if(!surfaceId){ svg.classList.remove('is-active','is-processing','is-done'); return; }
+  svg.classList.add('is-active');
+  svg.classList.toggle('is-processing', state==='processing');
+  svg.classList.toggle('is-done', state==='done');
+}
+// Wait until the surface's media element reports it has a frame to render, or timeout.
+function dsWaitMediaReady(surfaceId, timeoutMs){
+  return new Promise(resolve=>{
+    const m=DS_SURFACE_MEDIA[surfaceId];
+    if(!m){ resolve(false); return; }
+    if(m.ready){ resolve(true); return; }
+    const start=Date.now();
+    const limit=timeoutMs||15000;
+    const tick=()=>{
+      if(m.ready) return resolve(true);
+      if(Date.now()-start>limit) return resolve(false);
+      setTimeout(tick,100);
+    };
+    tick();
+  });
+}
+
 async function dsImportProcessAndNotify(fileList,targetSurfaceId){
-  const added=await dsImportsAddFiles(fileList);
-  if(typeof showEv==='function'){
-    if(added.length){
-      if(targetSurfaceId) showEv('📌 '+added.length+' contenido(s) fijados en '+dsSurfaceLabel(targetSurfaceId),'#ffd866');
-      else showEv('🖼 Importados '+added.length+' contenido(s) DS','#78f3ff');
-    } else {
-      showEv('Sin archivos válidos para DS (imagen/vídeo)','#ff8866');
-    }
+  const files=Array.from(fileList||[]);
+  const eligible=files.filter(f=>dsImportsKindFromMime(f.type));
+  if(!eligible.length){
+    dsImportSetStatus('error','Sin archivos válidos. Acepto PNG/JPG/WEBP/GIF/MP4/WEBM.', 100);
+    dsImportHideStatus(2200);
+    if(typeof showEv==='function') showEv('Sin archivos válidos para DS (imagen/vídeo)','#ff8866');
+    return [];
   }
-  if(added.length){
-    if(targetSurfaceId){
-      // Pin the LAST imported item so the user sees what they just dropped
-      dsPinSurface(targetSurfaceId, added[added.length-1]);
-    } else {
-      const idx=VIDEO_LIST.indexOf(added[added.length-1]);
-      if(idx>=0 && typeof switchDSVideo==='function') switchDSVideo(idx);
+  // Where will the result land?
+  const surfaceLabel = targetSurfaceId ? dsSurfaceLabel(targetSurfaceId) : 'Playlist global';
+  // Phase 1: saving each file to IndexedDB
+  dsImportSetStatus('processing','Importando 1/'+eligible.length+'… → '+surfaceLabel, 5);
+  if(targetSurfaceId) dsImportSetSurfaceState(targetSurfaceId,'processing');
+
+  const added = await dsImportsAddFiles(eligible, (ev)=>{
+    if(ev.phase==='saving'){
+      dsImportSetStatus('processing',
+        'Guardando '+ev.index+'/'+ev.total+': '+ev.name+' ('+dsFormatBytes(ev.sizeBytes)+')',
+        5 + (ev.index-1)/ev.total*55);
+    } else if(ev.phase==='saved'){
+      dsImportSetStatus('processing',
+        'Guardado '+ev.index+'/'+ev.total+': '+ev.name,
+        5 + ev.index/ev.total*55);
+    } else if(ev.phase==='error'){
+      dsImportSetStatus('error','Error guardando '+ev.name+': '+ev.error, 100);
     }
+  });
+
+  if(!added.length){
+    dsImportHideStatus(2200);
+    return [];
+  }
+
+  // Phase 2: pin / activate
+  if(targetSurfaceId){
+    const finalName=added[added.length-1];
+    dsImportSetStatus('processing','Adaptando "'+finalName+'" a '+surfaceLabel+'…', 70);
+    dsPinSurface(targetSurfaceId, finalName);
+    // Phase 3: wait for media to actually have a frame
+    dsImportSetStatus('processing','Cargando '+(DS_IMPORT.KIND[finalName]==='video'?'vídeo':'imagen')+'…', 85);
+    const ready = await dsWaitMediaReady(targetSurfaceId, 20000);
+    if(ready){
+      dsImportSetStatus('done','✓ Listo: '+finalName+' en '+surfaceLabel, 100);
+      dsImportSetSurfaceState(targetSurfaceId,'done');
+      if(typeof showEv==='function') showEv('📌 Fijado en '+surfaceLabel,'#78ffa0');
+    } else {
+      dsImportSetStatus('error','El media tarda en cargar — revisa el archivo.', 100);
+    }
+    setTimeout(()=>dsImportSetSurfaceState(null), 1200);
+    dsImportHideStatus(ready?1500:2800);
+  } else {
+    const last=added[added.length-1];
+    const idx=VIDEO_LIST.indexOf(last);
+    if(idx>=0 && typeof switchDSVideo==='function') switchDSVideo(idx);
+    dsImportSetStatus('done','✓ '+added.length+' contenido(s) en playlist global · ahora suena "'+last+'"', 100);
+    if(typeof showEv==='function') showEv('🖼 Importados '+added.length+' contenido(s) DS','#78f3ff');
+    dsImportHideStatus(1800);
   }
   return added;
 }
