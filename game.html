@@ -138,7 +138,14 @@
     .tg-signage-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .tg-signage-tag{font-size:8px;background:rgba(255,216,102,.15);color:#ffd866;border-radius:3px;padding:1px 5px;flex-shrink:0}
     .tg-signage-tag-import{font-size:8px;background:rgba(120,243,255,.15);color:#78f3ff;border-radius:3px;padding:1px 5px;flex-shrink:0}
+    .tg-signage-header-actions{display:flex;align-items:center;gap:6px;flex-shrink:0}
     .ds-tv-icon{width:14px;height:12px;stroke:currentColor;fill:none;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round;vertical-align:-2px;margin-right:3px}
+    .tg-signage-row[draggable="true"]{cursor:grab}
+    .tg-signage-row[draggable="true"]:active{cursor:grabbing}
+    .tg-signage-row[draggable="true"] .tg-signage-thumb{cursor:grab}
+    .tg-signage-row.is-dragging{opacity:.35}
+    .tg-signage-row.is-drop-before{box-shadow:inset 0 3px 0 #78f3ff}
+    .tg-signage-row.is-drop-after{box-shadow:inset 0 -3px 0 #78f3ff}
     .tg-signage-fs-btn{display:inline-flex;align-items:center;justify-content:center;background:transparent;border:1px solid rgba(255,216,102,.35);border-radius:4px;padding:3px 6px;cursor:pointer;color:#ffd866;margin-right:6px;line-height:1;transition:background .12s, border-color .12s, transform .12s}
     .tg-signage-fs-btn:hover{background:rgba(255,216,102,.18);border-color:#ffd866}
     .tg-signage-fs-btn .ds-tv-icon{width:18px;height:14px;margin:0;color:#ffd866;vertical-align:0}
@@ -17492,6 +17499,7 @@ window.xtAPI = (function(){
   function dsEscapeHtml(s){ return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]); }
   function renderSignagePanel(){
     if(!signagePanel) return;
+    if(dsDragging) return; // don't wipe drop indicators mid-drag
     const surfaces=(typeof DS_SURFACES!=='undefined')?DS_SURFACES:[];
     const playlist=(typeof VIDEO_LIST!=='undefined')?VIDEO_LIST:[];
     const currentIdx=(typeof dsVideoIdx!=='undefined')?dsVideoIdx:-1;
@@ -17505,11 +17513,11 @@ window.xtAPI = (function(){
     const isFs=document.body.classList.contains('ds-signage-fullwidth');
     const tvSvg='<svg class="ds-tv-icon" viewBox="0 0 24 20" aria-hidden="true"><line x1="6" y1="1" x2="9" y2="5"/><line x1="18" y1="1" x2="15" y2="5"/><rect x="2" y="5" width="20" height="13" rx="1.5"/><rect x="4" y="7" width="13" height="9" rx="0.6"/><circle cx="19.5" cy="9" r="0.7"/><circle cx="19.5" cy="14" r="0.7"/><line x1="9" y1="19" x2="15" y2="19"/></svg>';
     let html='<div class="tg-help-top">'
-      +'<strong>'
-      +'<button type="button" class="tg-signage-fs-btn'+(isFs?' is-active':'')+'" data-signage-fullwidth title="'+(isFs?'Volver al panel lateral':'Expandir a toda la franja inferior')+'" aria-label="Modo pantalla ancha">'+tvSvg+'</button>'
-      +'Digital Signage · Playlist activa'
-      +'</strong>'
+      +'<strong>📺 Digital Signage · Playlist activa</strong>'
+      +'<div class="tg-signage-header-actions">'
+      +'<button type="button" class="tg-signage-fs-btn'+(isFs?' is-active':'')+'" data-signage-fullwidth title="'+(isFs?'Volver al panel lateral':'Pantalla completa')+'" aria-label="Modo pantalla ancha">'+tvSvg+'</button>'
       +'<button type="button" class="tg-help-close" data-signage-close>Cerrar</button>'
+      +'</div>'
       +'</div>';
     // Surface cards
     html+='<div class="tg-signage-surfaces">';
@@ -17553,7 +17561,7 @@ window.xtAPI = (function(){
         const importTag=isImport?' <span class="tg-signage-tag-import">imported</span>':'';
         const cached=dsThumbCache[n];
         const thumbInner=cached?('<img src="'+dsEscapeHtml(cached)+'" alt="">'):dsKindIcon(n);
-        html+='<div class="'+cls+'" data-signage-play="'+i+'" title="Click para reproducir en rotación global">'
+        html+='<div class="'+cls+'" data-signage-play="'+i+'" data-signage-name="'+dsEscapeHtml(n)+'" draggable="true" title="Click para reproducir · arrastra para reordenar">'
           +'<span class="tg-signage-thumb" data-thumb-for="'+dsEscapeHtml(n)+'"'+(cached?' data-thumb-resolved="1"':'')+'>'+thumbInner+'</span>'
           +'<span class="tg-signage-name">'+(i+1)+'. '+dsEscapeHtml(n)+'</span>'
           +tags+importTag
@@ -17584,6 +17592,51 @@ window.xtAPI = (function(){
     if(sendPane && sendPane.classList.contains('signage-open')) hideSignagePanel();
     else showSignagePanel();
   }
+  const DS_PLAYLIST_ORDER_KEY='xtanco_ds_playlist_order';
+  function dsSavePlaylistOrder(){
+    try{ localStorage.setItem(DS_PLAYLIST_ORDER_KEY,JSON.stringify(VIDEO_LIST.slice())); }catch(e){}
+  }
+  function dsApplySavedPlaylistOrder(){
+    try{
+      const raw=localStorage.getItem(DS_PLAYLIST_ORDER_KEY);
+      if(!raw) return;
+      const saved=JSON.parse(raw);
+      if(!Array.isArray(saved)) return;
+      const present=new Set(VIDEO_LIST);
+      const reordered=saved.filter(n=>present.has(n));
+      const remaining=VIDEO_LIST.filter(n=>!reordered.includes(n));
+      const cur=VIDEO_LIST[dsVideoIdx];
+      VIDEO_LIST.length=0;
+      VIDEO_LIST.push(...reordered,...remaining);
+      const newIdx=VIDEO_LIST.indexOf(cur);
+      if(newIdx>=0) dsVideoIdx=newIdx;
+    }catch(e){}
+  }
+  // Apply saved order once on next tick (after dsImportsRestore has had a chance to run)
+  setTimeout(dsApplySavedPlaylistOrder, 600);
+
+  let dsDragSrcIdx=-1;
+  let dsDragging=false;
+  function dsClearDropIndicators(){
+    if(!signagePanel) return;
+    signagePanel.querySelectorAll('.is-drop-before,.is-drop-after').forEach(el=>el.classList.remove('is-drop-before','is-drop-after'));
+  }
+  function dsHandlePlaylistReorder(srcIdx,dstIdx){
+    if(srcIdx<0||srcIdx>=VIDEO_LIST.length||dstIdx<0||dstIdx>VIDEO_LIST.length) return;
+    if(dstIdx===srcIdx||dstIdx===srcIdx+1) return; // no-op
+    const moved=VIDEO_LIST.splice(srcIdx,1)[0];
+    let insertAt=dstIdx;
+    if(srcIdx<dstIdx) insertAt-=1;
+    VIDEO_LIST.splice(insertAt,0,moved);
+    // Track currently playing index across the reorder
+    if(typeof dsVideoIdx==='number'){
+      if(dsVideoIdx===srcIdx) dsVideoIdx=insertAt;
+      else if(srcIdx<dsVideoIdx && insertAt>=dsVideoIdx) dsVideoIdx-=1;
+      else if(srcIdx>dsVideoIdx && insertAt<=dsVideoIdx) dsVideoIdx+=1;
+    }
+    dsSavePlaylistOrder();
+  }
+
   function applySignageFullwidthGeometry(){
     if(!signagePanel) return;
     if(!document.body.classList.contains('ds-signage-fullwidth')){
@@ -17985,6 +18038,49 @@ window.xtAPI = (function(){
   bindDockButton(hideBtn,()=>setTelegramDockHidden(!telegramDockHidden));
   bindDockButton(signageBtn,()=>toggleSignagePanel());
   if(signagePanel){
+    signagePanel.addEventListener('dragstart',e=>{
+      const row=e.target.closest('[data-signage-play]');
+      if(!row) return;
+      dsDragSrcIdx=Number(row.getAttribute('data-signage-play'));
+      dsDragging=true;
+      try{ e.dataTransfer.effectAllowed='move'; e.dataTransfer.setData('text/plain',String(dsDragSrcIdx)); }catch(err){}
+      row.classList.add('is-dragging');
+    });
+    signagePanel.addEventListener('dragover',e=>{
+      if(dsDragSrcIdx<0) return;
+      const row=e.target.closest('[data-signage-play]');
+      if(!row||row===e.currentTarget) return;
+      e.preventDefault();
+      try{ e.dataTransfer.dropEffect='move'; }catch(err){}
+      const r=row.getBoundingClientRect();
+      const before=(e.clientY-r.top)<r.height/2;
+      dsClearDropIndicators();
+      row.classList.add(before?'is-drop-before':'is-drop-after');
+    });
+    signagePanel.addEventListener('dragleave',e=>{
+      const row=e.target.closest('[data-signage-play]');
+      if(row && !signagePanel.contains(e.relatedTarget)) row.classList.remove('is-drop-before','is-drop-after');
+    });
+    signagePanel.addEventListener('drop',e=>{
+      if(dsDragSrcIdx<0) return;
+      const row=e.target.closest('[data-signage-play]');
+      if(!row){ dsDragging=false; dsDragSrcIdx=-1; dsClearDropIndicators(); renderSignagePanel(); return; }
+      e.preventDefault(); e.stopPropagation();
+      let dstIdx=Number(row.getAttribute('data-signage-play'));
+      const r=row.getBoundingClientRect();
+      const before=(e.clientY-r.top)<r.height/2;
+      if(!before) dstIdx+=1;
+      const src=dsDragSrcIdx;
+      dsDragSrcIdx=-1; dsDragging=false;
+      dsClearDropIndicators();
+      dsHandlePlaylistReorder(src,dstIdx);
+      renderSignagePanel();
+    });
+    signagePanel.addEventListener('dragend',()=>{
+      dsDragging=false; dsDragSrcIdx=-1;
+      dsClearDropIndicators();
+      signagePanel.querySelectorAll('.is-dragging').forEach(el=>el.classList.remove('is-dragging'));
+    });
     signagePanel.addEventListener('click',e=>{
       const close=e.target.closest('[data-signage-close]');
       if(close){ e.preventDefault(); e.stopPropagation(); hideSignagePanel(); return; }
