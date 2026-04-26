@@ -879,7 +879,6 @@ const DS_SURFACES=[
   { id:'ds1',        label:'DS · Pared izquierda · arriba', kind:'dom-canvas' },
   { id:'ds2',        label:'DS · Pared izquierda · abajo',  kind:'dom-canvas' },
   { id:'escaparate', label:'Escaparate · sobre la puerta',  kind:'iso-quad'  },
-  { id:'fachada',    label:'Fachada exterior · junto puerta', kind:'iso-quad' },
 ];
 const DS_PIN=Object.create(null);          // surfaceId -> { name, kind }
 const DS_SURFACE_MEDIA=Object.create(null);// surfaceId -> { kind, name, img, video, ready }
@@ -10932,9 +10931,6 @@ function drawShop(){
   // ── GLASS DOOR — drawn LAST, always on top of furniture/characters ──
   if(!editorSceneActive) drawGlassDoor();
 
-  // ── FACHADA EXTERIOR — outdoor LED billboard mounted on the facade, beside the door ──
-  if(!editorSceneActive) drawFachadaSign();
-
   // ── DAY / NIGHT AMBIENT OVERLAY ──
   if(!editorSceneActive&&G&&G.gameTime){
     const nh=G.gameTime;
@@ -11229,68 +11225,6 @@ function drawEscaparate(){
     cx.fillStyle=d===basePIdx?'#fff':'rgba(255,255,255,0.3)';
     cx.fill();
   }
-}
-
-function drawFachadaSign(){
-  // Outdoor LED billboard hanging above the door, on the exterior facade.
-  // Anchored to the door position so it tracks resize; placed in the sky band above the wall top.
-  const doorAnchor=rightWallFeatureIso(3);
-  const sw=Math.round(120), sh=Math.round(68);
-  const cxBase=Math.round(doorAnchor.x), cyBase=Math.round(doorAnchor.y - ISO.wallH*0.95);
-  const TLx=cxBase-Math.round(sw/2), TLy=cyBase-Math.round(sh/2);
-  // Pole/mount visual cue
-  cx.fillStyle='#2a2018';
-  cx.fillRect(TLx+sw/2-2, TLy+sh, 4, 28);
-  // Outer panel frame
-  cx.fillStyle='#0a1118';
-  cx.fillRect(TLx-3, TLy-3, sw+6, sh+6);
-  cx.fillStyle='#1a2530';
-  cx.fillRect(TLx-1, TLy-1, sw+2, sh+2);
-  // Inner LED area
-  cx.save();
-  cx.beginPath(); cx.rect(TLx, TLy, sw, sh); cx.clip();
-  cx.translate(TLx, TLy);
-
-  const pin=DS_PIN.fachada;
-  const m=DS_SURFACE_MEDIA.fachada;
-  let drawn=false;
-  if(pin && m){ drawn=dsDrawMediaCover(cx, m, sw, sh); }
-  if(!drawn){
-    // Default placeholder LED loop
-    const t=tt*0.02;
-    const grd=cx.createLinearGradient(0,0,sw,sh);
-    grd.addColorStop(0,'#0a1018');
-    grd.addColorStop(0.5+0.3*Math.sin(t),'#2a4a78');
-    grd.addColorStop(1,'#0a1018');
-    cx.fillStyle=grd; cx.fillRect(0,0,sw,sh);
-    cx.fillStyle='#78f3ff';
-    cx.font='bold 14px monospace'; cx.textAlign='center';
-    cx.fillText('ADMIRA XP', sw/2, sh/2-2);
-    cx.font='8px monospace'; cx.fillStyle='#aef';
-    cx.fillText('DIGITAL SIGNAGE', sw/2, sh/2+12);
-    cx.font='6px monospace'; cx.fillStyle='rgba(255,255,255,.45)';
-    cx.fillText('arrastra aquí imagen o vídeo', sw/2, sh-6);
-  }
-  // Scanlines
-  cx.globalAlpha=0.06;
-  for(let y=0;y<sh;y+=3){cx.fillStyle='#fff';cx.fillRect(0,y,sw,1);}
-  cx.globalAlpha=1;
-  if(pin){
-    cx.fillStyle='rgba(0,0,0,0.45)'; cx.fillRect(0,sh-12,sw,12);
-    cx.fillStyle='#ffd866'; cx.font='7px monospace'; cx.textAlign='center';
-    cx.fillText('📌 '+pin.name, sw/2, sh-3);
-  }
-  cx.setTransform(1,0,0,1,0,0);
-  cx.restore();
-  // Outer bevel highlight
-  cx.strokeStyle='#3a5468'; cx.lineWidth=1;
-  cx.strokeRect(TLx-1, TLy-1, sw+2, sh+2);
-
-  // Cache axis-aligned quad in canvas-internal coords for hit-test
-  DS_SURFACE_QUADS.fachada=[
-    {x:TLx,y:TLy},{x:TLx+sw,y:TLy},
-    {x:TLx+sw,y:TLy+sh},{x:TLx,y:TLy+sh},
-  ];
 }
 
 function drawGlassDoor(){
