@@ -2,6 +2,83 @@
 
 ---
 
+## [v26.26.04.14] — 2026-04-26
+
+### Pared trasera sin bloque lateral
+
+- La pared trasera deja de extenderse artificialmente mas alla de la esquina real de la tienda.
+- La zona derecha queda transparente para que no aparezca el bloque que tapaba visualmente la ventana y el aparato de olores.
+
+---
+
+## [v26.26.04.13] — 2026-04-26
+
+### Ventana derecha sin bloque del escaparate
+
+- La franja superior del escaparate exterior deja de repintar pared sobre la ventana derecha.
+- El aparato de olores queda visible, pero sin ningun bloque rectangular asociado ni capa que tape la ventana.
+
+---
+
+## [v26.26.04.12] — 2026-04-26
+
+### Aroma limpio y gestor de turnos ajustado
+
+- El aparato de olores deja de usar cualquier panel o sombra de fondo: queda como difusor compacto y ondas visibles al activarse.
+- La pantalla del gestor de turnos se ensancha, gana aire y dibuja su texto en la misma perspectiva que el panel para que no quede torcido.
+
+---
+
+## [v26.26.04.11] — 2026-04-26
+
+### Aparato de olores sin artefactos
+
+- Eliminada la placa translúcida que dejaba un cuadrado raro bajo el aparato de olores.
+- El aparato queda más compacto, más alto y conserva las ondas visibles por encima de los anuncios.
+
+---
+
+## [v26.26.04.10] — 2026-04-26
+
+### Aparato de olores sobre los anuncios
+
+- El aparato de olores sube por encima de la pantalla de publicidad exterior.
+- En modo juego se dibuja después del escaparate LED para que el cuerpo y las ondas de difusión queden siempre visibles cuando está activado.
+
+---
+
+## [v26.26.04.9] — 2026-04-26
+
+### Aparato de olores visible
+
+- El aparato de olores pasa a tener más tamaño, placa de montaje y contraste para que se vea claramente en la pared derecha.
+- Se mantiene en la zona marcada junto a la ventana y conserva las ondas cuando está activo.
+
+---
+
+## [v26.26.04.8] — 2026-04-26
+
+### Layout público canónico y escaparate
+
+- El layout perfecto de la tienda queda fijado como layout canónico de fábrica para que la versión pública no recupere layouts antiguos agrupados en el centro.
+- Añadida migración de `localStorage` por versión de esquema: si el navegador trae un layout viejo, se reescribe con la disposición pública correcta y queda marcado.
+- Subido el aparato de olores a la zona alta de la pared derecha, junto al punto marcado.
+- La puerta corredera y la pantalla exterior LED se desplazan hacia la esquina inferior para dejar más limpia la lectura de los anuncios.
+
+---
+
+## [v26.26.04.7] — 2026-04-26
+
+### Unitree voz limpia y movimiento calmado
+
+- Reducida la velocidad de movimiento de clientes y personajes especiales para que la tienda se lea mejor en pantalla.
+- El **Unitree Bot** queda especialmente pausado en entrada, patrulla y salida.
+- Las respuestas de **Unitree Intelligence** eliminan prefijos y coletillas como `Unitree Bot:` o `Escaneo en progreso` antes de mostrarse y antes de leerlas por voz.
+- Grok, dictado y TTS usan el idioma activo del juego: castellano si el juego está en castellano, inglés si el juego está en inglés.
+- Actualizados los prompts del proxy local y del worker Grok para no devolver nombres de rol ni estados internos.
+
+---
+
 ## [v26.26.04.6] — 2026-04-26
 
 ### Fix Unitree overlay al salir

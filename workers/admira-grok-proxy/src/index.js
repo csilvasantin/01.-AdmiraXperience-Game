@@ -85,7 +85,7 @@ async function askGrok(request, env) {
       messages: [
         {
           role: 'system',
-          content: 'Eres AdmiraXPBot dentro de Admira XP. Responde breve, claro y útil para un juego de simulación de tienda.',
+          content: 'Eres AdmiraXPBot dentro de Admira XP. Responde breve, claro y útil para un juego de simulación de tienda. Usa el idioma indicado por el contexto o el usuario. No antepongas nombres de rol ni estados internos como "Unitree Bot:" o "Scan in progress".',
         },
         { role: 'user', content: prompt },
       ],

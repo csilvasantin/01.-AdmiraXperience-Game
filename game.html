@@ -1696,6 +1696,25 @@ function updateRobotVoiceButtons(){
 function robotVoiceLang(){
   return lang==='en'?'en-US':'es-ES';
 }
+function robotText(es,en){
+  return lang==='en'?en:es;
+}
+function cleanRobotAnswerText(text){
+  let out=String(text||'').replace(/\s+/g,' ').trim();
+  if(!out) return '';
+  const original=out;
+  for(let i=0;i<4;i++){
+    const before=out;
+    out=out
+      .replace(/^(?:unitree\s*(?:bot|u1|intelligence)|admira\s*xp\s*bot|robot)\s*[:\-–]\s*/i,'')
+      .replace(/^(?:escane[oó]|scan(?:ning)?)\s+(?:en\s+(?:progreso|curso)|in\s+progress)\.?\s*/i,'')
+      .replace(/^estado(?:\s+del\s+robot)?\s*[:\-–]\s*[^.!?]{0,90}[.!?]\s*/i,'')
+      .replace(/^robot\s+status\s*[:\-–]\s*[^.!?]{0,90}[.!?]\s*/i,'')
+      .trim();
+    if(out===before) break;
+  }
+  return out||original;
+}
 function normalizeRobotVoiceText(text){
   return String(text||'')
     .normalize('NFD')
@@ -1781,7 +1800,7 @@ function startRobotVoiceListening(){
   recognition.maxAlternatives=1;
   recognition.onstart=()=>{
     ROBOT_VOICE.listening=true;
-    setRobotGrokUiStatus('Escuchando...',false);
+    setRobotGrokUiStatus(robotText('Escuchando...','Listening...'),false);
     updateRobotVoiceButtons();
   };
   recognition.onresult=(event)=>{
@@ -1803,14 +1822,14 @@ function startRobotVoiceListening(){
     ROBOT_VOICE.listening=false;
     const code=event&&event.error?event.error:'error';
     const msg=code==='not-allowed'||code==='service-not-allowed'
-      ? 'Permiso de microfono denegado'
-      : 'Error voz: '+code;
+      ? robotText('Permiso de microfono denegado','Microphone permission denied')
+      : robotText('Error voz: ','Voice error: ')+code;
     setRobotGrokUiStatus(msg,true);
     updateRobotVoiceButtons();
   };
   recognition.onend=()=>{
     ROBOT_VOICE.listening=false;
-    if(els.prompt&&els.prompt.value.trim()) setRobotGrokUiStatus('Dictado listo',false);
+    if(els.prompt&&els.prompt.value.trim()) setRobotGrokUiStatus(robotText('Dictado listo','Voice ready'),false);
     updateRobotVoiceButtons();
     scheduleRobotWakeRestart(900);
   };
@@ -1818,7 +1837,7 @@ function startRobotVoiceListening(){
     recognition.start();
   }catch(e){
     ROBOT_VOICE.listening=false;
-    setRobotGrokUiStatus(e.message||'No se pudo iniciar voz',true);
+    setRobotGrokUiStatus(e.message||robotText('No se pudo iniciar voz','Could not start voice'),true);
     updateRobotVoiceButtons();
     scheduleRobotWakeRestart(1200);
   }
@@ -1833,7 +1852,7 @@ async function runRobotWakeQuestion(question){
     try{ROBOT_VOICE.wakeRecognition.stop();}catch(e){}
   }
   if(els.prompt) els.prompt.value=clean;
-  setRobotGrokUiStatus('OK Admira recibido',false);
+  setRobotGrokUiStatus(robotText('OK Admira recibido','OK Admira heard'),false);
   try{
     await askRobotGrok();
   }finally{
@@ -1851,7 +1870,7 @@ function handleRobotWakeTranscript(text){
       return;
     }
     ROBOT_VOICE.wakeMode='capturing';
-    setRobotGrokUiStatus('OK Admira: te escucho',false);
+    setRobotGrokUiStatus(robotText('OK Admira: te escucho','OK Admira: listening'),false);
     updateRobotVoiceButtons();
     return;
   }
@@ -1863,8 +1882,8 @@ function startRobotWakeListening(){
   const els=robotGrokEls();
   const Rec=robotSpeechRecognitionCtor();
   if(!Rec){
-    setRobotGrokUiStatus('Wake no soportado',true);
-    if(els.answer) els.answer.textContent='Este navegador no permite palabra clave por voz. Prueba en Chrome con permiso de microfono.';
+    setRobotGrokUiStatus(robotText('Wake no soportado','Wake not supported'),true);
+    if(els.answer) els.answer.textContent=robotText('Este navegador no permite palabra clave por voz. Prueba en Chrome con permiso de microfono.','This browser does not support wake word voice capture. Try Chrome with microphone permission.');
     updateRobotVoiceButtons();
     return;
   }
@@ -1877,7 +1896,7 @@ function startRobotWakeListening(){
   recognition.maxAlternatives=1;
   recognition.onstart=()=>{
     ROBOT_VOICE.wakeListening=true;
-    setRobotGrokUiStatus('Di: OK Admira',false);
+    setRobotGrokUiStatus(robotText('Di: OK Admira','Say: OK Admira'),false);
     updateRobotVoiceButtons();
   };
   recognition.onresult=(event)=>{
@@ -1893,7 +1912,7 @@ function startRobotWakeListening(){
     const code=event&&event.error?event.error:'error';
     if(code==='not-allowed'||code==='service-not-allowed'){
       ROBOT_VOICE.wakeActive=false;
-      setRobotGrokUiStatus('Permiso de microfono denegado',true);
+      setRobotGrokUiStatus(robotText('Permiso de microfono denegado','Microphone permission denied'),true);
     }else if(code!=='no-speech'){
       setRobotGrokUiStatus('Wake: '+code,true);
     }
@@ -1908,7 +1927,7 @@ function startRobotWakeListening(){
     recognition.start();
   }catch(e){
     ROBOT_VOICE.wakeListening=false;
-    setRobotGrokUiStatus(e.message||'No se pudo activar wake',true);
+    setRobotGrokUiStatus(e.message||robotText('No se pudo activar wake','Could not enable wake'),true);
     updateRobotVoiceButtons();
   }
 }
@@ -1944,7 +1963,7 @@ function speakRobotAnswer(text){
   utterance.volume=1;
   utterance.onstart=()=>{
     ROBOT_VOICE.speaking=true;
-    setRobotGrokUiStatus('Hablando...',false);
+    setRobotGrokUiStatus(robotText('Hablando...','Speaking...'),false);
     updateRobotVoiceButtons();
   };
   utterance.onend=()=>{
@@ -1955,7 +1974,7 @@ function speakRobotAnswer(text){
   };
   utterance.onerror=()=>{
     ROBOT_VOICE.speaking=false;
-    setRobotGrokUiStatus('Audio no disponible',true);
+    setRobotGrokUiStatus(robotText('Audio no disponible','Audio unavailable'),true);
     updateRobotVoiceButtons();
     scheduleRobotWakeRestart(900);
   };
@@ -1963,7 +1982,7 @@ function speakRobotAnswer(text){
 }
 function toggleRobotSpeech(){
   if(!robotTtsSupported()){
-    setRobotGrokUiStatus('Audio no soportado',true);
+    setRobotGrokUiStatus(robotText('Audio no soportado','Audio not supported'),true);
     return;
   }
   if(ROBOT_VOICE.speaking){
@@ -2047,31 +2066,33 @@ function syncRobotGrokPanel(){
   updateRobotVoiceButtons();
 }
 function buildUnitreeGrokContext(){
-  if(!G) return 'No hay partida activa.';
+  const isEs=lang!=='en';
+  if(!G) return isEs?'No hay partida activa.':'No active game.';
   const bot=G.unitreeBot||{};
   const lowStock=(G.prods||[])
     .map((p,i)=>({name:prodName(i),stock:p.stock,max:p.max,pct:p.max?Math.round(p.stock/p.max*100):0}))
     .sort((a,b)=>a.pct-b.pct)
     .slice(0,5)
     .map(p=>p.name+' '+p.stock+'/'+p.max+' ('+p.pct+'%)')
-    .join('; ')||'sin datos';
+    .join('; ')||(isEs?'sin datos':'no data');
   const customers=(G.custs||[])
     .slice(0,7)
     .map((c,i)=>'#'+(i+1)+' '+customerTypeLabel(c)+' '+customerStateLabel(c)+' '+(c.wantsProdIdx>=0?prodName(c.wantsProdIdx):'-'))
-    .join('; ')||'sin clientes';
+    .join('; ')||(isEs?'sin clientes':'no customers');
   const staff=(G.staff||[])
     .filter(s=>s.hired&&!s.fired)
     .map(s=>s.name+' '+roleShortLabel(s.role)+' E'+Math.round(s.energy||0)+' M'+Math.round(s.morale||0))
-    .join('; ')||'sin equipo';
+    .join('; ')||(isEs?'sin equipo':'no team');
   return [
-    'Contexto de Admira XP para Unitree Bot.',
-    'Responde como un asistente robot de tienda, breve, operativo y en español.',
-    'No inventes datos; si falta informacion, dilo y sugiere la siguiente comprobacion.',
-    'Estado robot: '+(bot.phase||'idle')+', objetivo '+(bot.targetCol||'-')+','+(bot.targetRow||'-')+', scan '+(bot.scanTimer||0)+'.',
-    'Caja '+Math.round(G.money||0)+'€, satisfaccion '+Math.round(G.satisfaction||0)+'%, fama '+Math.round(G.fame||0)+'%, clientes hoy '+(G.customersToday||0)+'.',
-    'Stock mas bajo: '+lowStock+'.',
-    'Clientes visibles: '+customers+'.',
-    'Equipo activo: '+staff+'.',
+    isEs?'Contexto de Admira XP para Unitree Bot.':'Admira XP context for Unitree Bot.',
+    (isEs?'Responde en castellano.':'Answer in English.')+' Se directo, breve y operativo.',
+    isEs?'No empieces con prefijos como "Unitree Bot:" ni con estados internos como "Escaneo en progreso".':'Do not start with prefixes like "Unitree Bot:" or internal states like "Scan in progress".',
+    isEs?'No inventes datos; si falta informacion, dilo y sugiere la siguiente comprobacion.':'Do not invent data; if information is missing, say so and suggest the next check.',
+    (isEs?'Datos internos robot: ':'Internal robot data: ')+(bot.phase||'idle')+', target '+(bot.targetCol||'-')+','+(bot.targetRow||'-')+', scan '+(bot.scanTimer||0)+'.',
+    (isEs?'Caja ':'Cash ')+Math.round(G.money||0)+'€, '+(isEs?'satisfaccion ':'satisfaction ')+Math.round(G.satisfaction||0)+'%, '+(isEs?'fama ':'fame ')+Math.round(G.fame||0)+'%, '+(isEs?'clientes hoy ':'customers today ')+(G.customersToday||0)+'.',
+    (isEs?'Stock mas bajo: ':'Lowest stock: ')+lowStock+'.',
+    (isEs?'Clientes visibles: ':'Visible customers: ')+customers+'.',
+    (isEs?'Equipo activo: ':'Active team: ')+staff+'.',
   ].join('\n');
 }
 async function askRobotGrok(){
@@ -2079,21 +2100,22 @@ async function askRobotGrok(){
   const clean=els.prompt?els.prompt.value.trim():'';
   if(!clean){
     setRobotGrokUiStatus('Escribe una pregunta',true);
-    if(els.answer) els.answer.textContent='Introduce una duda para el Unitree Bot.';
+    if(els.answer) els.answer.textContent=robotText('Introduce una duda para el Unitree Bot.','Ask Unitree Bot a question.');
     return;
   }
   if(!window.askAdmiraGrok){
     setRobotGrokUiStatus('Grok no disponible',true);
-    if(els.answer) els.answer.textContent='El puente Grok aun no esta listo en esta sesion.';
+    if(els.answer) els.answer.textContent=robotText('El puente Grok aun no esta listo en esta sesion.','The Grok bridge is not ready in this session yet.');
     return;
   }
-  setRobotGrokUiStatus('Consultando...',false);
+  setRobotGrokUiStatus(robotText('Consultando...','Thinking...'),false);
   if(els.ask) els.ask.disabled=true;
-  if(els.answer) els.answer.textContent='Unitree Bot esta consultando Grok...';
+  if(els.answer) els.answer.textContent=robotText('Consultando Grok...','Checking Grok...');
   try{
-    const result=await window.askAdmiraGrok('Consulta Unitree Bot: '+clean,buildUnitreeGrokContext());
+    const result=await window.askAdmiraGrok((lang==='en'?'Unitree Bot query: ':'Consulta Unitree Bot: ')+clean,buildUnitreeGrokContext());
     const ok=result&&result.ok;
-    const answer=String((result&&(result.text||result.message))||'Sin respuesta').trim();
+    const rawAnswer=String((result&&(result.text||result.message))||robotText('Sin respuesta','No answer')).trim();
+    const answer=ok?cleanRobotAnswerText(rawAnswer):rawAnswer;
     if(els.answer) els.answer.textContent=answer;
     if(ok){
       ROBOT_VOICE.lastAnswer=answer;
@@ -3869,6 +3891,10 @@ let tabletVote={face:-1,timer:0}; // face: 0=😊, 1=😐, 2=😡
 let shopStaffPos=null;     // saved staff positions (null = use DEFAULT_STAFF_POS)
 let shopStaffZones=null;   // saved staff influence zones (null = use home-based defaults)
 
+const LAYOUT_SCHEMA_VERSION='20260426-public-canonical-1';
+const CANONICAL_LAYOUT_IDS=new Set(DEFAULT_LAYOUT.map(item=>item.id));
+const PINNED_LAYOUT_IDS=new Set(['aroma']);
+
 // Default staff home positions (used when no custom positions saved)
 const DEFAULT_STAFF_POS=[
   {col:2, row:1, label:'Cajera',      color:'#ff88aa'},
@@ -3882,6 +3908,18 @@ const DEFAULT_STAFF_POS=[
 ];
 
 const DEFAULT_STAFF_ZONE_RADIUS=[1,2,2,2,1,2,2,2];
+const ACTOR_PATH_SPEED_SCALE=0.78;
+const CUSTOMER_MOVE_SPEED_SCALE=0.74;
+const ROBOT_PATH_SPEED_SCALE=0.54;
+function actorPathSpeedScale(actor){
+  try{
+    if(G&&actor&&actor===G.unitreeBot) return ROBOT_PATH_SPEED_SCALE;
+  }catch(e){}
+  return ACTOR_PATH_SPEED_SCALE;
+}
+function customerMoveSpeed(speed){
+  return speed*CUSTOMER_MOVE_SPEED_SCALE;
+}
 
 // ── LAYOUT PERSISTENCE ───────────────────────────────────────
 // Startup order is explicit:
@@ -3897,6 +3935,7 @@ function getLayoutSlotKeys(prefix){
     backup: prefix+'_layout_backup',
     slot0: prefix+'_layout_slot0',
     slot1: prefix+'_layout_slot1',
+    schema: prefix+'_layout_schema_version',
     staffPos: prefix+'_staff_pos',
     staffZones: prefix+'_staff_zones',
     slot0StaffPos: prefix+'_layout_slot0_staff_pos',
@@ -3904,6 +3943,53 @@ function getLayoutSlotKeys(prefix){
     slot1StaffPos: prefix+'_layout_slot1_staff_pos',
     slot1StaffZones: prefix+'_layout_slot1_staff_zones',
   };
+}
+function cloneLayoutData(data){
+  return JSON.parse(JSON.stringify(data));
+}
+function syncFactoryFurniture(layout,options={}){
+  const forceAll=!!options.forceAll;
+  const next=Array.isArray(layout)?cloneLayoutData(layout):[];
+  for(const def of DEFAULT_LAYOUT){
+    const idx=next.findIndex(item=>item&&item.id===def.id);
+    const existing=idx>=0?next[idx]:{};
+    const shouldSync=forceAll||PINNED_LAYOUT_IDS.has(def.id);
+    const merged=shouldSync
+      ? {...existing,...cloneLayoutData(def)}
+      : {
+          ...cloneLayoutData(def),
+          ...existing,
+          id:def.id,
+          type:existing.type||def.type,
+          label:existing.label||def.label,
+          sx:(typeof existing.sx==='number'&&existing.sx>0)?existing.sx:(def.sx||1),
+          sy:(typeof existing.sy==='number'&&existing.sy>0)?existing.sy:(def.sy||1),
+        };
+    if(idx>=0) next[idx]=merged;
+    else next.push(cloneLayoutData(def));
+  }
+  return next.filter(item=>item&&(CANONICAL_LAYOUT_IDS.has(item.id)||item.custom===true));
+}
+function isClusteredFurnitureLayout(layout){
+  const items=(layout||[]).filter(item=>item&&CANONICAL_LAYOUT_IDS.has(item.id)&&!['led','aroma'].includes(item.type)&&Number.isFinite(item.col)&&Number.isFinite(item.row));
+  if(items.length<8) return true;
+  const unique=new Set(items.map(item=>item.col+','+item.row));
+  if(unique.size<=Math.ceil(items.length*0.55)) return true;
+  const cols=items.map(item=>item.col), rows=items.map(item=>item.row);
+  const spreadCol=Math.max(...cols)-Math.min(...cols);
+  const spreadRow=Math.max(...rows)-Math.min(...rows);
+  return spreadCol<7||spreadRow<4;
+}
+function persistLayoutSchema(keys){
+  localStorage.setItem(keys.schema,LAYOUT_SCHEMA_VERSION);
+}
+function persistCanonicalLayout(keys){
+  const data=JSON.stringify(shopLayout);
+  localStorage.setItem(keys.current,data);
+  localStorage.setItem(keys.backup,data);
+  localStorage.setItem(keys.initial,data);
+  localStorage.setItem(keys.slot1,data);
+  persistLayoutSchema(keys);
 }
 function getFactoryStaffPosSnapshot(){
   return JSON.parse(JSON.stringify(shopStaffPos&&shopStaffPos.length?shopStaffPos:DEFAULT_STAFF_POS));
@@ -3949,24 +4035,15 @@ function loadLayout(){
           sx:  (typeof it.sx==='number'&&it.sx>0) ? it.sx : 1,
           sy:  (typeof it.sy==='number'&&it.sy>0) ? it.sy : 1,
         }));
-        shopLayout=clean;
-        // Merge: add any NEW items from DEFAULT that saved layout doesn't have
-        for(const def of DEFAULT_LAYOUT){
-          if(!shopLayout.find(i=>i.id===def.id)){
-            shopLayout.push(JSON.parse(JSON.stringify(def)));
-          }
+        const savedSchema=localStorage.getItem(keys.schema)||'';
+        const needsCanonical=savedSchema!==LAYOUT_SCHEMA_VERSION||((source==='slot0'||source.startsWith('legacy-'))&&isClusteredFurnitureLayout(clean));
+        shopLayout=syncFactoryFurniture(clean,{forceAll:needsCanonical});
+        if(needsCanonical){
+          persistCanonicalLayout(keys);
+          console.log('[Layout] ✓ Migrated '+source+' to canonical public layout v'+LAYOUT_SCHEMA_VERSION+' ('+shopLayout.length+' items)');
+        } else {
+          console.log('[Layout] ✓ Loaded '+source+' ('+shopLayout.length+' items)');
         }
-        const aromaDef=DEFAULT_LAYOUT.find(i=>i.id==='aroma');
-        const aromaItem=shopLayout.find(i=>i.id==='aroma');
-        if(aromaDef&&aromaItem){
-          aromaItem.type=aromaDef.type;
-          aromaItem.label=aromaDef.label;
-          aromaItem.col=aromaDef.col;
-          aromaItem.row=aromaDef.row;
-          aromaItem.sx=aromaDef.sx||1;
-          aromaItem.sy=aromaDef.sy||1;
-        }
-        console.log('[Layout] ✓ Loaded '+source+' ('+shopLayout.length+' items)');
         // Also load staff positions
         const usesStartupStaff=source==='initial'||source==='slot1'||source==='legacy-initial'||source==='legacy-slot1';
         const spKey=usesStartupStaff?keys.slot1StaffPos:source==='slot0'||source==='legacy-slot0'?keys.slot0StaffPos:keys.staffPos;
@@ -3989,6 +4066,7 @@ function saveLayout(){
     const keys=getLayoutSlotKeys(prefix);
     localStorage.setItem(keys.current,data);
     localStorage.setItem(keys.backup,data);
+    persistLayoutSchema(keys);
     if(shopStaffPos) localStorage.setItem(keys.staffPos,JSON.stringify(shopStaffPos));
     if(shopStaffZones) localStorage.setItem(keys.staffZones,JSON.stringify(shopStaffZones));
     try{if(typeof buildWalkGrid==='function') buildWalkGrid();}catch(gridErr){}
@@ -4004,6 +4082,7 @@ function saveLayoutSlot1(){
     localStorage.setItem(keys.slot1,data);
     localStorage.setItem(keys.current,data);
     localStorage.setItem(keys.backup,data);
+    persistLayoutSchema(keys);
     if(shopStaffPos) localStorage.setItem(keys.slot1StaffPos,JSON.stringify(shopStaffPos));
     else localStorage.setItem(keys.slot1StaffPos,JSON.stringify(getFactoryStaffPosSnapshot()));
     if(shopStaffZones) localStorage.setItem(keys.slot1StaffZones,JSON.stringify(shopStaffZones));
@@ -4089,6 +4168,7 @@ function resetToFactory(){
   localStorage.removeItem(keys.backup);
   localStorage.removeItem(keys.initial);
   localStorage.removeItem(keys.slot1);
+  localStorage.removeItem(keys.schema);
   shopLayout=JSON.parse(JSON.stringify(DEFAULT_LAYOUT));
   shopStaffPos=JSON.parse(JSON.stringify(DEFAULT_STAFF_POS));
   shopStaffZones=null;
@@ -4315,8 +4395,9 @@ function stepActorPath(actor,pathProp='path',idxProp='pathIdx',speed=1,animEvery
     actor[idxProp]++;
     return actor[idxProp]>=path.length?'done':'next';
   }
-  actor.x+=dx/d*speed;
-  actor.y+=dy/d*speed;
+  const stepSpeed=speed*actorPathSpeedScale(actor);
+  actor.x+=dx/d*stepSpeed;
+  actor.y+=dy/d*stepSpeed;
   actor.dir=dx<0?-1:1;
   actor.aTimer=(actor.aTimer||0)+1;
   if(actor.aTimer>=animEvery){actor.aTimer=0;actor.aFrame=((actor.aFrame||0)+1)%2;}
@@ -6308,7 +6389,7 @@ function updateGame(){
     const queueStress=(c.persona==='impatient'?1.8:1);
     if(c.st==='walk'){
       // Sun → customers walk 65% speed (too hot); Rain → normal speed (rushing in)
-      const wSpd=G.weather&&G.weather.type==='sun'?0.85:1.3;
+      const wSpd=customerMoveSpeed(G.weather&&G.weather.type==='sun'?0.85:1.3);
       // Rain → customers linger longer (took shelter); base browse timer scaled up
       const browseBase=G.weather&&G.weather.type==='rain'?1.7:1.0;
       if(isNearDoorSensor(c.x,c.y,140,96)) G.doorOpen=Math.max(G.doorOpen||0,85);
@@ -6391,7 +6472,8 @@ function updateGame(){
       const dx=qtx-c.x,dy=qty-c.y,d=Math.sqrt(dx*dx+dy*dy);
       if(d>3){
         if(canActorStepToTile(spot.col,spot.row,c)){
-          c.x+=dx/d*1.05;c.y+=dy/d*1.05;c.dir=dx<0?-1:1;
+          const qSpd=customerMoveSpeed(1.05);
+          c.x+=dx/d*qSpd;c.y+=dy/d*qSpd;c.dir=dx<0?-1:1;
         }
       }else if(idx===0&&G.turns&&(G.turns.servingId===null||G.turns.servingId===c.id)){
         G.turns.current=c.queueNumber||0;
@@ -6409,7 +6491,8 @@ function updateGame(){
       const dx=btx-c.x,dy=bty-c.y,d=Math.sqrt(dx*dx+dy*dy);
       if(d>3){
         if(canActorStepToTile(spot.col,spot.row,c)){
-          c.x+=dx/d*1.1;c.y+=dy/d*1.1;c.dir=dx<0?-1:1;
+          const buySpd=customerMoveSpeed(1.1);
+          c.x+=dx/d*buySpd;c.y+=dy/d*buySpd;c.dir=dx<0?-1:1;
         }
       }else{
         c.serviceTimer=(c.serviceTimer|0)-1;
@@ -6441,7 +6524,7 @@ function updateGame(){
             c.roamCooldown=70+Math.floor(Math.random()*120);
           }
         }else{
-          const roamSpd=(G.weather&&G.weather.type==='sun'?0.7:0.95);
+          const roamSpd=customerMoveSpeed(G.weather&&G.weather.type==='sun'?0.7:0.95);
           c.x+=dx/d*roamSpd;c.y+=dy/d*roamSpd;c.dir=dx<0?-1:1;
         }
       }else if((c.roamCooldown=(c.roamCooldown|0)-1)<=0){
@@ -6487,7 +6570,7 @@ function updateGame(){
         }
         const ltx=lpIso.x-7,lty=lpIso.y-20;
         const dx=ltx-c.x,dy=lty-c.y,d=Math.sqrt(dx*dx+dy*dy);
-        if(d<3){c.leaveIdx++;} else{c.x+=dx/d*1.6;c.y+=dy/d*1.6;c.dir=dx<0?-1:1;}
+        if(d<3){c.leaveIdx++;} else{const leaveSpd=customerMoveSpeed(1.6);c.x+=dx/d*leaveSpd;c.y+=dy/d*leaveSpd;c.dir=dx<0?-1:1;}
         if(d<42&&G.doorOpen<70) G.doorOpen=90;
       } else {
         const dx=c.tx-c.x,dy=c.ty-c.y,d=Math.sqrt(dx*dx+dy*dy);
@@ -6533,9 +6616,10 @@ function updateGame(){
           }
         }
         else{
-          const nx=c.x+dx/d*1.6,ny=c.y+dy/d*1.6;
+          const leaveSpd=customerMoveSpeed(1.6);
+          const nx=c.x+dx/d*leaveSpd,ny=c.y+dy/d*leaveSpd;
           if(canWalkTo(nx+5,ny+20,{ignore:c})){c.x=nx;c.y=ny;c.dir=dx<0?-1:1;}
-          else{c.x+=dx/d*0.5;c.y+=dy/d*0.5;c.dir=dx<0?-1:1;}
+          else{const fallbackSpd=customerMoveSpeed(0.5);c.x+=dx/d*fallbackSpd;c.y+=dy/d*fallbackSpd;c.dir=dx<0?-1:1;}
         }
       }
     }
@@ -6867,12 +6951,12 @@ function spawnCust(isVip){
 }
 
 function getDoorThresholdPos(){
-  const doorIso=toIso(ISO.cols,3);
+  const doorIso=rightWallFeatureIso(3);
   return {x:doorIso.x-7,y:doorIso.y-20};
 }
 
 function getDoorOutsidePos(){
-  const outsideIso=toIso(ISO.cols+0.92,3.18);
+  const outsideIso=toIso(ISO.cols+0.92,3.18+RIGHT_WALL_FEATURE_ROW_OFFSET);
   return {x:outsideIso.x-7,y:outsideIso.y-20};
 }
 
@@ -7149,7 +7233,7 @@ const ISO={
   cols:14,rows:8,        // +1 more each direction for bigger shop
   ox:270,oy:185,         // adjusted for larger grid
   wallH:165,             // walls
-  doorCol:13,doorRow:3,  // door far right (moved with cols)
+  doorCol:13,doorRow:3.35,  // door far right (moved with cols)
 };
 // Cart→Iso: convert grid (col,row) to screen pixel
 function toIso(col,row){
@@ -7157,6 +7241,10 @@ function toIso(col,row){
     x: ISO.ox + (col-row)*ISO.tileW/2,
     y: ISO.oy + (col+row)*ISO.tileH/2
   };
+}
+const RIGHT_WALL_FEATURE_ROW_OFFSET=0.35;
+function rightWallFeatureIso(row){
+  return toIso(ISO.cols,row+RIGHT_WALL_FEATURE_ROW_OFFSET);
 }
 // Draw a flat diamond tile
 function drawIsoTile(col,row,color,strokeColor){
@@ -9913,7 +10001,7 @@ function drawShop(){
 
   // ── BACK WALL (cream/beige, Kairosoft style) ──
   const wallPts=[];
-  for(let c=0;c<=ISO.cols+4;c++) wallPts.push(toIso(c,0)); // extend right to cover full view
+  for(let c=0;c<=ISO.cols;c++) wallPts.push(toIso(c,0)); // stop at the real corner; outside stays transparent
   // Wall body
   cx.beginPath();
   cx.moveTo(wallPts[0].x,wallPts[0].y);
@@ -10156,6 +10244,7 @@ function drawShop(){
   if(shopFurnitureVisible||editorSceneActive){
     for(const item of shopLayout){
       if(item.type==='led'||item.type==='tft') continue;
+      if(item.type==='aroma'&&!editorSceneActive) continue;
       const d=item.type==='rug'?-999:item.type==='aroma'?-1200:isoDepth(item.col,item.row+1);
       entities.push({type:item.type,col:item.col,row:item.row,depth:d,layoutId:item.id,sx:item.sx||1,sy:item.sy||1,flipX:item.flipX||false,rot:item.rot||0});
     }
@@ -10262,6 +10351,12 @@ function drawShop(){
   // ── ESCAPARATE — right wall rows 0-2, above glass door ──
   if(!editorSceneActive) drawEscaparate();
 
+  // ── AROMA MACHINE — wall overlay above exterior ads so waves stay visible ──
+  if(!editorSceneActive&&shopFurnitureVisible){
+    const aromaItem=shopLayout.find(i=>i.type==='aroma');
+    if(aromaItem) drawAromatizer(aromaItem.col,aromaItem.row);
+  }
+
   // ── GLASS DOOR — drawn LAST, always on top of furniture/characters ──
   if(!editorSceneActive) drawGlassDoor();
 
@@ -10330,16 +10425,12 @@ function drawEscaparate(){
   if(!G.escaparate) G.escaparate={active:true,phase:0,boost:0,smTimer:900};
   const esc=G.escaparate;
 
-  // Right wall face: rows 0→2 at col=ISO.cols (above glass door)
-  const pe0=toIso(ISO.cols,0);  // floor point at right corner (col=14, row=0)
-  const pe2=toIso(ISO.cols,2);  // floor point at left corner  (col=14, row=2)
+  // Right wall face: rows 0→2 at col=ISO.cols (above glass door), shifted toward the lower corner.
+  const pe0=rightWallFeatureIso(0);  // floor point at right corner (col=14, row=0.35)
+  const pe2=rightWallFeatureIso(2);  // floor point at left corner  (col=14, row=2.35)
   const wH=ISO.wallH;
   // Display height matches door height (ISO.wallH * 0.75) — sits flush at bottom of wall section
   const dispH=Math.round(wH*0.75);
-
-  // Full wall face corners (for background fill)
-  const TR_wall={x:pe0.x, y:pe0.y-wH};
-  const TL_wall={x:pe2.x, y:pe2.y-wH};
 
   // Display panel corners (only dispH tall, anchored at floor level)
   const TR={x:pe0.x, y:pe0.y-dispH};   // top-right of display
@@ -10347,15 +10438,8 @@ function drawEscaparate(){
   const BL={x:pe2.x, y:pe2.y};          // bottom-left
   const TL={x:pe2.x, y:pe2.y-dispH};    // top-left of display
 
-  // ── WALL STRIP ABOVE DISPLAY — matches back wall color (P.wallInner) ──
-  // Only the strip between display top and wall ceiling, so it blends with the back wall corner.
-  cx.save();
-  cx.beginPath();
-  cx.moveTo(TR_wall.x,TR_wall.y); cx.lineTo(TR.x,TR.y);
-  cx.lineTo(TL.x,TL.y); cx.lineTo(TL_wall.x,TL_wall.y);
-  cx.closePath();
-  cx.fillStyle=P.wallInner; cx.fill();
-  cx.restore();
+  // The wall behind this display is already painted earlier. Repainting the strip
+  // here can cover the back-wall window, so the upper area stays transparent.
 
   // ── OUTER FRAME — same dark wood as door frame, flush with parallelogram boundary ──
   // Drawn BEFORE display content so frame appears as a border
@@ -10536,10 +10620,10 @@ function drawEscaparate(){
 }
 
 function drawGlassDoor(){
-  // Door occupies right wall between row 2 and row 4
-  const dt=toIso(ISO.cols,2);  // right panel outer edge
-  const dm=toIso(ISO.cols,3);  // center divider
-  const db=toIso(ISO.cols,4);  // left panel outer edge
+  // Door occupies right wall between row 2 and row 4, shifted toward the lower corner.
+  const dt=rightWallFeatureIso(2);  // right panel outer edge
+  const dm=rightWallFeatureIso(3);  // center divider
+  const db=rightWallFeatureIso(4);  // left panel outer edge
   const doorH=ISO.wallH*0.75;
   // doorAmt follows the real traffic sensor, so the glass reacts to the threshold.
   const doorAmt=G&&typeof G.doorAnim==='number'?G.doorAnim:(G&&G.doorOpen>0?1:0);
@@ -11388,14 +11472,14 @@ function drawAltadisTFT(){
 }
 
 function drawTurnManager(){
-  const left=toIso(3.45,0);
-  const right=toIso(4.75,0);
-  const topY=left.y-ISO.wallH+36;
+  const left=toIso(3.25,0);
+  const right=toIso(4.95,0);
+  const topY=left.y-ISO.wallH+32;
   const slopeY=right.y-left.y;
   const frameTL={x:left.x,y:topY};
   const frameTR={x:right.x,y:topY+slopeY};
-  const frameBL={x:left.x,y:topY+54};
-  const frameBR={x:right.x,y:topY+54+slopeY};
+  const frameBL={x:left.x,y:topY+62};
+  const frameBR={x:right.x,y:topY+62+slopeY};
   cx.save();
   cx.beginPath();
   cx.moveTo(frameTL.x,frameTL.y);cx.lineTo(frameTR.x,frameTR.y);
@@ -11412,11 +11496,26 @@ function drawTurnManager(){
   cx.lineTo(br.x,br.y);cx.lineTo(bl.x,bl.y);
   cx.closePath();cx.fillStyle='#031316';cx.fill();
   const num=String(currentTurnNumber()).padStart(3,'0');
-  const cxm=(tl.x+tr.x+bl.x+br.x)/4;
-  const cym=(tl.y+tr.y+bl.y+br.y)/4;
-  tx('TURNO',cxm,cym-10,'#8defff',7,'center');
-  tx(num,cxm,cym+12,'#ffd86b',16,'center');
-  tx('CAJA',cxm,cym+26,'#8defff',6,'center');
+  const vW=92,vH=54;
+  const ax=(tr.x-tl.x)/vW, ay=(tr.y-tl.y)/vW;
+  const bx=(bl.x-tl.x)/vH, by=(bl.y-tl.y)/vH;
+  cx.save();
+  cx.beginPath();
+  cx.moveTo(tl.x,tl.y);cx.lineTo(tr.x,tr.y);
+  cx.lineTo(br.x,br.y);cx.lineTo(bl.x,bl.y);
+  cx.closePath();cx.clip();
+  cx.setTransform(ax,ay,bx,by,tl.x,tl.y);
+  cx.fillStyle='#031316';cx.fillRect(0,0,vW,vH);
+  cx.globalAlpha=0.18;
+  cx.strokeStyle='#1e6a72';cx.lineWidth=1;
+  for(let gy=8;gy<vH;gy+=8){cx.beginPath();cx.moveTo(5,gy);cx.lineTo(vW-5,gy);cx.stroke();}
+  cx.globalAlpha=1;
+  cx.textAlign='center';
+  cx.fillStyle='#8defff';cx.font='bold 8px monospace';cx.fillText('TURNO',vW/2,13);
+  cx.fillStyle='#ffd86b';cx.font='bold 23px monospace';cx.fillText(num,vW/2,37);
+  cx.fillStyle='#8defff';cx.font='bold 7px monospace';cx.fillText('CAJA',vW/2,49);
+  cx.setTransform(1,0,0,1,0,0);
+  cx.restore();
   cx.restore();
 }
 
@@ -11491,94 +11590,65 @@ function drawAirConditioning(){
 let aromaOn=false; // Aromatizer state: false=off, true=on (diffusing particles)
 
 function drawAromatizer(col=13,row=1){
-  // Pegado a la pared larga, entre la ventana derecha y la puerta.
-  const left=toIso(Math.max(11.9,col-0.62),0);
-  const right=toIso(Math.max(12.35,col-0.18),0);
-  const topY=left.y-ISO.wallH+86;
+  // Small wall diffuser: no backing panel, just the visible device and waves.
+  const left=toIso(Math.max(12.15,col-0.48),0);
+  const right=toIso(Math.max(12.85,col+0.22),0);
+  const topY=left.y-ISO.wallH+12;
   const slopeY=right.y-left.y;
-  const bodyH=28;
+  const bodyH=34;
   const tl={x:left.x,y:topY};
   const tr={x:right.x,y:topY+slopeY};
   const bl={x:left.x,y:topY+bodyH};
   const br={x:right.x,y:topY+bodyH+slopeY};
 
   cx.save();
-  cx.beginPath();
-  cx.moveTo(tl.x,tl.y);cx.lineTo(tr.x,tr.y);cx.lineTo(br.x,br.y);cx.lineTo(bl.x,bl.y);
-  cx.closePath();
-  cx.fillStyle='rgba(0,0,0,0.14)';
-  cx.fill();
-
-  const vW=24,vH=34;
-  const ax=(tr.x-tl.x)/vW, ay=(tr.y-tl.y)/vW;
-  const bx=(bl.x-tl.x)/vH, by=(bl.y-tl.y)/vH;
-  cx.save();
-  cx.beginPath();
-  cx.moveTo(tl.x,tl.y);cx.lineTo(tr.x,tr.y);cx.lineTo(br.x,br.y);cx.lineTo(bl.x,bl.y);
-  cx.closePath();
-  cx.clip();
-  cx.setTransform(ax,ay,bx,by,tl.x,tl.y);
-
-  cx.fillStyle='#f1eee8';cx.fillRect(1,1,vW-2,vH-2);
-  cx.fillStyle='#cbc5ba';cx.fillRect(1,1,vW-2,4);
-  cx.fillStyle='#2e6fb5';cx.fillRect(4,6,vW-8,2);
-  cx.fillStyle='#242424';cx.fillRect(vW-7,3,3,2);
-  cx.strokeStyle='#6a6358';cx.lineWidth=1;cx.strokeRect(1.5,1.5,vW-3,vH-3);
-  cx.strokeStyle='#7b766d';cx.lineWidth=1;
-  cx.beginPath();cx.arc(vW/2,14,4,0,Math.PI*2);cx.stroke();
-  cx.fillStyle='#7b766d';
-  cx.beginPath();
-  cx.moveTo(vW/2-1,11);cx.lineTo(vW/2-1,17);cx.lineTo(vW/2+3,14);
-  cx.closePath();cx.fill();
-  cx.fillStyle=aromaOn?'#22cc22':'#cc2222';
-  cx.beginPath();cx.arc(vW/2,7,2,0,Math.PI*2);cx.fill();
-  cx.globalAlpha=0.45;
-  for(let gy=0;gy<4;gy++){
-    for(let gx=0;gx<4;gx++){
-      const px=5+gx*4+(gy%2)*1.5;
-      const py=22+gy*2.4;
-      cx.fillStyle='#55514c';
-      cx.beginPath();
-      cx.moveTo(px,py-1);cx.lineTo(px+1,py);cx.lineTo(px,py+1);cx.lineTo(px-1,py);
-      cx.closePath();cx.fill();
-    }
+  const bodyX=(tl.x+tr.x+bl.x+br.x)/4;
+  const bodyY=(tl.y+tr.y+bl.y+br.y)/4;
+  const shell=cx.createRadialGradient(bodyX-4,bodyY-5,2,bodyX,bodyY,12);
+  shell.addColorStop(0,'#ffffff');
+  shell.addColorStop(0.72,'#d7fbff');
+  shell.addColorStop(1,'#58dcea');
+  cx.fillStyle=shell;
+  cx.beginPath();cx.ellipse(bodyX,bodyY,11,13,0.08,0,Math.PI*2);cx.fill();
+  cx.strokeStyle='#0c6d7a';cx.lineWidth=1.5;
+  cx.beginPath();cx.ellipse(bodyX,bodyY,11,13,0.08,0,Math.PI*2);cx.stroke();
+  cx.strokeStyle='#1a5963';cx.lineWidth=1;
+  for(let i=-1;i<=1;i++){
+    cx.beginPath();cx.arc(bodyX,bodyY+3+i*4,6,Math.PI*0.12,Math.PI*0.88);cx.stroke();
   }
-  cx.globalAlpha=1;
-  cx.fillStyle='#66615a';cx.font='bold 4px monospace';cx.textAlign='center';
-  cx.fillText('AROMA',vW/2,32);
-  cx.setTransform(1,0,0,1,0,0);
-  cx.restore();
+  cx.fillStyle=aromaOn?'#22ff77':'#e04444';
+  cx.beginPath();cx.arc(bodyX+5,bodyY-7,2.5,0,Math.PI*2);cx.fill();
+  cx.strokeStyle='#0c2a33';cx.lineWidth=0.7;cx.stroke();
+  cx.fillStyle='#0c2a33';cx.font='bold 5px monospace';cx.textAlign='center';
+  cx.fillText('OLOR',bodyX,bodyY+19);
 
   if(!editorSceneActive){
-    const minX=Math.min(tl.x,bl.x)-3, maxX=Math.max(tr.x,br.x)+3;
-    const minY=Math.min(tl.y,tr.y)-3, maxY=Math.max(bl.y,br.y)+3;
+    const minX=bodyX-15, maxX=bodyX+15;
+    const minY=bodyY-17, maxY=bodyY+23;
     BTNS['aromaToggle']={x:minX,y:minY,w:maxX-minX,h:maxY-minY};
   }
 
   if(aromaOn){
-    const aromaCycle=(tt+150)%600;
-    if(aromaCycle<300){
-      const waveX=(tl.x+tr.x+bl.x+br.x)/4;
-      const waveBase=Math.min(tl.y,tr.y)-4;
-      for(let i=0;i<4;i++){
-        const phase=(tt*0.004+i*0.7)%1;
-        const wy=waveBase-phase*34;
-        const wSize=4+phase*9;
-        const alpha=0.7*(1-phase);
-        cx.globalAlpha=alpha;
-        cx.strokeStyle='#cc66ff';
-        cx.lineWidth=2;
-        cx.beginPath();
-        cx.arc(waveX,wy,wSize,Math.PI*1.15,Math.PI*1.85);
-        cx.stroke();
-        cx.strokeStyle='#ee88ff';
-        cx.lineWidth=1;
-        cx.beginPath();
-        cx.arc(waveX,wy,wSize-1.5,Math.PI*1.15,Math.PI*1.85);
-        cx.stroke();
-      }
-      cx.globalAlpha=1;
+    const waveX=bodyX;
+    const waveBase=bodyY-17;
+    for(let i=0;i<5;i++){
+      const phase=(tt*0.006+i*0.22)%1;
+      const wy=waveBase-phase*42;
+      const wSize=5+phase*14;
+      const alpha=0.78*(1-phase);
+      cx.globalAlpha=alpha;
+      cx.strokeStyle='#b55cff';
+      cx.lineWidth=2.4;
+      cx.beginPath();
+      cx.arc(waveX,wy,wSize,Math.PI*1.12,Math.PI*1.88);
+      cx.stroke();
+      cx.strokeStyle='#f0a8ff';
+      cx.lineWidth=1;
+      cx.beginPath();
+      cx.arc(waveX,wy,wSize-1.8,Math.PI*1.12,Math.PI*1.88);
+      cx.stroke();
     }
+    cx.globalAlpha=1;
   }
   cx.restore();
 }
