@@ -1111,6 +1111,97 @@ function dsImportOpenPicker(){
   const inp=document.getElementById('dsImportInput');
   if(inp) inp.click();
 }
+
+// Resolve candidate base URLs for the local elgato-proxy (where yt-dlp lives).
+function dsTubeBaseUrls(){
+  const isLocal=location.hostname==='localhost'||location.hostname==='127.0.0.1';
+  const port=(typeof ELGATO!=='undefined'&&ELGATO.proxyPort)||9124;
+  return isLocal ? [location.origin] : [`http://localhost:${port}`,`http://127.0.0.1:${port}`];
+}
+async function dsTubeHealth(){
+  for(const base of dsTubeBaseUrls()){
+    try{
+      const res=await fetch(base+'/tube/health',{signal:AbortSignal.timeout(2500)});
+      if(res.ok) return Object.assign(await res.json(),{base});
+    }catch(e){}
+  }
+  return {ok:false,available:false,error:'proxy unreachable'};
+}
+async function dsTubeDownload(youTubeUrl,onProgress){
+  let lastErr='proxy unreachable';
+  for(const base of dsTubeBaseUrls()){
+    try{
+      onProgress&&onProgress({phase:'connecting',base});
+      const ctrl=new AbortController();
+      const timer=setTimeout(()=>ctrl.abort(),200000); // 200s safety net
+      const res=await fetch(base+'/tube/download',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({url:youTubeUrl}),
+        signal:ctrl.signal,
+      });
+      clearTimeout(timer);
+      if(!res.ok){
+        let detail=''; try{ detail=(await res.json()).error||''; }catch(e){}
+        lastErr=`yt-dlp HTTP ${res.status}${detail?': '+detail:''}`;
+        continue;
+      }
+      const ct=res.headers.get('Content-Type')||'video/mp4';
+      const titleEnc=res.headers.get('X-Tube-Title')||'';
+      const title=(()=>{ try{return decodeURIComponent(titleEnc);}catch(e){return '';} })();
+      const cd=res.headers.get('Content-Disposition')||'';
+      const fnMatch=cd.match(/filename="([^"]+)"/);
+      const fileName=(fnMatch&&fnMatch[1])||(title?title.replace(/[^\w\-. ]+/g,'_').slice(0,120)+'.mp4':'youtube.mp4');
+      onProgress&&onProgress({phase:'downloading'});
+      const blob=await res.blob();
+      return {blob,title:title||'YouTube',fileName,mime:ct,base};
+    }catch(e){ lastErr=e&&e.message||String(e); }
+  }
+  throw new Error(lastErr);
+}
+
+async function dsImportFromYouTube(youTubeUrl){
+  if(!youTubeUrl||!/^https?:\/\//i.test(youTubeUrl)){
+    dsImportSetStatus('error','URL inválida. Ejemplo: /importTube https://youtu.be/abc',100);
+    dsImportHideStatus(2200); return;
+  }
+  dsImportSetStatus('processing','Comprobando yt-dlp en proxy local…',5);
+  const h=await dsTubeHealth();
+  if(!h.available){
+    dsImportSetStatus('error','yt-dlp no disponible. Arranca elgato-proxy.js y verifica `yt-dlp --version`.',100);
+    dsImportHideStatus(3500); return;
+  }
+  dsImportSetStatus('processing','Descargando de YouTube vía yt-dlp…',15);
+  let result;
+  try{ result=await dsTubeDownload(youTubeUrl,(ev)=>{
+    if(ev.phase==='connecting') dsImportSetStatus('processing','Conectando con yt-dlp ('+ev.base+')…',12);
+    else if(ev.phase==='downloading') dsImportSetStatus('processing','Recibiendo MP4 del proxy…',45);
+  }); }
+  catch(e){
+    dsImportSetStatus('error','Fallo en descarga: '+e.message,100);
+    dsImportHideStatus(3500); return;
+  }
+  const sizeMB=(result.blob.size/(1024*1024)).toFixed(1);
+  dsImportSetStatus('processing','Guardando MP4 ('+sizeMB+' MB) en almacenamiento…',60);
+  const file=new File([result.blob],result.fileName,{type:result.mime});
+  // Reuse the audited path: persist to IDB + register in playlist
+  const added=await dsImportsAddFiles([file]);
+  if(!added.length){
+    dsImportSetStatus('error','No se pudo importar el archivo descargado.',100);
+    dsImportHideStatus(2800); return;
+  }
+  const finalName=added[added.length-1];
+  // Pin to every DS surface so it shows everywhere in the Xtanco
+  dsImportSetStatus('processing','Adaptando "'+finalName+'" a todas las pantallas…',80);
+  const pinned=[];
+  for(const s of DS_SURFACES){ if(dsPinSurface(s.id,finalName)) pinned.push(s.id); }
+  // Wait for the slowest surface to be ready
+  dsImportSetStatus('processing','Cargando vídeo en '+pinned.length+' pantalla(s)…',92);
+  await Promise.all(pinned.map(sid=>dsWaitMediaReady(sid,30000)));
+  dsImportSetStatus('done','✓ "'+finalName+'" en TODAS las pantallas ('+pinned.length+')',100);
+  if(typeof showEv==='function') showEv('📺 YouTube importado en todas las pantallas','#78ffa0');
+  dsImportHideStatus(1800);
+}
 function dsFormatBytes(n){
   if(!n||n<1024) return (n||0)+' B';
   if(n<1024*1024) return Math.round(n/1024)+' KB';
@@ -17232,7 +17323,7 @@ window.xtAPI = (function(){
       {title:'Tiempo y ambiente',items:['/reloj 14:30','/reloj 14 30','/time am','/time pm','/time night','/weather normal','/weather rain','/weather sun','/lamp','/lamp auto','/hue','/hue auto']},
       {title:'Pantalla y directo',items:['/livecam','/livecam off','/mocap','/mocap off','/AdmiraLive texto','/AdmiraLive off','/AdmiraTube URL 2 audio','/AdmiraTube off','/say texto']},
       {title:'Escena en vivo',items:['/dj on','/dj off','/ladron on','/ladron off','/guardiacivil on','/guardiacivil off','/opinador on','/opinador off','/robot on','/robot off','/door open','/door close','/door auto']},
-      {title:'IA y contenido',items:['/grok pregunta','/draw dibujo','/import','/import list','/import remove 1']},
+      {title:'IA y contenido',items:['/grok pregunta','/draw dibujo','/import','/import list','/import remove 1','/importTube https://youtu.be/...']},
       {title:'Ajustes rápidos',items:['/money 12000','/sat 90','/fame 80','/set week 12','/set year 2','/set revenue 5000','/set storeLevel 2','/set customers 30']},
       {title:'Musica y layout',items:['/song 1','/song bad bunny','/music','/next','/prev','/equipo inicio ana 3 4','/equipo zona dj 12 2 2','/mobiliario inicio','/mobiliario on','/mobiliario off']},
     ];
@@ -17381,6 +17472,12 @@ window.xtAPI = (function(){
       }
       if(cmd==='grok'||cmd==='ask'||cmd==='pregunta') return await grokAsk(arg);
       if(cmd==='draw'||cmd==='dibuja'||cmd==='paint'||cmd==='pinta') return await grokDraw(arg);
+      if(cmd==='importtube'||cmd==='tube'){
+        if(!arg) return 'Uso: /importTube <URL de YouTube>';
+        // fire-and-forget; the status overlay reports phases
+        dsImportFromYouTube(arg.trim()).catch(e=>{ if(typeof showEv==='function') showEv('importTube error: '+e.message,'#ff8866'); });
+        return 'Descargando de YouTube — sigue el progreso en el overlay inferior.';
+      }
       if(cmd==='import'||cmd==='importar'){
         const tokens=arg.split(/\s+/).filter(Boolean);
         const sub=(tokens[0]||'').toLowerCase();
