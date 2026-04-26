@@ -132,6 +132,10 @@
     .tg-signage-deselect{margin-left:auto;border:1px solid #2a7585;border-radius:5px;background:#0c2a35;color:#bff7ff;font-family:monospace;font-size:10px;font-weight:bold;padding:2px 9px;cursor:pointer}
     .tg-signage-deselect:hover{background:#11424f}
     body.ds-signage-selected .tg-signage-row{cursor:cell}
+    .tg-signage-quick-actions{display:flex;gap:6px;margin:0 0 8px;flex-wrap:wrap}
+    .tg-signage-select-all{display:inline-flex;align-items:center;gap:6px;border:1px solid rgba(120,243,255,.4);border-radius:7px;background:rgba(2,8,14,.6);color:#bff7ff;font-family:monospace;font-size:11px;font-weight:bold;padding:5px 12px;cursor:pointer;transition:background .12s, border-color .12s, transform .1s}
+    .tg-signage-select-all:hover{background:rgba(120,243,255,.10);border-color:#78f3ff}
+    .tg-signage-select-all.is-active{background:linear-gradient(180deg,rgba(120,243,255,.25),rgba(120,243,255,.08));border-color:#78f3ff;color:#dffaff;box-shadow:0 0 0 2px rgba(120,243,255,.25)}
     .tg-signage-surfaces.is-drop-all .tg-signage-card{border-color:#78ffa0;box-shadow:0 0 0 2px rgba(120,255,160,.35),0 0 18px rgba(120,255,160,.25)}
     .tg-signage-surfaces.is-drop-all{outline:2px dashed #78ffa0;outline-offset:4px;border-radius:11px}
     .tg-signage-card-head{color:#ffd866;font-size:9px;text-transform:uppercase;letter-spacing:.07em;margin-bottom:3px}
@@ -17569,6 +17573,13 @@ window.xtAPI = (function(){
       +'<button type="button" class="tg-help-close" data-signage-close>Cerrar</button>'
       +'</div>'
       +'</div>';
+    // Quick "select all" toggle above the cards
+    const allActive=dsAllSurfacesSelected();
+    html+='<div class="tg-signage-quick-actions">'
+      +'<button type="button" class="tg-signage-select-all'+(allActive?' is-active':'')+'" data-signage-select-all title="'+(allActive?'Deseleccionar todas':'Seleccionar las 3 pantallas')+'">'
+      +(allActive?'☑':'☐')+' 📺 Todas las pantallas'
+      +'</button>'
+      +'</div>';
     // Surface cards (also drop targets for playlist rows)
     html+='<div class="tg-signage-surfaces" data-pin-all-zone>';
     for(const s of surfaces){
@@ -17586,8 +17597,8 @@ window.xtAPI = (function(){
       } else {
         body='—'; meta='';
       }
-      const isSelected=(dsSelectedSurfaceId===s.id);
-      html+='<div class="tg-signage-card'+(isSelected?' is-selected':'')+'" data-pin-target="'+dsEscapeHtml(s.id)+'" data-signage-select="'+dsEscapeHtml(s.id)+'" title="'+(isSelected?'Pulsa para deseleccionar':'Pulsa para seleccionar como destino')+'">'
+      const isSelected=dsSelectedSurfaces.has(s.id);
+      html+='<div class="tg-signage-card'+(isSelected?' is-selected':'')+'" data-pin-target="'+dsEscapeHtml(s.id)+'" data-signage-select="'+dsEscapeHtml(s.id)+'" title="'+(isSelected?'Pulsa para deseleccionar':'Pulsa para añadir como destino')+'">'
         +'<div class="tg-signage-card-head">'+dsEscapeHtml(s.label)+'</div>'
         +'<div class="tg-signage-card-body">'+body+'</div>'
         +(meta?('<div class="tg-signage-card-meta">'+meta+'</div>'):'')
@@ -17595,10 +17606,12 @@ window.xtAPI = (function(){
         +'</div>';
     }
     html+='</div>';
-    // Selection banner (only when a surface is selected as destination)
-    if(dsSelectedSurfaceId){
+    // Selection banner (only when one or more surfaces are selected as destination)
+    if(dsSelectedSurfaces.size>0){
+      const labels=dsSelectedLabels();
+      const labelText=allActive?'todas las pantallas':labels.join(' + ');
       html+='<div class="tg-signage-selection-banner">'
-        +'📌 Modo selección: <strong>'+dsEscapeHtml(dsSurfaceLabel(dsSelectedSurfaceId))+'</strong> — pulsa un contenido del playlist para fijarlo aquí.'
+        +'📌 Modo selección: <strong>'+dsEscapeHtml(labelText)+'</strong> — pulsa un contenido del playlist para fijarlo aquí.'
         +'<button type="button" class="tg-signage-deselect" data-signage-deselect>Cancelar</button>'
         +'</div>';
     }
@@ -17638,7 +17651,7 @@ window.xtAPI = (function(){
     }
     html+='</div>';
     signagePanel.innerHTML=html;
-    document.body.classList.toggle('ds-signage-selected', !!dsSelectedSurfaceId);
+    document.body.classList.toggle('ds-signage-selected', dsSelectedSurfaces.size>0);
     dsApplyPanelThumbs();
   }
   function showSignagePanel(){
@@ -17685,7 +17698,15 @@ window.xtAPI = (function(){
 
   let dsDragSrcIdx=-1;
   let dsDragging=false;
-  let dsSelectedSurfaceId=null; // when set, a click on a playlist row pins to that surface
+  // Multi-select: a click on a playlist row pins to every surface in this set.
+  // Empty set → click switches the global rotation (default behaviour).
+  const dsSelectedSurfaces=new Set();
+  function dsAllSurfacesSelected(){
+    return DS_SURFACES.length>0 && DS_SURFACES.every(s=>dsSelectedSurfaces.has(s.id));
+  }
+  function dsSelectedLabels(){
+    return DS_SURFACES.filter(s=>dsSelectedSurfaces.has(s.id)).map(s=>s.label);
+  }
   function dsClearDropIndicators(){
     if(!signagePanel) return;
     signagePanel.querySelectorAll('.is-drop-before,.is-drop-after,.is-drop-target').forEach(el=>el.classList.remove('is-drop-before','is-drop-after','is-drop-target'));
@@ -18219,19 +18240,33 @@ window.xtAPI = (function(){
       const deselect=e.target.closest('[data-signage-deselect]');
       if(deselect){
         e.preventDefault(); e.stopPropagation();
-        dsSelectedSurfaceId=null;
+        dsSelectedSurfaces.clear();
         renderSignagePanel();
         return;
       }
-      // Surface card click → toggle selection (must come BEFORE playRow check since
-      // cards do not contain playRow children, but still: keep order explicit).
+      // "Todas las pantallas" toggle: select all 3 or deselect all (if already all)
+      const selectAll=e.target.closest('[data-signage-select-all]');
+      if(selectAll){
+        e.preventDefault(); e.stopPropagation();
+        if(dsAllSurfacesSelected()){
+          dsSelectedSurfaces.clear();
+        } else {
+          for(const s of DS_SURFACES) dsSelectedSurfaces.add(s.id);
+          if(typeof showEv==='function') showEv('Las 3 pantallas seleccionadas · pulsa un contenido','#78f3ff');
+        }
+        renderSignagePanel();
+        return;
+      }
+      // Surface card click → toggle that surface in/out of the selection set.
       const select=e.target.closest('[data-signage-select]');
       if(select){
         e.preventDefault(); e.stopPropagation();
         const sid=select.getAttribute('data-signage-select');
-        dsSelectedSurfaceId=(dsSelectedSurfaceId===sid)?null:sid;
-        if(dsSelectedSurfaceId && typeof showEv==='function'){
-          showEv('Pantalla seleccionada: '+dsSurfaceLabel(dsSelectedSurfaceId)+' · pulsa un contenido','#78f3ff');
+        if(dsSelectedSurfaces.has(sid)){
+          dsSelectedSurfaces.delete(sid);
+        } else {
+          dsSelectedSurfaces.add(sid);
+          if(typeof showEv==='function') showEv('Añadida '+dsSurfaceLabel(sid)+' (total '+dsSelectedSurfaces.size+'/'+DS_SURFACES.length+')','#78f3ff');
         }
         renderSignagePanel();
         return;
@@ -18242,14 +18277,19 @@ window.xtAPI = (function(){
         const idx=Number(playRow.getAttribute('data-signage-play'));
         if(!Number.isFinite(idx)) return;
         const name=VIDEO_LIST[idx];
-        if(dsSelectedSurfaceId){
-          // Pin to the selected surface (does NOT switch global rotation)
-          const sid=dsSelectedSurfaceId;
-          const ok=(typeof dsPinSurface==='function')?dsPinSurface(sid,name):false;
-          if(ok && typeof showEv==='function') showEv('📌 '+name+' fijado en '+dsSurfaceLabel(sid),'#ffd866');
-          else if(!ok && typeof showEv==='function') showEv('No se pudo fijar (item sin media file)','#ff8866');
-          // Keep the selection so the user can pin multiple items in a row;
-          // explicit Cancel button or clicking the card again clears it.
+        if(dsSelectedSurfaces.size>0){
+          // Pin to every selected surface (does NOT switch global rotation)
+          let pinned=0;
+          for(const sid of dsSelectedSurfaces){
+            if(typeof dsPinSurface==='function' && dsPinSurface(sid,name)) pinned++;
+          }
+          if(pinned>0 && typeof showEv==='function'){
+            const where=dsAllSurfacesSelected()?'TODAS las pantallas':(pinned+' pantalla(s)');
+            showEv('📌 '+name+' en '+where,'#ffd866');
+          } else if(pinned===0 && typeof showEv==='function'){
+            showEv('No se pudo fijar (item sin media file)','#ff8866');
+          }
+          // Keep the selection so the user can pin multiple items.
           renderSignagePanel();
           return;
         }
