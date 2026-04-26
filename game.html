@@ -122,7 +122,10 @@
     .tg-pane.send.signage-open #telegramHelpPanel{display:none}
     .tg-pane.send.signage-open #telegramSignagePanel{display:block}
     .tg-signage-surfaces{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:7px;margin-bottom:8px}
-    .tg-signage-card{border:1px solid rgba(255,216,102,.25);border-radius:9px;background:rgba(20,12,4,.55);padding:7px}
+    .tg-signage-card{border:1px solid rgba(255,216,102,.25);border-radius:9px;background:rgba(20,12,4,.55);padding:7px;transition:border-color .15s, box-shadow .15s, transform .15s}
+    .tg-signage-card.is-drop-target{border-color:#ffd866;box-shadow:0 0 0 2px rgba(255,216,102,.45),0 0 22px rgba(255,216,102,.35);transform:scale(1.02)}
+    .tg-signage-surfaces.is-drop-all .tg-signage-card{border-color:#78ffa0;box-shadow:0 0 0 2px rgba(120,255,160,.35),0 0 18px rgba(120,255,160,.25)}
+    .tg-signage-surfaces.is-drop-all{outline:2px dashed #78ffa0;outline-offset:4px;border-radius:11px}
     .tg-signage-card-head{color:#ffd866;font-size:9px;text-transform:uppercase;letter-spacing:.07em;margin-bottom:3px}
     .tg-signage-card-body{font-size:10px;color:#dff8ff;word-break:break-word}
     .tg-signage-card-meta{font-size:9px;opacity:.65;margin-top:2px}
@@ -966,8 +969,16 @@ function dsEnsureSurfaceMedia(id){
 }
 function dsPinSurface(surfaceId,name){
   if(!dsSurfaceById(surfaceId)) return false;
-  const kind=DS_IMPORT.KIND[name]; const url=VIDEO_FILES[name];
-  if(!kind||!url) return false;
+  const url=VIDEO_FILES[name];
+  if(!url) return false;
+  // Imports ship a kind in DS_IMPORT.KIND. Hardcoded VIDEO_LIST entries fall
+  // through to extension sniffing so they can also be pinned by drag.
+  let kind=DS_IMPORT.KIND[name];
+  if(!kind){
+    if(/\.(mp4|webm|mov|mkv)(\?|#|$)/i.test(url)) kind='video';
+    else if(/\.(png|jpe?g|webp|gif)(\?|#|$)/i.test(url)) kind='image';
+  }
+  if(!kind) return false;
   const m=dsEnsureSurfaceMedia(surfaceId);
   m.ready=false; m.kind=kind; m.name=name;
   if(kind==='image'){
@@ -17546,8 +17557,8 @@ window.xtAPI = (function(){
       +'<button type="button" class="tg-help-close" data-signage-close>Cerrar</button>'
       +'</div>'
       +'</div>';
-    // Surface cards
-    html+='<div class="tg-signage-surfaces">';
+    // Surface cards (also drop targets for playlist rows)
+    html+='<div class="tg-signage-surfaces" data-pin-all-zone>';
     for(const s of surfaces){
       const pin=(typeof DS_PIN!=='undefined' && DS_PIN[s.id])||null;
       let body, meta='';
@@ -17563,7 +17574,7 @@ window.xtAPI = (function(){
       } else {
         body='—'; meta='';
       }
-      html+='<div class="tg-signage-card">'
+      html+='<div class="tg-signage-card" data-pin-target="'+dsEscapeHtml(s.id)+'">'
         +'<div class="tg-signage-card-head">'+dsEscapeHtml(s.label)+'</div>'
         +'<div class="tg-signage-card-body">'+body+'</div>'
         +(meta?('<div class="tg-signage-card-meta">'+meta+'</div>'):'')
@@ -17655,7 +17666,8 @@ window.xtAPI = (function(){
   let dsDragging=false;
   function dsClearDropIndicators(){
     if(!signagePanel) return;
-    signagePanel.querySelectorAll('.is-drop-before,.is-drop-after').forEach(el=>el.classList.remove('is-drop-before','is-drop-after'));
+    signagePanel.querySelectorAll('.is-drop-before,.is-drop-after,.is-drop-target').forEach(el=>el.classList.remove('is-drop-before','is-drop-after','is-drop-target'));
+    signagePanel.querySelectorAll('.is-drop-all').forEach(el=>el.classList.remove('is-drop-all'));
   }
   function dsHandlePlaylistReorder(srcIdx,dstIdx){
     if(srcIdx<0||srcIdx>=VIDEO_LIST.length||dstIdx<0||dstIdx>VIDEO_LIST.length) return;
@@ -18084,6 +18096,25 @@ window.xtAPI = (function(){
     });
     signagePanel.addEventListener('dragover',e=>{
       if(dsDragSrcIdx<0) return;
+      // Priority 1: a specific surface card → pin to that surface
+      const card=e.target.closest('[data-pin-target]');
+      if(card){
+        e.preventDefault();
+        try{ e.dataTransfer.dropEffect='copy'; }catch(err){}
+        dsClearDropIndicators();
+        card.classList.add('is-drop-target');
+        return;
+      }
+      // Priority 2: anywhere inside the surfaces wrapper but outside a card → pin to ALL
+      const allZone=e.target.closest('[data-pin-all-zone]');
+      if(allZone){
+        e.preventDefault();
+        try{ e.dataTransfer.dropEffect='copy'; }catch(err){}
+        dsClearDropIndicators();
+        allZone.classList.add('is-drop-all');
+        return;
+      }
+      // Priority 3: a playlist row → reorder
       const row=e.target.closest('[data-signage-play]');
       if(!row||row===e.currentTarget) return;
       e.preventDefault();
@@ -18096,9 +18127,43 @@ window.xtAPI = (function(){
     signagePanel.addEventListener('dragleave',e=>{
       const row=e.target.closest('[data-signage-play]');
       if(row && !signagePanel.contains(e.relatedTarget)) row.classList.remove('is-drop-before','is-drop-after');
+      const card=e.target.closest('[data-pin-target]');
+      if(card && !signagePanel.contains(e.relatedTarget)) card.classList.remove('is-drop-target');
+      const allZone=e.target.closest('[data-pin-all-zone]');
+      if(allZone && !signagePanel.contains(e.relatedTarget)) allZone.classList.remove('is-drop-all');
     });
     signagePanel.addEventListener('drop',e=>{
       if(dsDragSrcIdx<0) return;
+      const srcName=VIDEO_LIST[dsDragSrcIdx];
+      // Drop on a specific surface card → pin to that surface
+      const card=e.target.closest('[data-pin-target]');
+      if(card){
+        e.preventDefault(); e.stopPropagation();
+        const sid=card.getAttribute('data-pin-target');
+        const ok=(typeof dsPinSurface==='function') ? dsPinSurface(sid,srcName) : false;
+        dsDragging=false; dsDragSrcIdx=-1;
+        dsClearDropIndicators();
+        if(ok && typeof showEv==='function') showEv('📌 '+srcName+' fijado en '+dsSurfaceLabel(sid),'#ffd866');
+        else if(!ok && typeof showEv==='function') showEv('No se pudo fijar (item sin media file)','#ff8866');
+        renderSignagePanel();
+        return;
+      }
+      // Drop on the surfaces row but not on a card → pin to ALL
+      const allZone=e.target.closest('[data-pin-all-zone]');
+      if(allZone){
+        e.preventDefault(); e.stopPropagation();
+        let pinned=0;
+        if(typeof DS_SURFACES!=='undefined' && typeof dsPinSurface==='function'){
+          for(const s of DS_SURFACES) if(dsPinSurface(s.id,srcName)) pinned++;
+        }
+        dsDragging=false; dsDragSrcIdx=-1;
+        dsClearDropIndicators();
+        if(pinned>0 && typeof showEv==='function') showEv('📺 '+srcName+' en TODAS las pantallas ('+pinned+')','#78ffa0');
+        else if(pinned===0 && typeof showEv==='function') showEv('No se pudo fijar en ninguna pantalla','#ff8866');
+        renderSignagePanel();
+        return;
+      }
+      // Drop on a playlist row → reorder
       const row=e.target.closest('[data-signage-play]');
       if(!row){ dsDragging=false; dsDragSrcIdx=-1; dsClearDropIndicators(); renderSignagePanel(); return; }
       e.preventDefault(); e.stopPropagation();
