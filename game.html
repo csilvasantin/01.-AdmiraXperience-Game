@@ -135,6 +135,7 @@
     .tg-signage-row.is-pinned{border-left-color:#ffd866}
     .tg-signage-thumb{width:32px;height:18px;flex-shrink:0;border-radius:3px;background:#0a1118;border:1px solid rgba(120,243,255,.18);display:flex;align-items:center;justify-content:center;overflow:hidden;font-size:11px;line-height:1}
     .tg-signage-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+    .tg-signage-thumb.is-error{background:#2a0e08;border-color:#ff8866;color:#ffb6a6;font-size:8px;font-weight:bold;letter-spacing:.04em}
     .tg-signage-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .tg-signage-tag{font-size:8px;background:rgba(255,216,102,.15);color:#ffd866;border-radius:3px;padding:1px 5px;flex-shrink:0}
     .tg-signage-tag-import{font-size:8px;background:rgba(120,243,255,.15);color:#78f3ff;border-radius:3px;padding:1px 5px;flex-shrink:0}
@@ -17433,29 +17434,49 @@ window.xtAPI = (function(){
       v.muted=true; v.playsInline=true; v.preload='auto'; v.crossOrigin='anonymous';
       let done=false;
       const finish=(val)=>{ if(done) return; done=true; try{ v.removeAttribute('src'); v.load&&v.load(); }catch(e){} resolve(val); };
+      let triedFromBlack=0;
+      const MAX_TRIES=40; // ample headroom: 40 × 3s = 120s of seeks
       const onSeeked=()=>{
+        if(done) return;
         try{
+          const iw=v.videoWidth, ih=v.videoHeight;
+          if(!iw||!ih){ finish(null); return; }
           const c=document.createElement('canvas'); c.width=w; c.height=h;
           const ctx=c.getContext('2d');
-          const iw=v.videoWidth, ih=v.videoHeight;
-          if(iw&&ih){
-            const ar=iw/ih, tar=w/h;
-            let sx,sy,sw,sh;
-            if(ar>tar){ sh=ih; sw=ih*tar; sx=(iw-sw)/2; sy=0; }
-            else      { sw=iw; sh=iw/tar; sx=0; sy=(ih-sh)/2; }
-            ctx.drawImage(v,sx,sy,sw,sh,0,0,w,h);
-            finish(c.toDataURL('image/jpeg',0.6));
+          const ar=iw/ih, tar=w/h;
+          let sx,sy,sw,sh;
+          if(ar>tar){ sh=ih; sw=ih*tar; sx=(iw-sw)/2; sy=0; }
+          else      { sw=iw; sh=iw/tar; sx=0; sy=(ih-sh)/2; }
+          ctx.drawImage(v,sx,sy,sw,sh,0,0,w,h);
+          // Black detection: average luminance over a sparse pixel sample
+          const data=ctx.getImageData(0,0,w,h).data;
+          let lum=0,samples=0;
+          for(let i=0;i<data.length;i+=4*8){
+            lum+=0.2126*data[i]+0.7152*data[i+1]+0.0722*data[i+2];
+            samples++;
+          }
+          const avg=samples?lum/samples:0;
+          if(avg<12){
+            const cur=v.currentTime||0;
+            const dur=v.duration||0;
+            const next=cur+3;
+            if(triedFromBlack<MAX_TRIES && next<dur-0.2){
+              triedFromBlack++;
+              try{ v.currentTime=next; return; }catch(e){}
+            }
+            // Exhausted seeks — flag error so the UI can render a warning glyph.
+            finish('error');
             return;
           }
-        }catch(e){}
-        finish(null);
+          finish(c.toDataURL('image/jpeg',0.6));
+        }catch(e){ finish(null); }
       };
       v.addEventListener('loadeddata',()=>{
-        try{ v.currentTime=Math.min(0.6, (v.duration||1)/4); }catch(e){ onSeeked(); }
+        try{ v.currentTime=Math.min(0.6,(v.duration||1)/4); }catch(e){ onSeeked(); }
       },{once:true});
-      v.addEventListener('seeked',onSeeked,{once:true});
+      v.addEventListener('seeked',onSeeked); // fires per retry seek
       v.addEventListener('error',()=>finish(null),{once:true});
-      setTimeout(()=>finish(null),8000); // safety
+      setTimeout(()=>finish('error'),45000); // overall safety
       v.src=url;
     });
   }
@@ -17492,7 +17513,13 @@ window.xtAPI = (function(){
         if(!src) return;
         if(el.dataset.thumbResolved==='1') return;
         el.dataset.thumbResolved='1';
-        el.innerHTML='<img src="'+dsEscapeHtml(src)+'" alt="">';
+        if(src==='error'){
+          el.classList.add('is-error');
+          el.setAttribute('title','Sin fotograma legible (todo en negro)');
+          el.textContent='Error';
+        } else {
+          el.innerHTML='<img src="'+dsEscapeHtml(src)+'" alt="">';
+        }
       });
     });
   }
@@ -17560,9 +17587,18 @@ window.xtAPI = (function(){
         const tags=pinned?(' <span class="tg-signage-tag">📌 '+dsEscapeHtml(pinned.join(','))+'</span>'):'';
         const importTag=isImport?' <span class="tg-signage-tag-import">imported</span>':'';
         const cached=dsThumbCache[n];
-        const thumbInner=cached?('<img src="'+dsEscapeHtml(cached)+'" alt="">'):dsKindIcon(n);
+        let thumbInner, thumbClass='tg-signage-thumb', thumbTitle='';
+        if(cached==='error'){
+          thumbInner='Error';
+          thumbClass+=' is-error';
+          thumbTitle=' title="Sin fotograma legible (todo en negro)"';
+        } else if(cached){
+          thumbInner='<img src="'+dsEscapeHtml(cached)+'" alt="">';
+        } else {
+          thumbInner=dsKindIcon(n);
+        }
         html+='<div class="'+cls+'" data-signage-play="'+i+'" data-signage-name="'+dsEscapeHtml(n)+'" draggable="true" title="Click para reproducir · arrastra para reordenar">'
-          +'<span class="tg-signage-thumb" data-thumb-for="'+dsEscapeHtml(n)+'"'+(cached?' data-thumb-resolved="1"':'')+'>'+thumbInner+'</span>'
+          +'<span class="'+thumbClass+'" data-thumb-for="'+dsEscapeHtml(n)+'"'+(cached?' data-thumb-resolved="1"':'')+thumbTitle+'>'+thumbInner+'</span>'
           +'<span class="tg-signage-name">'+(i+1)+'. '+dsEscapeHtml(n)+'</span>'
           +tags+importTag
           +'</div>';
