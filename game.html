@@ -1112,11 +1112,21 @@ function dsImportOpenPicker(){
   if(inp) inp.click();
 }
 
-// Resolve candidate base URLs for the local elgato-proxy (where yt-dlp lives).
+// Resolve candidate base URLs for the elgato-proxy (where yt-dlp lives).
+// Try, in order:
+//   1. Same origin — when the page was served BY elgato-proxy (e.g. http://localhost:9126)
+//   2. Public Tailscale Funnel — works from anywhere over HTTPS
+//   3. Localhost fallbacks — only meaningful when the page itself is HTTP
 function dsTubeBaseUrls(){
   const isLocal=location.hostname==='localhost'||location.hostname==='127.0.0.1';
   const port=(typeof ELGATO!=='undefined'&&ELGATO.proxyPort)||9124;
-  return isLocal ? [location.origin] : [`http://localhost:${port}`,`http://127.0.0.1:${port}`];
+  const urls=[];
+  if(isLocal) urls.push(location.origin);
+  if(TUBE&&TUBE.proxyUrl) urls.push(TUBE.proxyUrl);
+  if(location.protocol==='http:'){
+    urls.push(`http://localhost:${port}`,`http://127.0.0.1:${port}`);
+  }
+  return urls;
 }
 async function dsTubeHealth(){
   for(const base of dsTubeBaseUrls()){
@@ -3117,6 +3127,11 @@ const ELGATO_CONFIG=(RUNTIME_CONFIG.elgato&&typeof RUNTIME_CONFIG.elgato==='obje
 const HUE_CONFIG=(RUNTIME_CONFIG.hue&&typeof RUNTIME_CONFIG.hue==='object')?RUNTIME_CONFIG.hue:{};
 const TELEGRAM_CONFIG=(RUNTIME_CONFIG.telegram&&typeof RUNTIME_CONFIG.telegram==='object')?RUNTIME_CONFIG.telegram:{};
 const GROK_CONFIG=(RUNTIME_CONFIG.grok&&typeof RUNTIME_CONFIG.grok==='object')?RUNTIME_CONFIG.grok:{};
+const TUBE_CONFIG=(RUNTIME_CONFIG.tube&&typeof RUNTIME_CONFIG.tube==='object')?RUNTIME_CONFIG.tube:{};
+const TUBE={
+  proxyUrl:typeof TUBE_CONFIG.proxyUrl==='string'?TUBE_CONFIG.proxyUrl.replace(/\/+$/,''):'',
+  enabled:TUBE_CONFIG.enabled!==false,
+};
 const ELGATO={
   ip:typeof ELGATO_CONFIG.directIp==='string'?ELGATO_CONFIG.directIp:'',
   port:Number(ELGATO_CONFIG.directPort)||9123,

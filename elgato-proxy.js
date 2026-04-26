@@ -135,6 +135,7 @@ const CONFIG = {
   grokBaseUrl: resolveString('XTANCO_GROK_BASE_URL', FILE_CONFIG.grok && FILE_CONFIG.grok.baseUrl, DEFAULT_CONFIG.grok.baseUrl).replace(/\/+$/, ''),
   grokModel: resolveString('XTANCO_GROK_MODEL', FILE_CONFIG.grok && FILE_CONFIG.grok.model, DEFAULT_CONFIG.grok.model),
   grokProxyUrl: resolveString('XTANCO_GROK_PROXY_URL', FILE_CONFIG.grok && FILE_CONFIG.grok.proxyUrl, DEFAULT_CONFIG.grok.proxyUrl).replace(/\/+$/, ''),
+  tubeProxyUrl: resolveString('XTANCO_TUBE_PROXY_URL', FILE_CONFIG.tube && FILE_CONFIG.tube.proxyUrl, 'https://macmini.tail48b61c.ts.net/admira').replace(/\/+$/, ''),
   grokSystemPrompt: resolveString('XTANCO_GROK_SYSTEM_PROMPT', FILE_CONFIG.grok && FILE_CONFIG.grok.systemPrompt, DEFAULT_CONFIG.grok.systemPrompt),
   gameDir: GAME_DIR,
 };
@@ -471,6 +472,11 @@ function runtimeConfigScript() {
       enabled: Boolean(CONFIG.grokApiKey),
       proxyUrl: CONFIG.grokProxyUrl,
       model: CONFIG.grokModel,
+    },
+    tube: {
+      // /tube/* is served by this proxy on CONFIG.port; the public URL is the Funnel pass-through.
+      proxyUrl: CONFIG.tubeProxyUrl || '',
+      enabled: true,
     },
   })};
 })();`;
