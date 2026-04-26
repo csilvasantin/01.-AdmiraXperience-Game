@@ -18139,6 +18139,20 @@ window.xtAPI = (function(){
     });
     signagePanel.addEventListener('dragover',e=>{
       if(dsDragSrcIdx<0) return;
+      // Selection mode: if any surfaces are selected, dropping anywhere in the
+      // surfaces row targets exactly that subset (ignoring which card is under
+      // the cursor). This mirrors the click-mode behaviour.
+      const surfaceArea=e.target.closest('[data-pin-all-zone]')||e.target.closest('[data-pin-target]');
+      if(dsSelectedSurfaces.size>0 && surfaceArea){
+        e.preventDefault();
+        try{ e.dataTransfer.dropEffect='copy'; }catch(err){}
+        dsClearDropIndicators();
+        for(const sid of dsSelectedSurfaces){
+          const c=signagePanel.querySelector('[data-pin-target="'+sid+'"]');
+          if(c) c.classList.add('is-drop-target');
+        }
+        return;
+      }
       // Priority 1: a specific surface card → pin to that surface
       const card=e.target.closest('[data-pin-target]');
       if(card){
@@ -18178,6 +18192,25 @@ window.xtAPI = (function(){
     signagePanel.addEventListener('drop',e=>{
       if(dsDragSrcIdx<0) return;
       const srcName=VIDEO_LIST[dsDragSrcIdx];
+      // Selection mode: drop in the surfaces row pins to all selected surfaces
+      const surfaceArea=e.target.closest('[data-pin-all-zone]')||e.target.closest('[data-pin-target]');
+      if(dsSelectedSurfaces.size>0 && surfaceArea){
+        e.preventDefault(); e.stopPropagation();
+        let pinned=0;
+        for(const sid of dsSelectedSurfaces){
+          if(typeof dsPinSurface==='function' && dsPinSurface(sid,srcName)) pinned++;
+        }
+        dsDragging=false; dsDragSrcIdx=-1;
+        dsClearDropIndicators();
+        if(pinned>0 && typeof showEv==='function'){
+          const where=dsAllSurfacesSelected()?'TODAS las pantallas':(pinned+' pantalla(s) seleccionadas');
+          showEv('📌 '+srcName+' en '+where,'#ffd866');
+        } else if(pinned===0 && typeof showEv==='function'){
+          showEv('No se pudo fijar (item sin media file)','#ff8866');
+        }
+        renderSignagePanel();
+        return;
+      }
       // Drop on a specific surface card → pin to that surface
       const card=e.target.closest('[data-pin-target]');
       if(card){
