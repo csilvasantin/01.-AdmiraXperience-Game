@@ -185,12 +185,17 @@
       #telegramLog{font-size:9px}
       #mobileSkipBtn{bottom:10px;font-size:12px;padding:9px 16px}
     }
-    #dsImportDrop{position:fixed;inset:0;z-index:9999;display:none;align-items:center;justify-content:center;background:rgba(2,8,14,.78);backdrop-filter:blur(4px);pointer-events:none}
+    #dsImportDrop{position:fixed;inset:0;z-index:9999;display:none;align-items:center;justify-content:center;background:rgba(2,8,14,.55);backdrop-filter:blur(2px);pointer-events:none}
     #dsImportDrop.is-active{display:flex}
-    #dsImportDrop .ds-import-card{pointer-events:none;border:2px dashed #78f3ff;border-radius:14px;padding:32px 48px;background:radial-gradient(circle at 0 0,rgba(120,243,255,.15),transparent 60%),#04101a;color:#dff8ff;font-family:monospace;text-align:center;box-shadow:0 0 40px rgba(120,243,255,.25)}
-    #dsImportDrop .ds-import-icon{font-size:42px;margin-bottom:8px}
-    #dsImportDrop .ds-import-title{font-size:16px;font-weight:bold;letter-spacing:.5px;margin-bottom:6px}
-    #dsImportDrop .ds-import-sub{font-size:11px;opacity:.75}
+    #dsImportDrop .ds-import-card{pointer-events:none;border:2px dashed #78f3ff;border-radius:14px;padding:24px 36px;background:radial-gradient(circle at 0 0,rgba(120,243,255,.15),transparent 60%),#04101a;color:#dff8ff;font-family:monospace;text-align:center;box-shadow:0 0 40px rgba(120,243,255,.25);transition:transform .15s ease, border-color .15s ease}
+    #dsImportDrop.has-target .ds-import-card{border-color:#ffd866;box-shadow:0 0 50px rgba(255,216,102,.35);transform:scale(1.04)}
+    #dsImportDrop .ds-import-icon{font-size:38px;margin-bottom:6px}
+    #dsImportDrop .ds-import-title{font-size:15px;font-weight:bold;letter-spacing:.5px;margin-bottom:4px}
+    #dsImportDrop .ds-import-sub{font-size:11px;opacity:.85}
+    #dsImportTargetSVG{position:fixed;inset:0;z-index:10000;display:none;pointer-events:none;width:100%;height:100%}
+    #dsImportTargetSVG.is-active{display:block}
+    #dsImportTargetPoly{fill:rgba(255,216,102,.12);stroke:#ffd866;stroke-width:3;stroke-dasharray:8 6;animation:dsImportPulse 1s linear infinite}
+    @keyframes dsImportPulse{0%{stroke-dashoffset:0}100%{stroke-dashoffset:-28}}
   </style>
 </head>
 <body>
@@ -233,10 +238,11 @@
 <div id="dsImportDrop" aria-hidden="true">
   <div class="ds-import-card">
     <div class="ds-import-icon">🖼</div>
-    <div class="ds-import-title">Suelta para importar contenido DS</div>
-    <div class="ds-import-sub">PNG / JPG / WEBP / GIF / MP4 / WEBM · se ajusta a 160×90</div>
+    <div class="ds-import-title" id="dsImportTitle">Suelta para importar contenido DS</div>
+    <div class="ds-import-sub" id="dsImportSub">PNG / JPG / WEBP / GIF / MP4 / WEBM · se ajusta a 160×90</div>
   </div>
 </div>
+<svg id="dsImportTargetSVG" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><polygon id="dsImportTargetPoly" points=""></polygon></svg>
 <video id="bootVideo" preload="auto" playsinline webkit-playsinline style="display:none"></video>
 <video id="liveCamVideo" autoplay muted playsinline webkit-playsinline style="display:none"></video>
 <canvas id="c" width="800" height="500"></canvas>
@@ -866,6 +872,77 @@ const DS_IMPORT={
   IDS:Object.create(null),          // name -> IndexedDB record id
   DURATION_MS:8000,                 // image slide duration
 };
+
+// Per-screen pinning: each surface can show its own pinned imported item,
+// independent of the global rotation. Surfaces are the four physical screens.
+const DS_SURFACES=[
+  { id:'ds1',        label:'DS · Pared izquierda · arriba', kind:'dom-canvas' },
+  { id:'ds2',        label:'DS · Pared izquierda · abajo',  kind:'dom-canvas' },
+  { id:'escaparate', label:'Escaparate · sobre la puerta',  kind:'iso-quad'  },
+  { id:'fachada',    label:'Fachada exterior · junto puerta', kind:'iso-quad' },
+];
+const DS_PIN=Object.create(null);          // surfaceId -> { name, kind }
+const DS_SURFACE_MEDIA=Object.create(null);// surfaceId -> { kind, name, img, video, ready }
+const DS_SURFACE_QUADS=Object.create(null);// surfaceId -> [{x,y}x4] in cv-internal coords (for iso-quads)
+let DS_DRAG_HIGHLIGHT=null;                // surfaceId currently under drag cursor (or null)
+const DS_PIN_KEY='xtanco_ds_pins';
+
+function dsSurfaceById(id){ return DS_SURFACES.find(s=>s.id===id)||null; }
+function dsSurfaceLabel(id){ const s=dsSurfaceById(id); return s?s.label:id; }
+function dsEnsureSurfaceMedia(id){
+  if(DS_SURFACE_MEDIA[id]) return DS_SURFACE_MEDIA[id];
+  const img=new Image(); img.decoding='async';
+  const video=document.createElement('video');
+  video.muted=true; video.loop=true; video.playsInline=true; video.preload='auto';
+  video.style.display='none'; document.body.appendChild(video);
+  const m={kind:null,name:null,img,video,ready:false};
+  img.onload=()=>{ if(m.kind==='image') m.ready=true; };
+  img.onerror=()=>{ m.ready=false; };
+  video.onloadeddata=()=>{ if(m.kind==='video'){ m.ready=true; video.play().catch(()=>{}); } };
+  DS_SURFACE_MEDIA[id]=m;
+  return m;
+}
+function dsPinSurface(surfaceId,name){
+  if(!dsSurfaceById(surfaceId)) return false;
+  const kind=DS_IMPORT.KIND[name]; const url=VIDEO_FILES[name];
+  if(!kind||!url) return false;
+  const m=dsEnsureSurfaceMedia(surfaceId);
+  m.ready=false; m.kind=kind; m.name=name;
+  if(kind==='image'){
+    if(m.video.src){ try{ m.video.pause(); }catch(e){} m.video.removeAttribute('src'); m.video.load&&m.video.load(); }
+    m.img.src=url;
+  } else {
+    m.img.removeAttribute('src');
+    m.video.src=url;
+    try{ m.video.play().catch(()=>{}); }catch(e){}
+  }
+  DS_PIN[surfaceId]={name,kind};
+  dsSavePins();
+  return true;
+}
+function dsUnpinSurface(surfaceId){
+  const m=DS_SURFACE_MEDIA[surfaceId];
+  if(m){
+    m.kind=null; m.name=null; m.ready=false;
+    if(m.video.src){ try{ m.video.pause(); }catch(e){} m.video.removeAttribute('src'); m.video.load&&m.video.load(); }
+    if(m.img.src) m.img.removeAttribute('src');
+  }
+  delete DS_PIN[surfaceId];
+  dsSavePins();
+}
+function dsSavePins(){
+  try{ localStorage.setItem(DS_PIN_KEY,JSON.stringify(DS_PIN)); }catch(e){}
+}
+function dsLoadPinsFromStorage(){
+  try{
+    const raw=localStorage.getItem(DS_PIN_KEY); if(!raw) return;
+    const obj=JSON.parse(raw)||{};
+    for(const sid in obj){
+      const p=obj[sid];
+      if(p && p.name && VIDEO_FILES[p.name] && DS_IMPORT.KIND[p.name]) dsPinSurface(sid,p.name);
+    }
+  }catch(e){}
+}
 const dsImageEl=new Image();
 dsImageEl.decoding='async';
 let dsImageDeadlineMs=0;
@@ -981,27 +1058,126 @@ async function dsImportsRestore(){
   try{
     const records=await dsImportsDBList();
     for(const r of records) dsImportsRegister(r);
+    dsLoadPinsFromStorage();
   }catch(e){ console.warn('[ds-import] restore failed',e); }
 }
 // Fire-and-forget; DS UI handles late additions gracefully.
 dsImportsRestore();
 
+// Helper: draw a media object (image or video element) cover-fit into a target rect (0,0,w,h).
+function dsDrawMediaCover(ctx,media,w,h){
+  const src=media.kind==='video'?media.video:media.img;
+  if(!src) return false;
+  let iw=0,ih=0;
+  if(media.kind==='video'){ iw=src.videoWidth; ih=src.videoHeight; if(src.readyState<2) return false; }
+  else { iw=src.naturalWidth; ih=src.naturalHeight; if(!iw||!ih) return false; }
+  const ar=iw/ih, tar=w/h;
+  let sx,sy,sw,sh;
+  if(ar>tar){ sh=ih; sw=ih*tar; sx=(iw-sw)/2; sy=0; }
+  else      { sw=iw; sh=iw/tar; sx=0; sy=(ih-sh)/2; }
+  ctx.drawImage(src,sx,sy,sw,sh,0,0,w,h);
+  return true;
+}
+
 function dsImportOpenPicker(){
   const inp=document.getElementById('dsImportInput');
   if(inp) inp.click();
 }
-async function dsImportProcessAndNotify(fileList){
+async function dsImportProcessAndNotify(fileList,targetSurfaceId){
   const added=await dsImportsAddFiles(fileList);
   if(typeof showEv==='function'){
-    if(added.length) showEv('🖼 Importados '+added.length+' contenido(s) DS','#78f3ff');
-    else showEv('Sin archivos válidos para DS (imagen/vídeo)','#ff8866');
+    if(added.length){
+      if(targetSurfaceId) showEv('📌 '+added.length+' contenido(s) fijados en '+dsSurfaceLabel(targetSurfaceId),'#ffd866');
+      else showEv('🖼 Importados '+added.length+' contenido(s) DS','#78f3ff');
+    } else {
+      showEv('Sin archivos válidos para DS (imagen/vídeo)','#ff8866');
+    }
   }
   if(added.length){
-    const idx=VIDEO_LIST.indexOf(added[added.length-1]);
-    if(idx>=0 && typeof switchDSVideo==='function') switchDSVideo(idx);
+    if(targetSurfaceId){
+      // Pin the LAST imported item so the user sees what they just dropped
+      dsPinSurface(targetSurfaceId, added[added.length-1]);
+    } else {
+      const idx=VIDEO_LIST.indexOf(added[added.length-1]);
+      if(idx>=0 && typeof switchDSVideo==='function') switchDSVideo(idx);
+    }
   }
   return added;
 }
+
+// Point-in-quad (convex polygon) using cross-product sign test.
+function dsPointInQuad(px,py,quad){
+  if(!quad||quad.length<3) return false;
+  let sign=0;
+  for(let i=0;i<quad.length;i++){
+    const a=quad[i], b=quad[(i+1)%quad.length];
+    const cross=(b.x-a.x)*(py-a.y)-(b.y-a.y)*(px-a.x);
+    if(cross!==0){
+      if(sign===0) sign=cross>0?1:-1;
+      else if((cross>0?1:-1)!==sign) return false;
+    }
+  }
+  return true;
+}
+// Convert a quad in cv-internal coords to client-coords.
+function dsQuadCvToClient(quad){
+  const cv=document.getElementById('c'); if(!cv||!quad) return null;
+  const r=cv.getBoundingClientRect();
+  const sx=r.width/cv.width, sy=r.height/cv.height;
+  return quad.map(p=>({x:r.left+p.x*sx, y:r.top+p.y*sy}));
+}
+// Hit-test: which DS surface (if any) is under the given client coords?
+function dsSurfaceAtClientPoint(cxC,cyC){
+  // DOM canvases first (they may overlap iso-quads when positioned)
+  const ds1=document.getElementById('videoMonitor');
+  const ds2=document.getElementById('videoMonitor2');
+  const inRect=(el)=>{
+    if(!el||el.style.display==='none') return false;
+    const r=el.getBoundingClientRect();
+    if(!r.width||!r.height) return false;
+    return cxC>=r.left&&cxC<=r.right&&cyC>=r.top&&cyC<=r.bottom;
+  };
+  if(inRect(ds1)) return 'ds1';
+  if(inRect(ds2)) return 'ds2';
+  for(const surface of DS_SURFACES){
+    if(surface.kind!=='iso-quad') continue;
+    const quad=DS_SURFACE_QUADS[surface.id];
+    const clientQuad=dsQuadCvToClient(quad);
+    if(clientQuad && dsPointInQuad(cxC,cyC,clientQuad)) return surface.id;
+  }
+  return null;
+}
+function dsUpdateDragHighlight(surfaceId,clientX,clientY){
+  const drop=document.getElementById('dsImportDrop');
+  const svg=document.getElementById('dsImportTargetSVG');
+  const poly=document.getElementById('dsImportTargetPoly');
+  const title=document.getElementById('dsImportTitle');
+  const sub=document.getElementById('dsImportSub');
+  DS_DRAG_HIGHLIGHT=surfaceId||null;
+  if(!surfaceId){
+    if(svg) svg.classList.remove('is-active');
+    if(drop) drop.classList.remove('has-target');
+    if(title) title.textContent='Suelta para importar contenido DS';
+    if(sub) sub.textContent='PNG / JPG / WEBP / GIF / MP4 / WEBM · se ajusta a 160×90';
+    return;
+  }
+  // Get client-coord polygon for this surface
+  let clientQuad=null;
+  if(surfaceId==='ds1'||surfaceId==='ds2'){
+    const el=document.getElementById(surfaceId==='ds1'?'videoMonitor':'videoMonitor2');
+    if(el){ const r=el.getBoundingClientRect(); clientQuad=[{x:r.left,y:r.top},{x:r.right,y:r.top},{x:r.right,y:r.bottom},{x:r.left,y:r.bottom}]; }
+  } else {
+    clientQuad=dsQuadCvToClient(DS_SURFACE_QUADS[surfaceId]);
+  }
+  if(svg && poly && clientQuad){
+    poly.setAttribute('points', clientQuad.map(p=>p.x+','+p.y).join(' '));
+    svg.classList.add('is-active');
+  }
+  if(drop) drop.classList.add('has-target');
+  if(title) title.textContent='Suelta aquí: '+dsSurfaceLabel(surfaceId);
+  if(sub) sub.textContent='Se fija sólo en esta pantalla. Doble clic sobre la pantalla para liberar el pin.';
+}
+
 (function setupDSImportUI(){
   const setup=()=>{
     const inp=document.getElementById('dsImportInput');
@@ -1031,19 +1207,32 @@ async function dsImportProcessAndNotify(fileList){
         if(!isFileDrag(e)) return;
         e.preventDefault();
         if(e.dataTransfer) e.dataTransfer.dropEffect='copy';
+        const sid=dsSurfaceAtClientPoint(e.clientX,e.clientY);
+        dsUpdateDragHighlight(sid,e.clientX,e.clientY);
       });
       window.addEventListener('dragleave',(e)=>{
         if(!isFileDrag(e)) return;
         depth=Math.max(0,depth-1);
-        if(!depth) drop.classList.remove('is-active');
+        if(!depth){ drop.classList.remove('is-active'); dsUpdateDragHighlight(null); }
       });
       window.addEventListener('drop',async (e)=>{
         if(!isFileDrag(e)) return;
         e.preventDefault();
         depth=0;
         drop.classList.remove('is-active');
+        const sid=dsSurfaceAtClientPoint(e.clientX,e.clientY);
+        dsUpdateDragHighlight(null);
         const files=(e.dataTransfer&&e.dataTransfer.files)||[];
-        if(files.length) await dsImportProcessAndNotify(files);
+        if(files.length) await dsImportProcessAndNotify(files,sid||null);
+      });
+      // Double-click on a pinned surface unpins it
+      window.addEventListener('dblclick',(e)=>{
+        const sid=dsSurfaceAtClientPoint(e.clientX,e.clientY);
+        if(sid && DS_PIN[sid]){
+          const wasName=DS_PIN[sid].name;
+          dsUnpinSurface(sid);
+          if(typeof showEv==='function') showEv('Pin liberado: '+dsSurfaceLabel(sid)+' (era '+wasName+')','#aaccff');
+        }
       });
     }
   };
@@ -1251,6 +1440,25 @@ const DS_MSGS=[
 
 function renderDSCanvas(ctx,w,h,frame,displayIdx){
   const display=DS_DISPLAYS[displayIdx];
+  // Per-surface pin override: if this physical screen is pinned to an imported item, render that.
+  const surfaceId=displayIdx===0?'ds1':(displayIdx===1?'ds2':null);
+  if(surfaceId && DS_PIN[surfaceId]){
+    const m=DS_SURFACE_MEDIA[surfaceId];
+    if(m && dsDrawMediaCover(ctx,m,w,h)){
+      ctx.globalAlpha=0.04;
+      for(let y=0;y<h;y+=3){ctx.fillStyle='#fff';ctx.fillRect(0,y,w,1);}
+      ctx.globalAlpha=1;
+      ctx.fillStyle='#00000088';ctx.fillRect(0,h-12,w,12);
+      ctx.fillStyle='#ffd86688';ctx.font='7px monospace';ctx.textAlign='center';
+      ctx.fillText('📌 '+DS_PIN[surfaceId].name,w/2,h-3);
+      if(display&&display.paused){
+        ctx.fillStyle='#00000088';ctx.fillRect(0,0,w,h);
+        ctx.fillStyle='#ffffff';ctx.font='bold 14px monospace';ctx.textAlign='center';
+        ctx.fillText('PAUSA',w/2,h/2+5);
+      }
+      return;
+    }
+  }
   // If we have a video file playing, draw the video frame
   if(dsMode==='video' && dsVideoEl.readyState>=2 && !dsVideoEl.paused){
     ctx.drawImage(dsVideoEl,0,0,w,h);
@@ -10724,6 +10932,9 @@ function drawShop(){
   // ── GLASS DOOR — drawn LAST, always on top of furniture/characters ──
   if(!editorSceneActive) drawGlassDoor();
 
+  // ── FACHADA EXTERIOR — outdoor LED billboard mounted on the facade, beside the door ──
+  if(!editorSceneActive) drawFachadaSign();
+
   // ── DAY / NIGHT AMBIENT OVERLAY ──
   if(!editorSceneActive&&G&&G.gameTime){
     const nh=G.gameTime;
@@ -10851,6 +11062,43 @@ function drawEscaparate(){
   const ax=(iTR.x-iTL.x)/vW, ay=(iTR.y-iTL.y)/vW;
   // Going down:  from TL to BL
   const bx=(iBL.x-iTL.x)/vH, by=(iBL.y-iTL.y)/vH;
+
+  // Cache quad in canvas-internal coords for drag-drop hit-test.
+  DS_SURFACE_QUADS.escaparate=[
+    {x:iTL.x,y:iTL.y},{x:iTR.x,y:iTR.y},
+    {x:iBR.x,y:iBR.y},{x:iBL.x,y:iBL.y},
+  ];
+
+  // Per-surface pin override: replace posters with pinned imported media.
+  if(DS_PIN.escaparate){
+    const m=DS_SURFACE_MEDIA.escaparate;
+    if(m){
+      cx.save();
+      cx.beginPath();
+      cx.moveTo(iTL.x,iTL.y); cx.lineTo(iTR.x,iTR.y);
+      cx.lineTo(iBR.x,iBR.y); cx.lineTo(iBL.x,iBL.y);
+      cx.closePath(); cx.clip();
+      cx.setTransform(ax,ay,bx,by,iTL.x,iTL.y);
+      cx.fillStyle='#000'; cx.fillRect(0,0,vW,vH);
+      const drawn=dsDrawMediaCover(cx,m,vW,vH);
+      cx.globalAlpha=0.05;
+      for(let yy=0;yy<vH;yy+=3){cx.fillStyle='#fff';cx.fillRect(0,yy,vW,1);}
+      cx.globalAlpha=1;
+      cx.fillStyle='rgba(0,0,0,0.45)'; cx.fillRect(0,vH-14,vW,14);
+      cx.fillStyle='#ffd866'; cx.font='5px sans-serif'; cx.textAlign='center';
+      cx.fillText('📌 '+DS_PIN.escaparate.name, vW/2, vH-5);
+      cx.setTransform(1,0,0,1,0,0);
+      cx.restore();
+      // Outer frame + indicator dots intentionally fall through below if drawn=true; we still want them.
+      // Reuse the outer frame block and skip the posters by short-circuiting the rest of the function.
+      cx.strokeStyle='#5a3a18'; cx.lineWidth=2;
+      cx.beginPath();
+      cx.moveTo(iTL.x,iTL.y); cx.lineTo(iTR.x,iTR.y);
+      cx.lineTo(iBR.x,iBR.y); cx.lineTo(iBL.x,iBL.y);
+      cx.closePath(); cx.stroke();
+      return; // skip default posters
+    }
+  }
 
   cx.save();
   // Clip to inset window shape
@@ -10981,6 +11229,68 @@ function drawEscaparate(){
     cx.fillStyle=d===basePIdx?'#fff':'rgba(255,255,255,0.3)';
     cx.fill();
   }
+}
+
+function drawFachadaSign(){
+  // Outdoor LED billboard hanging above the door, on the exterior facade.
+  // Anchored to the door position so it tracks resize; placed in the sky band above the wall top.
+  const doorAnchor=rightWallFeatureIso(3);
+  const sw=Math.round(120), sh=Math.round(68);
+  const cxBase=Math.round(doorAnchor.x), cyBase=Math.round(doorAnchor.y - ISO.wallH*0.95);
+  const TLx=cxBase-Math.round(sw/2), TLy=cyBase-Math.round(sh/2);
+  // Pole/mount visual cue
+  cx.fillStyle='#2a2018';
+  cx.fillRect(TLx+sw/2-2, TLy+sh, 4, 28);
+  // Outer panel frame
+  cx.fillStyle='#0a1118';
+  cx.fillRect(TLx-3, TLy-3, sw+6, sh+6);
+  cx.fillStyle='#1a2530';
+  cx.fillRect(TLx-1, TLy-1, sw+2, sh+2);
+  // Inner LED area
+  cx.save();
+  cx.beginPath(); cx.rect(TLx, TLy, sw, sh); cx.clip();
+  cx.translate(TLx, TLy);
+
+  const pin=DS_PIN.fachada;
+  const m=DS_SURFACE_MEDIA.fachada;
+  let drawn=false;
+  if(pin && m){ drawn=dsDrawMediaCover(cx, m, sw, sh); }
+  if(!drawn){
+    // Default placeholder LED loop
+    const t=tt*0.02;
+    const grd=cx.createLinearGradient(0,0,sw,sh);
+    grd.addColorStop(0,'#0a1018');
+    grd.addColorStop(0.5+0.3*Math.sin(t),'#2a4a78');
+    grd.addColorStop(1,'#0a1018');
+    cx.fillStyle=grd; cx.fillRect(0,0,sw,sh);
+    cx.fillStyle='#78f3ff';
+    cx.font='bold 14px monospace'; cx.textAlign='center';
+    cx.fillText('ADMIRA XP', sw/2, sh/2-2);
+    cx.font='8px monospace'; cx.fillStyle='#aef';
+    cx.fillText('DIGITAL SIGNAGE', sw/2, sh/2+12);
+    cx.font='6px monospace'; cx.fillStyle='rgba(255,255,255,.45)';
+    cx.fillText('arrastra aquí imagen o vídeo', sw/2, sh-6);
+  }
+  // Scanlines
+  cx.globalAlpha=0.06;
+  for(let y=0;y<sh;y+=3){cx.fillStyle='#fff';cx.fillRect(0,y,sw,1);}
+  cx.globalAlpha=1;
+  if(pin){
+    cx.fillStyle='rgba(0,0,0,0.45)'; cx.fillRect(0,sh-12,sw,12);
+    cx.fillStyle='#ffd866'; cx.font='7px monospace'; cx.textAlign='center';
+    cx.fillText('📌 '+pin.name, sw/2, sh-3);
+  }
+  cx.setTransform(1,0,0,1,0,0);
+  cx.restore();
+  // Outer bevel highlight
+  cx.strokeStyle='#3a5468'; cx.lineWidth=1;
+  cx.strokeRect(TLx-1, TLy-1, sw+2, sh+2);
+
+  // Cache axis-aligned quad in canvas-internal coords for hit-test
+  DS_SURFACE_QUADS.fachada=[
+    {x:TLx,y:TLy},{x:TLx+sw,y:TLy},
+    {x:TLx+sw,y:TLy+sh},{x:TLx,y:TLy+sh},
+  ];
 }
 
 function drawGlassDoor(){
@@ -17017,16 +17327,28 @@ window.xtAPI = (function(){
       if(cmd==='grok'||cmd==='ask'||cmd==='pregunta') return await grokAsk(arg);
       if(cmd==='draw'||cmd==='dibuja'||cmd==='paint'||cmd==='pinta') return await grokDraw(arg);
       if(cmd==='import'||cmd==='importar'){
-        const sub=(arg.split(/\s+/)[0]||'').toLowerCase();
-        const rest=arg.replace(/^\S+\s*/,'').trim();
+        const tokens=arg.split(/\s+/).filter(Boolean);
+        const sub=(tokens[0]||'').toLowerCase();
+        const rest=tokens.slice(1).join(' ').trim();
         if(!sub||sub==='open'||sub==='add'){
           dsImportOpenPicker();
-          return 'Selector de archivos abierto. Suelta también imágenes/vídeos sobre la ventana para importar.';
+          return 'Selector de archivos abierto. También puedes arrastrar el archivo sobre la pantalla concreta del juego.';
+        }
+        if(sub==='surfaces'||sub==='pantallas'){
+          return DS_SURFACES.map(s=>{
+            const p=DS_PIN[s.id];
+            return s.id+' · '+s.label+(p?(' → 📌 '+p.name):' (sin pin)');
+          }).join('\n');
         }
         if(sub==='list'||sub==='ls'){
           const names=dsImportsListNames();
           if(!names.length) return 'Sin contenidos DS importados. Usa /import para añadir.';
-          return names.map((n,i)=>(i+1)+'. ['+(DS_IMPORT.KIND[n]||'?')+'] '+n).join('\n');
+          const pinnedBy=Object.create(null);
+          for(const sid in DS_PIN){ const n=DS_PIN[sid].name; (pinnedBy[n]=pinnedBy[n]||[]).push(sid); }
+          return names.map((n,i)=>{
+            const p=pinnedBy[n]?(' [📌 '+pinnedBy[n].join(',')+']'):'';
+            return (i+1)+'. ['+(DS_IMPORT.KIND[n]||'?')+'] '+n+p;
+          }).join('\n');
         }
         if(sub==='remove'||sub==='rm'||sub==='delete'||sub==='del'){
           if(!rest) return 'Uso: /import remove <n|nombre>';
@@ -17041,9 +17363,35 @@ window.xtAPI = (function(){
         if(sub==='clear'||sub==='clean'||sub==='reset'){
           const names=dsImportsListNames().slice();
           for(const n of names) await dsImportsRemoveByName(n);
-          return 'Imports DS borrados ('+names.length+').';
+          for(const sid in DS_PIN) dsUnpinSurface(sid);
+          return 'Imports DS borrados ('+names.length+') y pins liberados.';
         }
-        return 'Uso: /import · /import list · /import remove <n> · /import clear';
+        if(sub==='pin'){
+          const sid=(tokens[1]||'').toLowerCase();
+          const ref=tokens.slice(2).join(' ').trim();
+          if(!sid||!ref) return 'Uso: /import pin <ds1|ds2|escaparate|fachada> <n|nombre>';
+          if(!dsSurfaceById(sid)) return 'Superficie desconocida. Usa /import surfaces.';
+          const names=dsImportsListNames();
+          let target=null;
+          if(/^\d+$/.test(ref)){ target=names[Number(ref)-1]||null; }
+          else { target=names.find(n=>n.toLowerCase()===ref.toLowerCase()) || names.find(n=>n.toLowerCase().includes(ref.toLowerCase())) || null; }
+          if(!target) return 'No encuentro "'+ref+'" en imports.';
+          return dsPinSurface(sid,target)?('📌 Fijado '+target+' en '+dsSurfaceLabel(sid)):'No se pudo fijar.';
+        }
+        if(sub==='unpin'){
+          const sid=(tokens[1]||'').toLowerCase();
+          if(!sid) return 'Uso: /import unpin <ds1|ds2|escaparate|fachada|all>';
+          if(sid==='all'||sid==='*'){
+            const ids=Object.keys(DS_PIN);
+            for(const s of ids) dsUnpinSurface(s);
+            return 'Liberados '+ids.length+' pin(s).';
+          }
+          if(!dsSurfaceById(sid)) return 'Superficie desconocida. Usa /import surfaces.';
+          if(!DS_PIN[sid]) return dsSurfaceLabel(sid)+' ya estaba sin pin.';
+          dsUnpinSurface(sid);
+          return 'Pin liberado: '+dsSurfaceLabel(sid);
+        }
+        return 'Uso: /import · /import list · /import surfaces · /import pin <surface> <n> · /import unpin <surface|all> · /import remove <n> · /import clear';
       }
       return 'No entiendo "'+cmd+'". Usa /help';
     }catch(e){
