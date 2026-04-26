@@ -691,12 +691,45 @@ function isGrokConfigured() {
   return Boolean(CONFIG.grokApiKey);
 }
 
+function isGrokProxyConfigured() {
+  return Boolean(CONFIG.grokProxyUrl);
+}
+
+function grokConfigLabel() {
+  if (isGrokConfigured()) return `configured local (${CONFIG.grokModel})`;
+  if (isGrokProxyConfigured()) return `configured proxy (${CONFIG.grokModel})`;
+  return 'not configured';
+}
+
 function grokApiPath(endpoint) {
   const base = new URL(CONFIG.grokBaseUrl || DEFAULT_CONFIG.grok.baseUrl);
   const cleanEndpoint = String(endpoint || '').replace(/^\/+/, '');
   const basePath = base.pathname.replace(/\/+$/, '');
   base.pathname = `${basePath}/${cleanEndpoint}`.replace(/\/{2,}/g, '/');
   return base;
+}
+
+async function grokWorkerAsk(body) {
+  if (!isGrokProxyConfigured()) {
+    throw new Error('Grok proxy URL not configured');
+  }
+  const target = `${CONFIG.grokProxyUrl}/grok/ask`;
+  const response = await fetch(target, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body || {}),
+  });
+  const text = await response.text();
+  let json;
+  try {
+    json = JSON.parse(text || '{}');
+  } catch (error) {
+    throw new Error(`Grok worker invalid JSON: ${text.slice(0, 160)}`);
+  }
+  if (!response.ok || json.error || json.ok === false) {
+    throw new Error(json.message || json.error || `Grok worker HTTP ${response.status}`);
+  }
+  return json;
 }
 
 function grokChat(prompt, context = '') {
@@ -1036,17 +1069,12 @@ const server = http.createServer((req, res) => {
     if (requestPath === '/grok/status' && req.method === 'GET') {
       sendJson(res, 200, {
         ok: true,
-        configured: isGrokConfigured(),
+        configured: isGrokConfigured() || isGrokProxyConfigured(),
+        localConfigured: isGrokConfigured(),
+        proxyConfigured: isGrokProxyConfigured(),
+        proxyUrl: CONFIG.grokProxyUrl,
         model: CONFIG.grokModel,
         baseUrl: CONFIG.grokBaseUrl,
-      });
-      return;
-    }
-
-    if (!isGrokConfigured()) {
-      sendJson(res, 503, {
-        error: 'Grok not configured',
-        message: 'Set XAI_API_KEY or grok.apiKey in xtanco.config.local.json',
       });
       return;
     }
@@ -1064,8 +1092,20 @@ const server = http.createServer((req, res) => {
           return;
         }
         try {
-          const answer = await grokChat(prompt, context);
-          sendJson(res, 200, { ok: true, ...answer });
+          if (isGrokConfigured()) {
+            const answer = await grokChat(prompt, context);
+            sendJson(res, 200, { ok: true, source: 'local-xai', ...answer });
+            return;
+          }
+          if (isGrokProxyConfigured()) {
+            const answer = await grokWorkerAsk(body);
+            sendJson(res, 200, { source: 'worker-proxy', ...answer });
+            return;
+          }
+          sendJson(res, 503, {
+            error: 'Grok not configured',
+            message: 'Set XAI_API_KEY or grok.apiKey in xtanco.config.local.json, or configure grok.proxyUrl',
+          });
         } catch (grokError) {
           sendJson(res, 502, { error: 'Grok request failed', message: grokError.message });
         }
@@ -1375,7 +1415,7 @@ server.listen(CONFIG.port, () => {
   console.log(`  Elgato:  ${CONFIG.elgatoIp ? `http://${CONFIG.elgatoIp}:${CONFIG.elgatoPort}` : 'not configured'}`);
   console.log(`  Hue:     ${CONFIG.hueBridgeIp ? `http://${CONFIG.hueBridgeIp} (${maskSecret(CONFIG.hueApiKey)})` : 'not configured'}`);
   console.log(`  Telegram:${CONFIG.telegramBotToken ? ` configured (${CONFIG.telegramChatId || 'no default chat'})` : ' not configured'}`);
-  console.log(`  Grok:    ${CONFIG.grokApiKey ? `configured (${CONFIG.grokModel})` : 'not configured'}`);
+  console.log(`  Grok:    ${grokConfigLabel()}`);
   console.log('');
   console.log('  Copy xtanco.config.example.json to xtanco.config.local.json');
   console.log('  if you want local Elgato/Hue/Telegram/Grok control without exposing keys.');

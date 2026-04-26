@@ -66,6 +66,15 @@ Archivos de apoyo:
 - `xtanco-runtime-config.js` es la configuracion segura para publicacion; el proxy local la sobreescribe en runtime.
 - `xtanco.config.local.json` queda fuera de git y evita exponer claves en Pages.
 
+## Versionado
+
+Formato oficial: `AdmiraNext vYY.DD.MM.R`.
+
+- `YY`: año de trabajo, por ejemplo `26` para 2026.
+- `DD.MM`: día y mes reales de la entrega.
+- `R`: release del día; empieza en `1` cada día y solo sube si hay más entregas ese mismo día.
+- Ejemplo correcto para el 26 de abril de 2026, primera entrega del día: `AdmiraNext v26.26.04.1`.
+
 ## Telegram
 
 Admira XP v9.16 incluye puente bidireccional con Telegram via Cloudflare Worker o proxy local, Grok publico via Cloudflare Worker y una consola inferior 50/50:
@@ -76,6 +85,8 @@ Admira XP v9.16 incluye puente bidireccional con Telegram via Cloudflare Worker 
 - la mitad izquierda de la franja inferior envia texto al bot;
 - la mitad derecha muestra enviados, recibidos y respuestas de AdmiraXPBot.
 - `/grok` y `/ask` conectan AdmiraXPBot con Grok via el proxy local o via Cloudflare Worker, sin exponer la API key al navegador.
+- La ficha Unitree Intelligence permite dictar preguntas con **Voz** y escuchar respuestas con **Audio ON/OFF** usando las APIs locales del navegador.
+- **Wake OFF/ON** activa la palabra clave **OK Admira**: `OK Admira cuántos clientes han entrado hoy` transcribe, pregunta a Grok y responde por audio si está activo.
 - En GitHub Pages, Grok usa `https://admira-grok-proxy.csilvasantin.workers.dev`.
 - En GitHub Pages, Telegram usa `https://admira-telegram-bridge.csilvasantin.workers.dev`; el token del bot vive como secret de Cloudflare.
 

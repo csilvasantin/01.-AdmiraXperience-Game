@@ -2,6 +2,8 @@ const DEFAULT_ALLOWED_ORIGINS = [
   'https://csilvasantin.github.io',
   'http://localhost:9124',
   'http://127.0.0.1:9124',
+  'http://localhost:9170',
+  'http://127.0.0.1:9170',
 ];
 
 function getAllowedOrigins(env) {

@@ -2,6 +2,79 @@
 
 ---
 
+## [v26.26.04.6] — 2026-04-26
+
+### Fix Unitree overlay al salir
+
+- El panel **Unitree Intelligence** se cierra al volver al menú o a cualquier pantalla fuera de la tienda.
+- Se limpia el detalle especial de Unitree durante las transiciones de salida para que no quede flotando sobre la portada.
+- Al salir se paran dictado, wake word **OK Admira** y respuesta hablada para evitar sesiones vivas fuera del juego.
+- URL pública de la entrega: `https://csilvasantin.github.io/01.-AdmiraXperience-Game/game.html?v=unitree-popup-close-20260426-1`.
+
+---
+
+## [v26.26.04.5] — 2026-04-26
+
+### Wake word Unitree: OK Admira
+
+- Añadido botón **Wake OFF/ON** en **Unitree Intelligence** para activar escucha continua voluntaria.
+- La palabra clave **OK Admira** activa la captura de voz sin volver a pulsar el botón.
+- Si se dice `OK Admira` seguido de una pregunta, Unitree transcribe y consulta Grok directamente.
+- Si se dice solo `OK Admira`, Unitree queda en modo `te escucho` y usa la siguiente frase como pregunta.
+- La escucha se pausa mientras Grok responde por audio para evitar que el robot se escuche a sí mismo, y se reactiva al terminar.
+
+---
+
+## [v26.26.04.4] — 2026-04-26
+
+### Unitree Voice: pregunta por voz y respuesta hablada
+
+- Añadido botón **Voz** en la ficha **Unitree Intelligence** para dictar preguntas con el micrófono del navegador.
+- Añadido botón **Audio ON/OFF** para activar o silenciar la lectura de respuestas del robot.
+- Cuando Grok responde correctamente, Unitree puede leer la respuesta con `speechSynthesis` y mantener el bocadillo visual en tienda.
+- Añadidos estados claros para `Escuchando`, `Dictado listo`, `Hablando`, permisos denegados y navegadores sin soporte.
+- La integración queda local al navegador: no se añade ninguna API nueva para STT/TTS.
+
+---
+
+## [v26.26.04.3] — 2026-04-26
+
+### Fix Grok Unitree: proxy local y CORS
+
+- Corregido el error `Failed to fetch` de la ficha **Unitree Intelligence**.
+- El juego ahora prueba primero el proxy local `/grok/ask` antes del worker público.
+- El proxy local reenvía a `admira-grok-proxy` si no hay API key local, evitando bloqueo CORS del navegador.
+- Añadido `localhost:9170` a los orígenes permitidos del worker Grok para despliegues futuros.
+- Los errores de Grok ahora indican el endpoint que falló en lugar de devolver un mensaje genérico.
+- El arranque del proxy local ahora indica correctamente si Grok está configurado por API key local o por proxy.
+
+---
+
+## [v26.26.04.2] — 2026-04-26
+
+### Unitree Bot con consulta Grok en ficha
+
+- Añadida ficha extendida **Unitree Intelligence** al pulsar sobre el Unitree Bot.
+- Añadido campo de prompt dentro de la ficha para consultar dudas operativas a Grok.
+- La consulta envia contexto vivo del juego: estado del robot, caja, satisfaccion, fama, stock bajo, clientes y equipo activo.
+- La respuesta queda visible en la ficha y el Unitree Bot muestra un bocadillo resumido en tienda.
+
+---
+
+## [v26.26.04.1] — 2026-04-26
+
+### Nuevos personajes: Unitree Bot en tienda
+
+- Corregido el versionado diario: formato oficial **AdmiraNext vYY.DD.MM.R**; la release empieza en `1` cada día.
+- Añadido **Unitree Bot** como personaje robot original con look cartoon retro dentro de Admira XP.
+- El robot entra y sale por la puerta, respeta mapa de durezas, ocupa casilla dinámica y no atraviesa muebles ni personajes.
+- Añadido comportamiento de visita: patrulla suave por la tienda, escanea lineales, muestra bocadillos y genera feedback visual `SCAN` / `+DATA`.
+- Añadidos comandos binarios `/robot`, `/robot on`, `/robot off`, `/unitree` y `/bot` para CLI/Telegram.
+- Añadido botón rápido **Unitree Bot** en el panel inferior de control.
+- Añadido estado del robot a `/status` y flags de `xtAPI`.
+
+---
+
 ## [v26.21.04.18] — 2026-04-25
 
 ### Cierre de sesión: LiveCam mocap, puerta realista, layout estable y control Hue prioritario

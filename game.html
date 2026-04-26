@@ -36,6 +36,23 @@
     .speech-bubble{position:fixed;border:1px solid #8a7a60;border-radius:4px;background:#ffffffe8;color:#4a3a20;font-family:monospace;font-weight:bold;letter-spacing:0;white-space:pre-wrap;overflow-wrap:anywhere;box-shadow:0 8px 18px rgba(0,0,0,.22)}
     .speech-bubble.is-emphasis{box-shadow:0 0 0 1px currentColor,0 10px 22px rgba(0,0,0,.24)}
     .speech-bubble-line{display:block}
+    #robotGrokPanel{display:none;position:fixed;z-index:28;width:390px;min-height:158px;border:1px solid rgba(120,243,255,.55);border-radius:8px;background:linear-gradient(180deg,rgba(8,24,32,.97),rgba(3,10,15,.98));box-shadow:0 16px 34px rgba(0,0,0,.36),inset 0 1px 0 rgba(255,255,255,.10);font-family:monospace;color:#dff8ff;padding:8px;gap:6px}
+    #robotGrokPanel.show{display:flex;flex-direction:column}
+    .robot-grok-head{display:flex;align-items:center;justify-content:space-between;gap:8px;color:#78f3ff;font-size:10px;font-weight:bold;text-transform:uppercase}
+    .robot-grok-head span:last-child{color:#9ec7d0;font-size:8px;font-weight:normal;text-transform:none;white-space:nowrap}
+    #robotGrokPrompt{width:100%;min-height:44px;resize:none;border:1px solid #25515b;border-radius:6px;background:#02080d;color:#e6fbff;padding:7px;font-family:monospace;font-size:10px;line-height:1.3;outline:none}
+    #robotGrokPrompt:focus{border-color:#78f3ff;box-shadow:0 0 0 1px rgba(120,243,255,.24)}
+    #robotGrokPrompt::placeholder{color:#57747c}
+    .robot-grok-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+    .robot-grok-actions button{border:1px solid #75ecff;border-radius:999px;background:linear-gradient(180deg,#1e7d8d,#11515f);color:#ffffff;font-family:monospace;font-size:9px;font-weight:bold;padding:4px 10px;cursor:pointer}
+    .robot-grok-actions button.is-listening{border-color:#ffd666;background:linear-gradient(180deg,#8c6a1f,#3a2c0d);color:#fff6bf}
+    .robot-grok-actions button.is-speaking{border-color:#8cffbd;background:linear-gradient(180deg,#1f7d52,#0d3624);color:#dfffea}
+    .robot-grok-actions button.is-wake{border-color:#d394ff;background:linear-gradient(180deg,#573580,#241438);color:#f4e5ff}
+    .robot-grok-actions button:disabled{opacity:.55;cursor:default}
+    .robot-grok-actions span{font-size:9px;color:#b7dce5}
+    #robotGrokStatus{font-size:8px;color:#9ec7d0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    #robotGrokAnswer{min-height:32px;max-height:58px;overflow:auto;border:1px solid rgba(120,243,255,.20);border-radius:6px;background:rgba(2,8,13,.82);padding:6px;color:#f4fbff;font-size:9px;line-height:1.35;white-space:pre-wrap;overflow-wrap:anywhere;scrollbar-width:thin;scrollbar-color:#2a7585 #07131b}
+    #robotGrokAnswer.is-error{border-color:#ff6b6b;color:#ffd0d0}
     #telegramDock{display:none;position:fixed;left:0;bottom:0;height:228px;background:linear-gradient(180deg,rgba(5,16,24,.97),rgba(1,6,10,.98));border:1px solid rgba(120,243,255,.34);border-bottom:none;color:#d9f7ff;font-family:monospace;z-index:30;gap:8px;padding:8px;box-shadow:0 -18px 38px rgba(0,0,0,.42)}
     #telegramDock.show{display:flex}
     #telegramDock.hide-dock{display:none}
@@ -210,6 +227,18 @@
 <video id="liveCamVideo" autoplay muted playsinline webkit-playsinline style="display:none"></video>
 <canvas id="c" width="800" height="500"></canvas>
 <div id="speechOverlay" aria-hidden="true"></div>
+<div id="robotGrokPanel" aria-label="Consulta Grok del Unitree Bot">
+  <div class="robot-grok-head"><span>Unitree Intelligence</span><span id="robotGrokStatus">Grok listo</span></div>
+  <textarea id="robotGrokPrompt" maxlength="600" placeholder="Pregunta al Unitree Bot sobre stock, clientes, layout o la tienda..."></textarea>
+  <div class="robot-grok-actions">
+    <button type="button" id="robotGrokAskBtn">Preguntar a Grok</button>
+    <button type="button" id="robotGrokVoiceBtn">Voz</button>
+    <button type="button" id="robotGrokSpeakBtn">Audio</button>
+    <button type="button" id="robotGrokWakeBtn">Wake OFF</button>
+    <span>Ctrl/⌘ + Enter</span>
+  </div>
+  <div id="robotGrokAnswer">Pulsa el robot y consulta cualquier duda operativa.</div>
+</div>
 <div id="eraVerticalDock" aria-label="Selector inferior">
   <div class="evd-head">
     <div class="evd-head-left">
@@ -1602,6 +1631,506 @@ function escapeHtml(text){
     .replace(/"/g,'&quot;')
     .replace(/'/g,'&#39;');
 }
+
+function isUnitreeDetailOpen(){
+  return !!(npcEdOpen&&npcEdKind==='special'&&npcEdDraft&&npcEdDraft.kind==='unitree');
+}
+function robotGrokEls(){
+  return {
+    panel:document.getElementById('robotGrokPanel'),
+    prompt:document.getElementById('robotGrokPrompt'),
+    ask:document.getElementById('robotGrokAskBtn'),
+    voice:document.getElementById('robotGrokVoiceBtn'),
+    speak:document.getElementById('robotGrokSpeakBtn'),
+    wake:document.getElementById('robotGrokWakeBtn'),
+    status:document.getElementById('robotGrokStatus'),
+    answer:document.getElementById('robotGrokAnswer'),
+  };
+}
+const ROBOT_VOICE={
+  recognition:null,
+  wakeRecognition:null,
+  listening:false,
+  wakeActive:false,
+  wakeListening:false,
+  wakeMode:'waiting',
+  wakeBusy:false,
+  wakeRestartTimer:0,
+  promptBeforeListen:'',
+  lastAnswer:'',
+  speaking:false,
+  autoSpeak:true,
+  wakePhrase:'ok admira',
+};
+function robotSpeechRecognitionCtor(){
+  return window.SpeechRecognition||window.webkitSpeechRecognition||null;
+}
+function robotSttSupported(){
+  return !!robotSpeechRecognitionCtor();
+}
+function robotTtsSupported(){
+  return !!(window.speechSynthesis&&window.SpeechSynthesisUtterance);
+}
+function updateRobotVoiceButtons(){
+  const els=robotGrokEls();
+  if(els.voice){
+    els.voice.disabled=!robotSttSupported();
+    els.voice.textContent=ROBOT_VOICE.listening?'Escuchando':'Voz';
+    els.voice.classList.toggle('is-listening',ROBOT_VOICE.listening);
+    els.voice.title=robotSttSupported()?'Dictar pregunta al Unitree Bot':'Dictado no soportado por este navegador';
+  }
+  if(els.speak){
+    els.speak.disabled=!robotTtsSupported()&&!ROBOT_VOICE.speaking;
+    els.speak.textContent=ROBOT_VOICE.speaking?'Silenciar':(ROBOT_VOICE.autoSpeak?'Audio ON':'Audio OFF');
+    els.speak.classList.toggle('is-speaking',ROBOT_VOICE.autoSpeak||ROBOT_VOICE.speaking);
+    els.speak.title=robotTtsSupported()?'Activar o parar la lectura de respuestas':'Audio no soportado por este navegador';
+  }
+  if(els.wake){
+    els.wake.disabled=!robotSttSupported();
+    els.wake.textContent=ROBOT_VOICE.wakeActive?(ROBOT_VOICE.wakeListening?'OK Admira':'Wake ON'):'Wake OFF';
+    els.wake.classList.toggle('is-wake',ROBOT_VOICE.wakeActive);
+    els.wake.classList.toggle('is-listening',ROBOT_VOICE.wakeListening);
+    els.wake.title=robotSttSupported()?'Escucha la palabra clave OK Admira':'Wake word no soportada por este navegador';
+  }
+}
+function robotVoiceLang(){
+  return lang==='en'?'en-US':'es-ES';
+}
+function normalizeRobotVoiceText(text){
+  return String(text||'')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g,'')
+    .toLowerCase()
+    .replace(/[^a-z0-9áéíóúñü\s]/gi,' ')
+    .replace(/\s+/g,' ')
+    .trim();
+}
+function extractRobotWakeQuestion(text){
+  const raw=String(text||'').trim();
+  const normalized=normalizeRobotVoiceText(raw);
+  const triggers=['ok admira','okay admira','oye admira','hey admira'];
+  for(const trigger of triggers){
+    const idx=normalized.indexOf(trigger);
+    if(idx>=0){
+      const afterNorm=normalized.slice(idx+trigger.length).trim();
+      if(!afterNorm) return '';
+      const wordsBefore=normalized.slice(0,idx+trigger.length).trim().split(/\s+/).filter(Boolean).length;
+      const rawWords=raw.split(/\s+/).filter(Boolean);
+      return rawWords.slice(wordsBefore).join(' ').trim()||afterNorm;
+    }
+  }
+  return null;
+}
+function clearRobotWakeRestart(){
+  if(ROBOT_VOICE.wakeRestartTimer){
+    clearTimeout(ROBOT_VOICE.wakeRestartTimer);
+    ROBOT_VOICE.wakeRestartTimer=0;
+  }
+}
+function scheduleRobotWakeRestart(delay){
+  clearRobotWakeRestart();
+  if(!ROBOT_VOICE.wakeActive||ROBOT_VOICE.wakeBusy||ROBOT_VOICE.speaking) return;
+  ROBOT_VOICE.wakeRestartTimer=setTimeout(()=>{
+    ROBOT_VOICE.wakeRestartTimer=0;
+    if(ROBOT_VOICE.wakeActive&&!ROBOT_VOICE.wakeBusy&&!ROBOT_VOICE.speaking&&!ROBOT_VOICE.wakeListening){
+      startRobotWakeListening();
+    }
+  },Math.max(250,Number(delay)||700));
+}
+function stopRobotWakeListening(deactivate){
+  clearRobotWakeRestart();
+  if(deactivate) ROBOT_VOICE.wakeActive=false;
+  if(ROBOT_VOICE.wakeRecognition){
+    try{ROBOT_VOICE.wakeRecognition.stop();}catch(e){}
+  }
+  ROBOT_VOICE.wakeListening=false;
+  if(deactivate){
+    ROBOT_VOICE.wakeMode='waiting';
+    setRobotGrokUiStatus('Wake OFF',false);
+  }
+  updateRobotVoiceButtons();
+}
+function stopRobotVoiceListening(){
+  if(ROBOT_VOICE.recognition){
+    try{ROBOT_VOICE.recognition.stop();}catch(e){}
+  }
+  ROBOT_VOICE.listening=false;
+  updateRobotVoiceButtons();
+}
+function startRobotVoiceListening(){
+  const els=robotGrokEls();
+  const Rec=robotSpeechRecognitionCtor();
+  if(!Rec){
+    setRobotGrokUiStatus('Voz no soportada',true);
+    if(els.answer) els.answer.textContent='Este navegador no permite dictado. Prueba en Chrome con permiso de microfono.';
+    updateRobotVoiceButtons();
+    return;
+  }
+  if(ROBOT_VOICE.listening){
+    stopRobotVoiceListening();
+    return;
+  }
+  if(ROBOT_VOICE.wakeListening) stopRobotWakeListening(false);
+  const recognition=new Rec();
+  ROBOT_VOICE.recognition=recognition;
+  ROBOT_VOICE.promptBeforeListen=els.prompt?els.prompt.value.trim():'';
+  ROBOT_VOICE.listening=true;
+  recognition.lang=robotVoiceLang();
+  recognition.continuous=false;
+  recognition.interimResults=true;
+  recognition.maxAlternatives=1;
+  recognition.onstart=()=>{
+    ROBOT_VOICE.listening=true;
+    setRobotGrokUiStatus('Escuchando...',false);
+    updateRobotVoiceButtons();
+  };
+  recognition.onresult=(event)=>{
+    let finalText='';
+    let interimText='';
+    for(let i=event.resultIndex;i<event.results.length;i++){
+      const item=event.results[i];
+      const text=item&&item[0]&&item[0].transcript?item[0].transcript:'';
+      if(item&&item.isFinal) finalText+=text;
+      else interimText+=text;
+    }
+    const heard=(finalText||interimText).trim();
+    const base=ROBOT_VOICE.promptBeforeListen;
+    if(els.prompt&&heard){
+      els.prompt.value=base?(base.replace(/\s+$/,'')+' '+heard):heard;
+    }
+  };
+  recognition.onerror=(event)=>{
+    ROBOT_VOICE.listening=false;
+    const code=event&&event.error?event.error:'error';
+    const msg=code==='not-allowed'||code==='service-not-allowed'
+      ? 'Permiso de microfono denegado'
+      : 'Error voz: '+code;
+    setRobotGrokUiStatus(msg,true);
+    updateRobotVoiceButtons();
+  };
+  recognition.onend=()=>{
+    ROBOT_VOICE.listening=false;
+    if(els.prompt&&els.prompt.value.trim()) setRobotGrokUiStatus('Dictado listo',false);
+    updateRobotVoiceButtons();
+    scheduleRobotWakeRestart(900);
+  };
+  try{
+    recognition.start();
+  }catch(e){
+    ROBOT_VOICE.listening=false;
+    setRobotGrokUiStatus(e.message||'No se pudo iniciar voz',true);
+    updateRobotVoiceButtons();
+    scheduleRobotWakeRestart(1200);
+  }
+}
+async function runRobotWakeQuestion(question){
+  const els=robotGrokEls();
+  const clean=String(question||'').trim();
+  if(!clean) return;
+  ROBOT_VOICE.wakeBusy=true;
+  ROBOT_VOICE.wakeMode='waiting';
+  if(ROBOT_VOICE.wakeRecognition){
+    try{ROBOT_VOICE.wakeRecognition.stop();}catch(e){}
+  }
+  if(els.prompt) els.prompt.value=clean;
+  setRobotGrokUiStatus('OK Admira recibido',false);
+  try{
+    await askRobotGrok();
+  }finally{
+    ROBOT_VOICE.wakeBusy=false;
+    if(!ROBOT_VOICE.speaking) scheduleRobotWakeRestart(1200);
+  }
+}
+function handleRobotWakeTranscript(text){
+  const heard=String(text||'').trim();
+  if(!heard||ROBOT_VOICE.wakeBusy) return;
+  const afterWake=extractRobotWakeQuestion(heard);
+  if(afterWake!==null){
+    if(afterWake){
+      runRobotWakeQuestion(afterWake);
+      return;
+    }
+    ROBOT_VOICE.wakeMode='capturing';
+    setRobotGrokUiStatus('OK Admira: te escucho',false);
+    updateRobotVoiceButtons();
+    return;
+  }
+  if(ROBOT_VOICE.wakeMode==='capturing'&&normalizeRobotVoiceText(heard).length>2){
+    runRobotWakeQuestion(heard);
+  }
+}
+function startRobotWakeListening(){
+  const els=robotGrokEls();
+  const Rec=robotSpeechRecognitionCtor();
+  if(!Rec){
+    setRobotGrokUiStatus('Wake no soportado',true);
+    if(els.answer) els.answer.textContent='Este navegador no permite palabra clave por voz. Prueba en Chrome con permiso de microfono.';
+    updateRobotVoiceButtons();
+    return;
+  }
+  if(ROBOT_VOICE.wakeListening||ROBOT_VOICE.wakeBusy||ROBOT_VOICE.speaking) return;
+  const recognition=new Rec();
+  ROBOT_VOICE.wakeRecognition=recognition;
+  recognition.lang=robotVoiceLang();
+  recognition.continuous=true;
+  recognition.interimResults=false;
+  recognition.maxAlternatives=1;
+  recognition.onstart=()=>{
+    ROBOT_VOICE.wakeListening=true;
+    setRobotGrokUiStatus('Di: OK Admira',false);
+    updateRobotVoiceButtons();
+  };
+  recognition.onresult=(event)=>{
+    for(let i=event.resultIndex;i<event.results.length;i++){
+      const item=event.results[i];
+      if(!item||!item.isFinal) continue;
+      const text=item[0]&&item[0].transcript?item[0].transcript:'';
+      handleRobotWakeTranscript(text);
+    }
+  };
+  recognition.onerror=(event)=>{
+    ROBOT_VOICE.wakeListening=false;
+    const code=event&&event.error?event.error:'error';
+    if(code==='not-allowed'||code==='service-not-allowed'){
+      ROBOT_VOICE.wakeActive=false;
+      setRobotGrokUiStatus('Permiso de microfono denegado',true);
+    }else if(code!=='no-speech'){
+      setRobotGrokUiStatus('Wake: '+code,true);
+    }
+    updateRobotVoiceButtons();
+  };
+  recognition.onend=()=>{
+    ROBOT_VOICE.wakeListening=false;
+    updateRobotVoiceButtons();
+    scheduleRobotWakeRestart(900);
+  };
+  try{
+    recognition.start();
+  }catch(e){
+    ROBOT_VOICE.wakeListening=false;
+    setRobotGrokUiStatus(e.message||'No se pudo activar wake',true);
+    updateRobotVoiceButtons();
+  }
+}
+function toggleRobotWake(){
+  if(ROBOT_VOICE.wakeActive){
+    stopRobotWakeListening(true);
+    return;
+  }
+  ROBOT_VOICE.wakeActive=true;
+  ROBOT_VOICE.wakeMode='waiting';
+  stopRobotVoiceListening();
+  startRobotWakeListening();
+  updateRobotVoiceButtons();
+}
+function stopRobotSpeech(){
+  if(window.speechSynthesis){
+    try{window.speechSynthesis.cancel();}catch(e){}
+  }
+  ROBOT_VOICE.speaking=false;
+  updateRobotVoiceButtons();
+  scheduleRobotWakeRestart(900);
+}
+function speakRobotAnswer(text){
+  const clean=String(text||'').replace(/\s+/g,' ').trim();
+  if(!clean||!robotTtsSupported()) return;
+  stopRobotSpeech();
+  ROBOT_VOICE.speaking=true;
+  if(ROBOT_VOICE.wakeListening) stopRobotWakeListening(false);
+  const utterance=new SpeechSynthesisUtterance(clean.slice(0,700));
+  utterance.lang=robotVoiceLang();
+  utterance.rate=0.98;
+  utterance.pitch=1.05;
+  utterance.volume=1;
+  utterance.onstart=()=>{
+    ROBOT_VOICE.speaking=true;
+    setRobotGrokUiStatus('Hablando...',false);
+    updateRobotVoiceButtons();
+  };
+  utterance.onend=()=>{
+    ROBOT_VOICE.speaking=false;
+    setRobotGrokUiStatus('Grok listo',false);
+    updateRobotVoiceButtons();
+    scheduleRobotWakeRestart(900);
+  };
+  utterance.onerror=()=>{
+    ROBOT_VOICE.speaking=false;
+    setRobotGrokUiStatus('Audio no disponible',true);
+    updateRobotVoiceButtons();
+    scheduleRobotWakeRestart(900);
+  };
+  window.speechSynthesis.speak(utterance);
+}
+function toggleRobotSpeech(){
+  if(!robotTtsSupported()){
+    setRobotGrokUiStatus('Audio no soportado',true);
+    return;
+  }
+  if(ROBOT_VOICE.speaking){
+    stopRobotSpeech();
+    return;
+  }
+  ROBOT_VOICE.autoSpeak=!ROBOT_VOICE.autoSpeak;
+  updateRobotVoiceButtons();
+  if(ROBOT_VOICE.autoSpeak&&ROBOT_VOICE.lastAnswer){
+    speakRobotAnswer(ROBOT_VOICE.lastAnswer);
+  }else{
+    setRobotGrokUiStatus(ROBOT_VOICE.autoSpeak?'Audio ON':'Audio OFF',false);
+  }
+}
+function stopRobotVoiceSession(){
+  stopRobotWakeListening(true);
+  stopRobotVoiceListening();
+  stopRobotSpeech();
+}
+function hideRobotGrokPanel(){
+  const els=robotGrokEls();
+  if(els.panel) els.panel.classList.remove('show');
+}
+function closeUnitreeDetailOverlay(opts){
+  const stopVoice=!opts||opts.stopVoice!==false;
+  const els=robotGrokEls();
+  const hadPanel=!!(els.panel&&els.panel.classList&&els.panel.classList.contains('show'));
+  const hadVoice=ROBOT_VOICE.listening||ROBOT_VOICE.wakeActive||ROBOT_VOICE.speaking;
+  const hadDetail=isUnitreeDetailOpen();
+  if(stopVoice&&(hadPanel||hadVoice||hadDetail)) stopRobotVoiceSession();
+  if(hadDetail){
+    npcEdOpen=false;
+    npcEdIdx=-1;
+    npcEdDraft=null;
+    npcEdNameEdit=false;
+    npcEdKind='staff';
+    npcPlacementDirty=false;
+  }
+  hideRobotGrokPanel();
+}
+function setRobotGrokUiStatus(text,isError){
+  const els=robotGrokEls();
+  if(els.status) els.status.textContent=text||'Grok listo';
+  if(els.answer) els.answer.classList.toggle('is-error',!!isError);
+}
+function syncRobotGrokPanel(){
+  const els=robotGrokEls();
+  if(!els.panel) return;
+  const nextState=tran&&tran.active&&tran.to?tran.to:state;
+  const allowed=isGameplayUiState(state)&&isGameplayUiState(nextState);
+  if(!allowed){
+    if(els.panel.classList.contains('show')||isUnitreeDetailOpen()||ROBOT_VOICE.listening||ROBOT_VOICE.wakeActive||ROBOT_VOICE.speaking){
+      closeUnitreeDetailOverlay({stopVoice:true});
+    }else{
+      hideRobotGrokPanel();
+    }
+    return;
+  }
+  const show=isUnitreeDetailOpen();
+  els.panel.classList.toggle('show',show);
+  if(!show) return;
+  const bounds=getNPCEditorBounds();
+  const rect=cv.getBoundingClientRect();
+  const sx=rect.width/W;
+  const sy=rect.height/H;
+  const gap=8*sx;
+  let left=rect.left+(bounds.x+bounds.w)*sx+gap;
+  let top=rect.top+bounds.y*sy;
+  let width=Math.min(390,Math.max(300,window.innerWidth-left-10));
+  let height=Math.max(158,Math.min(212,bounds.h*sy));
+  if(left+width>window.innerWidth-8||width<300){
+    width=Math.min(390,Math.max(300,rect.width-24));
+    left=rect.left+bounds.x*sx;
+    top=rect.top+Math.max(12,(bounds.y-180))*sy;
+    height=174;
+  }
+  els.panel.style.left=Math.round(left)+'px';
+  els.panel.style.top=Math.round(top)+'px';
+  els.panel.style.width=Math.round(width)+'px';
+  els.panel.style.minHeight=Math.round(height)+'px';
+  updateRobotVoiceButtons();
+}
+function buildUnitreeGrokContext(){
+  if(!G) return 'No hay partida activa.';
+  const bot=G.unitreeBot||{};
+  const lowStock=(G.prods||[])
+    .map((p,i)=>({name:prodName(i),stock:p.stock,max:p.max,pct:p.max?Math.round(p.stock/p.max*100):0}))
+    .sort((a,b)=>a.pct-b.pct)
+    .slice(0,5)
+    .map(p=>p.name+' '+p.stock+'/'+p.max+' ('+p.pct+'%)')
+    .join('; ')||'sin datos';
+  const customers=(G.custs||[])
+    .slice(0,7)
+    .map((c,i)=>'#'+(i+1)+' '+customerTypeLabel(c)+' '+customerStateLabel(c)+' '+(c.wantsProdIdx>=0?prodName(c.wantsProdIdx):'-'))
+    .join('; ')||'sin clientes';
+  const staff=(G.staff||[])
+    .filter(s=>s.hired&&!s.fired)
+    .map(s=>s.name+' '+roleShortLabel(s.role)+' E'+Math.round(s.energy||0)+' M'+Math.round(s.morale||0))
+    .join('; ')||'sin equipo';
+  return [
+    'Contexto de Admira XP para Unitree Bot.',
+    'Responde como un asistente robot de tienda, breve, operativo y en español.',
+    'No inventes datos; si falta informacion, dilo y sugiere la siguiente comprobacion.',
+    'Estado robot: '+(bot.phase||'idle')+', objetivo '+(bot.targetCol||'-')+','+(bot.targetRow||'-')+', scan '+(bot.scanTimer||0)+'.',
+    'Caja '+Math.round(G.money||0)+'€, satisfaccion '+Math.round(G.satisfaction||0)+'%, fama '+Math.round(G.fame||0)+'%, clientes hoy '+(G.customersToday||0)+'.',
+    'Stock mas bajo: '+lowStock+'.',
+    'Clientes visibles: '+customers+'.',
+    'Equipo activo: '+staff+'.',
+  ].join('\n');
+}
+async function askRobotGrok(){
+  const els=robotGrokEls();
+  const clean=els.prompt?els.prompt.value.trim():'';
+  if(!clean){
+    setRobotGrokUiStatus('Escribe una pregunta',true);
+    if(els.answer) els.answer.textContent='Introduce una duda para el Unitree Bot.';
+    return;
+  }
+  if(!window.askAdmiraGrok){
+    setRobotGrokUiStatus('Grok no disponible',true);
+    if(els.answer) els.answer.textContent='El puente Grok aun no esta listo en esta sesion.';
+    return;
+  }
+  setRobotGrokUiStatus('Consultando...',false);
+  if(els.ask) els.ask.disabled=true;
+  if(els.answer) els.answer.textContent='Unitree Bot esta consultando Grok...';
+  try{
+    const result=await window.askAdmiraGrok('Consulta Unitree Bot: '+clean,buildUnitreeGrokContext());
+    const ok=result&&result.ok;
+    const answer=String((result&&(result.text||result.message))||'Sin respuesta').trim();
+    if(els.answer) els.answer.textContent=answer;
+    if(ok){
+      ROBOT_VOICE.lastAnswer=answer;
+      if(ROBOT_VOICE.autoSpeak) speakRobotAnswer(answer);
+    }
+    setRobotGrokUiStatus(ok?'Grok '+(result.model||'ready'):'Error Grok',!ok);
+    if(ok&&G&&G.unitreeBot){
+      G.unitreeBot.bMsg=answer.replace(/\s+/g,' ').slice(0,26)||'Respuesta lista';
+      G.unitreeBot.bTimer=180;
+      addFloat(G.unitreeBot.x+7,G.unitreeBot.y-38,'GROK','#78f3ff');
+    }
+  }catch(e){
+    setRobotGrokUiStatus('Error Grok',true);
+    if(els.answer) els.answer.textContent=e.message;
+  }finally{
+    if(els.ask) els.ask.disabled=false;
+  }
+}
+function setupRobotGrokPanel(){
+  const els=robotGrokEls();
+  if(!els.panel) return;
+  ['keydown','keyup','keypress','mousedown','mouseup','click','touchstart','touchend','wheel','pointerdown','pointerup'].forEach(ev=>{
+    els.panel.addEventListener(ev,e=>e.stopPropagation(),{passive:false});
+  });
+  if(els.ask) els.ask.addEventListener('click',e=>{e.preventDefault();askRobotGrok();});
+  if(els.voice) els.voice.addEventListener('click',e=>{e.preventDefault();startRobotVoiceListening();});
+  if(els.speak) els.speak.addEventListener('click',e=>{e.preventDefault();toggleRobotSpeech();});
+  if(els.wake) els.wake.addEventListener('click',e=>{e.preventDefault();toggleRobotWake();});
+  if(els.prompt) els.prompt.addEventListener('keydown',e=>{
+    if(e.key==='Enter'&&(e.metaKey||e.ctrlKey)){
+      e.preventDefault();
+      askRobotGrok();
+    }
+  });
+  updateRobotVoiceButtons();
+}
+setupRobotGrokPanel();
 function resetSpeechOverlay(){
   SPEECH_OVERLAY.items.length=0;
 }
@@ -3169,6 +3698,7 @@ function goToHomeMenu(preferredClient){
   menuEnteredAt=Date.now();
   lastInput=Date.now();
   demoMode=false;
+  closeUnitreeDetailOverlay({stopVoice:true});
   if(Number.isInteger(preferredClient)&&CLIENTS[preferredClient]) clientSel=preferredClient;
   else if(Number.isInteger(activeClient)&&CLIENTS[activeClient]) clientSel=activeClient;
   menuSel=lang==='en'?1:0;
@@ -3661,6 +4191,7 @@ function buildDynamicOccupancy(ignoreActor){
   if(G&&G.thief&&G.thief.phase&&G.thief.phase!=='idle') add(G.thief,'staff');
   if(G&&G.guardiaCivil&&G.guardiaCivil.phase&&G.guardiaCivil.phase!=='idle') add(G.guardiaCivil,'staff');
   if(G&&G.opinador&&G.opinador.phase&&G.opinador.phase!=='idle') add(G.opinador,'staff');
+  if(G&&G.unitreeBot&&G.unitreeBot.phase&&G.unitreeBot.phase!=='idle') add(G.unitreeBot,'staff');
   return occupied;
 }
 
@@ -3956,6 +4487,7 @@ function initGame(){
     securityCam:{active:true},
     guardiaCivil:{phase:'idle',x:820,y:0,dir:-1,aFrame:0,aTimer:0,patrolTimer:0,targetCol:9,targetRow:3},
     opinador:{phase:'idle',x:820,y:0,dir:-1,aFrame:0,aTimer:0,voteTimer:0,voteFace:0,look:null,opinion:''},
+    unitreeBot:{phase:'idle',cooldown:2100+Math.floor(Math.random()*900),x:820,y:0,dir:-1,aFrame:0,aTimer:0,scanTimer:0,targetCol:7,targetRow:4,path:null,pathIdx:0,pathMode:'',bTimer:0,bMsg:''},
     sfxVolume:0,
     weekHistory:[],
     holiday:{active:false,timer:0,name:''},
@@ -4104,6 +4636,7 @@ function loadGame(){
       if(G.customerSpawnDelay===undefined) G.customerSpawnDelay=0;
       if(!G.escaparate) G.escaparate={active:true,phase:0,boost:0,smTimer:900};
       if(!G.saca) G.saca={phase:'idle',cooldown:1800,x:820,y:0,dir:-1,aFrame:0,aTimer:0,unloadTimer:0,boxes:6};
+      if(!G.unitreeBot) G.unitreeBot={phase:'idle',cooldown:2100,x:820,y:0,dir:-1,aFrame:0,aTimer:0,scanTimer:0,targetCol:7,targetRow:4,path:null,pathIdx:0,pathMode:'',bTimer:0,bMsg:''};
       if(!G.thief) G.thief={phase:'idle',cooldown:3600,x:820,y:0,dir:-1,aFrame:0,aTimer:0,targetCol:5,targetRow:3,path:null,pathIdx:0,lootTimer:0,caught:false};
       // Restore navTarget fields on staff (lost in save/load)
       if(G.staff) G.staff.forEach((s,i)=>{
@@ -4721,6 +5254,14 @@ function doAction(id){
     ]);
     return;
   }
+  if(id==='specialClick_unitree'&&G.unitreeBot&&G.unitreeBot.phase!=='idle'){
+    openSpecialEditor('unitree','UNITREE BOT',[
+      'Fase: '+G.unitreeBot.phase,
+      'Objetivo: '+(G.unitreeBot.targetCol||'-')+','+(G.unitreeBot.targetRow||'-'),
+      'Scan: '+(G.unitreeBot.scanTimer||0)
+    ]);
+    return;
+  }
   // ── Menu touch/click actions ──
   if(id==='start'||id==='menuStart'||id==='menuStart8'||id==='menuStart16'){
     setLanguage(menuSel===0?'es':'en');
@@ -5010,6 +5551,84 @@ function showEv(msg,col){
   }
 }
 function addFloat(x,y,txt,col){G.floats.push({x,y,txt,col,life:65,vy:-0.65});}
+function ensureUnitreeBot(){
+  if(!G.unitreeBot){
+    G.unitreeBot={phase:'idle',cooldown:2100,x:820,y:0,dir:-1,aFrame:0,aTimer:0,scanTimer:0,targetCol:7,targetRow:4,path:null,pathIdx:0,pathMode:'',bTimer:0,bMsg:''};
+  }
+  return G.unitreeBot;
+}
+function resetUnitreeBotPosition(bot){
+  const doorIso=toIso(ISO.cols,3);
+  bot.x=820;
+  bot.y=doorIso.y-20;
+  bot.dir=-1;
+  bot.aFrame=0;
+  bot.aTimer=0;
+  bot.scanTimer=0;
+  bot.path=null;
+  bot.pathIdx=0;
+  bot.pathMode='';
+}
+function startUnitreeBot(bot){
+  resetUnitreeBotPosition(bot);
+  const target=findNearestWalkableTile(7,4,{from:{col:ISO.cols-1,row:3},ignore:bot})||findNearestWalkableTile(6,3,{from:{col:ISO.cols-1,row:3},ignore:bot})||{col:7,row:4};
+  bot.targetCol=target.col;
+  bot.targetRow=target.row;
+  bot.phase='entering';
+  bot.cooldown=9999;
+  bot.bTimer=110;
+  bot.bMsg='Unitree U1 online';
+  bot.path=astarPath(ISO.cols-1,3,bot.targetCol,bot.targetRow,{ignore:bot})||[];
+  bot.pathIdx=0;
+  bot.pathMode='scan';
+  G.doorOpen=90;
+  showEv('🤖 Unitree Bot entrando en tienda','#78f3ff');
+  setManagerSayBubble('Robot Unitree en tienda');
+  SFX.eventChime();
+  return bot;
+}
+function setUnitreeBotState(on){
+  const bot=ensureUnitreeBot();
+  if(on){
+    if(bot.phase==='idle') startUnitreeBot(bot);
+  }else{
+    if(bot.phase!=='idle'){
+      bot.phase='leaving';
+      bot.bTimer=80;
+      bot.bMsg='Volviendo a base';
+      bot.path=null;
+      bot.pathIdx=0;
+      bot.pathMode='';
+      G.doorOpen=90;
+      showEv('🤖 Unitree Bot saliendo','#9bb4bd');
+    }else{
+      bot.cooldown=2400+Math.floor(Math.random()*1200);
+    }
+  }
+  return !!on;
+}
+function sceneBinaryToggleArg(raw,currentOn){
+  const clean=String(raw||'').trim().toLowerCase();
+  if(!clean) return currentOn?'off':'on';
+  if(['1','true','yes','si','sí','activar','activa','encender','enciende','enable','enabled','abrir','abre','start','play','on'].includes(clean)) return 'on';
+  if(['0','false','no','desactivar','desactiva','apagar','apaga','disable','disabled','cerrar','cierra','stop','pause','off'].includes(clean)) return 'off';
+  return clean;
+}
+function setUnitreeBotCommand(arg){
+  if(!G) return 'No hay partida en curso. Entra en una partida y vuelve a mandar el comando.';
+  const bot=ensureUnitreeBot();
+  const clean=sceneBinaryToggleArg(arg,bot.phase!=='idle');
+  if(['on','entrar','entra','start','robot','unitree','demo'].includes(clean)){
+    startUnitreeBot(bot);
+    return 'Unitree Bot activado: entra por la puerta y escanea la tienda';
+  }
+  if(['off','salir','sale','stop','fuera','idle'].includes(clean)){
+    if(bot.phase==='idle') return 'No hay Unitree Bot activo';
+    setUnitreeBotState(false);
+    return 'Unitree Bot saliendo de la tienda';
+  }
+  return 'Uso: /robot [on|off]';
+}
 function openPause(){
   G.pauseData={rev:G.weekRevenue,exp:G.weekExpenses,cust:G.customersToday,sat:G.satisfaction,fame:G.fame};
   state=S.PAUSE;
@@ -5985,8 +6604,8 @@ function updateGame(){
   }
 
   // ── OPINADOR — entra, vota en el tótem y se va ────────────────
-  if(G.opinador){
-    const op=G.opinador;
+	  if(G.opinador){
+	    const op=G.opinador;
     const doorIso4=toIso(ISO.cols,3);
     const startX4=820,startY4=doorIso4.y-20;
     if(op.y===0) op.y=startY4;
@@ -6047,10 +6666,86 @@ function updateGame(){
         op.path=null;op.pathMode='';
       }
     }
-    if(op.bTimer>0) op.bTimer--;
-  }
+	    if(op.bTimer>0) op.bTimer--;
+	  }
 
-  // Floats
+	  // ── UNITREE BOT — visita robotica cartoon ────────────────────
+	  if(G.unitreeBot){
+	    const bot=G.unitreeBot;
+	    const doorIso5=toIso(ISO.cols,3);
+	    const startX5=820,startY5=doorIso5.y-20;
+	    if(bot.y===0) bot.y=startY5;
+	    if(bot.phase==='idle'){
+	      if(bot.cooldown>0) bot.cooldown--;
+	      else if(!G.dayEnded&&G.custs.length<7&&(G.fame||0)>=18){
+	        startUnitreeBot(bot);
+	      }
+	    }else if(bot.phase==='entering'){
+	      if(!bot.path||bot.pathMode!=='scan'){
+	        const target=findNearestWalkableTile(bot.targetCol||7,bot.targetRow||4,{from:{col:ISO.cols-1,row:3},ignore:bot})||{col:7,row:4};
+	        bot.targetCol=target.col;bot.targetRow=target.row;
+	        planActorPath(bot,bot.targetCol,bot.targetRow,'path','pathIdx');
+	        bot.pathMode='scan';
+	      }
+	      G.doorOpen=80;
+	      const moved=stepActorPath(bot,'path','pathIdx',1.15,7);
+	      if(moved==='done'){
+	        bot.phase='scanning';
+	        bot.scanTimer=2400;
+	        bot.path=null;bot.pathIdx=0;bot.pathMode='';
+	        bot.bTimer=130;bot.bMsg='Escaneando lineales';
+	        G.fame=Math.min(100,(G.fame||0)+1);
+	        G.satisfaction=Math.min(100,(G.satisfaction||0)+1);
+	        addFloat(bot.x+7,bot.y-36,'SCAN','#78f3ff');
+	      }else if(moved==='blocked'){
+	        bot.path=null;bot.pathMode='';
+	      }
+	    }else if(bot.phase==='scanning'){
+	      bot.scanTimer--;
+	      bot.aTimer=(bot.aTimer||0)+1;
+	      if(bot.aTimer>=10){bot.aTimer=0;bot.aFrame=((bot.aFrame||0)+1)%2;}
+	      if(bot.scanTimer%170===0||!bot.path||bot.pathIdx>=bot.path.length){
+	        const target=findNearestWalkableTile(4+Math.floor(Math.random()*7),2+Math.floor(Math.random()*4),{ignore:bot})||{col:bot.targetCol||7,row:bot.targetRow||4};
+	        bot.targetCol=target.col;bot.targetRow=target.row;
+	        planActorPath(bot,target.col,target.row,'path','pathIdx');
+	        bot.pathMode='roam';
+	      }
+	      if(bot.path&&bot.pathIdx<bot.path.length){
+	        const moved=stepActorPath(bot,'path','pathIdx',0.9,9);
+	        if(moved==='blocked'){bot.path=null;bot.pathMode='';}
+	      }
+	      if(bot.scanTimer%120===0){
+	        addFloat(bot.x+7,bot.y-38,'+DATA','#78f3ff');
+	        bot.bTimer=85;
+	        bot.bMsg=['Oferta detectada','Stock verificado','Hola humanos'][Math.floor(bot.scanTimer/120)%3];
+	      }
+	      if(bot.scanTimer<=0){
+	        bot.phase='leaving';
+	        bot.bTimer=80;bot.bMsg='Ruta completa';
+	        bot.path=null;bot.pathIdx=0;bot.pathMode='';
+	      }
+	    }else if(bot.phase==='leaving'){
+	      if(!bot.path||bot.pathMode!=='exit'){
+	        planActorPath(bot,ISO.cols-1,3,'path','pathIdx');
+	        bot.pathMode='exit';
+	      }
+	      G.doorOpen=80;
+	      const moved=stepActorPath(bot,'path','pathIdx',1.25,7);
+	      const dx=startX5-bot.x,dy=startY5-bot.y;
+	      const dist=Math.sqrt(dx*dx+dy*dy);
+	      if(moved==='done'||dist<3||bot.x>810){
+	        bot.phase='idle';
+	        bot.cooldown=3600+Math.floor(Math.random()*1600);
+	        resetUnitreeBotPosition(bot);
+	        bot.bTimer=0;bot.bMsg='';
+	      }else if(moved==='blocked'){
+	        bot.path=null;bot.pathMode='';
+	      }
+	    }
+	    if(bot.bTimer>0) bot.bTimer--;
+	  }
+
+	  // Floats
   for(let i=G.floats.length-1;i>=0;i--){
     G.floats[i].y+=G.floats[i].vy;G.floats[i].life--;
     if(G.floats[i].life<=0) G.floats.splice(i,1);
@@ -6379,6 +7074,7 @@ function shouldDoorBeOpen(){
   if(G.thief&&G.thief.phase!=='idle'&&actorTouchesDoor(G.thief,'staff')) return true;
   if(G.guardiaCivil&&G.guardiaCivil.phase!=='idle'&&actorTouchesDoor(G.guardiaCivil,'staff')) return true;
   if(G.opinador&&G.opinador.phase!=='idle'&&actorTouchesDoor(G.opinador,'staff')) return true;
+  if(G.unitreeBot&&G.unitreeBot.phase!=='idle'&&actorTouchesDoor(G.unitreeBot,'staff')) return true;
   return false;
 }
 
@@ -9491,6 +10187,10 @@ function drawShop(){
     if(G.opinador&&G.opinador.phase!=='idle'){
       entities.push({type:'opinador',data:G.opinador,col:0,row:0,depth:G.opinador.y+27});
     }
+    // Unitree Bot (active phases only)
+    if(G.unitreeBot&&G.unitreeBot.phase!=='idle'){
+      entities.push({type:'unitreeBot',data:G.unitreeBot,col:0,row:0,depth:G.unitreeBot.y+27});
+    }
   }
 
   // Sort by depth (lower screen Y = further back = drawn first)
@@ -9542,6 +10242,7 @@ function drawShop(){
       case 'thief': drawIsoThief(e.data); break;
       case 'guardiaCivil': drawIsoGuardiaCivil(e.data); break;
       case 'opinador': drawIsoOpinador(e.data); break;
+      case 'unitreeBot': drawIsoUnitreeBot(e.data); break;
     }
     if(isSelectedEditorFurniture){
       cx.globalAlpha=1;
@@ -12077,6 +12778,128 @@ function drawIsoOpinador(op){
   }
 }
 
+// ── UNITREE BOT — robot cartoon original ───────────────────────
+function drawIsoUnitreeBot(bot){
+  if(!bot||bot.phase==='idle') return;
+  const x=bot.x,y=bot.y;
+  const dir=bot.dir||1;
+  const fr=bot.aFrame||0;
+  const scan=bot.phase==='scanning';
+  const bob=Math.sin(tt*0.12)*1.7+(scan?Math.sin(tt*0.22)*0.8:0);
+  BTNS['specialClick_unitree']={x:x-20,y:y-48,w:58,h:88};
+
+  drawIsoShadow(x+8,y+28,12,4);
+
+  cx.save();
+  const flip=dir===-1;
+  if(flip){cx.translate(x+16,0);cx.scale(-1,1);cx.translate(-x,0);}
+  const yy=y+bob;
+  const bodyCol='#bcc8cf';
+  const bodyDark='#6f7e88';
+  const bodyHi='#edf7fb';
+  const teal='#78f3ff';
+  const gold='#f4cf64';
+
+  // Back antenna and tiny lidar puck.
+  cx.strokeStyle='#50616a';cx.lineWidth=1.5;
+  cx.beginPath();cx.moveTo(x+8,yy-25);cx.lineTo(x+5,yy-34);cx.stroke();
+  glow(scan?teal:'#9bb4bd',scan?6:2);
+  cx.fillStyle=scan?teal:'#9bb4bd';
+  cx.beginPath();cx.arc(x+4.5,yy-35,2.2,0,Math.PI*2);cx.fill();
+  nog();
+
+  // Legs: piston-like, slightly overanimated for a friendly cartoon read.
+  const walk=fr?2:-1;
+  r(x+3,yy+12,4,12+walk,'#596973');
+  r(x+10,yy+12,4,12-walk,'#596973');
+  r(x+2,yy+23+walk,7,4,'#33434d');
+  r(x+9,yy+23-walk,7,4,'#33434d');
+  r(x+4,yy+15,2,8,teal);
+  r(x+11,yy+15,2,8,teal);
+
+  // Rounded-cylinder body, intentionally original but with a retro TV-cartoon attitude.
+  r(x+0,yy-4,17,18,bodyCol);
+  rx(x+0,yy-4,17,18,bodyDark,1);
+  r(x+2,yy-2,13,3,bodyHi);
+  r(x+4,yy+3,9,5,'#1a2730');
+  tx('U1',x+8.5,yy+7,teal,5,'center');
+  r(x+3,yy+10,11,2,gold);
+
+  // Arms: bendy tubes with clamp hands.
+  const armLift=scan?Math.sin(tt*0.16)*4:0;
+  cx.strokeStyle='#768892';cx.lineWidth=3;cx.lineCap='round';
+  cx.beginPath();
+  cx.moveTo(x+1,yy+0);cx.quadraticCurveTo(x-7,yy+6+armLift,x-5,yy+14);
+  cx.moveTo(x+16,yy+0);cx.quadraticCurveTo(x+24,yy+6-armLift,x+21,yy+14);
+  cx.stroke();
+  r(x-8,yy+13+armLift*0.3,5,3,bodyDark);
+  r(x+19,yy+13-armLift*0.3,5,3,bodyDark);
+
+  // Head: pill/cylinder face with big expressive eyes.
+  r(x+1,yy-23,15,17,bodyCol);
+  rx(x+1,yy-23,15,17,bodyDark,1);
+  r(x+3,yy-20,11,3,bodyHi);
+  r(x+3,yy-15,11,6,'#10212b');
+  const blink=Math.floor(tt/95)%11===0;
+  if(blink){
+    r(x+5,yy-12,2,1,teal);r(x+11,yy-12,2,1,teal);
+  }else{
+    r(x+5,yy-14,3,3,teal);r(x+10,yy-14,3,3,teal);
+    r(x+6,yy-13,1,1,'#ffffff');r(x+11,yy-13,1,1,'#ffffff');
+  }
+  r(x+7,yy-8,4,1,'#31444e');
+  tx('UNITREE',x+8.5,yy-25,'#dff8ff',4,'center');
+  cx.restore();
+
+  if(scan){
+    cx.save();
+    cx.globalAlpha=0.18+0.08*Math.sin(tt*0.18);
+    glow(teal,10);
+    cx.beginPath();
+    cx.moveTo(x+8,y-10);
+    cx.lineTo(x-26,y+20);
+    cx.lineTo(x+42,y+20);
+    cx.closePath();
+    cx.fillStyle=teal;
+    cx.fill();
+    nog();
+    cx.restore();
+  }
+
+  if(bot.phase==='entering'){
+    const fadeA=Math.min(1,(820-bot.x)/150);
+    if(fadeA>0.05){
+      cx.globalAlpha=fadeA;
+      r(x-20,y-53,72,15,'#081d26dd');
+      rx(x-20,y-53,72,15,teal,1.5);
+      tx('UNITREE U1',x+16,y-42,teal,7,'center');
+      cx.globalAlpha=1;
+    }
+  }else if(scan){
+    cx.globalAlpha=0.55+0.25*Math.sin(tt*0.18);
+    tx('SCAN',x+8,y-42,teal,8,'center');
+    cx.globalAlpha=1;
+  }
+
+  if(bot.bTimer>0&&bot.bMsg){
+    const msg=bot.bMsg;
+    const bw=Math.min(118,msg.length*5.5+12),bh=14;
+    queueSpeechBubble({
+      x:x+8-bw/2,
+      y:y-36,
+      w:bw,
+      text:msg.slice(0,24),
+      bg:'#e9fbffee',
+      border:teal,
+      color:'#12313a',
+      font:7,
+      paddingX:6,
+      paddingY:4,
+      opacity:Math.min(1,bot.bTimer/12),
+    });
+  }
+}
+
 // Legacy compat: drawShopChars is now handled inside drawShop via entity sorting
 function drawShopChars(){}
 
@@ -13268,6 +14091,7 @@ function openSpecialEditor(kind,label,lines){
   npcEdOpen=true;npcEdIdx=-1;npcEdTab='look';npcEdNameEdit=false;npcEdKind='special';npcPlacementDirty=false;
   npcEdDockSide='left';
   npcEdDraft={title:label,name:label,lines:lines||[],kind};
+  syncRobotGrokPanel();
 }
 function getNPCEditorBounds(){
   const pw=420,ph=280,dockScale=0.58;
@@ -13284,7 +14108,10 @@ function persistSelectedStaffPlacement(){
   return true;
 }
 function closeNPCEditor(){
+  const wasUnitree=isUnitreeDetailOpen();
   npcEdOpen=false;npcEdIdx=-1;npcEdDraft=null;npcEdNameEdit=false;npcEdKind='staff';npcPlacementDirty=false;
+  if(wasUnitree) stopRobotVoiceSession();
+  syncRobotGrokPanel();
   // Re-show video monitors (they'll reposition on next frame if active)
 }
 function applyNPCEditor(){
@@ -13319,6 +14146,7 @@ function loadNPCCustoms(){
 function drawNPCEditor(){
   if(!npcEdOpen||!npcEdDraft)return;
   const d=npcEdDraft;
+  syncRobotGrokPanel();
   const pw=420,ph=280;
   const dockScale=0.58;
   const dockW=pw*dockScale,dockH=ph*dockScale;
@@ -13932,6 +14760,7 @@ function loop(){
   // Always update HTML bar + video position first
   try{updateHtmlBar();}catch(e){}
   try{syncGameplayChrome();}catch(e){}
+  try{syncRobotGrokPanel();}catch(e){}
   try{
     if(!isGameplayUiState(state)&&bgMusic&&!bgMusic.paused) bgMusic.pause();
   }catch(e){}
@@ -14150,6 +14979,7 @@ window.xtAPI = (function(){
       rain: !!(G&&G.weather&&G.weather.type==='rain'),
       sun: !!(G&&G.weather&&G.weather.type==='sun'),
       rivalPromo: !!(G&&G.comp&&G.comp.promoTimer>0),
+      robot: !!(G&&G.unitreeBot&&G.unitreeBot.phase!=='idle'),
       hueMode: HUE.mode,
     };
   }
@@ -14593,6 +15423,9 @@ window.xtAPI = (function(){
         const next=parsed===null?!current:parsed;
         return {ok:true,message:setOpinadorCommand(next?'on':'off'),data:{on:next}};
       }
+      if(['robot','unitree','unitreebot','bot'].includes(cmd)){
+        return runBinaryCommand('Unitree Bot',arg,()=>!!(G&&G.unitreeBot&&G.unitreeBot.phase!=='idle'),setUnitreeBotState,true);
+      }
       if(['mobiliario','furniture','muebles'].includes(cmd)){
         const req=resolveBinaryRequest('Mobiliario',arg,shopFurnitureVisible!==false);
         if(!req.ok) return req;
@@ -14711,7 +15544,7 @@ window.xtAPI = (function(){
         helpers: ['hireByRole(rol)','hireByName(nombre)','restockByName(nombre)','restockAll()','hireAll()','trainAll()'],
         atajos: ['hireDJ()','hireCashier()','hireHostess()','hireManager()','hireStorcker()'],
         hue: ['hueStatus()','hueDiscover()','hueLink()','hueSync()','hueMode("ambiente|evento")'],
-        slash: ['command("/music")','command("/lamp off")','command("/lamp auto")','command("/ladron")','command("/huemode evento")','command("/visita gc")'],
+        slash: ['command("/music")','command("/lamp off")','command("/lamp auto")','command("/ladron")','command("/robot")','command("/huemode evento")','command("/visita gc")'],
       }};
     },
   };
@@ -14894,6 +15727,7 @@ window.xtAPI = (function(){
     const thiefActive=hasGame&&isEntityActive(G.thief);
     const guardiaActive=hasGame&&isEntityActive(G.guardiaCivil);
     const opinadorActive=hasGame&&isEntityActive(G.opinador);
+    const robotActive=hasGame&&isEntityActive(G.unitreeBot);
     const liveActive=!!(hasGame&&G.admiraLiveMsg);
     const loyaltyReady=!!(hasGame&&G.loyaltyCard&&(G.loyaltyCard.pending||G.loyaltyCard.targetId));
     return [
@@ -14920,6 +15754,12 @@ window.xtAPI = (function(){
         status:opinadorActive?(isEs?'en ruta':'en route'):(isEs?'rápido':'quick'),
         command:opinadorActive?'/opinador off':'/opinador happy',
         active:opinadorActive
+      },
+      {
+        label:'Unitree Bot',
+        status:robotActive?(isEs?'en tienda':'in store'):'demo',
+        command:robotActive?'/robot off':'/robot on',
+        active:robotActive
       },
       {
         label:'AdmiraLive',
@@ -14989,7 +15829,30 @@ window.xtAPI = (function(){
   }
 
   function grokUrl(path){
-    return GROK.proxyUrl?GROK.proxyUrl+path:telegramUrl(path);
+    const base=grokCandidates()[0]||'';
+    return base+path;
+  }
+
+  function localGrokBaseUrl(){
+    const origin=window.location&&window.location.origin&&/^https?:\/\//.test(window.location.origin)?window.location.origin:'';
+    return origin||('http://localhost:'+GROK.proxyPort);
+  }
+
+  function workerGrokBaseUrl(){
+    return GROK.proxyUrl||'';
+  }
+
+  function grokCandidates(){
+    const seen=new Set();
+    return [localGrokBaseUrl(),workerGrokBaseUrl()]
+      .filter(Boolean)
+      .filter(base=>{
+        const clean=String(base).replace(/\/+$/,'');
+        if(seen.has(clean)) return false;
+        seen.add(clean);
+        return true;
+      })
+      .map(base=>String(base).replace(/\/+$/,''));
   }
 
   async function telegramFetch(path,opts){
@@ -15009,10 +15872,22 @@ window.xtAPI = (function(){
   }
 
   async function grokFetch(path,opts){
-    const res=await fetch(grokUrl(path),opts);
-    const json=await res.json().catch(()=>({ok:false,error:'Invalid JSON'}));
-    if(!res.ok||json.error) throw new Error(json.message||json.error||('HTTP '+res.status));
-    return json;
+    let lastError=null;
+    const tried=[];
+    for(const baseUrl of grokCandidates()){
+      try{
+        tried.push(baseUrl);
+        const res=await fetch(baseUrl+path,opts);
+        const json=await res.json().catch(()=>({ok:false,error:'Invalid JSON'}));
+        if(!res.ok||json.error||json.ok===false) throw new Error(json.message||json.error||('HTTP '+res.status));
+        GROK.lastOrigin=baseUrl;
+        return json;
+      }catch(error){
+        const label=baseUrl.replace(/^https?:\/\//,'');
+        lastError=new Error(label+': '+(error&&error.message?error.message:String(error)));
+      }
+    }
+    throw lastError||new Error('Grok no disponible'+(tried.length?' en '+tried.join(', '):''));
   }
 
   async function telegramSend(text){
@@ -15084,10 +15959,10 @@ window.xtAPI = (function(){
     }
   }
 
-  async function grokAsk(prompt){
+  async function askAdmiraGrok(prompt,extraContext){
     const clean=String(prompt||'').trim();
-    if(!clean) return 'Uso: /grok pregunta';
-    if(!GROK.enabled) return 'Grok no está configurado. Añade XAI_API_KEY o grok.apiKey en xtanco.config.local.json y reinicia el proxy, o configura grok.proxyUrl.';
+    if(!clean) return {ok:false,message:'Uso: /grok pregunta',text:''};
+    if(!GROK.enabled) return {ok:false,message:'Grok no está configurado. Añade XAI_API_KEY o grok.apiKey en xtanco.config.local.json y reinicia el proxy, o configura grok.proxyUrl.',text:''};
     try{
       const startedAt=performance.now();
       GROK.lastPrompt=clean;
@@ -15097,7 +15972,7 @@ window.xtAPI = (function(){
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({
           prompt:clean,
-          context:buildGrokContext()
+          context:buildGrokContext(extraContext)
         })
       });
       const answer=String(out.text||'').trim();
@@ -15106,14 +15981,23 @@ window.xtAPI = (function(){
       GROK.lastAnswer=answer;
       rememberMemory('dialog','Grok prompt: '+clean);
       rememberMemory('dialog','Grok respuesta: '+answer);
-      if(answer) setManagerSayBubble(answer);
       refreshTelegramDiagnostics();
-      return 'Grok ('+(out.model||GROK.model)+'):\n'+(answer||'Sin respuesta');
+      return {ok:true,message:'Grok ('+(out.model||GROK.model)+'):\n'+(answer||'Sin respuesta'),text:answer||'Sin respuesta',model:out.model||GROK.model};
     }catch(e){
-      GROK.lastError=e.message;
+      const msg=e.message==='Failed to fetch'
+        ? 'No se pudo conectar con Grok. Revisa el worker o configura XAI_API_KEY en el proxy local.'
+        : e.message;
+      GROK.lastError=msg;
       refreshTelegramDiagnostics();
-      return 'Error Grok: '+e.message;
+      return {ok:false,message:'Error Grok: '+msg,text:msg};
     }
+  }
+  window.askAdmiraGrok=askAdmiraGrok;
+
+  async function grokAsk(prompt){
+    const result=await askAdmiraGrok(prompt);
+    if(result.ok&&result.text) setManagerSayBubble(result.text);
+    return result.message;
   }
 
   function parseGrokArtJson(text){
@@ -15199,6 +16083,7 @@ window.xtAPI = (function(){
       'Guardia Civil: '+(G&&G.guardiaCivil?G.guardiaCivil.phase:'n/a'),
       'DJ: '+(G&&G.staff&&G.staff.some(s=>s.hired&&s.role===4&&!s.fired)?'on':'off'),
       'Opinador: '+(G&&G.opinador?G.opinador.phase:'n/a'),
+      'Unitree Bot: '+(G&&G.unitreeBot?G.unitreeBot.phase:'n/a'),
       'AdmiraLive: '+(G&&G.admiraLiveMsg?G.admiraLiveMsg:'off'),
       'AdmiraTube: '+(G&&G.admiraTube&&G.admiraTube.active?(G.admiraTube.videoId+' ('+(G.admiraTube.screens||2)+' pantallas, audio '+(G.admiraTube.audio!==false?'on':'off')+')'):'off'),
       'LiveCam: '+(LIVE_CAM.active?'ON':'OFF'),
@@ -15542,7 +16427,7 @@ window.xtAPI = (function(){
       {title:'Tienda',items:['/ad 0','/ad 1','/ad 2','/upgrade','/visit com','/visit tec','/visit del','/visit gc','/save']},
       {title:'Tiempo y ambiente',items:['/reloj 14:30','/reloj 14 30','/time am','/time pm','/time night','/weather normal','/weather rain','/weather sun','/lamp','/lamp auto','/hue','/hue auto']},
       {title:'Pantalla y directo',items:['/livecam','/livecam off','/mocap','/mocap off','/AdmiraLive texto','/AdmiraLive off','/AdmiraTube URL 2 audio','/AdmiraTube off','/say texto']},
-      {title:'Escena en vivo',items:['/dj on','/dj off','/ladron on','/ladron off','/guardiacivil on','/guardiacivil off','/opinador on','/opinador off','/door open','/door close','/door auto']},
+      {title:'Escena en vivo',items:['/dj on','/dj off','/ladron on','/ladron off','/guardiacivil on','/guardiacivil off','/opinador on','/opinador off','/robot on','/robot off','/door open','/door close','/door auto']},
       {title:'IA y contenido',items:['/grok pregunta','/draw dibujo']},
       {title:'Ajustes rápidos',items:['/money 12000','/sat 90','/fame 80','/set week 12','/set year 2','/set revenue 5000','/set storeLevel 2','/set customers 30']},
       {title:'Musica y layout',items:['/song 1','/song bad bunny','/music','/next','/prev','/equipo inicio ana 3 4','/equipo zona dj 12 2 2','/mobiliario inicio','/mobiliario on','/mobiliario off']},
@@ -15596,6 +16481,7 @@ window.xtAPI = (function(){
       if(cmd==='dj'||cmd==='djnovah'||cmd==='novah') return setDJCommand(arg);
       if(cmd==='tarjetafidelidad'||cmd==='fidelidad'||cmd==='loyaltycard') return setLoyaltyCardCommand();
       if(cmd==='opinador'||cmd==='opinion'||cmd==='opinión') return setOpinadorCommand(arg);
+      if(cmd==='robot'||cmd==='unitree'||cmd==='unitreebot'||cmd==='bot') return setUnitreeBotCommand(arg);
       if(cmd==='equipo'||cmd==='staffzone'||cmd==='zonaequipo'){
         const teamParts=arg.split(/\s+/).filter(Boolean);
         const action=(teamParts.shift()||'').toLowerCase();
