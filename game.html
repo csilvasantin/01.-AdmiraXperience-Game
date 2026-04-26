@@ -147,6 +147,8 @@
     .tg-signage-row[draggable="true"]{cursor:grab}
     .tg-signage-row[draggable="true"]:active{cursor:grabbing}
     .tg-signage-row[draggable="true"] .tg-signage-thumb{cursor:grab}
+    /* Prevent inner img / span from stealing the drag source from the row */
+    .tg-signage-row *{-webkit-user-drag:none;user-drag:none}
     .tg-signage-row.is-dragging{opacity:.35}
     .tg-signage-row.is-drop-before{box-shadow:inset 0 3px 0 #78f3ff}
     .tg-signage-row.is-drop-after{box-shadow:inset 0 -3px 0 #78f3ff}
@@ -17529,7 +17531,9 @@ window.xtAPI = (function(){
           el.setAttribute('title','Sin fotograma legible (todo en negro)');
           el.textContent='Error';
         } else {
-          el.innerHTML='<img src="'+dsEscapeHtml(src)+'" alt="">';
+          el.innerHTML='<img src="'+dsEscapeHtml(src)+'" alt="" draggable="false">';
+          // Defensive: also prevent the img from being a separate drag source
+          const ig=el.querySelector('img'); if(ig){ ig.addEventListener('dragstart',e=>e.preventDefault()); }
         }
       });
     });
@@ -17604,7 +17608,7 @@ window.xtAPI = (function(){
           thumbClass+=' is-error';
           thumbTitle=' title="Sin fotograma legible (todo en negro)"';
         } else if(cached){
-          thumbInner='<img src="'+dsEscapeHtml(cached)+'" alt="">';
+          thumbInner='<img src="'+dsEscapeHtml(cached)+'" alt="" draggable="false">';
         } else {
           thumbInner=dsKindIcon(n);
         }
