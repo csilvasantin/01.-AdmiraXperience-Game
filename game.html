@@ -202,7 +202,7 @@
   <div class="sep"></div>
   <div class="stat"><span class="stat-label">Sat</span><span class="stat-val" id="bbSat">0%</span></div>
   <div class="sep"></div>
-  <div class="stat"><span class="stat-label">Clientes</span><span class="stat-val" id="bbCli">0</span></div>
+  <div class="stat"><span class="stat-label" id="bbTrafficLabel">Tráfico</span><span class="stat-val" id="bbCli">0/0</span></div>
   <div class="sep"></div>
   <span id="bbStatus" style="color:#88cc88;font-size:10px">Idle</span>
   <div class="sep"></div>
@@ -2083,13 +2083,15 @@ function buildUnitreeGrokContext(){
     .filter(s=>s.hired&&!s.fired)
     .map(s=>s.name+' '+roleShortLabel(s.role)+' E'+Math.round(s.energy||0)+' M'+Math.round(s.morale||0))
     .join('; ')||(isEs?'sin equipo':'no team');
+  const passers=G.passersbyToday||0;
+  const entries=G.customersToday||0;
   return [
     isEs?'Contexto de Admira XP para Unitree Bot.':'Admira XP context for Unitree Bot.',
     (isEs?'Responde en castellano.':'Answer in English.')+' Se directo, breve y operativo.',
     isEs?'No empieces con prefijos como "Unitree Bot:" ni con estados internos como "Escaneo en progreso".':'Do not start with prefixes like "Unitree Bot:" or internal states like "Scan in progress".',
     isEs?'No inventes datos; si falta informacion, dilo y sugiere la siguiente comprobacion.':'Do not invent data; if information is missing, say so and suggest the next check.',
     (isEs?'Datos internos robot: ':'Internal robot data: ')+(bot.phase||'idle')+', target '+(bot.targetCol||'-')+','+(bot.targetRow||'-')+', scan '+(bot.scanTimer||0)+'.',
-    (isEs?'Caja ':'Cash ')+Math.round(G.money||0)+'€, '+(isEs?'satisfaccion ':'satisfaction ')+Math.round(G.satisfaction||0)+'%, '+(isEs?'fama ':'fame ')+Math.round(G.fame||0)+'%, '+(isEs?'clientes hoy ':'customers today ')+(G.customersToday||0)+'.',
+    (isEs?'Caja ':'Cash ')+Math.round(G.money||0)+'€, '+(isEs?'satisfaccion ':'satisfaction ')+Math.round(G.satisfaction||0)+'%, '+(isEs?'fama ':'fame ')+Math.round(G.fame||0)+'%, '+(isEs?'pasan hoy ':'passers today ')+passers+', '+(isEs?'entran hoy ':'entries today ')+entries+'.',
     (isEs?'Stock mas bajo: ':'Lowest stock: ')+lowStock+'.',
     (isEs?'Clientes visibles: ':'Visible customers: ')+customers+'.',
     (isEs?'Equipo activo: ':'Active team: ')+staff+'.',
@@ -2296,7 +2298,9 @@ function updateHtmlBar(){
   pe.textContent=(profit|0).toLocaleString()+'€';
   pe.style.color=profit>=0?'#66ee66':'#ee6666';
   document.getElementById('bbSat').textContent=(G.satisfaction|0)+'%';
-  document.getElementById('bbCli').textContent=G.customersToday||0;
+  const trafficLabel=document.getElementById('bbTrafficLabel');
+  if(trafficLabel) trafficLabel.textContent=lang==='en'?'Pass/In':'Pasan/Entran';
+  document.getElementById('bbCli').textContent=(G.passersbyToday||0)+'/'+(G.customersToday||0);
   const se=document.getElementById('bbStatus');
   se.textContent=trimHudLabel(ops.focus.label+' · '+ops.focus.detail,38);
   se.style.color=ops.focus.color;
@@ -3911,6 +3915,9 @@ const DEFAULT_STAFF_ZONE_RADIUS=[1,2,2,2,1,2,2,2];
 const ACTOR_PATH_SPEED_SCALE=0.78;
 const CUSTOMER_MOVE_SPEED_SCALE=0.74;
 const ROBOT_PATH_SPEED_SCALE=0.54;
+const PASSERBY_MAX_ACTIVE=2;
+const PASSERBY_MIN_COOLDOWN=520;
+const PASSERBY_EXTRA_COOLDOWN=1180;
 function actorPathSpeedScale(actor){
   try{
     if(G&&actor&&actor===G.unitreeBot) return ROBOT_PATH_SPEED_SCALE;
@@ -4540,6 +4547,7 @@ function initGame(){
     money:CFG.START_MONEY, week:1, year:1, weekTimer:0,
     yearRevenue:0, weekRevenue:0, weekExpenses:0,
     satisfaction:65, fame:25, customersToday:0, custIn:0, custOut:0, totalCustomers:0,
+    passersbyToday:0, passersbyTotal:0, passerbySpawnCooldown:PASSERBY_MIN_COOLDOWN,
     nowPlaying:shopTimeSettings.nowPlaying||'Titi Me Preguntó - Bad Bunny',
     totalRevenue:0, totalScore:0, yearsCompleted:0,
     loyaltyCard:{pending:false,targetId:null,nextId:1},
@@ -4617,6 +4625,8 @@ function initGame(){
   G.prods=M.prodsInit.map((p,i)=>({...p,color:P.prods[i%P.prods.length]}));
   // Customers
   G.custs=[];
+  G.passersby=[];
+  scheduleNextPasserby();
   // Floating numbers
   G.floats=[];
   // Stat bars
@@ -4719,6 +4729,10 @@ function loadGame(){
       if(!G.saca) G.saca={phase:'idle',cooldown:1800,x:820,y:0,dir:-1,aFrame:0,aTimer:0,unloadTimer:0,boxes:6};
       if(!G.unitreeBot) G.unitreeBot={phase:'idle',cooldown:2100,x:820,y:0,dir:-1,aFrame:0,aTimer:0,scanTimer:0,targetCol:7,targetRow:4,path:null,pathIdx:0,pathMode:'',bTimer:0,bMsg:''};
       if(!G.thief) G.thief={phase:'idle',cooldown:3600,x:820,y:0,dir:-1,aFrame:0,aTimer:0,targetCol:5,targetRow:3,path:null,pathIdx:0,lootTimer:0,caught:false};
+      if(!Array.isArray(G.passersby)) G.passersby=[];
+      if(!Number.isFinite(G.passersbyToday)) G.passersbyToday=0;
+      if(!Number.isFinite(G.passersbyTotal)) G.passersbyTotal=G.passersbyToday||0;
+      if(!Number.isFinite(G.passerbySpawnCooldown)) scheduleNextPasserby();
       // Restore navTarget fields on staff (lost in save/load)
       if(G.staff) G.staff.forEach((s,i)=>{
         if(s.navTarget===undefined){s.navTarget=null;s.navPath=null;s.navPathIdx=0;s.navTick=0;}
@@ -5743,7 +5757,7 @@ function advanceYear(){
   }
   G.yearsCompleted++;
   G.year++;G.week=1;G.weekTimer=0;G.yearRevenue=0;G.weekRevenue=0;G.weekExpenses=0;
-  G.customersToday=0;G.custIn=0;G.custOut=0;G.yearEndAnim=0;G.yearRating=null;
+  G.customersToday=0;G.custIn=0;G.custOut=0;G.passersbyToday=0;G.passersby=[];scheduleNextPasserby();G.yearEndAnim=0;G.yearRating=null;
   // Satisfaction decay on year transition
   G.satisfaction=Math.max(20,G.satisfaction-5);
   state=S.GAME;
@@ -5766,7 +5780,7 @@ function endWeek(){
   // Morale decay for unhired-slots
   for(const s of G.staff) if(s.hired) s.morale=Math.max(20,s.morale-2);
   updateBars();
-  G.weekRevenue=0;G.weekExpenses=0;G.customersToday=0;G.custIn=0;G.custOut=0;
+  G.weekRevenue=0;G.weekExpenses=0;G.customersToday=0;G.custIn=0;G.custOut=0;G.passersbyToday=0;G.passersby=[];scheduleNextPasserby();
   // Reset day for next week
   G.gameTime=shopTimeSettings.openHour;
   G.dayEnded=false;
@@ -6381,6 +6395,7 @@ function updateGame(){
   if(G.customerSpawnDelay>0) G.customerSpawnDelay--;
   const promoSpawnBoost=G.managerActions&&G.managerActions.flashPromo&&G.managerActions.flashPromo.buffTimer>0?1.35:1;
   if(G.custs.length<currentCustomerCap&&Math.random()<0.006*Math.max(1,G.staff.filter(s=>s.hired).length)*(G.rush.active?2:1)*weatherMod*holidaySpawn*(1-compSteal)*repMod*escapMod*hourSpawnMod*promoSpawnBoost) spawnCust();
+  updatePassersby();
   for(let i=G.custs.length-1;i>=0;i--){
     const c=G.custs[i];c.ft++;if(c.ft>10){c.fr=(c.fr+1)%2;c.ft=0;}
     c.dwellTicks=(c.dwellTicks|0)+1;
@@ -6958,6 +6973,105 @@ function getDoorThresholdPos(){
 function getDoorOutsidePos(){
   const outsideIso=toIso(ISO.cols+0.92,3.18+RIGHT_WALL_FEATURE_ROW_OFFSET);
   return {x:outsideIso.x-7,y:outsideIso.y-20};
+}
+
+function makePasserbyLook(){
+  if(custTemplates.length>0&&Math.random()<0.55){
+    const tpl=custTemplates[Math.floor(Math.random()*custTemplates.length)];
+    return JSON.parse(JSON.stringify(tpl.look));
+  }
+  return {
+    shirt:1+Math.floor(Math.random()*5),
+    hair:Math.floor(Math.random()*6),
+    skin:Math.floor(Math.random()*6),
+    pants:Math.floor(Math.random()*3),
+    shoes:0,
+    accessory:Math.random()<0.25?1:0,
+  };
+}
+
+function scheduleNextPasserby(){
+  if(!G) return;
+  const rushBoost=G.rush&&G.rush.active?0.65:1;
+  const rainGap=G.weather&&G.weather.type==='rain'?1.25:1;
+  G.passerbySpawnCooldown=Math.round((PASSERBY_MIN_COOLDOWN+Math.random()*PASSERBY_EXTRA_COOLDOWN)*rushBoost*rainGap);
+}
+
+function makePasserbyRoute(){
+  const door=getDoorOutsidePos();
+  const j=()=>Math.round((Math.random()-0.5)*16);
+  const route=[
+    {x:door.x+96+j(),y:door.y-82+j()},
+    {x:door.x+36+j(),y:door.y-24+j()},
+    {x:door.x-118+j(),y:door.y+42+j()},
+  ];
+  if(Math.random()<0.5) route.reverse();
+  return route;
+}
+
+function spawnPasserby(){
+  if(!G) return null;
+  if(!Array.isArray(G.passersby)) G.passersby=[];
+  if(G.passersby.length>=PASSERBY_MAX_ACTIVE) return null;
+  const route=makePasserbyRoute();
+  const look=makePasserbyLook();
+  const p={
+    id:Date.now()+Math.floor(Math.random()*10000),
+    x:route[0].x,
+    y:route[0].y,
+    tx:route[1].x,
+    ty:route[1].y,
+    route,
+    routeIdx:1,
+    fr:0,
+    ft:0,
+    dir:route[1].x<route[0].x?-1:1,
+    hair:look.hair,
+    look,
+    persona:CUSTOMER_ARCHETYPES[Math.floor(Math.random()*CUSTOMER_ARCHETYPES.length)]||'curious',
+    bTimer:0,
+    bMsg:'',
+    voted:false,
+    outside:true,
+    age:0,
+  };
+  G.passersby.push(p);
+  G.passersbyToday=(G.passersbyToday||0)+1;
+  G.passersbyTotal=(G.passersbyTotal||0)+1;
+  return p;
+}
+
+function updatePassersby(){
+  if(!G) return;
+  if(!Array.isArray(G.passersby)) G.passersby=[];
+  if(!Number.isFinite(G.passerbySpawnCooldown)) scheduleNextPasserby();
+  if(!G.dayEnded){
+    if(G.passerbySpawnCooldown>0) G.passerbySpawnCooldown--;
+    if(G.passerbySpawnCooldown<=0){
+      spawnPasserby();
+      scheduleNextPasserby();
+    }
+  }
+  for(let i=G.passersby.length-1;i>=0;i--){
+    const p=G.passersby[i];
+    p.age=(p.age||0)+1;
+    p.ft=(p.ft||0)+1;
+    if(p.ft>13){p.fr=((p.fr||0)+1)%2;p.ft=0;}
+    const wp=p.route&&p.route[p.routeIdx];
+    if(!wp||p.age>1900){G.passersby.splice(i,1);continue;}
+    const dx=wp.x-p.x,dy=wp.y-p.y,d=Math.sqrt(dx*dx+dy*dy)||1;
+    if(d<3){
+      p.routeIdx++;
+      const next=p.route&&p.route[p.routeIdx];
+      if(!next){G.passersby.splice(i,1);continue;}
+      p.tx=next.x;p.ty=next.y;
+    }else{
+      const spd=customerMoveSpeed(0.92);
+      p.x+=dx/d*spd;
+      p.y+=dy/d*spd;
+      p.dir=dx<0?-1:1;
+    }
+  }
 }
 
 function getCustomerRoamAnchor(c){
@@ -10260,6 +10374,10 @@ function drawShop(){
     for(const c of G.custs){
       entities.push({type:'cust',data:c,col:0,row:0,depth:c.y+20}); // feet Y
     }
+    // Exterior passersby — they move past the door but never enter the shop
+    for(const p of (G.passersby||[])){
+      entities.push({type:'passerby',data:p,col:0,row:0,depth:p.y+20});
+    }
     // La Saca delivery person (active phases only)
     if(G.saca&&G.saca.phase!=='idle'){
       entities.push({type:'saca',data:G.saca,col:0,row:0,depth:G.saca.y+27});
@@ -10327,6 +10445,7 @@ function drawShop(){
       case 'aroma': drawAromatizer(e.col,e.row); break;
       case 'staff': drawIsoStaff(e.data); break;
       case 'cust': drawIsoCust(e.data); break;
+      case 'passerby': drawIsoCust(e.data); break;
       case 'saca': drawIsoSaca(e.data); break;
       case 'thief': drawIsoThief(e.data); break;
       case 'guardiaCivil': drawIsoGuardiaCivil(e.data); break;
@@ -10908,7 +11027,7 @@ function _getLedParams(){
     ? (VIDEO_LED_MESSAGES[VIDEO_LIST[dsVideoIdx]] || `  ◆  VISITAS: AHORA SUENA ${VIDEO_LIST[dsVideoIdx].toUpperCase()}  ◆  `)
     : '';
   const liveData=(state===S.GAME||state===S.PAUSE)
-    ? `  ◈  ${T().customers}: ${G?G.customersToday:0}  ◈  ${T().satisfaction}: ${G?(G.satisfaction|0):0}%  ◈  ${T().fame}: ${G?(G.fame|0):0}%  ◈  `
+    ? `  ◈  ${lang==='es'?'PASAN':'PASS'}: ${G?(G.passersbyToday||0):0}  ◈  ${lang==='es'?'ENTRAN':'IN'}: ${G?(G.customersToday||0):0}  ◈  ${T().satisfaction}: ${G?(G.satisfaction|0):0}%  ◈  ${T().fame}: ${G?(G.fame|0):0}%  ◈  `
     : '  ◈  ';
   const fullMsg=admiraLive+currentVideoMsg+msgs.join('   ◆   ')+liveData;
   cx.font='bold 9px monospace';
@@ -12999,10 +13118,11 @@ function drawHUD(){
   const insideNow=G.custs?G.custs.length:0;
   const moneyEnd=130;
   tx('📷'+insideNow,moneyEnd,19,'#88ccee',11);
-  tx('▲'+(G.custIn||0),moneyEnd+35,19,'#44dd66',11);
-  tx('▼'+(G.custOut||0),moneyEnd+68,19,'#dd4444',11);
+  tx('↔'+(G.passersbyToday||0),moneyEnd+35,19,'#66ccee',11);
+  tx('▲'+(G.custIn||0),moneyEnd+72,19,'#44dd66',11);
+  tx('▼'+(G.custOut||0),moneyEnd+105,19,'#dd4444',11);
   // Now playing 🎵 — interactive: ♪ mute | ◀ prev | ▶ next
-  const musicX=moneyEnd+100;
+  const musicX=moneyEnd+137;
   const isMuted=bgMusic.paused;
   const noteCol=isMuted?'#664466':'#cc99dd';
   tx('♪',musicX,19,noteCol,12);
@@ -13442,8 +13562,8 @@ function drawCharacterGroupsPanel(){
     ? hired.length+' total | Caja '+roleCounts[0]+' Repo '+roleCounts[1]+' Aza '+roleCounts[2]+' Mgr '+roleCounts[3]+' DJ '+roleCounts[4]
     : hired.length+' total | Cash '+roleCounts[0]+' Stock '+roleCounts[1]+' Host '+roleCounts[2]+' Mgr '+roleCounts[3]+' DJ '+roleCounts[4];
   const clientStatusText=isEs
-    ? clients.length+' total | Entr '+(G.custIn||0)+' Sal '+(G.custOut||0)+' Dentro '+clients.length
-    : clients.length+' total | In '+(G.custIn||0)+' Out '+(G.custOut||0)+' Inside '+clients.length;
+    ? clients.length+' total | Pasan '+(G.passersbyToday||0)+' Entr '+(G.custIn||0)+' Sal '+(G.custOut||0)+' Dentro '+clients.length
+    : clients.length+' total | Pass '+(G.passersbyToday||0)+' In '+(G.custIn||0)+' Out '+(G.custOut||0)+' Inside '+clients.length;
   let teamHtml=hired.length
     ? hired.slice(0,teamMaxRows).map((s,rowIdx)=>{
         const staffIdx=G.staff.indexOf(s);
@@ -13540,8 +13660,8 @@ function drawBottomBar(){
   // Separator
   cx.beginPath();cx.moveTo(380,by+5);cx.lineTo(380,by+bh-3);cx.stroke();
 
-  // Customers today
-  tx('Clientes: '+(G.customersToday||0),390,by+13,'#bbaa88',8);
+  // Traffic today: people passing outside vs people entering
+  tx((lang==='es'?'Tráfico ':'Traffic ')+(G.passersbyToday||0)+'/'+(G.customersToday||0),390,by+13,'#bbaa88',8);
   // Stat bars mini
   const bars=G.bars||[];
   for(let i=0;i<Math.min(4,bars.length);i++){
@@ -13846,10 +13966,11 @@ function tabStock(py){
   tx('— '+(isEs?'FRECUENCIA VISITA':'VISIT FREQ.')+' —',UI.x+UI.w/2,vY+6,P.uiT3,8,'center');
   r(lx,vY+10,rw,50,'#1a1a1a');rx(lx,vY+10,rw,50,P.gray,1);
   const avgCust=G.customersToday||0;
+  const passToday=G.passersbyToday||0;
   const totalCust=G.totalCustomers||0;
   const weekNum=Math.max(1,(G.year-1)*CFG.WEEKS_PER_YEAR+G.week);
   const avgPerWeek=Math.round(totalCust/weekNum);
-  tx((isEs?'Hoy: ':'Today: ')+avgCust,lx+4,vY+24,'#88ccee',8);
+  tx((isEs?'Entran ':'In ')+avgCust+' / '+(isEs?'Pasan ':'Pass ')+passToday,lx+4,vY+24,'#88ccee',8);
   tx((isEs?'Media/sem: ':'Avg/week: ')+avgPerWeek,lx+4,vY+36,P.uiT3,7);
   tx((isEs?'Total: ':'Total: ')+totalCust.toLocaleString(),lx+4,vY+48,P.uiT3,7);
   tx('📊',lx+rw-14,vY+24,'#fff',10);
@@ -15277,6 +15398,8 @@ window.xtAPI = (function(){
         fame: G.fame,
         storeLevel: G.storeLevel,
         customersToday: G.customersToday,
+        passersbyToday: G.passersbyToday||0,
+        passersbyTotal: G.passersbyTotal||0,
         nowPlaying: G.nowPlaying,
         state: state,
         staffCount: G.staff?G.staff.filter(s=>s.hired).length:0,
@@ -16145,7 +16268,8 @@ window.xtAPI = (function(){
       'Satisfacción: '+Math.round(d.satisfaction)+'%',
       'Fama: '+Math.round(d.fame)+'%',
       'Nivel tienda: '+d.storeLevel,
-      'Clientes hoy: '+d.customersToday,
+      'Pasan por puerta: '+(d.passersbyToday||0),
+      'Entran en tienda: '+d.customersToday,
       'Hora tienda: '+hour,
       'Clima: '+weather,
       'Puerta: '+(G&&G.doorMode?G.doorMode:'auto'),

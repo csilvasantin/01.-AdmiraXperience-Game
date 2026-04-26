@@ -2,6 +2,16 @@
 
 ---
 
+## [v26.26.04.15] — 2026-04-26
+
+### Trafico exterior en puerta
+
+- Añadidos transeuntes exteriores que pasan de vez en cuando por delante de la puerta sin entrar en la tienda.
+- El trafico exterior no abre la puerta ni participa en las colisiones internas: solo simula escaparate y vida en la calle.
+- Las estadisticas distinguen entre gente que pasa y gente que entra en el HUD, dock de clientes, API `xtAPI.status()` y estado de Telegram.
+
+---
+
 ## [v26.26.04.14] — 2026-04-26
 
 ### Pared trasera sin bloque lateral
