@@ -10842,9 +10842,11 @@ function drawCityBg(){
 
 // ── DRAW SHOP (ISOMETRIC — Kairosoft warm style) ─────────────
 function drawShop(){
-  // Clip to shop area
+  // Clip to shop area. Extended down to the full canvas height so passersby
+  // walking on the sidewalk past the building footprint (route reaches y≈470,
+  // SHOP.h is 466) aren't clipped at the lower edge.
   cx.save();
-  cx.beginPath();cx.rect(SHOP.x,SHOP.y,SHOP.w,SHOP.h);cx.clip();
+  cx.beginPath();cx.rect(SHOP.x,SHOP.y,SHOP.w,Math.max(SHOP.h,H-SHOP.y));cx.clip();
 
   // ── FLOOR (continuous neutral base + tiles so edge gaps never show through) ──
   const floorPoly=[toIso(0,0),toIso(ISO.cols,0),toIso(ISO.cols,ISO.rows),toIso(0,ISO.rows)];
