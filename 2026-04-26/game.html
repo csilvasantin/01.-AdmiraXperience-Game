@@ -12011,6 +12011,9 @@ async function askMetahuman(text){
   const clean=String(text||'').trim();
   if(!clean) return;
   MH.lastQuestion=clean;
+  // Mirror the question into the textarea so it reads exactly the same whether
+  // the user typed it in directly or fired it from /metahuman in the CLI.
+  if(els.prompt) els.prompt.value=clean;
   MH.speaking=true;
   MH.speakUntil=Date.now()+30000;
   if(els.status) els.status.textContent='pensando…';
