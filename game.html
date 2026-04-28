@@ -12040,9 +12040,17 @@ async function askMetahuman(text){
     if(els.askBtn) els.askBtn.addEventListener('click',()=>askMetahuman(els.prompt&&els.prompt.value||''));
     if(els.closeBtn) els.closeBtn.addEventListener('click',closeMetahumanPanel);
     if(els.prompt){
+      // Stop every key from leaking to the game's global shortcuts (arrows, letters,
+      // space, ?). Without this, typing in the textarea triggered editor moves /
+      // toggles. We always stopPropagation; we only preventDefault on Ctrl/⌘+Enter
+      // so the browser's default newline behaviour stays for plain Enter.
+      const swallow=(e)=>{ e.stopPropagation(); };
       els.prompt.addEventListener('keydown',(e)=>{
+        e.stopPropagation();
         if((e.metaKey||e.ctrlKey)&&e.key==='Enter'){ e.preventDefault(); askMetahuman(els.prompt.value||''); }
       });
+      els.prompt.addEventListener('keyup',swallow);
+      els.prompt.addEventListener('keypress',swallow);
     }
     window.addEventListener('resize',()=>{ if(els.panel.classList.contains('show')) _mhPositionPanel(); });
   };
@@ -17695,7 +17703,7 @@ window.xtAPI = (function(){
       {title:'Tiempo y ambiente',items:['/reloj 14:30','/reloj 14 30','/time am','/time pm','/time night','/weather normal','/weather rain','/weather sun','/lamp','/lamp auto','/hue','/hue auto']},
       {title:'Pantalla y directo',items:['/livecam','/livecam off','/mocap','/mocap off','/AdmiraLive texto','/AdmiraLive off','/AdmiraTube URL 2 audio','/AdmiraTube off','/say texto']},
       {title:'Escena en vivo',items:['/dj on','/dj off','/ladron on','/ladron off','/guardiacivil on','/guardiacivil off','/opinador on','/opinador off','/robot on','/robot off','/door open','/door close','/door auto']},
-      {title:'IA y contenido',items:['/grok pregunta','/draw dibujo','/import','/import list','/import remove 1','/importTube https://youtu.be/...']},
+      {title:'IA y contenido',items:['/grok pregunta','/draw dibujo','/metahuman pregunta','/import','/import list','/import remove 1','/importTube https://youtu.be/...']},
       {title:'Ajustes rápidos',items:['/money 12000','/sat 90','/fame 80','/set week 12','/set year 2','/set revenue 5000','/set storeLevel 2','/set customers 30']},
       {title:'Musica y layout',items:['/song 1','/song bad bunny','/music','/next','/prev','/equipo inicio ana 3 4','/equipo zona dj 12 2 2','/mobiliario inicio','/mobiliario on','/mobiliario off']},
     ];
@@ -18160,6 +18168,15 @@ window.xtAPI = (function(){
       }
       if(cmd==='grok'||cmd==='ask'||cmd==='pregunta') return await grokAsk(arg);
       if(cmd==='draw'||cmd==='dibuja'||cmd==='paint'||cmd==='pinta') return await grokDraw(arg);
+      if(cmd==='metahuman'||cmd==='mh'){
+        if(!arg) return 'Uso: /metahuman <pregunta>';
+        if(typeof openMetahumanPanel==='function') openMetahumanPanel();
+        if(typeof askMetahuman==='function'){
+          await askMetahuman(arg);
+          return (typeof MH!=='undefined' && MH.lastAnswer) ? MH.lastAnswer : 'Metahuman pensando…';
+        }
+        return 'Metahuman no disponible (panel no inicializado)';
+      }
       if(cmd==='importtube'||cmd==='tube'){
         if(!arg) return 'Uso: /importTube <URL de YouTube>';
         // fire-and-forget; the status overlay reports phases
