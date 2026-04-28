@@ -6792,6 +6792,9 @@ function updateStaffNav(s){
 
 function updateGame(){
   tt++;
+  // ── PEOPLE LOG ── observation-based: every tick, see who is around and
+  // diff against the previous snapshot to record entry/exit timestamps.
+  try{ peopleLogTick(); }catch(e){}
   // ── GAME TIME: advance clock (1 day = dayDurationSec real seconds) ──
   const dayHours=shopTimeSettings.closeHour-shopTimeSettings.openHour;
   const framesPerDay=shopTimeSettings.dayDurationSec*60; // at 60fps
@@ -11805,6 +11808,99 @@ const MH={
   lastQuestion:'',
   lastAnswer:'',
 };
+
+// ── PEOPLE LOG ──────────────────────────────────────────────
+// In-memory log of every entry/exit during the current session. No persistence
+// (clears on reload, per user request). No size cap (typical day < 5K events).
+function _mhFmtGameTime(gt){
+  if(!Number.isFinite(gt)) return '--:--';
+  const h=Math.floor(gt);
+  const m=Math.round((gt-h)*60);
+  return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');
+}
+function peopleLogTick(){
+  if(!G) return;
+  if(!Array.isArray(G.peopleLog)) G.peopleLog=[];
+  if(!G.peopleTracker) G.peopleTracker={};
+  const tracker=G.peopleTracker;
+  const now=Date.now();
+  const gtime=_mhFmtGameTime(G.gameTime||0);
+  const isPhaseActive=(o)=>!!(o && o.phase && o.phase!=='idle' && o.phase!=='off');
+  const trackSingleton=(type,obj)=>{
+    const isOn=isPhaseActive(obj);
+    if(isOn && !tracker[type]){
+      const id=type+'_'+now.toString(36)+'_'+Math.random().toString(36).slice(2,5);
+      tracker[type]=id;
+      G.peopleLog.push({type, id, enteredAt:now, enteredAtGame:gtime, phase:obj.phase});
+    } else if(!isOn && tracker[type]){
+      const id=tracker[type];
+      const e=G.peopleLog.find(x=>x.id===id && !x.exitedAt);
+      if(e){
+        e.exitedAt=now; e.exitedAtGame=gtime; e.durationMs=now-e.enteredAt;
+        if(type==='thief' && obj && obj.caught) e.outcome='caught';
+      }
+      delete tracker[type];
+    }
+  };
+  trackSingleton('thief', G.thief);
+  trackSingleton('guardiaCivil', G.guardiaCivil);
+  trackSingleton('opinador', G.opinador);
+  trackSingleton('unitreeBot', G.unitreeBot);
+
+  const trackList=(type, list)=>{
+    if(!Array.isArray(list)) return;
+    const seenKey='_seen_'+type;
+    const prev=tracker[seenKey] instanceof Set ? tracker[seenKey] : new Set();
+    const cur=new Set();
+    for(const p of list){
+      if(!p) continue;
+      const id=(p.id!=null)?String(p.id):null;
+      if(!id) continue;
+      cur.add(id);
+      if(!prev.has(id)){
+        G.peopleLog.push({
+          type, id,
+          enteredAt:now, enteredAtGame:gtime,
+          archetype:p.persona||p.archetype||p.type||'',
+        });
+      }
+    }
+    for(const oldId of prev){
+      if(!cur.has(oldId)){
+        const e=G.peopleLog.find(x=>x.id===oldId && !x.exitedAt);
+        if(e){ e.exitedAt=now; e.exitedAtGame=gtime; e.durationMs=now-e.enteredAt; }
+      }
+    }
+    tracker[seenKey]=cur;
+  };
+  trackList('customer', G.custs);
+  trackList('passerby', G.passersby);
+}
+
+// Heuristic: should we feed the people log as Grok context?
+function _mhDetectsLogQuery(text){
+  const s=String(text||'').toLowerCase();
+  return /\bladr[oóón]+|guardia|polic[ií]a|cliente|pasante|paseante|opinador|unitree|robo|robar|pillar|atrap|cu[aá]ndo|cu[aá]nto\s*tiempo|qu[eé]\s*hora|han\s*pasado|han\s*entrado|han\s*salido|hist[oó]ric|registro|log\b|entr[oó]|sali[oó]|estuvo|han\s*estado|cu[aá]ntos?\b/i.test(s);
+}
+function buildPeopleLogContext(){
+  if(!G || !Array.isArray(G.peopleLog) || !G.peopleLog.length) return '';
+  const log=G.peopleLog;
+  const counts=Object.create(null);
+  let inside=0;
+  for(const e of log){
+    counts[e.type]=(counts[e.type]||0)+1;
+    if(!e.exitedAt) inside++;
+  }
+  const summary='Resumen: '+Object.entries(counts).map(([k,v])=>k+'='+v).join(', ')+(inside?` (${inside} aún dentro)`:'');
+  const lines=log.slice(-60).map(e=>{
+    const dur=e.durationMs?` (${Math.round(e.durationMs/1000)}s)`:(e.exitedAt?'':' [aún dentro]');
+    const exit=e.exitedAtGame?'-'+e.exitedAtGame:'';
+    const arch=e.archetype?' '+e.archetype:'';
+    const out=e.outcome?' ['+e.outcome+']':'';
+    return `[${e.enteredAtGame}${exit}] ${e.type}${arch}${dur}${out}`;
+  });
+  return summary+'\nÚltimos eventos (más recientes al final):\n'+lines.join('\n');
+}
 function drawIsoMetahuman(col,row){
   // Floor anchors
   const ip=toIso(col,row);
@@ -12022,7 +12118,12 @@ async function askMetahuman(text){
   try{
     const ask=window.askAdmiraGrok;
     if(typeof ask!=='function'){ throw new Error('Grok no está disponible (¿proxy o XAI_API_KEY?)'); }
-    const result=await ask('[Metahuman in-store assistant] '+clean);
+    let promptToSend='[Metahuman in-store assistant] '+clean;
+    if(_mhDetectsLogQuery(clean)){
+      const ctx=buildPeopleLogContext();
+      if(ctx) promptToSend+='\n\n[Registro real de gente del día — usa estos datos para la respuesta]\n'+ctx;
+    }
+    const result=await ask(promptToSend);
     const answerText=(result&&result.text)||(result&&result.message)||'(sin respuesta)';
     MH.lastAnswer=answerText;
     if(els.answer){ els.answer.classList.remove('is-thinking'); els.answer.classList.toggle('is-error',!result||!result.ok); els.answer.textContent=answerText; }
@@ -17706,7 +17807,7 @@ window.xtAPI = (function(){
       {title:'Tiempo y ambiente',items:['/reloj 14:30','/reloj 14 30','/time am','/time pm','/time night','/weather normal','/weather rain','/weather sun','/lamp','/lamp auto','/hue','/hue auto']},
       {title:'Pantalla y directo',items:['/livecam','/livecam off','/mocap','/mocap off','/AdmiraLive texto','/AdmiraLive off','/AdmiraTube URL 2 audio','/AdmiraTube off','/say texto']},
       {title:'Escena en vivo',items:['/dj on','/dj off','/ladron on','/ladron off','/guardiacivil on','/guardiacivil off','/opinador on','/opinador off','/robot on','/robot off','/door open','/door close','/door auto']},
-      {title:'IA y contenido',items:['/grok pregunta','/draw dibujo','/metahuman pregunta','/import','/import list','/import remove 1','/importTube https://youtu.be/...']},
+      {title:'IA y contenido',items:['/grok pregunta','/draw dibujo','/metahuman pregunta','/log','/log thief','/log customer','/import','/import list','/import remove 1','/importTube https://youtu.be/...']},
       {title:'Ajustes rápidos',items:['/money 12000','/sat 90','/fame 80','/set week 12','/set year 2','/set revenue 5000','/set storeLevel 2','/set customers 30']},
       {title:'Musica y layout',items:['/song 1','/song bad bunny','/music','/next','/prev','/equipo inicio ana 3 4','/equipo zona dj 12 2 2','/mobiliario inicio','/mobiliario on','/mobiliario off']},
     ];
@@ -18179,6 +18280,29 @@ window.xtAPI = (function(){
           return (typeof MH!=='undefined' && MH.lastAnswer) ? MH.lastAnswer : 'Metahuman pensando…';
         }
         return 'Metahuman no disponible (panel no inicializado)';
+      }
+      if(cmd==='log'||cmd==='registro'){
+        if(typeof buildPeopleLogContext!=='function') return 'Registro no disponible.';
+        const filter=(arg||'').toLowerCase().trim();
+        const all=(G&&Array.isArray(G.peopleLog))?G.peopleLog:[];
+        if(!all.length) return 'Sin eventos registrados todavía.';
+        let filtered=all;
+        if(filter && filter!=='all' && filter!=='todo'){
+          const map={ladron:'thief',ladrón:'thief',thief:'thief',guardia:'guardiaCivil',policia:'guardiaCivil',policía:'guardiaCivil',cliente:'customer',clientes:'customer',customer:'customer',pasante:'passerby',paseante:'passerby',passerby:'passerby',opinador:'opinador',unitree:'unitreeBot',bot:'unitreeBot'};
+          const want=map[filter]||filter;
+          filtered=all.filter(e=>e.type===want);
+          if(!filtered.length) return 'Sin eventos para "'+filter+'". Tipos: thief, guardiaCivil, customer, passerby, opinador, unitreeBot.';
+        }
+        const counts=Object.create(null);
+        for(const e of filtered) counts[e.type]=(counts[e.type]||0)+1;
+        const lines=filtered.slice(-30).map(e=>{
+          const dur=e.durationMs?` (${Math.round(e.durationMs/1000)}s)`:(e.exitedAt?'':' [dentro]');
+          const exit=e.exitedAtGame?'-'+e.exitedAtGame:'';
+          const arch=e.archetype?' '+e.archetype:'';
+          const out=e.outcome?' ['+e.outcome+']':'';
+          return `[${e.enteredAtGame}${exit}] ${e.type}${arch}${dur}${out}`;
+        });
+        return 'Registro · '+Object.entries(counts).map(([k,v])=>k+'='+v).join(', ')+'\n'+lines.join('\n');
       }
       if(cmd==='importtube'||cmd==='tube'){
         if(!arg) return 'Uso: /importTube <URL de YouTube>';
