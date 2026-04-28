@@ -12070,20 +12070,12 @@ function _mhPositionPanel(){
   const els=_mhEls(); if(!els.panel) return;
   const cv=document.getElementById('c'); if(!cv) return;
   const r=cv.getBoundingClientRect();
-  const quad=DS_SURFACE_QUADS.metahuman;
-  if(!quad){
-    els.panel.style.right='12px'; els.panel.style.bottom='320px'; els.panel.style.left='auto'; els.panel.style.top='auto';
-    return;
-  }
-  const sx=r.width/cv.width, sy=r.height/cv.height;
-  const screenX=r.left+quad[0].x*sx;
-  const screenY=r.top+quad[0].y*sy;
-  // Place panel to the LEFT of the totem so it doesn't overlap the right wall.
   const panelW=els.panel.offsetWidth||340;
   const panelH=els.panel.offsetHeight||190;
-  let x=screenX-panelW-12, y=screenY;
-  if(x<8) x=Math.min(window.innerWidth-panelW-8, screenX+(quad[1].x-quad[0].x)*sx+12);
-  if(y+panelH>window.innerHeight-8) y=Math.max(8,window.innerHeight-panelH-8);
+  // Anchored to the bottom-left grass corner of the canvas so the shop and
+  // the Metahuman totem stay visible while the user reads the answer.
+  const x=Math.max(8, Math.min(window.innerWidth-panelW-8, r.left+10));
+  const y=Math.max(8, Math.min(window.innerHeight-panelH-8, r.bottom-panelH-10));
   els.panel.style.left=x+'px';
   els.panel.style.top=y+'px';
   els.panel.style.right=''; els.panel.style.bottom='';
