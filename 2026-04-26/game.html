@@ -11258,6 +11258,10 @@ function drawShop(){
 
   // ── GLASS DOOR — drawn LAST, always on top of furniture/characters ──
   if(!editorSceneActive) drawGlassDoor();
+  // ── DOOR FOREGROUND PEOPLE — characters physically in front of the door
+  // (passersby on the sidewalk + customers entering/leaving) re-painted
+  // ON TOP of the glass-door frame so the wood jambs don't crop their bodies.
+  if(!editorSceneActive) drawDoorForegroundPeople();
 
   // ── DAY / NIGHT AMBIENT OVERLAY ──
   if(!editorSceneActive&&G&&G.gameTime){
@@ -11552,6 +11556,26 @@ function drawEscaparate(){
     cx.beginPath(); cx.arc(dotX,dotY,1.5,0,Math.PI*2);
     cx.fillStyle=d===basePIdx?'#fff':'rgba(255,255,255,0.3)';
     cx.fill();
+  }
+}
+
+function drawDoorForegroundPeople(){
+  if(!G) return;
+  // Door reference x in screen coords (door center at row 3 of right wall).
+  let doorX=Number.POSITIVE_INFINITY;
+  try{ doorX=rightWallFeatureIso(3).x; }catch(e){}
+  // Passersby always live on the sidewalk outside the door — they should never
+  // be cropped by the door frame.
+  if(Array.isArray(G.passersby)){
+    for(const p of G.passersby) try{ drawIsoCust(p); }catch(e){}
+  }
+  // Customers within ~8 px of the door X (or further out) are physically at
+  // the threshold or on the sidewalk — re-paint them on top of the frame.
+  if(Array.isArray(G.custs)){
+    for(const c of G.custs){
+      if(c==null||c.x==null) continue;
+      if(c.x >= doorX - 8) try{ drawIsoCust(c); }catch(e){}
+    }
   }
 }
 
