@@ -27,7 +27,10 @@
       proxyPort: 9124,
       enabled: true,
       proxyUrl: 'https://admira-grok-proxy.csilvasantin.workers.dev',
-      model: 'grok-4-latest',
+      // The worker auto-picks Gemini (free) when GEMINI_API_KEY is set, and falls
+      // back to xAI Grok otherwise. The model name shown in the UI reflects the
+      // free-tier default; the actual model used is reported via /health.
+      model: 'gemini-2.5-flash',
     },
     tube: {
       // Public Tailscale Funnel mapped to elgato-proxy (yt-dlp) on the Mac Mini.

@@ -135,6 +135,10 @@ const CONFIG = {
   grokBaseUrl: resolveString('XTANCO_GROK_BASE_URL', FILE_CONFIG.grok && FILE_CONFIG.grok.baseUrl, DEFAULT_CONFIG.grok.baseUrl).replace(/\/+$/, ''),
   grokModel: resolveString('XTANCO_GROK_MODEL', FILE_CONFIG.grok && FILE_CONFIG.grok.model, DEFAULT_CONFIG.grok.model),
   grokProxyUrl: resolveString('XTANCO_GROK_PROXY_URL', FILE_CONFIG.grok && FILE_CONFIG.grok.proxyUrl, DEFAULT_CONFIG.grok.proxyUrl).replace(/\/+$/, ''),
+  // Gemini (free tier). Same env var name the user already uses in Yarig.Telegram/.env.
+  geminiApiKey: resolveString('GEMINI_API_KEY', FILE_CONFIG.gemini && FILE_CONFIG.gemini.apiKey, ''),
+  geminiModel: resolveString('GEMINI_MODEL', FILE_CONFIG.gemini && FILE_CONFIG.gemini.model, 'gemini-2.5-flash'),
+  geminiBaseUrl: resolveString('GEMINI_BASE_URL', FILE_CONFIG.gemini && FILE_CONFIG.gemini.baseUrl, 'https://generativelanguage.googleapis.com/v1beta').replace(/\/+$/, ''),
   tubeProxyUrl: resolveString('XTANCO_TUBE_PROXY_URL', FILE_CONFIG.tube && FILE_CONFIG.tube.proxyUrl, 'https://macmini.tail48b61c.ts.net/admira').replace(/\/+$/, ''),
   grokSystemPrompt: resolveString('XTANCO_GROK_SYSTEM_PROMPT', FILE_CONFIG.grok && FILE_CONFIG.grok.systemPrompt, DEFAULT_CONFIG.grok.systemPrompt),
   gameDir: GAME_DIR,
@@ -469,9 +473,10 @@ function runtimeConfigScript() {
     },
     grok: {
       proxyPort: CONFIG.port,
-      enabled: Boolean(CONFIG.grokApiKey),
+      enabled: Boolean(CONFIG.grokApiKey) || Boolean(CONFIG.geminiApiKey),
       proxyUrl: CONFIG.grokProxyUrl,
-      model: CONFIG.grokModel,
+      // Reflect the actually-active model so the UI shows the right name.
+      model: CONFIG.geminiApiKey ? CONFIG.geminiModel : CONFIG.grokModel,
     },
     tube: {
       // /tube/* is served by this proxy on CONFIG.port; the public URL is the Funnel pass-through.
@@ -715,10 +720,68 @@ function isGrokProxyConfigured() {
   return Boolean(CONFIG.grokProxyUrl);
 }
 
+function isGeminiConfigured() {
+  return Boolean(CONFIG.geminiApiKey);
+}
+
 function grokConfigLabel() {
+  if (isGeminiConfigured()) return `configured local (${CONFIG.geminiModel})`;
   if (isGrokConfigured()) return `configured local (${CONFIG.grokModel})`;
   if (isGrokProxyConfigured()) return `configured proxy (${CONFIG.grokModel})`;
   return 'not configured';
+}
+
+// Free-tier provider: Google Gemini. Same response shape as Grok so the rest of
+// the pipeline stays untouched. Requires GEMINI_API_KEY.
+function geminiChat(prompt, context = '') {
+  return new Promise((resolve, reject) => {
+    if (!isGeminiConfigured()) {
+      reject(new Error('Gemini not configured'));
+      return;
+    }
+    const model = CONFIG.geminiModel;
+    const baseUrl = (CONFIG.geminiBaseUrl || 'https://generativelanguage.googleapis.com/v1beta').replace(/\/+$/, '');
+    const u = new URL(`${baseUrl}/models/${encodeURIComponent(model)}:generateContent`);
+    u.searchParams.set('key', CONFIG.geminiApiKey);
+    const userText = String(prompt || '').slice(0, 4000);
+    const ctxText = context ? `\n\nContexto del juego:\n${String(context).slice(0, 2400)}` : '';
+    const payload = {
+      system_instruction: { parts: [{ text: CONFIG.grokSystemPrompt || '' }] },
+      contents: [{ role: 'user', parts: [{ text: userText + ctxText }] }],
+      generationConfig: { temperature: 0.7, maxOutputTokens: 700 },
+    };
+    const body = JSON.stringify(payload);
+    const req = https.request({
+      hostname: u.hostname,
+      port: u.port || 443,
+      path: u.pathname + u.search,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
+      timeout: 35000,
+    }, apiRes => {
+      let data = '';
+      apiRes.on('data', c => data += c);
+      apiRes.on('end', () => {
+        let json;
+        try { json = JSON.parse(data || '{}'); }
+        catch (e) { reject(new Error(`Gemini invalid JSON: ${data.slice(0, 160)}`)); return; }
+        if (apiRes.statusCode < 200 || apiRes.statusCode >= 300) {
+          const m = json.error && (json.error.message || json.error.code) || `Gemini HTTP ${apiRes.statusCode}`;
+          reject(new Error(m));
+          return;
+        }
+        const cand = json.candidates && json.candidates[0];
+        const parts = cand && cand.content && cand.content.parts;
+        const text = parts ? parts.map(p => String(p.text || '')).join('').trim() : '';
+        if (!text) { reject(new Error(`Gemini empty (finish=${cand && cand.finishReason})`)); return; }
+        resolve({ text, model, id: '', provider: 'gemini' });
+      });
+    });
+    req.on('error', reject);
+    req.on('timeout', () => { req.destroy(); reject(new Error('Gemini timeout')); });
+    req.write(body);
+    req.end();
+  });
 }
 
 function grokApiPath(endpoint) {
@@ -1225,6 +1288,14 @@ const server = http.createServer((req, res) => {
           return;
         }
         try {
+          // Prefer free Gemini if available; fall back to local xAI; then to the
+          // remote worker proxy. The frontend always calls /grok/ask, but the
+          // underlying provider is whichever is configured here.
+          if (isGeminiConfigured()) {
+            const answer = await geminiChat(prompt, context);
+            sendJson(res, 200, { ok: true, source: 'local-gemini', ...answer });
+            return;
+          }
           if (isGrokConfigured()) {
             const answer = await grokChat(prompt, context);
             sendJson(res, 200, { ok: true, source: 'local-xai', ...answer });
@@ -1236,11 +1307,11 @@ const server = http.createServer((req, res) => {
             return;
           }
           sendJson(res, 503, {
-            error: 'Grok not configured',
-            message: 'Set XAI_API_KEY or grok.apiKey in xtanco.config.local.json, or configure grok.proxyUrl',
+            error: 'LLM not configured',
+            message: 'Set GEMINI_API_KEY (free) or XAI_API_KEY in xtanco.config.local.json, or configure grok.proxyUrl',
           });
         } catch (grokError) {
-          sendJson(res, 502, { error: 'Grok request failed', message: grokError.message });
+          sendJson(res, 502, { error: 'LLM request failed', message: grokError.message });
         }
       });
       return;
