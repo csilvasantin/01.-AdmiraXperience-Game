@@ -53,6 +53,21 @@
     #robotGrokStatus{font-size:8px;color:#9ec7d0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     #robotGrokAnswer{min-height:32px;max-height:58px;overflow:auto;border:1px solid rgba(120,243,255,.20);border-radius:6px;background:rgba(2,8,13,.82);padding:6px;color:#f4fbff;font-size:9px;line-height:1.35;white-space:pre-wrap;overflow-wrap:anywhere;scrollbar-width:thin;scrollbar-color:#2a7585 #07131b}
     #robotGrokAnswer.is-error{border-color:#ff6b6b;color:#ffd0d0}
+    #metahumanPanel{display:none;position:fixed;z-index:28;width:340px;min-height:170px;border:1px solid rgba(120,243,255,.55);border-radius:10px;background:linear-gradient(180deg,rgba(8,16,28,.97),rgba(3,8,18,.98));box-shadow:0 16px 34px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.10);font-family:monospace;color:#dff8ff;padding:10px;gap:7px}
+    #metahumanPanel.show{display:flex;flex-direction:column}
+    .mh-head{display:flex;align-items:center;justify-content:space-between;gap:8px;color:#78f3ff;font-size:10px;font-weight:bold;text-transform:uppercase}
+    .mh-head #mhStatus{color:#9ec7d0;font-size:8px;font-weight:normal;text-transform:none;white-space:nowrap}
+    .mh-close{margin-left:auto;border:none;background:transparent;color:#9ec7d0;font-size:18px;line-height:1;cursor:pointer;padding:0 4px}
+    .mh-close:hover{color:#fff}
+    #mhPrompt{flex:0 0 auto;min-height:54px;border:1px solid rgba(120,243,255,.30);border-radius:6px;background:rgba(2,8,13,.82);color:#f4fbff;padding:6px 7px;font-family:monospace;font-size:11px;resize:vertical;outline:none}
+    #mhPrompt:focus{border-color:#78f3ff}
+    .mh-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+    .mh-actions button.mh-primary{border:1px solid #75ecff;border-radius:999px;background:linear-gradient(180deg,#1e7d8d,#11515f);color:#ffffff;font-family:monospace;font-size:10px;font-weight:bold;padding:5px 14px;cursor:pointer}
+    .mh-actions button.mh-primary:disabled{opacity:.55;cursor:default}
+    .mh-actions .mh-hint{font-size:9px;color:#7da6ad}
+    #mhAnswer{min-height:36px;max-height:90px;overflow:auto;border:1px solid rgba(120,243,255,.20);border-radius:6px;background:rgba(2,8,13,.82);padding:7px 8px;color:#f4fbff;font-size:10px;line-height:1.4;white-space:pre-wrap;overflow-wrap:anywhere;scrollbar-width:thin;scrollbar-color:#2a7585 #07131b}
+    #mhAnswer.is-error{border-color:#ff6b6b;color:#ffd0d0}
+    #mhAnswer.is-thinking{border-color:#ffd866;color:#ffe9a9}
     #telegramDock{display:none;position:fixed;left:0;bottom:0;height:228px;background:linear-gradient(180deg,rgba(5,16,24,.97),rgba(1,6,10,.98));border:1px solid rgba(120,243,255,.34);border-bottom:none;color:#d9f7ff;font-family:monospace;z-index:30;gap:8px;padding:8px;box-shadow:0 -18px 38px rgba(0,0,0,.42)}
     #telegramDock.show{display:flex}
     #telegramDock.hide-dock{display:none}
@@ -325,6 +340,15 @@
 <video id="liveCamVideo" autoplay muted playsinline webkit-playsinline style="display:none"></video>
 <canvas id="c" width="800" height="500"></canvas>
 <div id="speechOverlay" aria-hidden="true"></div>
+<div id="metahumanPanel" aria-label="Metahuman AI Assistant" aria-hidden="true">
+  <div class="mh-head"><span>🤖 Metahuman · AI Assistant</span><span id="mhStatus">listo</span><button type="button" id="mhClose" class="mh-close" aria-label="Cerrar">×</button></div>
+  <textarea id="mhPrompt" maxlength="500" placeholder="Pregunta a tu agente Metahuman... (Ctrl/⌘+Enter envía)"></textarea>
+  <div class="mh-actions">
+    <button type="button" id="mhAskBtn" class="mh-primary">Preguntar</button>
+    <span class="mh-hint">Ctrl/⌘ + Enter</span>
+  </div>
+  <div id="mhAnswer">Toca el tótem para empezar. El agente piensa con Grok mientras anima la onda de voz.</div>
+</div>
 <div id="robotGrokPanel" aria-label="Consulta Grok del Unitree Bot">
   <div class="robot-grok-head"><span>Unitree Intelligence</span><span id="robotGrokStatus">Grok listo</span></div>
   <textarea id="robotGrokPrompt" maxlength="600" placeholder="Pregunta al Unitree Bot sobre stock, clientes, layout o la tienda..."></textarea>
@@ -959,6 +983,7 @@ const DS_SURFACES=[
   { id:'ds1',        label:'DS · Pared izquierda · arriba', kind:'dom-canvas' },
   { id:'ds2',        label:'DS · Pared izquierda · abajo',  kind:'dom-canvas' },
   { id:'escaparate', label:'Escaparate · sobre la puerta',  kind:'iso-quad'  },
+  { id:'metahuman',  label:'Metahuman · tótem AI',          kind:'iso-quad'  },
 ];
 const DS_PIN=Object.create(null);          // surfaceId -> { name, kind }
 const DS_SURFACE_MEDIA=Object.create(null);// surfaceId -> { kind, name, img, video, ready }
@@ -4595,6 +4620,7 @@ const FACTORY_LAYOUTS={
   {id:'tablet',type:'tablet',col:13,row:5,sx:1,sy:1,label:'Tablet Satisfacción'},
   {id:'turnKiosk',type:'turnKiosk',col:12,row:6,sx:1,sy:1,label:'Gestor Turnos'},
   {id:'aroma',type:'aroma',col:13,row:1,sx:1,sy:1,label:'Máquina olores'},
+  {id:'metahuman',type:'metahuman',col:13,row:3,sx:1,sy:1,label:'Metahuman AI'},
   ],
   supermercado:[
   {id:'counter',type:'counter',col:1,row:2,sx:1,sy:1,label:'Caja+TPV'},
@@ -4963,6 +4989,7 @@ const FURNITURE_SIZE={
   counter:[1,2], shelves:[1,2], wineRack:[2,1], lottery:[2,1],
   vending:[1,1], magazines:[2,1], manager:[2,1], plant:[1,1],
   floorLamp:[1,1], rug:[2,2], djBooth:[2,1], tablet:[1,1], turnKiosk:[1,1], aroma:[1,1],
+  metahuman:[1,1],
 };
 
 function gridKey(col,row){return Math.round(col)+','+Math.round(row);}
@@ -6100,6 +6127,10 @@ function doAction(id){
       'Objetivo: '+(G.unitreeBot.targetCol||'-')+','+(G.unitreeBot.targetRow||'-'),
       'Scan: '+(G.unitreeBot.scanTimer||0)
     ]);
+    return;
+  }
+  if(id==='specialClick_metahuman'){
+    if(typeof openMetahumanPanel==='function') openMetahumanPanel();
     return;
   }
   // ── Menu touch/click actions ──
@@ -11188,6 +11219,7 @@ function drawShop(){
       case 'tablet': drawScaled(e,drawIsoTabletKiosk); break;
       case 'turnKiosk': drawScaled(e,drawIsoTurnKiosk); break;
       case 'aroma': drawAromatizer(e.col,e.row); break;
+      case 'metahuman': drawScaled(e,drawIsoMetahuman); break;
       case 'staff': drawIsoStaff(e.data); break;
       case 'cust': drawIsoCust(e.data); break;
       case 'passerby': drawIsoCust(e.data); break;
@@ -11765,6 +11797,262 @@ function drawIsoTabletKiosk(col,row){
 
   if(tabletVote.timer>0) tabletVote.timer--;
 }
+
+const MH={
+  speaking:false,      // animation state — true while Grok is processing or response is being read
+  speakUntil:0,        // ms timestamp when speaking should stop
+  status:'',           // last status message ('listo', 'pensando', 'error')
+  lastQuestion:'',
+  lastAnswer:'',
+};
+function drawIsoMetahuman(col,row){
+  // Floor anchors
+  const ip=toIso(col,row);
+  const baseCenter=toIso(col+0.5,row+0.5);
+  const baseFront=toIso(col+0.5,row+1);
+  const shadowP=baseFront;
+  // Soft shadow
+  cx.save();
+  cx.globalAlpha=0.18;
+  cx.fillStyle='#000';
+  cx.beginPath();
+  cx.ellipse(shadowP.x,shadowP.y+5,22,8,0,0,Math.PI*2);
+  cx.fill();
+  cx.restore();
+  // Peana (small slim base block, off-center to be totem-like)
+  const baseW=0.62, baseD=0.62, baseH=6;
+  drawIsoBlock(col+0.19,row+0.19,baseW,baseD,baseH,'#1a1d24','#0e1117','#13161c',null);
+
+  // Totem body (vertical column from base up)
+  const totemCX=baseCenter.x;
+  const totemBaseY=baseCenter.y-baseH;
+  const totemH=92, totemW=34;
+  // Body shell
+  cx.fillStyle='#0a0d12';
+  cx.fillRect(totemCX-totemW/2-1,totemBaseY-totemH-1,totemW+2,totemH+2);
+  cx.fillStyle='#181c25';
+  cx.fillRect(totemCX-totemW/2,totemBaseY-totemH,totemW,totemH);
+  // Side accents (Lenovo-red strip on the right edge — feels like the booth in the brief)
+  cx.fillStyle='#cc1d1d';
+  cx.fillRect(totemCX+totemW/2-2,totemBaseY-totemH+4,2,totemH-8);
+  // Top bezel cap
+  cx.fillStyle='#0a0d12';
+  cx.fillRect(totemCX-totemW/2,totemBaseY-totemH-2,totemW,3);
+
+  // Portrait screen quad (axis-aligned)
+  const inset=3;
+  const sx0=totemCX-totemW/2+inset;
+  const sy0=totemBaseY-totemH+inset+4;
+  const sw=totemW-inset*2;
+  const sh=totemH-inset*2-12; // leave space at the bottom for a label strip
+  const TLx=Math.round(sx0), TLy=Math.round(sy0);
+  const SW=Math.round(sw), SH=Math.round(sh);
+
+  cx.save();
+  cx.beginPath(); cx.rect(TLx,TLy,SW,SH); cx.clip();
+  cx.translate(TLx,TLy);
+
+  const pin=DS_PIN.metahuman;
+  const m=DS_SURFACE_MEDIA.metahuman;
+  let drewPinned=false;
+  if(pin && m){
+    drewPinned=dsDrawMediaCover(cx,m,SW,SH);
+  }
+  if(!drewPinned){
+    // Default animated AI avatar
+    const t=tt*0.04;
+    // Background gradient (subtle teal/violet)
+    const grd=cx.createLinearGradient(0,0,0,SH);
+    grd.addColorStop(0,'#1a2436');
+    grd.addColorStop(0.5,'#262040');
+    grd.addColorStop(1,'#0d1626');
+    cx.fillStyle=grd; cx.fillRect(0,0,SW,SH);
+    // Soft halo behind head
+    const cxC=SW/2, headCY=SH*0.34;
+    const halo=cx.createRadialGradient(cxC,headCY,2,cxC,headCY,SW*0.55);
+    halo.addColorStop(0,'rgba(120,243,255,0.20)');
+    halo.addColorStop(1,'rgba(120,243,255,0)');
+    cx.fillStyle=halo; cx.fillRect(0,0,SW,SH);
+    // Body (suit silhouette)
+    cx.fillStyle='#1a1f2c';
+    cx.beginPath();
+    cx.moveTo(SW*0.20,SH*0.95);
+    cx.lineTo(SW*0.30,SH*0.55);
+    cx.lineTo(SW*0.70,SH*0.55);
+    cx.lineTo(SW*0.80,SH*0.95);
+    cx.closePath(); cx.fill();
+    // Tie
+    cx.fillStyle='#cc1d1d';
+    cx.beginPath();
+    cx.moveTo(SW*0.5-2,SH*0.55);
+    cx.lineTo(SW*0.5+2,SH*0.55);
+    cx.lineTo(SW*0.5+1.4,SH*0.78);
+    cx.lineTo(SW*0.5,SH*0.84);
+    cx.lineTo(SW*0.5-1.4,SH*0.78);
+    cx.closePath(); cx.fill();
+    // Head
+    cx.fillStyle='#e9c5a4';
+    cx.beginPath();
+    cx.ellipse(cxC,headCY,SW*0.22,SH*0.13,0,0,Math.PI*2);
+    cx.fill();
+    // Hair
+    cx.fillStyle='#3a2818';
+    cx.beginPath();
+    cx.ellipse(cxC,headCY-SH*0.05,SW*0.22,SH*0.08,0,Math.PI,0);
+    cx.fill();
+    // Eyes (blink occasionally)
+    const blink=(Math.sin(t*0.4)>0.97)?0.15:1;
+    cx.fillStyle='#222';
+    cx.fillRect(cxC-SW*0.10,headCY-SH*0.005,SW*0.04,SH*0.012*blink);
+    cx.fillRect(cxC+SW*0.06,headCY-SH*0.005,SW*0.04,SH*0.012*blink);
+    // Mouth — opens/closes when speaking
+    const mouthOpen=MH.speaking?(0.5+0.5*Math.abs(Math.sin(t*1.6))):0.15;
+    cx.fillStyle='#7a2010';
+    cx.fillRect(cxC-SW*0.05,headCY+SH*0.06,SW*0.10,SH*0.012+SH*0.020*mouthOpen);
+    // Audio waveform at the very bottom
+    const wfY=SH*0.92;
+    cx.strokeStyle='#78f3ff';
+    cx.lineWidth=1;
+    cx.beginPath();
+    const bars=14;
+    for(let i=0;i<bars;i++){
+      const f=i/(bars-1);
+      const px=SW*0.10 + f*SW*0.80;
+      const energy=MH.speaking?(0.4+0.6*Math.abs(Math.sin(t*1.4+i*0.7))):(0.15+0.15*Math.abs(Math.sin(t*0.4+i*0.5)));
+      const h=energy*SH*0.06;
+      cx.moveTo(px,wfY-h);
+      cx.lineTo(px,wfY+h);
+    }
+    cx.stroke();
+    // Label
+    cx.fillStyle='rgba(0,0,0,0.45)';
+    cx.fillRect(0,SH-9,SW,9);
+    cx.fillStyle=MH.speaking?'#ffd866':'#78f3ff';
+    cx.font='bold 5px monospace'; cx.textAlign='center';
+    cx.fillText(MH.speaking?'• PENSANDO':'• AI ASSISTANT',SW/2,SH-3);
+  }
+  // Scanlines
+  cx.globalAlpha=0.06;
+  for(let yy=0;yy<SH;yy+=3){cx.fillStyle='#fff';cx.fillRect(0,yy,SW,1);}
+  cx.globalAlpha=1;
+  if(pin){
+    cx.fillStyle='rgba(0,0,0,0.45)'; cx.fillRect(0,SH-12,SW,12);
+    cx.fillStyle='#ffd866'; cx.font='bold 6px monospace'; cx.textAlign='center';
+    cx.fillText('📌 '+pin.name,SW/2,SH-3);
+  }
+  cx.setTransform(1,0,0,1,0,0);
+  cx.restore();
+  // Outer bezel highlight
+  cx.strokeStyle='#3a4654'; cx.lineWidth=1;
+  cx.strokeRect(TLx,TLy,SW,SH);
+  // Status pill below screen ("Metahuman")
+  const labelY=totemBaseY-totemH+totemH-9;
+  cx.fillStyle='#0a0d12'; cx.fillRect(totemCX-totemW/2,labelY,totemW,9);
+  cx.fillStyle='#cccccc'; cx.font='bold 5px monospace'; cx.textAlign='center';
+  cx.fillText('METAHUMAN',totemCX,labelY+6);
+
+  // Cache quad for hit-test (drag-drop pin + click)
+  DS_SURFACE_QUADS.metahuman=[
+    {x:TLx,y:TLy},{x:TLx+SW,y:TLy},
+    {x:TLx+SW,y:TLy+SH},{x:TLx,y:TLy+SH},
+  ];
+  // Register a screen-space click hitbox so the canvas click handler can open the panel
+  if(typeof BTNS!=='undefined') BTNS['specialClick_metahuman']={x:TLx,y:TLy,w:SW,h:SH+12};
+}
+
+function _mhEls(){
+  return {
+    panel:document.getElementById('metahumanPanel'),
+    prompt:document.getElementById('mhPrompt'),
+    askBtn:document.getElementById('mhAskBtn'),
+    answer:document.getElementById('mhAnswer'),
+    status:document.getElementById('mhStatus'),
+    closeBtn:document.getElementById('mhClose'),
+  };
+}
+function _mhPositionPanel(){
+  const els=_mhEls(); if(!els.panel) return;
+  const cv=document.getElementById('c'); if(!cv) return;
+  const r=cv.getBoundingClientRect();
+  const quad=DS_SURFACE_QUADS.metahuman;
+  if(!quad){
+    els.panel.style.right='12px'; els.panel.style.bottom='320px'; els.panel.style.left='auto'; els.panel.style.top='auto';
+    return;
+  }
+  const sx=r.width/cv.width, sy=r.height/cv.height;
+  const screenX=r.left+quad[0].x*sx;
+  const screenY=r.top+quad[0].y*sy;
+  // Place panel to the LEFT of the totem so it doesn't overlap the right wall.
+  const panelW=els.panel.offsetWidth||340;
+  const panelH=els.panel.offsetHeight||190;
+  let x=screenX-panelW-12, y=screenY;
+  if(x<8) x=Math.min(window.innerWidth-panelW-8, screenX+(quad[1].x-quad[0].x)*sx+12);
+  if(y+panelH>window.innerHeight-8) y=Math.max(8,window.innerHeight-panelH-8);
+  els.panel.style.left=x+'px';
+  els.panel.style.top=y+'px';
+  els.panel.style.right=''; els.panel.style.bottom='';
+}
+function openMetahumanPanel(){
+  const els=_mhEls(); if(!els.panel) return;
+  els.panel.classList.add('show');
+  els.panel.setAttribute('aria-hidden','false');
+  _mhPositionPanel();
+  if(els.prompt){ try{ els.prompt.focus({preventScroll:true}); }catch(e){} }
+  if(typeof showEv==='function') showEv('🤖 Metahuman activado · pregúntale algo','#78f3ff');
+}
+function closeMetahumanPanel(){
+  const els=_mhEls(); if(!els.panel) return;
+  els.panel.classList.remove('show');
+  els.panel.setAttribute('aria-hidden','true');
+  MH.speaking=false;
+}
+async function askMetahuman(text){
+  const els=_mhEls(); if(!els.panel) return;
+  const clean=String(text||'').trim();
+  if(!clean) return;
+  MH.lastQuestion=clean;
+  MH.speaking=true;
+  MH.speakUntil=Date.now()+30000;
+  if(els.status) els.status.textContent='pensando…';
+  if(els.answer){ els.answer.classList.add('is-thinking'); els.answer.classList.remove('is-error'); els.answer.textContent='Pensando…'; }
+  if(els.askBtn) els.askBtn.disabled=true;
+  try{
+    const ask=window.askAdmiraGrok;
+    if(typeof ask!=='function'){ throw new Error('Grok no está disponible (¿proxy o XAI_API_KEY?)'); }
+    const result=await ask('[Metahuman in-store assistant] '+clean);
+    const answerText=(result&&result.text)||(result&&result.message)||'(sin respuesta)';
+    MH.lastAnswer=answerText;
+    if(els.answer){ els.answer.classList.remove('is-thinking'); els.answer.classList.toggle('is-error',!result||!result.ok); els.answer.textContent=answerText; }
+    if(els.status) els.status.textContent=(result&&result.ok)?'listo':'error';
+    // Keep speaking animation for a bit so the avatar "reads" the answer
+    MH.speakUntil=Date.now()+Math.min(8000,Math.max(2000,answerText.length*40));
+  } catch(e){
+    if(els.answer){ els.answer.classList.remove('is-thinking'); els.answer.classList.add('is-error'); els.answer.textContent='Error: '+(e&&e.message||e); }
+    if(els.status) els.status.textContent='error';
+    MH.speakUntil=Date.now()+1500;
+  } finally {
+    if(els.askBtn) els.askBtn.disabled=false;
+  }
+}
+(function setupMetahumanPanel(){
+  const wire=()=>{
+    const els=_mhEls(); if(!els.panel) return;
+    if(els.askBtn) els.askBtn.addEventListener('click',()=>askMetahuman(els.prompt&&els.prompt.value||''));
+    if(els.closeBtn) els.closeBtn.addEventListener('click',closeMetahumanPanel);
+    if(els.prompt){
+      els.prompt.addEventListener('keydown',(e)=>{
+        if((e.metaKey||e.ctrlKey)&&e.key==='Enter'){ e.preventDefault(); askMetahuman(els.prompt.value||''); }
+      });
+    }
+    window.addEventListener('resize',()=>{ if(els.panel.classList.contains('show')) _mhPositionPanel(); });
+  };
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',wire,{once:true});
+  else wire();
+  // Drive the speaking flag down when speakUntil expires (driven by the render loop).
+  setInterval(()=>{ if(MH.speaking && Date.now()>MH.speakUntil) MH.speaking=false; },200);
+})();
+window.openMetahumanPanel=openMetahumanPanel;
+window.closeMetahumanPanel=closeMetahumanPanel;
 
 function drawIsoTurnKiosk(col,row){
   const kp=toIso(col,row);
