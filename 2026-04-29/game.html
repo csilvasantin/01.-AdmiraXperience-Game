@@ -53,7 +53,7 @@
     #robotGrokStatus{font-size:8px;color:#9ec7d0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     #robotGrokAnswer{min-height:32px;max-height:58px;overflow:auto;border:1px solid rgba(120,243,255,.20);border-radius:6px;background:rgba(2,8,13,.82);padding:6px;color:#f4fbff;font-size:9px;line-height:1.35;white-space:pre-wrap;overflow-wrap:anywhere;scrollbar-width:thin;scrollbar-color:#2a7585 #07131b}
     #robotGrokAnswer.is-error{border-color:#ff6b6b;color:#ffd0d0}
-    #metahumanPanel{display:none;position:fixed;z-index:28;width:340px;min-height:170px;border:1px solid rgba(120,243,255,.55);border-radius:10px;background:linear-gradient(180deg,rgba(8,16,28,.97),rgba(3,8,18,.98));box-shadow:0 16px 34px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.10);font-family:monospace;color:#dff8ff;padding:10px;gap:7px}
+    #metahumanPanel{display:none;position:fixed;z-index:31;width:340px;min-height:170px;max-height:calc(100vh - 16px);overflow-y:auto;overscroll-behavior:contain;border:1px solid rgba(120,243,255,.55);border-radius:10px;background:linear-gradient(180deg,rgba(8,16,28,.97),rgba(3,8,18,.98));box-shadow:0 16px 34px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.10);font-family:monospace;color:#dff8ff;padding:10px;gap:7px;scrollbar-width:thin;scrollbar-color:#2a7585 #07131b}
     #metahumanPanel.show{display:flex;flex-direction:column}
     .mh-head{display:flex;align-items:center;justify-content:space-between;gap:8px;color:#78f3ff;font-size:10px;font-weight:bold;text-transform:uppercase}
     .mh-head #mhStatus{color:#9ec7d0;font-size:8px;font-weight:normal;text-transform:none;white-space:nowrap}
@@ -12179,12 +12179,26 @@ function _mhPositionPanel(){
   const els=_mhEls(); if(!els.panel) return;
   const cv=document.getElementById('c'); if(!cv) return;
   const r=cv.getBoundingClientRect();
+  // Account for the bottom Telegram dock so the panel never lands behind it.
+  const dock=document.getElementById('telegramDock');
+  let dockH=0;
+  if(dock){
+    const cs=getComputedStyle(dock);
+    if(cs.display!=='none' && cs.visibility!=='hidden'){
+      dockH=dock.getBoundingClientRect().height||0;
+    }
+  }
+  const safeBottom=window.innerHeight-dockH-8;
+  // Cap the panel height to the visible safe area so an expanded QR section
+  // becomes internally scrollable instead of falling behind the dock.
+  els.panel.style.maxHeight=Math.max(180, safeBottom-16)+'px';
   const panelW=els.panel.offsetWidth||340;
   const panelH=els.panel.offsetHeight||190;
   // Anchored to the bottom-left grass corner of the canvas so the shop and
   // the Metahuman totem stay visible while the user reads the answer.
   const x=Math.max(8, Math.min(window.innerWidth-panelW-8, r.left+10));
-  const y=Math.max(8, Math.min(window.innerHeight-panelH-8, r.bottom-panelH-10));
+  const yMax=Math.max(8, safeBottom-panelH);
+  const y=Math.max(8, Math.min(yMax, r.bottom-panelH-10));
   els.panel.style.left=x+'px';
   els.panel.style.top=y+'px';
   els.panel.style.right=''; els.panel.style.bottom='';
@@ -12268,6 +12282,14 @@ async function askMetahuman(text){
             window.LoyaltyBridge.renderQrInto(clubQr,url);
           }
         }
+        // Recompute the panel anchor after the body grew or shrunk so the new
+        // height stays inside the safe area above the bottom dock, and bring
+        // the QR (or the Ask area) into view.
+        try{ _mhPositionPanel(); }catch(e){}
+        try{
+          const target=open?els.prompt:clubBody;
+          if(target && target.scrollIntoView) target.scrollIntoView({block:'nearest',behavior:'smooth'});
+        }catch(e){}
       });
     }
     if(els.prompt){
