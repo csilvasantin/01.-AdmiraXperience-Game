@@ -1019,6 +1019,98 @@ const DS_SURFACE_QUADS=Object.create(null);// surfaceId -> [{x,y}x4] in cv-inter
 let DS_DRAG_HIGHLIGHT=null;                // surfaceId currently under drag cursor (or null)
 const DS_PIN_KEY='xtanco_ds_pins';
 
+// Xtanco Club celebration overlay shown across all digital signage surfaces
+// (ds1, ds2, escaparate, metahuman) when the player clicks on a Club member.
+// Two flavours: full birthday burst (pink, longer) and a quieter welcome.
+const CLUB_BURST={mode:null,name:'',emoji:'🪪',stamps:0,until:0,startedAt:0,duration:0};
+function isClubBurstActive(){ return CLUB_BURST.mode && Date.now()<CLUB_BURST.until; }
+function triggerClubBurst(mode,fanCustomerLike){
+  const c=fanCustomerLike||{};
+  CLUB_BURST.mode=mode;
+  CLUB_BURST.name=c.fanName||c.name||'Socio';
+  CLUB_BURST.emoji=c.fanEmoji||c.avatarEmoji||(mode==='birthday'?'🎂':'🪪');
+  CLUB_BURST.stamps=(c.fanStamps!=null?c.fanStamps:(c.stamps|0))|0;
+  CLUB_BURST.startedAt=Date.now();
+  CLUB_BURST.duration=mode==='birthday'?6500:3500;
+  CLUB_BURST.until=CLUB_BURST.startedAt+CLUB_BURST.duration;
+}
+function clubBurstProgress(){
+  if(!CLUB_BURST.mode||!CLUB_BURST.duration) return 0;
+  return Math.min(1,Math.max(0,(Date.now()-CLUB_BURST.startedAt)/CLUB_BURST.duration));
+}
+function drawClubBurst(ctx,w,h){
+  if(!isClubBurstActive()) return false;
+  const isBday=CLUB_BURST.mode==='birthday';
+  const t=Date.now()/1000;
+  const progress=clubBurstProgress();
+  // Solid background gradient
+  const g=ctx.createLinearGradient(0,0,0,h);
+  if(isBday){
+    g.addColorStop(0,'#3a0a2a'); g.addColorStop(0.5,'#5a1448'); g.addColorStop(1,'#1a0218');
+  } else {
+    g.addColorStop(0,'#062338'); g.addColorStop(0.5,'#0a3a5a'); g.addColorStop(1,'#020e1a');
+  }
+  ctx.fillStyle=g; ctx.fillRect(0,0,w,h);
+  // Confetti / sparkles — deterministic so frames are consistent across surfaces
+  const seedBase=CLUB_BURST.startedAt|0;
+  const sparkles=isBday?38:18;
+  for(let i=0;i<sparkles;i++){
+    const seed=(seedBase+i*9301)|0;
+    const sx=((seed*16807)%w+w)%w;
+    const phase=(seed*0.013)+t*1.4;
+    const sy=((Math.sin(phase)*0.5+0.5)*h*0.85)+(h*0.05);
+    const size=2+((seed%5)|0);
+    const palette=isBday?['#ff7eb6','#ffd866','#a880ff','#7eecff','#fff']:['#78f3ff','#bff7ff','#fff'];
+    ctx.fillStyle=palette[(seed>>3)%palette.length];
+    ctx.globalAlpha=0.6+0.4*Math.sin(phase*2.1);
+    ctx.fillRect(sx,sy,size,size);
+  }
+  ctx.globalAlpha=1;
+  // Title
+  const titleSize=Math.max(14,Math.min(72,Math.floor(h*0.22)));
+  ctx.font='bold '+titleSize+'px sans-serif';
+  ctx.textAlign='center';
+  ctx.textBaseline='middle';
+  const pulse=1+0.06*Math.sin(t*5.5);
+  ctx.save();
+  ctx.translate(w/2,h*0.34);
+  ctx.scale(pulse,pulse);
+  if(isBday){
+    ctx.fillStyle='rgba(0,0,0,0.55)';
+    ctx.fillText('¡CUMPLEAÑOS FELIZ!',2,2);
+    ctx.fillStyle='#ffd866';
+    ctx.fillText('¡CUMPLEAÑOS FELIZ!',0,0);
+  } else {
+    ctx.fillStyle='rgba(0,0,0,0.55)';
+    ctx.fillText('¡BIENVENIDO AL CLUB!',2,2);
+    ctx.fillStyle='#bff7ff';
+    ctx.fillText('¡BIENVENIDO AL CLUB!',0,0);
+  }
+  ctx.restore();
+  // Cake / badge — big emoji
+  const emojiSize=Math.max(20,Math.min(110,Math.floor(h*0.30)));
+  ctx.font=emojiSize+'px serif';
+  const bob=Math.sin(t*3.2)*emojiSize*0.05;
+  ctx.fillText(isBday?'🎂':'🪪',w/2,h*0.58+bob);
+  // Name + meta
+  const nameSize=Math.max(10,Math.min(36,Math.floor(h*0.13)));
+  ctx.font='bold '+nameSize+'px sans-serif';
+  ctx.fillStyle='#fff';
+  const tag=isBday?(CLUB_BURST.emoji+' '+CLUB_BURST.name):(CLUB_BURST.emoji+' '+CLUB_BURST.name);
+  ctx.fillText(tag,w/2,h*0.84);
+  if(isBday){
+    const metaSize=Math.max(8,Math.min(20,Math.floor(h*0.08)));
+    ctx.font=metaSize+'px sans-serif';
+    ctx.fillStyle='#ffe1f0';
+    ctx.fillText('XTANCO CLUB · '+CLUB_BURST.stamps+'/5',w/2,h*0.94);
+  }
+  // Fade-out at the very end
+  const fade=progress>0.85?(1-(progress-0.85)/0.15):1;
+  if(fade<1){ ctx.fillStyle='rgba(0,0,0,'+(1-fade)+')'; ctx.fillRect(0,0,w,h); }
+  ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+  return true;
+}
+
 function dsSurfaceById(id){ return DS_SURFACES.find(s=>s.id===id)||null; }
 function dsSurfaceLabel(id){ const s=dsSurfaceById(id); return s?s.label:id; }
 function dsEnsureSurfaceMedia(id){
@@ -1780,6 +1872,8 @@ const DS_MSGS=[
 
 function renderDSCanvas(ctx,w,h,frame,displayIdx){
   const display=DS_DISPLAYS[displayIdx];
+  // Xtanco Club celebration takes over every screen for a few seconds.
+  if(typeof drawClubBurst==='function' && drawClubBurst(ctx,w,h)) return;
   // Per-surface pin override: if this physical screen is pinned to an imported item, render that.
   const surfaceId=displayIdx===0?'ds1':(displayIdx===1?'ds2':null);
   if(surfaceId && DS_PIN[surfaceId]){
@@ -6114,7 +6208,17 @@ function doAction(id){
   }
   if(id.startsWith('custClick')){
     const ci=parseInt(id.slice(9));
-    if(G.custs&&G.custs[ci]) openCustomerEditor(ci);
+    const cust=G.custs&&G.custs[ci];
+    if(cust && cust.fanCustomerId && typeof triggerClubBurst==='function'){
+      const mode=cust.fanIsBirthday?'birthday':'welcome';
+      triggerClubBurst(mode,cust);
+      if(typeof showEv==='function'){
+        if(mode==='birthday') showEv('🎂 Felicitando a '+cust.fanName+' en pantallas','#ff7eb6');
+        else showEv('🪪 Pantallas saludan a '+cust.fanName,'#78f3ff');
+      }
+      try{ SFX&&SFX.cashRegister&&SFX.cashRegister(); }catch(e){}
+    }
+    if(cust) openCustomerEditor(ci);
     return;
   }
   if(id==='specialClick_saca'&&G.saca&&G.saca.phase!=='idle'){
@@ -7782,13 +7886,19 @@ function spawnCust(isVip){
         newCust.fanEmoji=fan.avatarEmoji||'🙂';
         newCust.fanStamps=fan.stamps|0;
         newCust.fanFreePending=!!fan.freePending;
+        newCust.fanBirthday=fan.birthday||null;
+        newCust.fanIsBirthday=!!fan.isBirthday;
         newCust.persona='loyal';
-        newCust.col='#78f3ff'; // distinctive cyan tint for fans
+        newCust.col=fan.isBirthday?'#ff7eb6':'#78f3ff'; // pink for birthday, cyan for regular fans
         if(fan.freePending) newCust.loyaltyFree=true;
-        newCust.bMsg=newCust.fanEmoji+' '+newCust.fanName+' · '+newCust.fanStamps+'/5';
+        const cake=fan.isBirthday?' 🎂':'';
+        newCust.bMsg=newCust.fanEmoji+' '+newCust.fanName+cake+' · '+newCust.fanStamps+'/5';
         newCust.bTimer=Math.max(newCust.bTimer||0,420);
         window.LoyaltyBridge.markInScene(fan.id, null);
-        if(typeof showEv==='function') showEv('🪪 '+newCust.fanName+' entró del Xtanco Club','#78f3ff');
+        if(typeof showEv==='function'){
+          if(fan.isBirthday) showEv('🎂 ¡Cumple de '+newCust.fanName+'! Pulsa encima para felicitar','#ff7eb6');
+          else showEv('🪪 '+newCust.fanName+' entró del Xtanco Club','#78f3ff');
+        }
       }
     }
   }catch(e){ console.warn('LoyaltyBridge spawn hook',e); }
@@ -11468,6 +11578,25 @@ function drawEscaparate(){
     {x:iBR.x,y:iBR.y},{x:iBL.x,y:iBL.y},
   ];
 
+  // Xtanco Club celebration overrides the escaparate too.
+  if(typeof isClubBurstActive==='function' && isClubBurstActive()){
+    cx.save();
+    cx.beginPath();
+    cx.moveTo(iTL.x,iTL.y); cx.lineTo(iTR.x,iTR.y);
+    cx.lineTo(iBR.x,iBR.y); cx.lineTo(iBL.x,iBL.y);
+    cx.closePath(); cx.clip();
+    cx.setTransform(ax,ay,bx,by,iTL.x,iTL.y);
+    drawClubBurst(cx,vW,vH);
+    cx.setTransform(1,0,0,1,0,0);
+    cx.restore();
+    cx.strokeStyle='#5a3a18'; cx.lineWidth=2;
+    cx.beginPath();
+    cx.moveTo(iTL.x,iTL.y); cx.lineTo(iTR.x,iTR.y);
+    cx.lineTo(iBR.x,iBR.y); cx.lineTo(iBL.x,iBL.y);
+    cx.closePath(); cx.stroke();
+    return;
+  }
+
   // Per-surface pin override: replace posters with pinned imported media.
   if(DS_PIN.escaparate){
     const m=DS_SURFACE_MEDIA.escaparate;
@@ -12060,7 +12189,10 @@ function drawIsoMetahuman(col,row){
   const pin=DS_PIN.metahuman;
   const m=DS_SURFACE_MEDIA.metahuman;
   let drewPinned=false;
-  if(pin && m){
+  if(typeof isClubBurstActive==='function' && isClubBurstActive()){
+    drawClubBurst(cx,SW,SH);
+    drewPinned=true;
+  } else if(pin && m){
     drewPinned=dsDrawMediaCover(cx,m,SW,SH);
   }
   if(!drewPinned){
@@ -14618,6 +14750,11 @@ function customerStateLabel(c){
 
 function customerTypeLabel(c){
   if(!c) return lang==='es'?'Anonimo':'Unknown';
+  if(c.fanCustomerId){
+    const isEs=lang==='es';
+    if(c.fanIsBirthday) return '🎂 '+(isEs?'Cumple Club':'Club Birthday');
+    return '🪪 '+(isEs?'Socio Club':'Club Member');
+  }
   if(c.vip) return 'VIP';
   return customerPersonaLabel(c);
 }
@@ -14838,6 +14975,8 @@ function staffMiniAvatar(s){
 
 function customerTone(c){
   if(!c) return '#b9d8e5';
+  if(c.fanIsBirthday) return '#ff7eb6';
+  if(c.fanCustomerId) return '#78f3ff';
   if(c.vip) return '#ffd86b';
   if(c.st==='queue') return '#ffb36b';
   if(c.st==='leave') return '#9fb4c4';

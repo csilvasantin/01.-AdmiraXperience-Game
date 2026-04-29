@@ -58,6 +58,7 @@ function newToken() {
 
 const NAME_RE = /^[\p{L}\p{N}\s.\-_'!?]{1,32}$/u;
 const EMOJI_RE = /^[\p{Extended_Pictographic}\p{Emoji_Presentation}‍️]{1,8}$/u;
+const BIRTHDAY_RE = /^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 
 function sanitizeName(s) {
   const t = String(s || '').trim().replace(/\s+/g, ' ').slice(0, 32);
@@ -68,9 +69,19 @@ function sanitizeEmoji(s) {
   if (!t) return '🙂';
   return EMOJI_RE.test(t) ? t : '🙂';
 }
+function sanitizeBirthday(s) {
+  if (s == null || s === '') return null;
+  const t = String(s).trim();
+  return BIRTHDAY_RE.test(t) ? t : null;
+}
+function todayMMDD() {
+  const d = new Date();
+  return String(d.getUTCMonth() + 1).padStart(2, '0') + '-' + String(d.getUTCDate()).padStart(2, '0');
+}
 
 async function publicCustomer(c) {
   if (!c) return null;
+  const birthday = c.birthday || null;
   return {
     id: c.id,
     name: c.name,
@@ -82,6 +93,8 @@ async function publicCustomer(c) {
     createdAt: c.created_at,
     lastSeenAt: c.last_seen_at,
     lastCheckin: c.last_checkin,
+    birthday,
+    isBirthday: !!(birthday && birthday === todayMMDD()),
   };
 }
 
@@ -101,14 +114,38 @@ async function handleRegister(request, env) {
   const name = sanitizeName(body.name);
   if (!name) return json(request, env, 400, { error: 'invalid_name' });
   const avatar = sanitizeEmoji(body.avatarEmoji);
+  const birthday = sanitizeBirthday(body.birthday);
   const token = newToken();
   const ts = now();
   await env.DB.prepare(`
-    INSERT INTO customers (token, name, avatar_emoji, stamps, total_visits, total_spend, free_pending, created_at, last_seen_at, last_checkin)
-    VALUES (?, ?, ?, 0, 0, 0, 0, ?, ?, 0)
-  `).bind(token, name, avatar, ts, ts).run();
+    INSERT INTO customers (token, name, avatar_emoji, stamps, total_visits, total_spend, free_pending, created_at, last_seen_at, last_checkin, birthday)
+    VALUES (?, ?, ?, 0, 0, 0, 0, ?, ?, 0, ?)
+  `).bind(token, name, avatar, ts, ts, birthday).run();
   const row = await getCustomerByToken(env, token);
   return json(request, env, 200, { token, customer: await publicCustomer(row) });
+}
+
+async function handleUpdate(request, env) {
+  const body = await readBody(request);
+  const c = await getCustomerByToken(env, body.token);
+  if (!c) return json(request, env, 404, { error: 'not_found' });
+  const sets = []; const vals = [];
+  if (body.name !== undefined) {
+    const name = sanitizeName(body.name);
+    if (!name) return json(request, env, 400, { error: 'invalid_name' });
+    sets.push('name = ?'); vals.push(name);
+  }
+  if (body.avatarEmoji !== undefined) {
+    sets.push('avatar_emoji = ?'); vals.push(sanitizeEmoji(body.avatarEmoji));
+  }
+  if (body.birthday !== undefined) {
+    sets.push('birthday = ?'); vals.push(sanitizeBirthday(body.birthday));
+  }
+  if (!sets.length) return json(request, env, 400, { error: 'nothing_to_update' });
+  vals.push(c.id);
+  await env.DB.prepare('UPDATE customers SET ' + sets.join(', ') + ' WHERE id = ?').bind(...vals).run();
+  const fresh = await getCustomerByToken(env, body.token);
+  return json(request, env, 200, { customer: await publicCustomer(fresh) });
 }
 
 async function handleMe(request, env) {
@@ -214,7 +251,7 @@ async function handleActive(request, env) {
   const cutoff = now() - windowSec;
   const rows = await env.DB.prepare(`
     SELECT id, token, name, avatar_emoji, stamps, total_visits, total_spend, free_pending,
-           created_at, last_seen_at, last_checkin
+           created_at, last_seen_at, last_checkin, birthday
       FROM customers
      WHERE last_checkin >= ?
      ORDER BY last_checkin DESC
@@ -238,6 +275,7 @@ export default {
     try {
       if (request.method === 'GET'  && path === '/health')   return json(request, env, 200, { ok: true, ts: now() });
       if (request.method === 'POST' && path === '/register') return await handleRegister(request, env);
+      if (request.method === 'POST' && path === '/update')   return await handleUpdate(request, env);
       if (request.method === 'GET'  && path === '/me')       return await handleMe(request, env);
       if (request.method === 'POST' && path === '/checkin')  return await handleCheckin(request, env);
       if (request.method === 'POST' && path === '/visit')    return await handleVisit(request, env);

@@ -84,6 +84,11 @@
       <input id="reg-name" type="text" autocomplete="given-name" placeholder="Tu nombre" maxlength="32">
       <label>Tu avatar</label>
       <div id="emoji-grid" class="emojigrid"></div>
+      <label>Tu cumpleaños <span class="muted" style="text-transform:none;letter-spacing:0;font-size:11px">(opcional · regalo del estanco)</span></label>
+      <div style="display:flex;gap:8px">
+        <select id="reg-bday-day" style="flex:1;background:#06101a;border:1px solid var(--border);border-radius:10px;color:var(--ink);font-size:16px;padding:12px"></select>
+        <select id="reg-bday-month" style="flex:2;background:#06101a;border:1px solid var(--border);border-radius:10px;color:var(--ink);font-size:16px;padding:12px"></select>
+      </div>
       <label>Código del estanco</label>
       <input id="reg-code" type="text" placeholder="XTANCO26" maxlength="16" autocapitalize="characters" autocorrect="off">
       <div class="err" id="reg-err"></div>
@@ -103,6 +108,18 @@
         </div>
       </div>
       <div id="me-free-banner" class="hidden" style="margin-top:12px;padding:10px;border:1px solid var(--ok);border-radius:10px;background:rgba(84,224,141,.08);color:var(--ok);text-align:center;font-weight:700">🎁 Tu próxima compra en el estanco es GRATIS</div>
+      <div id="me-birthday-banner" class="hidden" style="margin-top:8px;padding:10px;border:1px solid #ff7eb6;border-radius:10px;background:rgba(255,126,182,.10);color:#ff7eb6;text-align:center;font-weight:700">🎂 ¡Cumpleaños feliz! Hoy es tu día especial en el estanco</div>
+    </div>
+
+    <div class="card">
+      <h2>Mi cumpleaños</h2>
+      <p class="muted" style="font-size:13px;margin-bottom:8px">Si lo guardas, el estanco te saluda en pantallas grandes cuando entres ese día.</p>
+      <div style="display:flex;gap:8px;align-items:flex-end">
+        <select id="bday-day" style="flex:1;background:#06101a;border:1px solid var(--border);border-radius:10px;color:var(--ink);font-size:16px;padding:12px"></select>
+        <select id="bday-month" style="flex:2;background:#06101a;border:1px solid var(--border);border-radius:10px;color:var(--ink);font-size:16px;padding:12px"></select>
+        <button id="bday-save" type="button" style="flex:0 0 auto;width:auto;padding:12px 14px">Guardar</button>
+      </div>
+      <div class="muted" id="bday-status" style="font-size:12px;margin-top:6px"></div>
     </div>
 
     <div class="card">

@@ -5,6 +5,41 @@
   const POLL_MS = 12_000;
 
   const EMOJIS = ['🙂','😎','🦊','🐺','🦁','🐱','🐶','🐼','🐯','🦉','🐸','🐙','🦄','👽','🤖','🐉','🐢','🦋','🌵','🍀','🍕','🍩','☕','🚀','⚡','🔥','🌙','⭐','🎩','🎷','🎮','🪐'];
+  const MONTHS = ['—','enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+
+  function fillBirthdaySelects(daySel, monthSel, current) {
+    if (!daySel || !monthSel) return;
+    daySel.innerHTML = '';
+    monthSel.innerHTML = '';
+    const empty = document.createElement('option');
+    empty.value = ''; empty.textContent = 'día';
+    daySel.appendChild(empty);
+    for (let d = 1; d <= 31; d++) {
+      const o = document.createElement('option');
+      o.value = String(d).padStart(2, '0'); o.textContent = String(d);
+      daySel.appendChild(o);
+    }
+    const emptyM = document.createElement('option');
+    emptyM.value = ''; emptyM.textContent = 'mes';
+    monthSel.appendChild(emptyM);
+    for (let m = 1; m <= 12; m++) {
+      const o = document.createElement('option');
+      o.value = String(m).padStart(2, '0'); o.textContent = MONTHS[m];
+      monthSel.appendChild(o);
+    }
+    if (current && /^\d{2}-\d{2}$/.test(current)) {
+      const [mm, dd] = current.split('-');
+      monthSel.value = mm;
+      daySel.value = dd;
+    }
+  }
+
+  function readBirthday(daySel, monthSel) {
+    if (!daySel || !monthSel) return null;
+    const dd = daySel.value, mm = monthSel.value;
+    if (!dd || !mm) return null;
+    return mm + '-' + dd;
+  }
 
   const $ = sel => document.querySelector(sel);
   const $$ = sel => Array.from(document.querySelectorAll(sel));
@@ -112,6 +147,27 @@
       $('#me-free-banner').classList.add('hidden');
       $('#stamps-text').textContent = `${c.stamps} de ${N} sellos. Te faltan ${N - c.stamps} para una compra gratis.`;
     }
+    const bdayBanner = $('#me-birthday-banner');
+    if (bdayBanner) {
+      if (c.isBirthday) bdayBanner.classList.remove('hidden');
+      else bdayBanner.classList.add('hidden');
+    }
+    const bdayDay = $('#bday-day'), bdayMonth = $('#bday-month');
+    if (bdayDay && bdayMonth && bdayMonth.options.length === 0) fillBirthdaySelects(bdayDay, bdayMonth, c.birthday);
+    else if (bdayDay && bdayMonth && c.birthday && /^\d{2}-\d{2}$/.test(c.birthday)) {
+      const [mm, dd] = c.birthday.split('-');
+      if (bdayMonth.value !== mm) bdayMonth.value = mm;
+      if (bdayDay.value !== dd) bdayDay.value = dd;
+    }
+    const bdayStatus = $('#bday-status');
+    if (bdayStatus) {
+      if (c.birthday && /^\d{2}-\d{2}$/.test(c.birthday)) {
+        const [mm, dd] = c.birthday.split('-');
+        bdayStatus.textContent = `Guardado: ${parseInt(dd, 10)} de ${MONTHS[parseInt(mm, 10)]}`;
+      } else {
+        bdayStatus.textContent = 'Sin guardar.';
+      }
+    }
     const visitsEl = $('#visits-list');
     if (state.recentVisits && state.recentVisits.length) {
       visitsEl.innerHTML = '';
@@ -172,6 +228,7 @@
     const name = $('#reg-name').value.trim();
     const code = $('#reg-code').value.trim().toUpperCase();
     const emoji = selectedEmoji();
+    const birthday = readBirthday($('#reg-bday-day'), $('#reg-bday-month'));
     const errEl = $('#reg-err');
     errEl.textContent = '';
     if (!name) { errEl.textContent = 'Pon tu nombre.'; return; }
@@ -179,7 +236,7 @@
     const btn = $('#reg-submit');
     btn.disabled = true; btn.textContent = 'Creando…';
     try {
-      const res = await api('/register', { method: 'POST', body: { joinCode: code, name, avatarEmoji: emoji } });
+      const res = await api('/register', { method: 'POST', body: { joinCode: code, name, avatarEmoji: emoji, birthday } });
       state.token = res.token;
       state.customer = res.customer;
       save(state);
@@ -193,6 +250,23 @@
       else errEl.textContent = 'No se pudo crear la tarjeta. Inténtalo de nuevo.';
     } finally {
       btn.disabled = false; btn.textContent = 'Crear mi tarjeta';
+    }
+  }
+
+  async function doSaveBirthday(state) {
+    const birthday = readBirthday($('#bday-day'), $('#bday-month'));
+    const btn = $('#bday-save');
+    btn.disabled = true;
+    try {
+      const res = await api('/update', { method: 'POST', body: { token: state.token, birthday } });
+      state.customer = res.customer;
+      save(state);
+      toast(birthday ? '🎂 Cumpleaños guardado' : 'Cumpleaños borrado');
+      renderHome(state);
+    } catch (err) {
+      toast('No se pudo guardar.');
+    } finally {
+      btn.disabled = false;
     }
   }
 
@@ -235,16 +309,19 @@
     const urlCode = readJoinCodeFromUrl();
     if (state.token) {
       buildEmojiGrid(state.customer && state.customer.avatarEmoji);
+      fillBirthdaySelects($('#bday-day'), $('#bday-month'), state.customer && state.customer.birthday);
       show('screen-home');
       refresh(state);
       startPolling(state);
     } else {
       buildEmojiGrid(EMOJIS[0]);
+      fillBirthdaySelects($('#reg-bday-day'), $('#reg-bday-month'), null);
       if (urlCode) $('#reg-code').value = urlCode;
       show('screen-register');
     }
     $('#reg-submit').addEventListener('click', () => doRegister(state));
     $('#checkin-btn').addEventListener('click', () => doCheckin(load()));
+    $('#bday-save').addEventListener('click', () => doSaveBirthday(load()));
     $('#logout-btn').addEventListener('click', () => {
       if (!confirm('¿Olvidar la tarjeta de este dispositivo? Los sellos siguen guardados en el servidor pero perderás el acceso desde aquí.')) return;
       stopPolling();
