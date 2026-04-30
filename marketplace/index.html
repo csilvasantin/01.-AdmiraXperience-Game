@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#070b13">
+<meta name="description" content="Admira XP Marketplace — subasta abierta de cartelería digital, hilo musical, posters de papel y mancha de marca completa.">
+<meta property="og:title" content="Admira XP Marketplace">
+<meta property="og:description" content="Subasta abierta de inventario publicitario del estanco. Pantallas, jingles, posters y mancha de marca completa.">
+<title>Admira XP Marketplace — subasta de inventario publicitario</title>
+<link rel="stylesheet" href="../marketing/style.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<canvas id="bg" aria-hidden="true"></canvas>
+
+<header class="topbar">
+  <a class="brand" href="../marketing/">
+    <span class="brand-mark"><span class="x">×</span></span>
+    <span class="brand-name">ADMIRA <b>XP</b><span class="brand-sub">// Marketplace</span></span>
+  </a>
+  <nav>
+    <a href="../marketing/">Producto</a>
+    <a href="#takeover">Mancha de marca</a>
+    <a href="#inventory">Inventario</a>
+    <a class="nav-cta" href="../?v=marketplace&fresh=1">Ver tienda en vivo →</a>
+  </nav>
+</header>
+
+<main>
+
+<section class="market-hero">
+  <div class="kicker"><span class="dot"></span> Subasta abierta · Cierra cada 24 h</div>
+  <h1>Compra el estanco<br>como espacio publicitario.</h1>
+  <p class="lede">
+    Cartelería digital, hilo musical, posters de papel, cabezas de góndola y la
+    <b>mancha de marca completa</b>. Pujas en vivo, cierre inglés, ganador
+    visible al instante en la simulación. Anti-snipe automático.
+  </p>
+  <div class="cta-row">
+    <a class="btn primary" href="#takeover">🚨 Quiero la mancha de marca</a>
+    <a class="btn ghost" href="#inventory">Ver inventario</a>
+  </div>
+  <ul class="strip" id="strip">
+    <li><b id="strip-slots">—</b><span>slots en subasta</span></li>
+    <li><b id="strip-bids">—</b><span>pujas activas</span></li>
+    <li><b id="strip-top">—</b><span>puja más alta · €</span></li>
+    <li><b id="strip-active">—</b><span>campañas en directo</span></li>
+  </ul>
+</section>
+
+<!-- TAKEOVER ───────────────────────────────────────────────────── -->
+<section id="takeover" class="takeover">
+  <div class="section-head">
+    <div class="kicker"><span class="dot"></span> Mancha de marca</div>
+    <h2>Un solo anunciante. Toda la tienda.</h2>
+    <p class="lede">Pantallas, hilo musical, posters de papel, cabezas de góndola, gestión de turnos, Metahuman y Opinador — todo coordinado bajo tu marca durante 24 horas.</p>
+  </div>
+  <div id="takeover-card"><div class="loading">Cargando subasta…</div></div>
+</section>
+
+<!-- INVENTORY ───────────────────────────────────────────────────── -->
+<section id="inventory" class="inventory">
+  <div class="section-head">
+    <div class="kicker"><span class="dot"></span> Inventario por canal</div>
+    <h2>9 slots. 4 canales. Pujas abiertas.</h2>
+    <p class="lede">Cada slot es una subasta inglesa independiente. Si llegas en los últimos 60 s, el cierre se retrasa para que la subasta sea justa.</p>
+  </div>
+  <div class="filter-row" role="tablist" aria-label="Filtrar por canal">
+    <button class="filter-pill is-on" data-filter="all">Todos</button>
+    <button class="filter-pill" data-filter="digital">Digital</button>
+    <button class="filter-pill" data-filter="audio">Audio</button>
+    <button class="filter-pill" data-filter="physical">Físico</button>
+  </div>
+  <div id="inv-grid" class="inv-grid"><div class="loading">Cargando inventario…</div></div>
+</section>
+
+<!-- BID DRAWER ─────────────────────────────────────────────────── -->
+<aside id="bid-drawer" class="bid-drawer" hidden aria-modal="true" role="dialog" aria-labelledby="bid-title">
+  <div class="bid-card">
+    <button class="bid-close" id="bid-close" aria-label="Cerrar">×</button>
+    <div class="kicker" id="bid-kicker">Subasta · slot</div>
+    <h3 id="bid-title">Pujar</h3>
+    <p class="lede" id="bid-desc"></p>
+    <div class="bid-state" id="bid-state"></div>
+
+    <form id="bid-form" autocomplete="off" novalidate>
+      <div class="row2">
+        <div>
+          <label>Importe (€)</label>
+          <input id="f-amount" type="number" min="1" step="1" required>
+          <p class="hint" id="hint-amount"></p>
+        </div>
+        <div>
+          <label>Tu marca</label>
+          <input id="f-brand" type="text" maxlength="40" placeholder="Marlboro, Camel, AdmiraTube…" required>
+        </div>
+      </div>
+      <div class="row2">
+        <div>
+          <label>Color de marca</label>
+          <input id="f-color" type="color" value="#78f3ff">
+        </div>
+        <div>
+          <label>Tu nombre / agencia</label>
+          <input id="f-bidder" type="text" maxlength="40" placeholder="Carlos · Admira" required>
+        </div>
+      </div>
+      <label>Mensaje en el creativo (opcional, 140c)</label>
+      <input id="f-msg" type="text" maxlength="140" placeholder="Don't be a Maverick">
+      <label>Email de contacto (opcional)</label>
+      <input id="f-email" type="email" maxlength="192" placeholder="agency@brand.com">
+      <div class="bid-actions">
+        <button class="btn primary" type="submit" id="f-submit">Pujar ahora</button>
+        <button class="btn ghost" type="button" id="f-cancel">Cancelar</button>
+      </div>
+      <p class="bid-error" id="f-error" hidden></p>
+    </form>
+  </div>
+  <div class="bid-backdrop" id="bid-backdrop"></div>
+</aside>
+
+<footer class="foot">
+  <div class="foot-row">
+    <span class="brand">
+      <span class="brand-mark"><span class="x">×</span></span>
+      <span class="brand-name">ADMIRA <b>XP</b></span>
+    </span>
+    <span class="foot-meta" id="footMeta">marketplace · admira-marketplace</span>
+  </div>
+  <div class="foot-row tiny">
+    <span>© 2026 Admira · csilva@admira.com</span>
+    <span class="links">
+      <a href="../?v=marketplace&fresh=1">Ver tienda</a>
+      <a href="../marketing/">Producto</a>
+      <a href="../loyalty-app/?join=XTANCO26">Xtanco Club</a>
+    </span>
+  </div>
+</footer>
+
+</main>
+
+<script src="../xtanco-version.js"></script>
+<script src="../marketing/app.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
