@@ -135,6 +135,44 @@ async function sendMessage(request, env, replyMode) {
   }
 }
 
+async function sendDocument(request, env) {
+  if (!configured(env)) {
+    return jsonResponse(request, env, 503, {
+      ok: false,
+      error: 'telegram_not_configured',
+      message: 'TELEGRAM_BOT_TOKEN no está configurado en Cloudflare Worker.',
+    });
+  }
+  const body = await readJson(request);
+  const chatId   = String(body.chatId || defaultChatId(env) || '').trim();
+  const document = String(body.document || '').trim();
+  const caption  = String(body.caption || '').slice(0, 1024);
+  if (!chatId)   return jsonResponse(request, env, 400, { ok: false, error: 'missing_chat_id' });
+  if (!document) return jsonResponse(request, env, 400, { ok: false, error: 'missing_document', message: 'Falta document (URL pública del archivo).' });
+  if (!/^https?:\/\//i.test(document)) {
+    return jsonResponse(request, env, 400, { ok: false, error: 'invalid_document', message: 'document debe ser una URL https pública.' });
+  }
+  if (!isAllowedChat(env, chatId)) {
+    return jsonResponse(request, env, 403, { ok: false, error: 'chat_not_allowed' });
+  }
+  try {
+    const result = await telegramApi(env, 'sendDocument', {
+      chat_id: chatId,
+      document,
+      caption: caption || undefined,
+      parse_mode: body.parseMode || undefined,
+      disable_content_type_detection: body.detectType === false ? true : undefined,
+    });
+    return jsonResponse(request, env, 200, {
+      ok: true,
+      messageId: result.message_id,
+      chatId: String(result.chat.id),
+    });
+  } catch (error) {
+    return jsonResponse(request, env, 502, { ok: false, error: 'telegram_document_failed', message: error.message });
+  }
+}
+
 async function handleWebhook(request, env, secret) {
   if (!configured(env)) {
     return jsonResponse(request, env, 503, { ok: false, error: 'telegram_not_configured' });
@@ -274,6 +312,10 @@ export default {
 
     if (url.pathname === '/telegram/reply' && request.method === 'POST') {
       return sendMessage(request, env, true);
+    }
+
+    if (url.pathname === '/telegram/send-document' && request.method === 'POST') {
+      return sendDocument(request, env);
     }
 
     if (url.pathname === '/telegram/commands' && request.method === 'GET') {
