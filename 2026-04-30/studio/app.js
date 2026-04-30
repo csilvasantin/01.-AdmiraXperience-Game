@@ -78,44 +78,114 @@
     const linesByLength = { 15: 4, 30: 8, 60: 14, 90: 22 };
     const targetLines = linesByLength[length] || 8;
     return [
-      `Eres letrista publicitario para Admira XP. Genera SOLO un objeto JSON estricto, sin texto antes ni después, sin comillas triples, sin comentarios.`,
+      `OUTPUT FORMAT: Devuelve EXCLUSIVAMENTE un objeto JSON válido (RFC 8259). NADA antes, NADA después, sin markdown, sin \`\`\`, sin texto explicativo.`,
+      `Usa SOLO comillas dobles ASCII ("), NUNCA comillas tipográficas («» " " ' '), NUNCA apóstrofos, NUNCA trailing commas.`,
+      `Si necesitas comillas dentro de una cadena, escápalas como \\". Mantén todo en una sola cadena por línea (sin saltos \\n dentro de las strings).`,
+      ``,
+      `Eres letrista publicitario para Admira XP.`,
       ``,
       `Brief:`,
-      `- Marca: "${brand}"`,
-      `- Valores y propuesta: "${values}"`,
+      `- Marca: ${brand}`,
+      `- Valores y propuesta: ${values}`,
       `- Vibe: ${vibe}`,
       `- Duración objetivo: ${length} segundos`,
       `- Idioma: ${langLabel}`,
       ``,
-      `Devuelve un objeto JSON con esta forma EXACTA (las claves entre comillas dobles):`,
+      `Forma EXACTA del JSON:`,
       `{`,
-      `  "title": "string corto, ≤40 caracteres, sin emojis",`,
-      `  "hookLine": "una sola línea pegadiza (≤80 caracteres) que mencione la marca o sus valores con naturalidad",`,
-      `  "tagline": "frase de cierre tipo claim (≤60 caracteres)",`,
+      `  "title": "string corto, max 40 caracteres, sin emojis",`,
+      `  "hookLine": "una sola linea pegadiza, max 80 caracteres, menciona la marca o sus valores con naturalidad",`,
+      `  "tagline": "frase de cierre tipo claim, max 60 caracteres",`,
       `  "structure": ["intro","verse","chorus","verse","chorus","outro"],`,
-      `  "lyrics": [`,
-      `    "${targetLines} líneas de letra. Una línea por elemento del array.",`,
-      `    "Tono adecuado al vibe. Cada línea ≤90 caracteres. Nada de paréntesis con notas escénicas."`,
-      `  ],`,
-      `  "moodWords": ["3-5 palabras clave del estado emocional"]`,
+      `  "lyrics": ["linea 1", "linea 2", "..."],`,
+      `  "moodWords": ["3-5", "palabras", "clave"]`,
       `}`,
       ``,
-      `Reglas: nada de markdown, nada de \`\`\`, nada de cabecera. Solo el JSON. Si la marca y los valores son sensibles (tabaco, alcohol), usa lenguaje sugerente sin glorificar consumo.`,
+      `lyrics debe tener exactamente ${targetLines} elementos (una linea por elemento). Cada linea max 90 caracteres, sin parentesis con notas escenicas, sin saltos de linea dentro de la string.`,
+      ``,
+      `Si la marca o los valores son sensibles (tabaco, alcohol, juego), usa lenguaje sugerente sin glorificar consumo.`,
     ].join('\n');
+  }
+
+  // Tolerant JSON repair for LLM output. Smart quotes, trailing commas, line
+  // breaks inside strings, control characters — fix them best-effort before
+  // calling JSON.parse. Returns the original input if no repair was needed.
+  function repairJson(s) {
+    let t = String(s);
+    // Strip BOM and zero-width chars
+    t = t.replace(/[﻿​‌‍⁠]/g, '');
+    // Replace common smart quotes
+    t = t.replace(/[“”„‟″‶]/g, '"')   // “ ” „ ‟ ″ ‶
+         .replace(/[‘’‚‛′‵]/g, "'")   // ‘ ’ ‚ ‛ ′ ‵
+         .replace(/[«»]/g, '"');                          // « »
+    // Em/en dashes inside JSON to hyphen — only if they cause issues; safer to leave.
+    // Fix trailing commas before ] or }
+    t = t.replace(/,(\s*[\]\}])/g, '$1');
+    // Replace literal newlines inside strings: a quick heuristic — split on
+    // boundaries we know are safe (after ":, ", or [ ", or , ").
+    // First pass: collapse \r and replace CRLF with \n
+    t = t.replace(/\r\n?/g, '\n');
+    // Inside string contents, replace bare newlines with a space.
+    let out = '', inStr = false, esc = false;
+    for (let i = 0; i < t.length; i++) {
+      const ch = t[i];
+      if (esc) { out += ch; esc = false; continue; }
+      if (ch === '\\') { out += ch; esc = true; continue; }
+      if (ch === '"') { inStr = !inStr; out += ch; continue; }
+      if (inStr && ch === '\n') { out += ' '; continue; }
+      if (inStr && ch.charCodeAt(0) < 0x20) { out += ' '; continue; }
+      out += ch;
+    }
+    return out;
   }
 
   function parseTuneJson(text) {
     if (!text) return null;
     const s = String(text).trim();
-    // Try direct parse first.
-    try { return JSON.parse(s); } catch {}
-    // Strip ``` fences if any.
-    const m = s.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (m) { try { return JSON.parse(m[1]); } catch {} }
-    // Find the first { ... } block.
+    const tryParse = str => { try { return JSON.parse(str); } catch { return null; } };
+    // 1) raw
+    let r = tryParse(s); if (r) return r;
+    // 2) strip ``` fences if any
+    const fence = s.match(/```(?:json|JSON)?\s*([\s\S]*?)```/);
+    if (fence) { r = tryParse(fence[1]); if (r) return r; }
+    // 3) extract first balanced { ... }
     const a = s.indexOf('{'), b = s.lastIndexOf('}');
-    if (a >= 0 && b > a) { try { return JSON.parse(s.slice(a, b + 1)); } catch {} }
+    if (a >= 0 && b > a) {
+      const slice = s.slice(a, b + 1);
+      r = tryParse(slice); if (r) return r;
+      // 4) repair + parse
+      r = tryParse(repairJson(slice)); if (r) return r;
+    }
+    // 5) repair the whole string + parse
+    r = tryParse(repairJson(s)); if (r) return r;
     return null;
+  }
+
+  // Heuristic fallback: pull title + lyrics out of free-form text when the
+  // model refuses to return JSON. Good enough to ship a tune.
+  function rescueFromFreeText(text, fallbackBrand) {
+    if (!text) return null;
+    const t = String(text);
+    // Title: first line, or "Título:" pattern
+    const titleM = t.match(/(?:t[ií]tulo|title)\s*[:\-–]\s*([^\n]+)/i);
+    let title = titleM ? titleM[1].trim() : '';
+    if (!title) {
+      const firstLine = t.split('\n').find(l => l.trim().length && l.trim().length <= 60);
+      title = firstLine ? firstLine.trim() : (fallbackBrand + ' Anthem');
+    }
+    title = title.replace(/^["'«»\s]+|["'«»\s]+$/g, '').slice(0, 40);
+    // Lyrics: lines 2..N that aren't headers / labels
+    const lines = t.split('\n')
+      .map(l => l.trim())
+      .filter(l => l && !/^[#>*\-]+\s*$/.test(l) && !/^(t[ií]tulo|title|hook|tagline|estructura|structure|moodwords|estribillo|verse|chorus|intro|outro)[:\-–]/i.test(l) && !/^```/.test(l))
+      .filter(l => l !== title);
+    const lyrics = lines.slice(0, 12);
+    if (lyrics.length < 2) return null;
+    return {
+      title, hookLine: lyrics[0], tagline: lyrics[lyrics.length - 1].slice(0, 60),
+      structure: ['intro','verse','chorus','verse','chorus','outro'],
+      lyrics, moodWords: [],
+    };
   }
 
   function pickKeyAndBpm(seed, vibe) {
@@ -201,9 +271,17 @@
         $('#btn-generate').disabled = false; return;
       }
       payload = parseTuneJson(data.text);
-      if (!payload || !Array.isArray(payload.lyrics)) {
-        setStatus('La IA no devolvió JSON válido. Reintenta.', 'err');
-        $('#btn-generate').disabled = false; return;
+      if (!payload || !Array.isArray(payload.lyrics) || payload.lyrics.length < 2) {
+        // Last-resort: rescue title + lyrics from free-form text.
+        const rescued = rescueFromFreeText(data.text, brand);
+        console.warn('[studio] JSON parse failed, raw response was:\n', data.text);
+        if (rescued) {
+          payload = rescued;
+          setStatus('⚠ La IA no devolvió JSON estricto, recuperé título y letras del texto libre.');
+        } else {
+          setStatus('La IA devolvió texto que no se puede parsear. Reintenta o cambia el brief. Revisa la consola para ver la respuesta cruda.', 'err');
+          $('#btn-generate').disabled = false; return;
+        }
       }
     } catch (err) {
       setStatus('Error de red: ' + (err && err.message || err), 'err');
