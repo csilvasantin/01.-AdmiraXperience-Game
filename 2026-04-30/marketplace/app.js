@@ -206,9 +206,14 @@
     $('#bid-kicker').textContent = (CHANNEL_LABEL[item.slot.channel] || item.slot.channel) + ' · ' + (item.slot.size || '');
     $('#bid-title').textContent = item.slot.name;
     $('#bid-desc').textContent = item.slot.description || '';
-    $('#bid-state').innerHTML = leader
+    let stateHtml = leader
       ? `Líder actual: <b>${escapeHtml(leader.brandName)}</b> · ${fmtAmount(leader.amount)} €. Mínimo siguiente: <b>${fmtAmount(minNext)} €</b>.`
       : `Sin pujas · reserva <b>${fmtAmount(reserve)} €</b>.`;
+    // Cross-link to AdmiraTunes Studio for audio slots / takeover.
+    if (item.slot.id === 'hilo-musical' || item.slot.id === 'takeover') {
+      stateHtml += ` · <a href="../studio/" target="_blank" rel="noopener" style="color:var(--lime)">🎼 Crea jingle en Studio</a>`;
+    }
+    $('#bid-state').innerHTML = stateHtml;
     const fa = $('#f-amount');
     fa.min = String(minNext);
     fa.placeholder = String(minNext);

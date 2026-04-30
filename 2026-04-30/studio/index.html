@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#070b13">
+<meta name="description" content="AdmiraTunes Studio — genera jingles y videoclips de marca para el hilo musical de Admira XP. Letra IA, beat sintetizado en navegador, vídeo opcional.">
+<title>AdmiraTunes Studio — jingle + videoclip de marca</title>
+<link rel="stylesheet" href="../marketing/style.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<canvas id="bg" aria-hidden="true"></canvas>
+
+<header class="topbar">
+  <a class="brand" href="../marketing/">
+    <span class="brand-mark"><span class="x">×</span></span>
+    <span class="brand-name">ADMIRA <b>XP</b><span class="brand-sub">// Tunes Studio</span></span>
+  </a>
+  <nav>
+    <a href="../marketing/">Producto</a>
+    <a href="../marketplace/">Marketplace</a>
+    <a class="nav-cta" href="../?v=studio&fresh=1">Ver tienda en vivo →</a>
+  </nav>
+</header>
+
+<main>
+
+<section class="studio-hero">
+  <div class="kicker"><span class="dot"></span> Hilo Musical · Estudio AI</div>
+  <h1>Genera la <em>banda sonora</em> de tu marca.</h1>
+  <p class="lede">
+    Letra escrita por IA con tu propuesta de valor, beat sintetizado en directo
+    en el navegador y, si lo pagas, <b>videoclip karaoke</b> con tu paleta de
+    colores listo para descargar y emitir en las pantallas. Sin Spotify, sin
+    Suno, sin licencias de terceros.
+  </p>
+  <p class="lede" style="margin-top:8px;font-size:14px">
+    💡 Pista: cuando ganes un slot de <b>hilo musical</b> en el
+    <a href="../marketplace/">marketplace</a>, vuelve aquí para crear el jingle
+    y asociarlo a tu campaña.
+  </p>
+</section>
+
+<section class="studio-grid">
+  <!-- LEFT: form ─────────────────────────────────────────── -->
+  <div class="card studio-form">
+    <h2>1. Briefing</h2>
+    <label>Marca</label>
+    <input id="f-brand" type="text" maxlength="32" placeholder="Marlboro, Camel, AdmiraTube…" value="Camel">
+    <label>Valores · qué quieres comunicar</label>
+    <textarea id="f-values" rows="2" maxlength="240" placeholder="Aventura, ritual de viaje, autenticidad, calidad sin prisa…">Aventura, libertad, ritual de viaje y autenticidad sin prisa.</textarea>
+    <div class="row3">
+      <div>
+        <label>Vibe</label>
+        <select id="f-vibe">
+          <option value="uplifting">Uplifting · alegre</option>
+          <option value="edgy">Edgy · urbano</option>
+          <option value="cinematic">Cinematic · épico</option>
+          <option value="chill">Chill · ambiente</option>
+          <option value="retro">Retro · 80s</option>
+          <option value="latino">Latino · reggaetón</option>
+        </select>
+      </div>
+      <div>
+        <label>Duración</label>
+        <select id="f-length">
+          <option value="15">Jingle 15s</option>
+          <option value="30" selected>Cuña 30s</option>
+          <option value="60">Spot 60s</option>
+          <option value="90">Track 90s</option>
+        </select>
+      </div>
+      <div>
+        <label>Color</label>
+        <input id="f-color" type="color" value="#caa466">
+      </div>
+    </div>
+    <label>Idioma de la letra</label>
+    <select id="f-lang">
+      <option value="es" selected>Español</option>
+      <option value="en">English</option>
+      <option value="es-en">Mezcla ES/EN</option>
+    </select>
+    <button id="btn-generate" class="btn primary big" type="button">🎼 Generar jingle</button>
+    <p class="hint" id="gen-status"></p>
+  </div>
+
+  <!-- RIGHT: result ──────────────────────────────────────── -->
+  <div class="card studio-result" id="result-card">
+    <h2>2. Resultado</h2>
+    <div id="result-empty" class="empty">
+      <div class="empty-icon">🎧</div>
+      <p>Aún no has generado ningún jingle. Pulsa <b>Generar</b> para que la IA escriba la letra y el navegador sintetice el beat.</p>
+    </div>
+    <div id="result-payload" hidden>
+      <div class="head-row">
+        <div class="head-meta">
+          <div class="head-title" id="r-title">—</div>
+          <div class="head-tags"><span id="r-tag-vibe">—</span><span id="r-tag-bpm">—</span><span id="r-tag-key">—</span><span id="r-tag-length">—</span></div>
+        </div>
+        <div class="head-swatch" id="r-swatch"></div>
+      </div>
+      <p class="hook" id="r-hook">—</p>
+      <div class="lyric-block">
+        <div class="lyric-head">Letra</div>
+        <pre id="r-lyrics" class="lyrics"></pre>
+      </div>
+      <div class="player">
+        <button id="btn-play" class="btn primary" type="button">▶ Reproducir jingle</button>
+        <button id="btn-stop" class="btn ghost" type="button" hidden>■ Stop</button>
+        <span id="player-status" class="hint" style="margin-left:auto"></span>
+      </div>
+      <canvas id="visualizer" width="640" height="80"></canvas>
+      <div class="upsell" id="upsell">
+        <div>
+          <h3>🎬 Quieres el videoclip?</h3>
+          <p>Karaoke sincronizado con la letra, gradiente de marca, beat reactivo. Renderizado en 1080×608 y descargable como WebM. <b>49 €</b> por canción.</p>
+        </div>
+        <button id="btn-unlock" class="btn primary" type="button">Desbloquear videoclip · 49 €</button>
+      </div>
+      <div class="video-stage" id="video-stage" hidden>
+        <h3>3. Videoclip</h3>
+        <div class="video-frame">
+          <canvas id="video-canvas" width="1080" height="608"></canvas>
+        </div>
+        <div class="video-actions">
+          <button id="btn-render" class="btn primary" type="button">🎬 Renderizar y descargar (.webm)</button>
+          <span class="hint" id="render-status"></span>
+        </div>
+      </div>
+      <div class="campaign-link" id="campaign-link" hidden>
+        <h3>4. Asociar al hilo musical</h3>
+        <p>Tu campaña ya tiene jingle. Cuando ganes la subasta del slot <code>hilo-musical</code> en el marketplace, este jingle se asociará automáticamente.</p>
+        <a class="btn ghost" href="../marketplace/#inventory">Ir al marketplace →</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer class="foot">
+  <div class="foot-row">
+    <span class="brand">
+      <span class="brand-mark"><span class="x">×</span></span>
+      <span class="brand-name">ADMIRA <b>XP</b></span>
+    </span>
+    <span class="foot-meta" id="footMeta">studio · síntesis local · gemini lyrics</span>
+  </div>
+  <div class="foot-row tiny">
+    <span>© 2026 Admira · csilva@admira.com</span>
+    <span class="links">
+      <a href="../?v=studio&fresh=1">Ver tienda</a>
+      <a href="../marketplace/">Marketplace</a>
+      <a href="../marketing/">Producto</a>
+    </span>
+  </div>
+</footer>
+
+</main>
+
+<script src="../xtanco-version.js"></script>
+<script src="../marketing/app.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
