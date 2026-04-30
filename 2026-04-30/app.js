@@ -11,10 +11,7 @@
 //      grabable como WebM via MediaRecorder.
 
 (() => {
-  const GROK_API  = 'https://admira-grok-proxy.csilvasantin.workers.dev/grok/ask';
-  const TUNES_API = 'https://admira-tunes.csilvasantin.workers.dev';
-  const SUNO_POLL_MS = 5_000;
-  const SUNO_MAX_WAIT_MS = 5 * 60_000;
+  const GROK_API = 'https://admira-grok-proxy.csilvasantin.workers.dev/grok/ask';
 
   const $ = sel => document.querySelector(sel);
   const $$ = sel => Array.from(document.querySelectorAll(sel));
@@ -63,10 +60,6 @@
   let VIZ_RAF = 0;
   let VIDEO_RAF = 0;
   let RECORDER = null;
-  let ENGINE = 'local';     // 'local' | 'suno'
-  let SUNO_AUDIO_URL = null;
-  let SUNO_TASK_ID = null;
-  let SUNO_POLL = null;
 
   // ── Status helpers ───────────────────────────────────────────
   function setStatus(msg, mode) {
@@ -775,155 +768,12 @@
     }, (totalSec + 0.4) * 1000);
   }
 
-  // ── Engine selector ──────────────────────────────────────────
-  function setEngine(name) {
-    ENGINE = name;
-    $$('.engine-pill').forEach(p => {
-      const on = p.dataset.engine === name;
-      p.classList.toggle('is-on', on);
-      p.setAttribute('aria-checked', on ? 'true' : 'false');
-    });
-    // If we already have a Suno track loaded, keep the audio element visible
-    // when we're back on Suno; otherwise hide it.
-    const audio = $('#suno-audio');
-    if (audio) audio.hidden = !(name === 'suno' && SUNO_AUDIO_URL);
-    if (name === 'suno' && PLAYING) stopJingle();
-  }
-
-  function onPlayClick() {
-    if (!TUNE) return;
-    if (ENGINE === 'suno') {
-      if (SUNO_AUDIO_URL) { playSunoAudio(); return; }
-      openSunoConfirm();
-      return;
-    }
-    playJingle();
-  }
-
-  // ── Suno flow ────────────────────────────────────────────────
-  async function openSunoConfirm() {
-    $('#suno-error').hidden = true;
-    const cfg = $('#suno-cfg');
-    cfg.className = '';
-    cfg.textContent = '⏳ Comprobando configuración del worker…';
-    $('#suno-confirm').hidden = false;
-    $('#suno-confirm-go').disabled = true;
-    try {
-      const r = await fetch(TUNES_API + '/health', { cache: 'no-store' });
-      const data = await r.json().catch(() => ({}));
-      if (data && data.configured) {
-        cfg.classList.add('ok');
-        cfg.textContent = '✅ Suno configurado · modelo ' + (data.model || 'V4_5');
-        $('#suno-confirm-go').disabled = false;
-      } else {
-        cfg.classList.add('ko');
-        cfg.textContent = '⚠ Suno NO está configurado en el worker. Pídele al admin que ejecute `wrangler secret put SUNO_API_KEY`.';
-      }
-    } catch (err) {
-      cfg.classList.add('ko');
-      cfg.textContent = '❌ No se pudo contactar con admira-tunes: ' + (err && err.message || err);
-    }
-  }
-  function closeSunoConfirm() { $('#suno-confirm').hidden = true; }
-
-  async function startSunoGeneration() {
-    if (!TUNE) return;
-    closeSunoConfirm();
-    setPlayerStatus('🎤 Suno está componiendo… 30-60s');
-    $('#btn-play').disabled = true;
-    SUNO_AUDIO_URL = null;
-    const audio = $('#suno-audio');
-    audio.hidden = true;
-    audio.removeAttribute('src');
-
-    const styleHints = [TUNE.vibe, TUNE.bpm + ' bpm', TUNE.root + ' ' + TUNE.scale, ...(TUNE.moodWords || [])].filter(Boolean).join(', ');
-    let payload;
-    try {
-      const r = await fetch(TUNES_API + '/suno/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          brand: TUNE.brand,
-          title: TUNE.title,
-          lyrics: TUNE.lyrics,
-          style: styleHints,
-          instrumental: false,
-          length: TUNE.length,
-        }),
-      });
-      payload = await r.json().catch(() => ({}));
-      if (!r.ok || !payload.taskId) {
-        const msg = payload.error === 'not_configured'
-          ? 'Suno no está configurado en el worker. Avisa al admin para añadir SUNO_API_KEY.'
-          : (payload.message || payload.error || ('http_' + r.status));
-        setPlayerStatus('❌ ' + msg);
-        $('#btn-play').disabled = false;
-        return;
-      }
-    } catch (err) {
-      setPlayerStatus('❌ Error de red: ' + (err && err.message || err));
-      $('#btn-play').disabled = false;
-      return;
-    }
-
-    SUNO_TASK_ID = payload.taskId;
-    const startedAt = Date.now();
-    if (SUNO_POLL) clearInterval(SUNO_POLL);
-    const poll = async () => {
-      try {
-        const r = await fetch(TUNES_API + '/suno/status?id=' + encodeURIComponent(SUNO_TASK_ID), { cache: 'no-store' });
-        const data = await r.json().catch(() => ({}));
-        if (data.status === 'ready' && data.audioUrl) {
-          clearInterval(SUNO_POLL); SUNO_POLL = null;
-          SUNO_AUDIO_URL = data.audioUrl;
-          audio.src = SUNO_AUDIO_URL;
-          audio.hidden = false;
-          audio.play().catch(() => {});
-          setPlayerStatus('✅ Suno listo · ' + (TUNE.bpm + ' BPM · ' + (data.duration || TUNE.length) + 's'));
-          $('#btn-play').disabled = false;
-          $('#btn-play').textContent = '▶ Reproducir Suno';
-        } else if (data.status === 'error') {
-          clearInterval(SUNO_POLL); SUNO_POLL = null;
-          setPlayerStatus('❌ Suno falló: ' + (data.error || 'desconocido'));
-          $('#btn-play').disabled = false;
-        } else {
-          const secs = Math.round((Date.now() - startedAt) / 1000);
-          setPlayerStatus('🎤 Suno ' + (data.providerStatus || 'PENDING').toLowerCase() + ' · ' + secs + 's');
-          if (Date.now() - startedAt > SUNO_MAX_WAIT_MS) {
-            clearInterval(SUNO_POLL); SUNO_POLL = null;
-            setPlayerStatus('⏱ Timeout esperando a Suno · reintenta');
-            $('#btn-play').disabled = false;
-          }
-        }
-      } catch (err) {
-        // Soft fail: keep polling
-        console.warn('suno poll error', err);
-      }
-    };
-    SUNO_POLL = setInterval(poll, SUNO_POLL_MS);
-    poll();
-  }
-
-  function playSunoAudio() {
-    const audio = $('#suno-audio');
-    audio.hidden = false;
-    try { audio.currentTime = 0; } catch {}
-    audio.play().catch(() => {});
-    setPlayerStatus('▶ Reproduciendo Suno');
-  }
-
   // ── Wire up ──────────────────────────────────────────────────
   $('#btn-generate').addEventListener('click', generate);
-  $('#btn-play').addEventListener('click', onPlayClick);
+  $('#btn-play').addEventListener('click', () => playJingle());
   $('#btn-stop').addEventListener('click', stopJingle);
   $('#btn-unlock').addEventListener('click', unlockVideo);
   $('#btn-render').addEventListener('click', renderVideo);
-  $$('.engine-pill').forEach(p => p.addEventListener('click', () => setEngine(p.dataset.engine)));
-  $('#suno-cancel').addEventListener('click', closeSunoConfirm);
-  $('#suno-close').addEventListener('click', closeSunoConfirm);
-  $('#suno-backdrop').addEventListener('click', closeSunoConfirm);
-  $('#suno-confirm-go').addEventListener('click', startSunoGeneration);
-  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#suno-confirm').hidden) closeSunoConfirm(); });
 
   // Pre-fill from URL ?brand=...&values=...&color=...
   const params = new URLSearchParams(location.search);

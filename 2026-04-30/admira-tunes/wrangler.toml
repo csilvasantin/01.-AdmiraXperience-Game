@@ -1,0 +1,12 @@
+name = "admira-tunes"
+main = "src/index.js"
+compatibility_date = "2025-12-01"
+
+[vars]
+ALLOWED_ORIGINS = "https://csilvasantin.github.io,http://localhost:9124,http://127.0.0.1:9124,http://localhost:5173"
+# Suno-compatible API. Default targets sunoapi.org (apibox.erweima.ai).
+# Other compatible providers: sunoapi.com, sunoaiapi.com, etc.
+# Set SUNO_API_BASE to override.
+SUNO_API_BASE = "https://apibox.erweima.ai/api/v1"
+SUNO_MODEL = "V4_5"
+# SUNO_API_KEY is set as a secret with `wrangler secret put SUNO_API_KEY`.

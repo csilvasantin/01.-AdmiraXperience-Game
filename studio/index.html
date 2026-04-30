@@ -107,12 +107,21 @@
         <div class="lyric-head">Letra</div>
         <pre id="r-lyrics" class="lyrics"></pre>
       </div>
+      <div class="engine-row" role="radiogroup" aria-label="Motor de audio">
+        <button class="engine-pill is-on" data-engine="local" type="button" role="radio" aria-checked="true">
+          🎹 <b>Síntesis local</b><span>gratis · navegador · &lt;1s</span>
+        </button>
+        <button class="engine-pill" data-engine="suno" type="button" role="radio" aria-checked="false">
+          🎤 <b>Suno AI</b><span>de pago · ~0,10€/canción · 30-60s</span>
+        </button>
+      </div>
       <div class="player">
         <button id="btn-play" class="btn primary" type="button">▶ Reproducir jingle</button>
         <button id="btn-stop" class="btn ghost" type="button" hidden>■ Stop</button>
         <span id="player-status" class="hint" style="margin-left:auto"></span>
       </div>
       <canvas id="visualizer" width="640" height="80"></canvas>
+      <audio id="suno-audio" hidden controls preload="none"></audio>
       <div class="upsell" id="upsell">
         <div>
           <h3>🎬 Quieres el videoclip?</h3>
@@ -158,6 +167,26 @@
 </footer>
 
 </main>
+
+<aside id="suno-confirm" class="suno-confirm" hidden role="dialog" aria-modal="true" aria-labelledby="suno-confirm-title">
+  <div class="suno-card">
+    <button class="suno-close" id="suno-close" aria-label="Cerrar">×</button>
+    <div class="suno-icon">⚠</div>
+    <h3 id="suno-confirm-title">Vas a pagar para generar audio</h3>
+    <p>Suno AI consume crédito de tu cuenta cada vez que generas una canción. <b>Coste estimado: ~0,10 € por canción.</b> Tarda 30-60 segundos. Si Suno no está configurado, este botón solo te lo dirá.</p>
+    <ul class="suno-checks" id="suno-checks">
+      <li id="suno-cfg">⏳ Comprobando configuración…</li>
+      <li>💳 Se descontará crédito de la cuenta Suno del worker</li>
+      <li>📜 La letra que enviarás es la que has generado arriba</li>
+    </ul>
+    <div class="suno-actions">
+      <button class="btn ghost" id="suno-cancel" type="button">Cancelar</button>
+      <button class="btn primary" id="suno-confirm-go" type="button">Sí, generar con Suno</button>
+    </div>
+    <p class="suno-error" id="suno-error" hidden></p>
+  </div>
+  <div class="suno-backdrop" id="suno-backdrop"></div>
+</aside>
 
 <script src="../xtanco-version.js"></script>
 <script src="../marketing/app.js"></script>
