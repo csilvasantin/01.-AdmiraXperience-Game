@@ -16071,14 +16071,38 @@ function openCustomerEditor(custIdx){
   const c=G.custs[custIdx];
   npcEdOpen=true;npcEdIdx=custIdx;npcEdTab='look';npcEdNameEdit=false;npcEdKind='customer';npcPlacementDirty=false;
   npcEdDockSide='left';
+  // Socio del Xtanco Club → ficha dedicada con datos de la app de fidelizacion
+  if(c.fanCustomerId){
+    const stamps=Number.isFinite(c.fanStamps)?c.fanStamps:0;
+    const stampBar='● '.repeat(stamps)+'○ '.repeat(Math.max(0,5-stamps));
+    const cake=c.fanIsBirthday?' 🎂 ¡CUMPLE HOY!':'';
+    const tier=stamps>=5?'Premium · sello canjeable':stamps>=3?'Activo':'Nuevo';
+    npcEdDraft={
+      title:'FICHA DE SOCIO · XTANCO CLUB',
+      name:(c.fanEmoji?c.fanEmoji+' ':'')+(c.fanName||'Socio')+cake,
+      look:JSON.parse(JSON.stringify(c.look||{shirt:1,hair:0,skin:1,pants:0,shoes:0,accessory:0})),
+      lines:[
+        'ID socio: '+c.fanCustomerId,
+        'Nacimiento: '+(c.fanBirthday||'—'),
+        'Sellos: '+stamps+'/5  '+stampBar,
+        'Categoria: '+tier,
+        'Ticket esperado: '+(Math.round(c.avgTicket||0))+'€',
+        'Producto que busca: '+(c.wantsProdIdx>=0?prodName(c.wantsProdIdx):'—'),
+        'Estado en tienda: '+customerStateLabel(c),
+        'Compra realizada: '+(c.bought?'sí':'no'),
+      ],
+    };
+    return;
+  }
   npcEdDraft={
-    title:c.vip?'CLIENTE VIP':'CLIENTE',
-    name:c.vip?'Cliente VIP':'Cliente',
+    title:c.sponsor?'🦆 SPONSOR · TIO GILITO':(c.vip?'CLIENTE VIP':'CLIENTE'),
+    name:c.sponsor?'Tio Gilito':(c.vip?'Cliente VIP':'Cliente'),
     look:JSON.parse(JSON.stringify(c.look||{shirt:1,hair:0,skin:1,pants:0,shoes:0,accessory:0})),
     lines:[
       'Estado: '+customerStateLabel(c),
       'Quiere: '+(c.wantsProdIdx>=0?prodName(c.wantsProdIdx):'-'),
       'Compra: '+(c.bought?'si':'no'),
+      'Ticket esperado: '+(Math.round(c.avgTicket||0))+'€',
       'Dentro: '+(G.custs.length||0),
     ],
   };
@@ -16163,7 +16187,7 @@ function drawNPCEditor(){
   cx.fillStyle='#e0d4b8';cx.fillRect(px,py,pw,22);
   cx.strokeStyle='#8a7a60';cx.lineWidth=1;
   cx.beginPath();cx.moveTo(px,py+22);cx.lineTo(px+pw,py+22);cx.stroke();
-  const title='EDITOR NPC: '+d.name;
+  const title=(d.title?d.title+': ':'EDITOR NPC: ')+d.name;
   tx(title,px+pw/2,py+15,'#3a2a1a',9,'center');
   // Close button
   npcBtn('npcEdClose',px+pw-20,py+2,18,18);
