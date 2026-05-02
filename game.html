@@ -4334,6 +4334,7 @@ const LANGS={
     custHappy:['¡Gracias!','Buen servicio','Volveré','¡Perfecto!','Muy amables','¡Genial!','Hasta luego'],
     custUnhappy:['Mucha cola...','No hay stock...','Qué lento...','Menuda espera...','Vaya...'],
     custVip:['Quiero lo mejor','Soy cliente habitual','¿Hay novedades premium?','Lo de siempre','¿Qué me recomiendas?'],
+    custSponsor:['¡Excelente surtido, mi buen!','Tomo de todo','Cobre, cobre','¡Qué buen negocio!','Me llevo el lote completo','Negocio de oro, sí señor'],
     custNoStock:['No hay stock...','¡Sin existencias!','Qué pena, no queda...','Me voy a otro sitio','No tienen lo que busco...'],
     custSaved:['¡Ah, gracias!','Menos mal que viniste','¡Eres un crack!','Genial, me llevo esto'],
     custBought:['¡Perfecto!','Justo lo que buscaba','Gracias, hasta luego','¡Qué bien!'],
@@ -4415,6 +4416,7 @@ const LANGS={
     custHappy:['Thanks!','Great service','I\'ll be back','Perfect!','Very kind','Awesome!','See you'],
     custUnhappy:['Long queue...','Out of stock...','So slow...','What a wait...','Ugh...'],
     custVip:['I want the best','I\'m a regular','Any premium items?','The usual','What do you recommend?'],
+    custSponsor:['Splendid selection, lad!','I\'ll take it all','Charge me, charge me','What a fine business!','The whole lot, please','Solid gold deal!'],
     custNoStock:['Out of stock...','Nothing left!','Such a shame...','I\'ll go elsewhere','They don\'t have what I need...'],
     custSaved:['Oh, thanks!','Good thing you came','You\'re a star!','Great, I\'ll take this'],
     custBought:['Perfect!','Exactly what I wanted','Thanks, bye!','Lovely!'],
@@ -7295,12 +7297,25 @@ function updateGame(){
       const dx2=startX2-th.x, dy2=startY2-th.y;
       const dist2=Math.sqrt(dx2*dx2+dy2*dy2);
       if(moved==='done'||dist2<3||th.x>810){
+        // No teleport-to-idle: hand off to 'exiting' so the actor walks the
+        // last visible stretch through the door frame before disappearing.
+        th.phase='exiting';
+        th.path=null;th.pathIdx=0;th.pathMode='';
+        th.dir=1;
+      } else if(moved==='blocked'){
+        th.path=null;th.pathMode='';
+      }
+    } else if(th.phase==='exiting'){
+      G.doorOpen=Math.max(G.doorOpen,40);
+      th.dir=1;
+      th.x+=th.caught?2.6:2.0;
+      th.aTimer=(th.aTimer||0)+1;
+      if(th.aTimer>=6){th.aTimer=0;th.aFrame=((th.aFrame||0)+1)%2;}
+      if(th.x>=startX2+12){
         th.phase='idle';
         th.cooldown=4800+Math.floor(Math.random()*2400); // ~80-120 sec between thieves
         th.x=startX2;th.y=startY2;
         th.path=null;th.pathIdx=0;th.pathMode='';
-      } else if(moved==='blocked'){
-        th.path=null;th.pathMode='';
       }
     }
   }
@@ -7618,10 +7633,20 @@ function updateGame(){
       const dx=startX3-gc.x,dy=startY3-gc.y;
       const dist=Math.sqrt(dx*dx+dy*dy);
       if(moved==='done'||dist<3||gc.x>810){
-        gc.phase='idle';gc.x=startX3;gc.y=startY3;gc.autoLeave=false;
+        gc.phase='exiting';
         gc.path=null;gc.pathMode='';
+        gc.dir=1;
       } else if(moved==='blocked'){
         gc.path=null;gc.pathMode='';
+      }
+    } else if(gc.phase==='exiting'){
+      G.doorOpen=Math.max(G.doorOpen,40);
+      gc.dir=1;
+      gc.x+=1.7;
+      gc.aTimer=(gc.aTimer||0)+1;
+      if(gc.aTimer>=8){gc.aTimer=0;gc.aFrame=((gc.aFrame||0)+1)%2;}
+      if(gc.x>=startX3+12){
+        gc.phase='idle';gc.x=startX3;gc.y=startY3;gc.autoLeave=false;
       }
     }
   }
@@ -7683,10 +7708,20 @@ function updateGame(){
       const dx=startX4-op.x,dy=startY4-op.y;
       const dist=Math.sqrt(dx*dx+dy*dy);
       if(moved==='done'||dist<3||op.x>810){
-        op.phase='idle';op.x=startX4;op.y=startY4;op.bTimer=0;op.bMsg='';
+        op.phase='exiting';
         op.path=null;op.pathMode='';
+        op.dir=1;
       } else if(moved==='blocked'){
         op.path=null;op.pathMode='';
+      }
+    } else if(op.phase==='exiting'){
+      G.doorOpen=Math.max(G.doorOpen,40);
+      op.dir=1;
+      op.x+=1.7;
+      op.aTimer=(op.aTimer||0)+1;
+      if(op.aTimer>=8){op.aTimer=0;op.aFrame=((op.aFrame||0)+1)%2;}
+      if(op.x>=startX4+12){
+        op.phase='idle';op.x=startX4;op.y=startY4;op.bTimer=0;op.bMsg='';
       }
     }
 	    if(op.bTimer>0) op.bTimer--;
@@ -7757,12 +7792,23 @@ function updateGame(){
 	      const dx=startX5-bot.x,dy=startY5-bot.y;
 	      const dist=Math.sqrt(dx*dx+dy*dy);
 	      if(moved==='done'||dist<3||bot.x>810){
+	        bot.phase='exiting';
+	        bot.path=null;bot.pathMode='';
+	        bot.dir=1;
+	      }else if(moved==='blocked'){
+	        bot.path=null;bot.pathMode='';
+	      }
+	    }else if(bot.phase==='exiting'){
+	      G.doorOpen=Math.max(G.doorOpen,50);
+	      bot.dir=1;
+	      bot.x+=1.5;
+	      bot.aTimer=(bot.aTimer||0)+1;
+	      if(bot.aTimer>=10){bot.aTimer=0;bot.aFrame=((bot.aFrame||0)+1)%2;}
+	      if(bot.x>=startX5+14){
 	        bot.phase='idle';
 	        bot.cooldown=3600+Math.floor(Math.random()*1600);
 	        resetUnitreeBotPosition(bot);
 	        bot.bTimer=0;bot.bMsg='';
-	      }else if(moved==='blocked'){
-	        bot.path=null;bot.pathMode='';
 	      }
 	    }
 	    if(bot.bTimer>0) bot.bTimer--;
@@ -7805,12 +7851,15 @@ function updateGame(){
   updateBars();
 }
 
-function spawnCust(isVip){
+function spawnCust(isVip,isSponsor){
   if(G.custs.length>=getCurrentCustomerCap()) return;
   const ci=Math.floor(Math.random()*6);
-  const isV=!!isVip;
-  const persona=isV?'loyal':CUSTOMER_ARCHETYPES[Math.floor(Math.random()*CUSTOMER_ARCHETYPES.length)];
-  const avgTicket=isV
+  const isSp=!!isSponsor;
+  const isV=!!isVip||isSp; // sponsor implies VIP-tier perks
+  const persona=isSp?'sponsor':(isV?'loyal':CUSTOMER_ARCHETYPES[Math.floor(Math.random()*CUSTOMER_ARCHETYPES.length)]);
+  const avgTicket=isSp
+    ? 90+Math.round(Math.random()*60) // big spender — Scrooge McDuck tier
+    : isV
     ? 30+Math.round(Math.random()*20)
     : (Math.random()<0.45
         ? 12+Math.round(Math.random()*13)
@@ -7834,7 +7883,9 @@ function spawnCust(isVip){
   const entryPath=wantsTurn&&turnTarget?astarPath(ISO.cols-1,3,turnTarget.col,turnTarget.row):path;
   // Pick an entry dialogue
   let cBMsg='',cBTimer=0;
-  if(isV){
+  if(isSp){
+    const arr=T().custSponsor||T().custVip;cBMsg=arr[Math.floor(Math.random()*arr.length)];cBTimer=240;
+  } else if(isV){
     const arr=T().custVip;cBMsg=arr[Math.floor(Math.random()*arr.length)];cBTimer=210;
   } else if(Math.random()<0.4){
     const arr=T().custEnter;cBMsg=arr[Math.floor(Math.random()*arr.length)];cBTimer=210;
@@ -7866,10 +7917,10 @@ function spawnCust(isVip){
     x:doorStart.x,y:doorStart.y,
     tx:tIso.x-7,ty:tIso.y-20,
     gCol:ISO.cols,gRow:3,
-    st:'walk',timer:0,col:isVip?'#ffd700':P.prods[ci],hair:cLook.hair,
+    st:'walk',timer:0,col:isSp?'#ffaa00':(isVip?'#ffd700':P.prods[ci]),hair:cLook.hair,
     look:cLook,
     fr:0,ft:0,dir:-1,
-    path:entryPath,pathIdx:0,vip:isV,
+    path:entryPath,pathIdx:0,vip:isV,sponsor:isSp,
     roamPath:null,roamIdx:0,roamCooldown:45+Math.floor(Math.random()*60),
     wantsTurn:wantsTurn,queueNumber:0,serviceTimer:0,ticketPicked:false,
     bTimer:cBTimer,bMsg:cBMsg,bShown:false,
@@ -14201,7 +14252,92 @@ function drawIsoStaff(s){
 }
 
 // ── DRAW CUSTOMERS (ISOMETRIC) ───────────────────────────────
+// ── DRAW SPONSOR (Scrooge McDuck-style patron) ─────────────────────────────
+// Pato amarillo con sombrero de copa negro, levita roja, monoculo y baston
+// con pomo dorado. Mismo footprint que chibi() para que encaje en el juego.
+function drawSponsorScrooge(x,y,dir,frame,tick){
+  cx.save();
+  const flip=dir===-1;
+  if(flip){cx.translate(x+12,0);cx.scale(-1,1);cx.translate(-x,0);}
+  // Shadow
+  drawIsoShadow(x+7,y+27,9,3.2);
+  // Webbed feet (orange) with walk anim
+  const lk=frame===0?0:1;
+  r(x+2,y+24+lk,5,3,'#ff9933');
+  r(x+8,y+24-lk,5,3,'#ff9933');
+  // Legs (yellow duck legs, short)
+  r(x+4,y+20,2,5,'#ffcc44');
+  r(x+9,y+20,2,5,'#ffcc44');
+  // Frock coat (red levita) — main body
+  r(x+1,y+10,12,12,'#aa1818');
+  // Coat tails (slightly darker, hint of split)
+  r(x+1,y+18,5,5,'#881010');
+  r(x+8,y+18,5,5,'#881010');
+  // Coat highlight
+  r(x+3,y+11,2,8,'#cc2828');
+  // White shirt cuff at neck
+  r(x+5,y+9,5,3,'#f4ecd8');
+  // Black bowtie
+  r(x+6,y+10,3,2,'#1a1a1a');
+  // Head (yellow duck) — slightly oval feel via two stacked rects
+  r(x+3,y+3,9,7,'#ffe066');
+  r(x+4,y+2,7,2,'#ffe066');
+  // Head highlight
+  r(x+5,y+4,3,2,'#fff5b8');
+  // Beak (orange triangle-ish)
+  r(x+10,y+6,4,3,'#ff9933');
+  r(x+11,y+9,3,1,'#dd7722');
+  // Eye + monocle (front eye)
+  r(x+8,y+5,2,2,'#1a1a1a');
+  cx.strokeStyle='#ffd700';cx.lineWidth=0.8;
+  cx.beginPath();cx.arc(x+9,y+6,2.2,0,Math.PI*2);cx.stroke();
+  // Monocle chain
+  cx.strokeStyle='#cc9900';cx.lineWidth=0.5;
+  cx.beginPath();cx.moveTo(x+10,y+7);cx.lineTo(x+12,y+11);cx.stroke();
+  // Top hat — brim
+  r(x+1,y+1,12,2,'#0a0a0a');
+  // Top hat — crown
+  r(x+3,y-5,8,6,'#0a0a0a');
+  // Hat band (red)
+  r(x+3,y,8,1,'#aa1818');
+  // Hat highlight
+  r(x+4,y-4,1,5,'#2a2a2a');
+  // Cane — vertical, on the right
+  cx.strokeStyle='#1a1a1a';cx.lineWidth=1.2;
+  cx.beginPath();cx.moveTo(x+14,y+12);cx.lineTo(x+14,y+27);cx.stroke();
+  // Cane gold pommel
+  r(x+13,y+10,3,2,'#ffd700');
+  r(x+13,y+10,3,1,'#ffe680');
+  cx.restore();
+}
+
 function drawIsoCust(c){
+  // Sponsor (Scrooge McDuck-style patron) — special render path
+  if(c&&c.sponsor){
+    const djHired=G&&G.staff&&G.staff.some(s=>s.hired&&s.role===4);
+    const bob=djHired?Math.sin(tt*0.2+c.x*0.1)*3:0;
+    drawSponsorScrooge(c.x,c.y+bob,c.dir||1,c.fr,tt);
+    // Sponsor halo + golden coin sparks
+    cx.save();
+    cx.globalAlpha=0.55+0.25*Math.abs(Math.sin(tt*0.10));
+    cx.strokeStyle='#ffd700';cx.lineWidth=1.4;
+    cx.beginPath();cx.ellipse(c.x+7,c.y+30,11,3.5,0,0,Math.PI*2);cx.stroke();
+    cx.restore();
+    if(tt%24<2){
+      cx.fillStyle='#ffd700';cx.font='8px monospace';
+      cx.fillText('$',c.x+(Math.random()*10-5),c.y-22-Math.random()*8);
+    }
+    const ciSp=G&&G.custs?G.custs.indexOf(c):-1;
+    if(ciSp>=0) BTNS['custClick'+ciSp]={x:c.x-3,y:c.y-12,w:18,h:40};
+    if(c.bTimer>0&&c.bMsg){
+      const msgSp=c.bMsg, bwSp=msgSp.length*5.5+12, bhSp=14;
+      const bxSp=c.x+7-bwSp/2, bySp=c.y-26;
+      r(bxSp,bySp,bwSp,bhSp,'#fff8e0');rx(bxSp,bySp,bwSp,bhSp,'#cc9900',1);
+      cx.fillStyle='#5a3a00';cx.font='9px monospace';cx.textAlign='center';
+      cx.fillText(msgSp,c.x+7,bySp+10);cx.textAlign='left';
+    }
+    return;
+  }
   // Use look if available, otherwise fallback
   const cLook=c.look||null;
   const shirtIdx=cLook?cLook.shirt:(1+(Math.abs(c.hair)%(P.shirts.length-1)));
@@ -14895,6 +15031,7 @@ function customerStateLabel(c){
 
 function customerTypeLabel(c){
   if(!c) return lang==='es'?'Anonimo':'Unknown';
+  if(c.sponsor) return '🦆 '+(lang==='es'?'Sponsor':'Sponsor');
   if(c.fanCustomerId){
     const isEs=lang==='es';
     if(c.fanIsBirthday) return '🎂 '+(isEs?'Cumple Club':'Club Birthday');
@@ -17613,6 +17750,12 @@ window.xtAPI = (function(){
         status:loyaltyReady?(isEs?'preparada':'armed'):(isEs?'regalo':'gift'),
         command:'/tarjetaFidelidad',
         active:loyaltyReady
+      },
+      {
+        label:'🦆 Sponsor',
+        status:(hasGame&&G.custs&&G.custs.some(c=>c&&c.sponsor))?(isEs?'en tienda':'in store'):(isEs?'invitar':'invite'),
+        command:(hasGame&&G.custs&&G.custs.some(c=>c&&c.sponsor))?'/sponsor off':'/sponsor on',
+        active:hasGame&&G.custs&&G.custs.some(c=>c&&c.sponsor)
       }
     ];
   }
@@ -18896,6 +19039,23 @@ window.xtAPI = (function(){
       if(cmd==='ladron'||cmd==='ladrón'||cmd==='thief') return setThiefCommand(arg);
       if(cmd==='guardiacivil'||cmd==='guardia-civil'||cmd==='gc') return setGuardiaCivilCommand(arg);
       if(cmd==='guardia') return setGuardiaCivilCommand(arg.replace(/^civil\s+/i,''));
+      if(cmd==='sponsor'||cmd==='gilito'||cmd==='tio-gilito'||cmd==='scrooge'){
+        const errSp=needsGame();if(errSp)return errSp;
+        const sub=String(arg||'').trim().toLowerCase();
+        if(['off','out','clear','limpiar','despedir'].includes(sub)){
+          if(!Array.isArray(G.custs)) return 'Sin clientes';
+          const removed=G.custs.filter(c=>c&&c.sponsor).length;
+          G.custs=G.custs.filter(c=>!(c&&c.sponsor));
+          showEv('🦆 Sponsor despedido','#ffaa55');
+          return removed?'🦆 '+removed+' sponsor(s) fuera de la tienda.':'No habia ningun sponsor en la tienda.';
+        }
+        try{spawnCust(false,true);}catch(e){return 'Error invocando sponsor: '+e.message;}
+        const last=G.custs[G.custs.length-1];
+        if(!last||!last.sponsor) return '⚠️ No se pudo invocar al sponsor (capacidad o pathing).';
+        showEv('🦆 Sponsor en la tienda','#ffd700');
+        addFloat(last.x+7,last.y-30,'$$$','#ffd700');
+        return '🦆 Tio Gilito ha entrado a la tienda. Ticket esperado ~'+last.avgTicket+'€. Usa /sponsor off para echarlo.';
+      }
       if(cmd==='admiralive'||cmd==='live'||cmd==='led') return setAdmiraLive(arg);
       if(cmd==='comunicar'||cmd==='comunicado'||cmd==='announce'||cmd==='megafonia'||cmd==='megafonía') return await setComunicado(arg);
       if(cmd==='layout'||cmd==='ordena'||cmd==='ordenar'||cmd==='resetlayout'){
