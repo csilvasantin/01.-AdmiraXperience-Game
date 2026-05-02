@@ -599,6 +599,89 @@ const SFX=(()=>{
   };
 })();
 
+// ── AMBIENT ENGINE — rumor de fondo + cafetera + lluvia, loop continuo ──
+const AMBIENT=(()=>{
+  let ac=null,master=null,started=false,nodes=[];
+  function ctx(){
+    if(!ac){try{ac=new(window.AudioContext||window.webkitAudioContext)();}catch(e){return null;}}
+    return ac;
+  }
+  function buildRumorNoise(a){
+    // Ruido marrón filtrado para simular rumor de gente
+    const buf=a.createBuffer(1,a.sampleRate*2,a.sampleRate);
+    const d=buf.getChannelData(0);let last=0;
+    for(let i=0;i<d.length;i++){const w=Math.random()*2-1;last=(last+0.02*w)/1.02;d[i]=last*3.5;}
+    const src=a.createBufferSource();src.buffer=buf;src.loop=true;
+    const f=a.createBiquadFilter();f.type='lowpass';f.frequency.value=460;
+    const g=a.createGain();g.gain.value=0.0;
+    src.connect(f);f.connect(g);g.connect(master);
+    src.start();
+    return {src,gain:g,fade:0.15};
+  }
+  function buildRainNoise(a){
+    const buf=a.createBuffer(1,a.sampleRate*2,a.sampleRate);
+    const d=buf.getChannelData(0);
+    for(let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*0.6;
+    const src=a.createBufferSource();src.buffer=buf;src.loop=true;
+    const f=a.createBiquadFilter();f.type='bandpass';f.frequency.value=2200;f.Q.value=0.6;
+    const g=a.createGain();g.gain.value=0.0;
+    src.connect(f);f.connect(g);g.connect(master);
+    src.start();
+    return {src,gain:g,fade:0.2};
+  }
+  function start(){
+    const a=ctx();if(!a||started) return;
+    started=true;
+    master=a.createGain();master.gain.value=0;master.connect(a.destination);
+    nodes.push(buildRumorNoise(a));
+    nodes.push(buildRainNoise(a));
+    // Cafetera ocasional cada 12-25s
+    setInterval(()=>{
+      if(!G||!G.ambient||!G.ambient.enabled) return;
+      try{
+        const t=a.currentTime;
+        const o=a.createOscillator(),g=a.createGain();
+        o.type='triangle';o.frequency.value=1200;
+        g.gain.setValueAtTime(0,t);
+        g.gain.linearRampToValueAtTime(0.05*(G.ambient.volume||0.25),t+0.05);
+        g.gain.exponentialRampToValueAtTime(0.001,t+0.6);
+        const f=a.createBiquadFilter();f.type='bandpass';f.frequency.value=2400;f.Q.value=4;
+        o.connect(f);f.connect(g);g.connect(master);
+        o.start(t);o.stop(t+0.65);
+      }catch(e){}
+    },12000+Math.floor(Math.random()*13000));
+  }
+  function applyVolumes(){
+    if(!ac||!master||!nodes.length) return;
+    const vol=(G&&G.ambient&&G.ambient.enabled)?(G.ambient.volume||0.25):0;
+    const isRain=G&&G.weather&&G.weather.type==='rain';
+    master.gain.setTargetAtTime(vol,ac.currentTime,0.4);
+    nodes[0].gain.gain.setTargetAtTime(vol*0.7,ac.currentTime,0.4); // rumor
+    nodes[1].gain.gain.setTargetAtTime(isRain?vol*0.9:0,ac.currentTime,0.4); // lluvia
+  }
+  return {
+    init(){start();},
+    update(){applyVolumes();},
+    pulseTill(){applyVolumes();},
+  };
+})();
+
+// ── Voces de clientes — TTS corto del bocadillo, con cooldown ──
+function speakCustomerBubble(text){
+  if(!G||!G.custVoices||!G.custVoices.enabled) return;
+  if(!('speechSynthesis' in window)||typeof window.SpeechSynthesisUtterance!=='function') return;
+  const now=typeof tt==='number'?tt:0;
+  if(now-(G.custVoices.lastSpeakTick||0)<140) return; // ~2.3s entre voces
+  G.custVoices.lastSpeakTick=now;
+  const clean=String(text||'').replace(/[🎂🪪🦆🐰🐱🐢🐝🐬🐧🦊🐼🦉🦄🦁🦊]/g,'').replace(/\s+/g,' ').trim();
+  if(!clean||clean.length<2) return;
+  try{
+    const u=new SpeechSynthesisUtterance(clean.slice(0,80));
+    u.lang='es-ES';u.rate=1.05;u.pitch=0.9+Math.random()*0.4;u.volume=0.6;
+    window.speechSynthesis.speak(u);
+  }catch(e){}
+}
+
 // ── HOME CHIPTUNE ────────────────────────────────────────────
 let homeMusicCtx=null;
 let homeMusicTimer=null;
@@ -5530,6 +5613,8 @@ function initGame(){
     recurringSponsor:{enabled:false,intervalSec:120,lastVisitTick:0,discountPct:10,visits:0},
     socioRegistry:[], // historico {id,name,emoji,birthday,fanSince,source:'tienda'|'web',joinedAtTick}
     socioJoinHour:-1, // ultima hora del juego (entera) en que se acerco un wantToJoin
+    ambient:{enabled:false,volume:0.25}, // sonido ambiente (rumor + cafetera ocasional + lluvia)
+    custVoices:{enabled:false,lastSpeakTick:0}, // TTS de bocadillos de cliente
     admiraTube:null,
     securityCam:{active:true},
     guardiaCivil:{phase:'idle',x:820,y:0,dir:-1,aFrame:0,aTimer:0,patrolTimer:0,targetCol:9,targetRow:3},
@@ -5686,6 +5771,8 @@ function loadGame(){
       if(!G.recurringSponsor) G.recurringSponsor={enabled:false,intervalSec:120,lastVisitTick:0,discountPct:10,visits:0};
       if(!Array.isArray(G.socioRegistry)) G.socioRegistry=[];
       if(typeof G.socioJoinHour!=='number') G.socioJoinHour=-1;
+      if(!G.ambient) G.ambient={enabled:false,volume:0.25};
+      if(!G.custVoices) G.custVoices={enabled:false,lastSpeakTick:0};
       if(G.customerSpawnDelay===undefined) G.customerSpawnDelay=0;
       if(!G.escaparate) G.escaparate={active:true,phase:0,boost:0,smTimer:900};
       if(!G.saca) G.saca={phase:'idle',cooldown:1800,x:820,y:0,dir:-1,aFrame:0,aTimer:0,unloadTimer:0,boxes:6};
@@ -7502,6 +7589,8 @@ function updateGame(){
       }catch(e){}
     }
   }
+  // Ambient engine — sync volumen del rumor/lluvia con el estado del juego
+  try{ if(G.ambient && G.ambient.enabled){ AMBIENT.init(); AMBIENT.update(); } }catch(e){}
   // Heat map de socios — sample cada 15 ticks (~0.25s) para no saturar
   if(G.socioHeat && G.socioHeat.enabled){
     G.socioHeat.sampleTick=(G.socioHeat.sampleTick||0)+1;
@@ -11183,6 +11272,56 @@ function drawCityBg(){
   cx.fillStyle=skyGrad;
   cx.fillRect(0,skyTop,W,skyH);
 
+  // ── SOL / LUNA — disco celeste que viaja por el cielo segun hora del juego ──
+  if(G && typeof G.gameTime==='number'){
+    const h=G.gameTime;
+    const isDay=h>=7&&h<19.5;
+    // Posición horizontal: 0 (izquierda) → 1 (derecha) según hora del día/noche
+    const dayProg=isDay?(h-7)/12.5:((h>=19.5?(h-19.5):(h+4.5))/11.5);
+    const sx=W*(0.05+0.9*dayProg);
+    const sy=skyTop+18+Math.sin(dayProg*Math.PI)*-22;
+    const radius=isDay?16:13;
+    cx.save();
+    if(isDay){
+      // Sol con halo
+      const haloG=cx.createRadialGradient(sx,sy,radius*0.4,sx,sy,radius*2.4);
+      haloG.addColorStop(0,'rgba(255,224,128,0.55)');
+      haloG.addColorStop(1,'rgba(255,224,128,0)');
+      cx.fillStyle=haloG;
+      cx.beginPath();cx.arc(sx,sy,radius*2.4,0,Math.PI*2);cx.fill();
+      cx.fillStyle='#ffe066';
+      cx.beginPath();cx.arc(sx,sy,radius,0,Math.PI*2);cx.fill();
+      cx.fillStyle='rgba(255,255,255,0.5)';
+      cx.beginPath();cx.arc(sx-radius*0.35,sy-radius*0.35,radius*0.5,0,Math.PI*2);cx.fill();
+    } else {
+      // Luna con cráteres + estrellas
+      const haloG=cx.createRadialGradient(sx,sy,radius*0.4,sx,sy,radius*2.0);
+      haloG.addColorStop(0,'rgba(220,224,255,0.35)');
+      haloG.addColorStop(1,'rgba(220,224,255,0)');
+      cx.fillStyle=haloG;
+      cx.beginPath();cx.arc(sx,sy,radius*2.0,0,Math.PI*2);cx.fill();
+      cx.fillStyle='#e8e8f4';
+      cx.beginPath();cx.arc(sx,sy,radius,0,Math.PI*2);cx.fill();
+      // Cráteres
+      cx.fillStyle='rgba(160,160,180,0.4)';
+      cx.beginPath();cx.arc(sx-3,sy-2,2.5,0,Math.PI*2);cx.fill();
+      cx.beginPath();cx.arc(sx+4,sy+3,1.8,0,Math.PI*2);cx.fill();
+      cx.beginPath();cx.arc(sx+1,sy-5,1.2,0,Math.PI*2);cx.fill();
+      // Estrellas titilantes
+      cx.fillStyle='rgba(255,255,255,0.85)';
+      const starSeed=[120,240,380,510,640,720];
+      for(let i=0;i<starSeed.length;i++){
+        const stx=starSeed[i]%W;
+        const sty=skyTop+8+(i*9)%(skyH*0.55);
+        const tw=0.5+0.5*Math.sin(tt*0.06+i);
+        cx.globalAlpha=0.4+0.5*tw;
+        cx.beginPath();cx.arc(stx,sty,1+tw,0,Math.PI*2);cx.fill();
+      }
+      cx.globalAlpha=1;
+    }
+    cx.restore();
+  }
+
   // Clouds (darker when raining)
   const isRaining=G&&G.weather&&G.weather.type==='rain';
   cx.fillStyle=isRaining?'#6a7080':'#d0e8f8';
@@ -14640,6 +14779,11 @@ function drawIsoCust(c){
   }
   // Customer dialogue bubble
   if(c.bTimer>0&&c.bMsg){
+    // Voz: una sola vez por mensaje único (evita repetir cada frame)
+    if(G&&G.custVoices&&G.custVoices.enabled && c._lastSpokenMsg!==c.bMsg){
+      c._lastSpokenMsg=c.bMsg;
+      try{ speakCustomerBubble(c.bMsg); }catch(e){}
+    }
     const msg=c.bMsg;
     const bw=msg.length*5.5+12;
     const bh=14;
@@ -19063,6 +19207,7 @@ window.xtAPI = (function(){
       {title:'Pantalla y directo',items:['/livecam','/mocap','/AdmiraLive texto','/comunicar texto','/comunicar texto --grok','/comunicar texto --elevenlabs','/AdmiraTube URL 2 audio','/say texto']},
       {title:'Escena en vivo',items:['/dj','/ladron','/guardiacivil','/opinador','/robot','/sponsor','/socio','/door open','/door close','/door auto']},
       {title:'Notificaciones al personal',items:['/personal socio','/personal dashboard','/socios listado','/heatmap','/heatmap reset','/sponsor recurrente 120 10']},
+      {title:'Atmósfera',items:['/ambiente','/ambiente vol 50','/voces']},
       {title:'IA y contenido',items:['/grok pregunta','/draw dibujo','/metahuman pregunta','/log','/log thief','/log customer','/import','/import list','/import remove 1','/importTube https://youtu.be/...']},
       {title:'Ajustes rápidos',items:['/money 12000','/sat 90','/fame 80','/set week 12','/set year 2','/set revenue 5000','/set storeLevel 2','/set customers 30']},
       {title:'Musica y layout',items:['/song 1','/song bad bunny','/music','/next','/prev','/equipo inicio ana 3 4','/equipo zona dj 12 2 2','/mobiliario','/mobiliario inicio','/layout','/layout save','/layout factory']},
@@ -19513,6 +19658,37 @@ window.xtAPI = (function(){
             +'Admira IA · Top Crosselling: '+topCross;
         }
         return 'Subtipo no soportado: '+sub+'. Disponibles: socio, dashboard.';
+      }
+      if(cmd==='ambiente'||cmd==='ambient'||cmd==='atmosfera'||cmd==='atmósfera'){
+        const errA=needsGame();if(errA)return errA;
+        if(!G.ambient) G.ambient={enabled:false,volume:0.25};
+        const subA=String(arg||'').trim().toLowerCase();
+        const volMatch=subA.match(/^(?:vol|volumen|volume)\s+(\d+)$/);
+        if(volMatch){
+          const v=Math.max(0,Math.min(100,parseInt(volMatch[1])));
+          G.ambient.volume=v/100;
+          try{AMBIENT.init();AMBIENT.update();}catch(e){}
+          return '🔊 Volumen ambiente: '+v+'%';
+        }
+        const cleanA=binaryToggleArg(subA,!!G.ambient.enabled);
+        const turnOn=!['off','out','clear','limpiar','despedir','fuera','sale','salir','stop'].includes(cleanA);
+        G.ambient.enabled=turnOn;
+        try{AMBIENT.init();AMBIENT.update();}catch(e){}
+        showEv(turnOn?'🔊 Ambiente ON':'🔇 Ambiente OFF','#ffaa44');
+        return turnOn
+          ? '🔊 Sonido ambiente ACTIVADO ('+(Math.round((G.ambient.volume||0.25)*100))+'%). Rumor de gente, lluvia (si llueve) y cafetera ocasional. Usa /ambiente vol 50 para ajustar.'
+          : '🔇 Sonido ambiente DESACTIVADO.';
+      }
+      if(cmd==='voces'||cmd==='voz'||cmd==='voices'||cmd==='custvoice'){
+        const errV=needsGame();if(errV)return errV;
+        if(!G.custVoices) G.custVoices={enabled:false,lastSpeakTick:0};
+        const cleanV=binaryToggleArg(arg,!!G.custVoices.enabled);
+        const turnOn=!['off','out','clear','limpiar','despedir','fuera','sale','salir','stop'].includes(cleanV);
+        G.custVoices.enabled=turnOn;
+        showEv(turnOn?'🗣️ Voces clientes ON':'🤐 Voces clientes OFF','#ffaa44');
+        return turnOn
+          ? '🗣️ Voces de clientes ACTIVADAS. Cada bocadillo se locuta con TTS español (cooldown 2.3s).'
+          : '🤐 Voces de clientes DESACTIVADAS. Los bocadillos siguen visibles solo en pantalla.';
       }
       if(cmd==='heatmap'||cmd==='heat'||cmd==='mapa'||cmd==='mapacalor'){
         const errH=needsGame();if(errH)return errH;
