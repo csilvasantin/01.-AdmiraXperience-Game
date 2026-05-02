@@ -17731,6 +17731,8 @@ window.xtAPI = (function(){
     const robotActive=hasGame&&isEntityActive(G.unitreeBot);
     const liveActive=!!(hasGame&&G.admiraLiveMsg);
     const loyaltyReady=!!(hasGame&&G.loyaltyCard&&(G.loyaltyCard.pending||G.loyaltyCard.targetId));
+    const sponsorActive=!!(hasGame&&G.custs&&G.custs.some(c=>c&&c.sponsor));
+    const socioActive=!!(hasGame&&G.custs&&G.custs.some(c=>c&&c.fanCustomerId));
     return [
       {
         label:'📺 Signage',
@@ -17740,31 +17742,31 @@ window.xtAPI = (function(){
       {
         label:'DJ Novah',
         status:djActive?(isEs?'ON':'ON'):(isEs?'OFF':'OFF'),
-        command:djActive?'/dj off':'/dj on',
+        command:'/dj',
         active:djActive
       },
       {
         label:isEs?'Ladrón':'Thief',
         status:thiefActive?(isEs?'en tienda':'in store'):(isEs?'listo':'ready'),
-        command:thiefActive?'/ladron off':'/ladron on',
+        command:'/ladron',
         alert:thiefActive
       },
       {
         label:'Guardia Civil',
         status:guardiaActive?(isEs?'activo':'active'):(isEs?'fuera':'away'),
-        command:guardiaActive?'/guardiacivil off':'/guardiacivil on',
+        command:'/guardiacivil',
         active:guardiaActive
       },
       {
         label:isEs?'Opinador':'Reviewer',
         status:opinadorActive?(isEs?'en ruta':'en route'):(isEs?'rápido':'quick'),
-        command:opinadorActive?'/opinador off':'/opinador happy',
+        command:'/opinador',
         active:opinadorActive
       },
       {
         label:'Unitree Bot',
         status:robotActive?(isEs?'en tienda':'in store'):'demo',
-        command:robotActive?'/robot off':'/robot on',
+        command:'/robot',
         active:robotActive
       },
       {
@@ -17781,9 +17783,15 @@ window.xtAPI = (function(){
       },
       {
         label:'🦆 Sponsor',
-        status:(hasGame&&G.custs&&G.custs.some(c=>c&&c.sponsor))?(isEs?'en tienda':'in store'):(isEs?'invitar':'invite'),
-        command:(hasGame&&G.custs&&G.custs.some(c=>c&&c.sponsor))?'/sponsor off':'/sponsor on',
-        active:hasGame&&G.custs&&G.custs.some(c=>c&&c.sponsor)
+        status:sponsorActive?(isEs?'en tienda':'in store'):(isEs?'invitar':'invite'),
+        command:'/sponsor',
+        active:sponsorActive
+      },
+      {
+        label:'❤️ Socio',
+        status:socioActive?(isEs?'en tienda':'in store'):(isEs?'invitar':'invite'),
+        command:'/socio',
+        active:socioActive
       }
     ];
   }
