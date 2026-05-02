@@ -5506,6 +5506,8 @@ function initGame(){
     tftGrokArt:null,  // Grok-generated pixel art for the main wall screen
     admiraLiveMsg:'',
     comunicadoMsg:'',
+    socioHeat:{enabled:false,grid:Object.create(null),max:0,sampleTick:0},
+    recurringSponsor:{enabled:false,intervalSec:120,lastVisitTick:0,discountPct:10,visits:0},
     admiraTube:null,
     securityCam:{active:true},
     guardiaCivil:{phase:'idle',x:820,y:0,dir:-1,aFrame:0,aTimer:0,patrolTimer:0,targetCol:9,targetRow:3},
@@ -5658,6 +5660,8 @@ function loadGame(){
       if(!G.comp) G.comp={shares:[28,26,25,21],promoTimer:0,promoBrand:-1};
       if(!G.reviews) G.reviews={positive:0,negative:0,spawnMod:1.0};
       if(!G.loyaltyCard) G.loyaltyCard={pending:false,targetId:null,nextId:1};
+      if(!G.socioHeat) G.socioHeat={enabled:false,grid:Object.create(null),max:0,sampleTick:0};
+      if(!G.recurringSponsor) G.recurringSponsor={enabled:false,intervalSec:120,lastVisitTick:0,discountPct:10,visits:0};
       if(G.customerSpawnDelay===undefined) G.customerSpawnDelay=0;
       if(!G.escaparate) G.escaparate={active:true,phase:0,boost:0,smTimer:900};
       if(!G.saca) G.saca={phase:'idle',cooldown:1800,x:820,y:0,dir:-1,aFrame:0,aTimer:0,unloadTimer:0,boxes:6};
@@ -7380,6 +7384,51 @@ function updateGame(){
   const promoSpawnBoost=G.managerActions&&G.managerActions.flashPromo&&G.managerActions.flashPromo.buffTimer>0?1.35:1;
   if(G.custs.length<currentCustomerCap&&Math.random()<0.006*Math.max(1,G.staff.filter(s=>s.hired).length)*(G.rush.active?2:1)*weatherMod*holidaySpawn*(1-compSteal)*repMod*escapMod*hourSpawnMod*promoSpawnBoost) spawnCust();
   updatePassersby();
+  // Sponsor recurrente — visita programada del Tio Gilito cada N segundos
+  if(G.recurringSponsor && G.recurringSponsor.enabled){
+    const rs=G.recurringSponsor;
+    const sponsorInScene=G.custs.some(c=>c&&c.sponsor);
+    const elapsedSec=(tt-(rs.lastVisitTick||0))/60;
+    if(!sponsorInScene && elapsedSec>=rs.intervalSec){
+      try{
+        const sp=spawnCust(false,true,true);
+        if(sp){
+          sp.recurringDiscount=rs.discountPct;
+          // Aplicar descuento al ticket esperado
+          if(sp.avgTicket){
+            const original=sp.avgTicket;
+            sp.avgTicket=Math.round(sp.avgTicket*(1-rs.discountPct/100));
+            sp.recurringSavings=original-sp.avgTicket;
+          }
+          sp.bMsg='🦆 Visita habitual · '+rs.discountPct+'% dto';
+          sp.bTimer=Math.max(sp.bTimer||0,300);
+          rs.lastVisitTick=tt;
+          rs.visits=(rs.visits||0)+1;
+          if(typeof setManagerSayBubble==='function') setManagerSayBubble('AdmiraNext AI: vuelve nuestro Sponsor habitual (visita '+rs.visits+'). Aplicado '+rs.discountPct+'% de descuento.');
+          if(typeof showEv==='function') showEv('🦆 Sponsor recurrente vuelve (visita #'+rs.visits+')','#ffd700');
+          if(typeof SFX!=='undefined' && SFX.eventChime) SFX.eventChime();
+        }
+      }catch(e){}
+    }
+  }
+  // Heat map de socios — sample cada 15 ticks (~0.25s) para no saturar
+  if(G.socioHeat && G.socioHeat.enabled){
+    G.socioHeat.sampleTick=(G.socioHeat.sampleTick||0)+1;
+    if(G.socioHeat.sampleTick>=15){
+      G.socioHeat.sampleTick=0;
+      const grid=G.socioHeat.grid;let mx=G.socioHeat.max||0;
+      for(const c of G.custs){
+        if(!c||!c.fanCustomerId||c.x==null) continue;
+        try{
+          const t=screenToIso(c.x+7,c.y+20);
+          const k=Math.round(t.col)+','+Math.round(t.row);
+          grid[k]=(grid[k]||0)+1;
+          if(grid[k]>mx) mx=grid[k];
+        }catch(e){}
+      }
+      G.socioHeat.max=mx;
+    }
+  }
   for(let i=G.custs.length-1;i>=0;i--){
     const c=G.custs[i];c.ft++;if(c.ft>10){c.fr=(c.fr+1)%2;c.ft=0;}
     c.dwellTicks=(c.dwellTicks|0)+1;
@@ -11177,6 +11226,34 @@ function drawShop(){
       }
       drawIsoFloorTile(col,row,floorCol,'#aab4be22');
     }
+  }
+
+  // ── SOCIO HEAT MAP — overlay rojo según concentración de visitas de socios ──
+  if(G&&G.socioHeat&&G.socioHeat.enabled&&G.socioHeat.max>0){
+    const grid=G.socioHeat.grid, mx=G.socioHeat.max;
+    cx.save();
+    for(const k in grid){
+      const v=grid[k];if(!v) continue;
+      const parts=k.split(',');const c=parseInt(parts[0]),r=parseInt(parts[1]);
+      if(!Number.isFinite(c)||!Number.isFinite(r)) continue;
+      if(c<0||c>=ISO.cols||r<0||r>=ISO.rows) continue;
+      const intensity=Math.min(1,v/mx);
+      const pulse=0.85+0.15*Math.sin(tt*0.06);
+      // Gradiente: amarillo (frío) → naranja → rojo (caliente)
+      const red=200+Math.floor(55*intensity);
+      const green=Math.floor(180*(1-intensity));
+      const alpha=(0.18+0.42*intensity)*pulse;
+      cx.fillStyle='rgba('+red+','+green+',40,'+alpha.toFixed(3)+')';
+      const p=toIso(c,r);
+      cx.beginPath();
+      cx.moveTo(p.x,p.y-ISO.tileH/2);
+      cx.lineTo(p.x+ISO.tileW/2,p.y);
+      cx.lineTo(p.x,p.y+ISO.tileH/2);
+      cx.lineTo(p.x-ISO.tileW/2,p.y);
+      cx.closePath();
+      cx.fill();
+    }
+    cx.restore();
   }
 
   // ── WEATHER FLOOR EFFECTS ──
@@ -18893,7 +18970,7 @@ window.xtAPI = (function(){
       {title:'Tiempo y ambiente',items:['/reloj 14:30','/reloj 14 30','/time am','/time pm','/time night','/weather normal','/weather rain','/weather sun','/lamp','/lamp auto','/hue','/hue auto']},
       {title:'Pantalla y directo',items:['/livecam','/mocap','/AdmiraLive texto','/comunicar texto','/comunicar texto --grok','/comunicar texto --elevenlabs','/AdmiraTube URL 2 audio','/say texto']},
       {title:'Escena en vivo',items:['/dj','/ladron','/guardiacivil','/opinador','/robot','/sponsor','/socio','/door open','/door close','/door auto']},
-      {title:'Notificaciones al personal',items:['/personal socio']},
+      {title:'Notificaciones al personal',items:['/personal socio','/personal dashboard','/heatmap','/heatmap reset','/sponsor recurrente 120 10']},
       {title:'IA y contenido',items:['/grok pregunta','/draw dibujo','/metahuman pregunta','/log','/log thief','/log customer','/import','/import list','/import remove 1','/importTube https://youtu.be/...']},
       {title:'Ajustes rápidos',items:['/money 12000','/sat 90','/fame 80','/set week 12','/set year 2','/set revenue 5000','/set storeLevel 2','/set customers 30']},
       {title:'Musica y layout',items:['/song 1','/song bad bunny','/music','/next','/prev','/equipo inicio ana 3 4','/equipo zona dj 12 2 2','/mobiliario','/mobiliario inicio','/layout','/layout save','/layout factory']},
@@ -19298,7 +19375,7 @@ window.xtAPI = (function(){
       if(cmd==='personal'||cmd==='staff-notif'||cmd==='notif'){
         const errPN=needsGame();if(errPN)return errPN;
         const sub=String(arg||'').trim().toLowerCase();
-        if(!sub) return 'Uso: /personal socio  (otros tipos proximamente)';
+        if(!sub) return 'Uso: /personal socio | /personal dashboard';
         if(['socio','socios','club','xtancoclub','member','members','fan','fans'].includes(sub)){
           const list=Array.isArray(G.custs)?G.custs.filter(c=>c&&c.fanCustomerId):[];
           if(!list.length) return '🪪 Personal · Sin socios del Xtanco Club en la tienda ahora mismo.';
@@ -19310,7 +19387,58 @@ window.xtAPI = (function(){
           });
           return '🪪 Personal · Socios Xtanco Club en tienda ('+list.length+'):\n'+lines.join('\n');
         }
-        return 'Subtipo no soportado: '+sub+'. Disponibles: socio.';
+        if(['dashboard','panel','resumen','stats','metricas','métricas'].includes(sub)){
+          const list=Array.isArray(G.custs)?G.custs.filter(c=>c&&c.fanCustomerId):[];
+          const total=list.length;
+          const cumple=list.filter(c=>c.fanIsBirthday).length;
+          // Categorias por sellos
+          const cats={nuevo:0,activo:0,premium:0};
+          list.forEach(c=>{const s=c.fanStamps|0;if(s>=5)cats.premium++;else if(s>=3)cats.activo++;else cats.nuevo++;});
+          // Cumpleaños del mes (solo socios actuales con fanBirthday DD/MM/YYYY)
+          const mesActual=String(new Date().getMonth()+1).padStart(2,'0');
+          const cumpleMes=list.filter(c=>{const m=String(c.fanBirthday||'').match(/^\d{2}\/(\d{2})\//);return m&&m[1]===mesActual;}).length;
+          // Ticket medio por categoria
+          const tickets={nuevo:[],activo:[],premium:[]};
+          list.forEach(c=>{const s=c.fanStamps|0;const t=Math.round(c.avgTicket||0);if(s>=5)tickets.premium.push(t);else if(s>=3)tickets.activo.push(t);else tickets.nuevo.push(t);});
+          const avg=arr=>arr.length?Math.round(arr.reduce((a,b)=>a+b,0)/arr.length):0;
+          // Top productos cross-vendidos: contar Crosselling sugerido
+          const crossCount={};
+          list.forEach(c=>{const xs=getAdmiraXSell(c);if(xs.cross&&xs.cross!=='—')crossCount[xs.cross]=(crossCount[xs.cross]||0)+1;});
+          const topCross=Object.entries(crossCount).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([n,c])=>n+' (×'+c+')').join(', ')||'—';
+          // Top upselling igual
+          const upCount={};
+          list.forEach(c=>{const xs=getAdmiraXSell(c);if(xs.upsell&&xs.upsell!=='—')upCount[xs.upsell]=(upCount[xs.upsell]||0)+1;});
+          const topUp=Object.entries(upCount).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([n,c])=>n+' (×'+c+')').join(', ')||'—';
+          return '📊 Personal · Dashboard de socios Xtanco Club\n'
+            +'━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
+            +'En tienda ahora: '+total+' socios\n'
+            +'Cumplen hoy: '+cumple+' · Cumplen este mes: '+cumpleMes+'\n\n'
+            +'Por categoría:\n'
+            +'  • Nuevo (≤2 sellos): '+cats.nuevo+' · ticket medio '+avg(tickets.nuevo)+'€\n'
+            +'  • Activo (3-4 sellos): '+cats.activo+' · ticket medio '+avg(tickets.activo)+'€\n'
+            +'  • Premium (5/5): '+cats.premium+' · ticket medio '+avg(tickets.premium)+'€\n\n'
+            +'Admira IA · Top Upselling: '+topUp+'\n'
+            +'Admira IA · Top Crosselling: '+topCross;
+        }
+        return 'Subtipo no soportado: '+sub+'. Disponibles: socio, dashboard.';
+      }
+      if(cmd==='heatmap'||cmd==='heat'||cmd==='mapa'||cmd==='mapacalor'){
+        const errH=needsGame();if(errH)return errH;
+        if(!G.socioHeat) G.socioHeat={enabled:false,grid:Object.create(null),max:0,sampleTick:0};
+        const subH=String(arg||'').trim().toLowerCase();
+        if(['reset','clear','limpiar','borrar'].includes(subH)){
+          G.socioHeat.grid=Object.create(null);G.socioHeat.max=0;
+          showEv('🗺️ Heatmap reseteado','#ffaa44');
+          return '🗺️ Heat map reseteado. Recolectando nuevas visitas de socios.';
+        }
+        const cleanH=binaryToggleArg(subH,!!G.socioHeat.enabled);
+        const turnOn=!['off','out','clear','limpiar','despedir','fuera','sale','salir','stop'].includes(cleanH);
+        G.socioHeat.enabled=turnOn;
+        showEv(turnOn?'🗺️ Heatmap socios ON':'🗺️ Heatmap socios OFF','#ffaa44');
+        const tiles=Object.keys(G.socioHeat.grid).length;
+        return turnOn
+          ? '🗺️ Heat map de socios ACTIVADO. '+tiles+' tiles trackeados (max '+G.socioHeat.max+'). Sigue las zonas calientes en el suelo del estanco.'
+          : '🗺️ Heat map de socios DESACTIVADO. Datos ('+tiles+' tiles) preservados — vuelve a activar para verlos. Usa /heatmap reset para borrar.';
       }
       if(cmd==='socio'||cmd==='socios'||cmd==='club'||cmd==='member'){
         const errSc=needsGame();if(errSc)return errSc;
@@ -19356,8 +19484,27 @@ window.xtAPI = (function(){
       }
       if(cmd==='sponsor'||cmd==='gilito'||cmd==='tio-gilito'||cmd==='scrooge'){
         const errSp=needsGame();if(errSp)return errSp;
+        if(!G.recurringSponsor) G.recurringSponsor={enabled:false,intervalSec:120,lastVisitTick:0,discountPct:10,visits:0};
+        const argTxt=String(arg||'').trim();
+        // Subcomando: /sponsor recurrente <secs> [descuento%]
+        const recM=argTxt.match(/^(?:recurrente|recurring|repetidor|repeat|cada)(?:\s+(\d+))?(?:\s+(\d+))?\s*$/i);
+        if(recM){
+          const secs=parseInt(recM[1])||120;
+          const disc=parseInt(recM[2])||10;
+          G.recurringSponsor.enabled=!G.recurringSponsor.enabled;
+          if(G.recurringSponsor.enabled){
+            G.recurringSponsor.intervalSec=Math.max(20,secs);
+            G.recurringSponsor.discountPct=Math.max(0,Math.min(80,disc));
+            G.recurringSponsor.lastVisitTick=tt;
+            showEv('🦆 Sponsor recurrente cada '+G.recurringSponsor.intervalSec+'s ('+G.recurringSponsor.discountPct+'% dto)','#ffd700');
+            return '🦆 Sponsor recurrente ACTIVADO. Tio Gilito visitará cada '+G.recurringSponsor.intervalSec+' segundos con un '+G.recurringSponsor.discountPct+'% de descuento. Visitas hasta ahora: '+G.recurringSponsor.visits+'. Vuelve a ejecutar /sponsor recurrente para apagarlo.';
+          } else {
+            showEv('🦆 Sponsor recurrente OFF','#888888');
+            return '🦆 Sponsor recurrente DESACTIVADO. Total de visitas registradas: '+G.recurringSponsor.visits+'.';
+          }
+        }
         const sponsorActive=Array.isArray(G.custs)&&G.custs.some(c=>c&&c.sponsor);
-        const clean=binaryToggleArg(arg,sponsorActive);
+        const clean=binaryToggleArg(argTxt,sponsorActive);
         if(['off','out','clear','limpiar','despedir','fuera','sale','salir','stop'].includes(clean)){
           if(!Array.isArray(G.custs)) return 'Sin clientes';
           const removed=G.custs.filter(c=>c&&c.sponsor).length;
