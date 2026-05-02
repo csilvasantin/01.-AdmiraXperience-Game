@@ -16188,28 +16188,34 @@ function drawNPCEditor(){
   cx.strokeStyle='#8a7a60';cx.lineWidth=1;
   cx.beginPath();cx.moveTo(px,py+22);cx.lineTo(px+pw,py+22);cx.stroke();
   const title=(d.title?d.title+': ':'EDITOR NPC: ')+d.name;
-  tx(title,px+pw/2,py+15,'#3a2a1a',9,'center');
+  tx(title,px+pw/2,py+15,'#3a2a1a',11,'center');
   // Close button
   npcBtn('npcEdClose',px+pw-20,py+2,18,18);
   cx.fillStyle='#cc4444';cx.fillRect(px+pw-20,py+3,16,16);
-  tx('X',px+pw-12,py+15,'#fff',9,'center');
+  tx('X',px+pw-12,py+15,'#fff',10,'center');
 
   if(npcEdKind!=='staff'){
     const cy=py+38;
-    cx.fillStyle='#e8e0cc';cx.fillRect(px+16,cy,pw-32,ph-56);
-    cx.strokeStyle='#a09880';cx.lineWidth=1;cx.strokeRect(px+16,cy,pw-32,ph-56);
+    const btnAreaH=34; // espacio reservado abajo para el boton Telegram
+    cx.fillStyle='#fbf6e8';cx.fillRect(px+16,cy,pw-32,ph-56-btnAreaH);
+    cx.strokeStyle='#a09880';cx.lineWidth=1;cx.strokeRect(px+16,cy,pw-32,ph-56-btnAreaH);
     if(npcEdKind==='customer'&&d.look){
-      cx.fillStyle='#d8d0b8';cx.fillRect(px+26,cy+16,70,86);
-      cx.strokeStyle='#a09880';cx.strokeRect(px+26,cy+16,70,86);
-      chibi(px+48,cy+56,1,d.look.shirt||1,d.look.hair||0,Math.floor(tt/12)%2,false,tt,2,false,d.look);
+      cx.fillStyle='#d8d0b8';cx.fillRect(px+26,cy+16,84,108);
+      cx.strokeStyle='#a09880';cx.strokeRect(px+26,cy+16,84,108);
+      chibi(px+54,cy+74,1,d.look.shirt||1,d.look.hair||0,Math.floor(tt/12)%2,false,tt,2.6,false,d.look);
     }
-    tx(d.name||d.title,px+126,cy+22,'#2a6a4a',10);
-    (d.lines||[]).forEach((line,i)=>tx(line,px+126,cy+44+i*16,'#4a3a20',8));
-    if(npcEdKind==='customer'){
-      tx('Ficha cliente',px+126,cy+108,'#7a7060',7);
-    }else{
-      tx('Ficha NPC',px+126,cy+108,'#7a7060',7);
-    }
+    tx(d.name||d.title,px+126,cy+24,'#1a3a4a',14);
+    const lines=d.lines||[];
+    lines.forEach((line,i)=>tx(line,px+126,cy+50+i*20,'#26201a',12));
+    const subL=npcEdKind==='customer'?'Ficha de cliente':'Ficha NPC';
+    tx(subL,px+126,cy+50+lines.length*20+8,'#7a7060',9);
+    // Boton "📤 Enviar a Telegram"
+    const btnW=200, btnH=26;
+    const btnXp=px+(pw-btnW)/2, btnYp=py+ph-btnH-10;
+    npcBtn('npcEdSendTg',btnXp,btnYp,btnW,btnH);
+    cx.fillStyle='#0e3550';cx.fillRect(btnXp,btnYp,btnW,btnH);
+    cx.strokeStyle='#3a8ab0';cx.lineWidth=1.5;cx.strokeRect(btnXp,btnYp,btnW,btnH);
+    tx('📤 Enviar ficha a Telegram', btnXp+btnW/2, btnYp+17, '#cfeaff', 11, 'center');
     cx.restore();
     return;
   }
@@ -16395,6 +16401,19 @@ function drawNPCEditor(){
 function handleNPCEditorClick(id){
   if(!npcEdOpen||!npcEdDraft)return false;
   if(id==='npcEdClose'){closeNPCEditor();return true;}
+  if(id==='npcEdSendTg'){
+    try{
+      const d=npcEdDraft||{};
+      const header=(d.title||'Ficha')+' — '+(d.name||'');
+      const body=(d.lines||[]).join('\n');
+      const text=header+'\n'+body;
+      if(window.xtAPI&&typeof window.xtAPI.telegramSend==='function'){
+        window.xtAPI.telegramSend(text);
+      }
+      if(typeof showEv==='function') showEv('📤 Ficha enviada a Telegram','#78f3ff');
+    }catch(e){}
+    return true;
+  }
   if(npcEdKind!=='staff') return false;
   if(id==='npcEdSave'){applyNPCEditor();closeNPCEditor();return true;}
   if(id==='npcEdReset'){
