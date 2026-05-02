@@ -412,6 +412,7 @@
       <div class="char-head-left char-tabs">
         <button type="button" class="char-tab-btn team" id="characterTeamFocusBtn">Team</button>
         <button type="button" class="char-tab-btn clients" id="characterClientFocusBtn">Customers</button>
+        <button type="button" class="char-tab-btn socio" id="characterSocioFocusBtn">Socios</button>
       </div>
       <span class="char-status" id="characterPanelStatus">0 inside</span>
     </div>
@@ -15341,10 +15342,12 @@ function drawCharacterGroupsPanel(){
     panelBody.innerHTML='';
     return;
   }
-  const activePane=characterDockFocus==='team'?'team':'clients';
+  const activePane=characterDockFocus==='team'?'team':characterDockFocus==='socios'?'socios':'clients';
   dock.classList.toggle('focus-team',activePane==='team');
   if(teamFocusBtn) teamFocusBtn.classList.toggle('is-active',activePane==='team');
   if(clientFocusBtn) clientFocusBtn.classList.toggle('is-active',activePane==='clients');
+  const socioFocusBtn=document.getElementById('characterSocioFocusBtn');
+  if(socioFocusBtn) socioFocusBtn.classList.toggle('is-active',activePane==='socios');
   const hired=(G.staff||[]).filter(s=>s.hired&&!s.fired);
   const clients=(G.custs||[]).slice().sort((a,b)=>{
     const prDiff=customerPriority(a)-customerPriority(b);
@@ -15419,8 +15422,58 @@ function drawCharacterGroupsPanel(){
       +'</div>';
   }).join('');
   clientHtml+='<div class="char-row clients-grid is-summary"><span class="muted">'+clients.length+'</span><span class="muted">VIP '+vipCount+'</span><span class="muted">'+(isEs?'Zona ':'Zone ')+browsingCount+'</span><span class="muted">'+(isEs?'Cola ':'Queue ')+queueCount+'</span><span class="muted">'+(isEs?'Turnos ':'Turns ')+issuedTurns+'</span><span></span><span></span></div>';
-  panelStatus.textContent=activePane==='team'?teamStatusText:clientStatusText;
-  panelBody.innerHTML=activePane==='team'?teamHtml:clientHtml;
+  // ── SOCIOS pane: lista todos los clientes con fanCustomerId con datos de fidelizacion ──
+  const socios=clients.filter(c=>c&&c.fanCustomerId);
+  const cumpleHoy=socios.filter(c=>c.fanIsBirthday).length;
+  const totalSellos=socios.reduce((acc,c)=>acc+(c.fanStamps|0),0);
+  const socioStatusText=isEs
+    ? socios.length+' socios · '+cumpleHoy+' cumple hoy · '+totalSellos+' sellos en total'
+    : socios.length+' members · '+cumpleHoy+' birthday today · '+totalSellos+' total stamps';
+  const socioHead='<div class="char-row clients-grid is-head">'
+    +clientHeadCell(isEs?'Socio':'Member',0)
+    +clientHeadCell(isEs?'Antiguedad':'Since',1)
+    +clientHeadCell(isEs?'Cumple':'Bday',2)
+    +clientHeadCell(isEs?'Sellos':'Stamps',3)
+    +clientHeadCell(isEs?'Tiempo':'Time',4)
+    +clientHeadCell('Ticket',5)
+    +clientHeadCell(isEs?'Estado':'State',6)
+    +'</div>';
+  const formatSinceShort=(fanSince)=>{
+    if(!fanSince) return '—';
+    const sinceMs=fanSince>1e12?fanSince:fanSince*1000;
+    const days=Math.max(0,Math.floor((Date.now()-sinceMs)/86400000));
+    const years=Math.floor(days/365);
+    const months=Math.floor((days%365)/30);
+    if(years>0) return years+'a '+months+'m';
+    if(months>0) return months+'m';
+    return days+'d';
+  };
+  const socioRows=socios.length
+    ? socios.map((c,rowIdx)=>{
+        const custIdx=G.custs.indexOf(c);
+        const stamps=(c.fanStamps|0);
+        const stampsLbl=stamps+'/5'+(c.fanFreePending?' 🎁':'');
+        const cake=c.fanIsBirthday?'🎂':'—';
+        const dwell=customerDwellLabel(c);
+        const ticket=customerTicketLabel(c);
+        const stateLbl=customerStateLabel(c);
+        const rowClass=rowIdx%2===0?'row-even':'row-odd';
+        const nameLbl=(c.fanEmoji||'🪪')+' '+(c.fanName||'Socio');
+        return '<div class="char-row clients-grid '+rowClass+'">'
+          +'<span><button type="button" class="char-trigger" data-customer-idx="'+custIdx+'" aria-label="Abrir ficha de socio '+(c.fanName||'')+'" onpointerdown="window.openCharacterDockCustomerDetail&&window.openCharacterDockCustomerDetail('+custIdx+');event.preventDefault();event.stopPropagation();return false;" onclick="event.preventDefault();event.stopPropagation();return false;">'+customerMiniAvatar(c)+'</button> <span style="color:'+(c.fanIsBirthday?'#ff7eb6':'#78f3ff')+'">'+nameLbl+'</span></span>'
+          +'<span>'+formatSinceShort(c.fanSince)+'</span>'
+          +'<span>'+cake+'</span>'
+          +'<span>'+stampsLbl+'</span>'
+          +'<span>'+dwell+'</span>'
+          +'<span>'+ticket+'</span>'
+          +'<span class="muted">'+stateLbl+'</span>'
+          +'</div>';
+      }).join('')
+    : '<div class="char-row clients-grid"><span class="muted">'+(isEs?'Sin socios del Xtanco Club en la tienda. Usa /socio para invitar uno.':'No Xtanco Club members inside. Use /socio to invite one.')+'</span><span></span><span></span><span></span><span></span><span></span><span></span></div>';
+  const socioHtml=socioHead+socioRows;
+
+  panelStatus.textContent=activePane==='team'?teamStatusText:activePane==='socios'?socioStatusText:clientStatusText;
+  panelBody.innerHTML=activePane==='team'?teamHtml:activePane==='socios'?socioHtml:clientHtml;
 }
 
 // ── DRAW BOTTOM BAR (GDS style: Yr Sales | Yr Profit | Status | Menu) ──
@@ -19824,6 +19877,7 @@ window.xtAPI = (function(){
   }
   bindDockButton(teamFocusBtn,()=>{characterDockFocus='team';drawCharacterGroupsPanel();});
   bindDockButton(clientFocusBtn,()=>{characterDockFocus='clients';drawCharacterGroupsPanel();});
+  bindDockButton(document.getElementById('characterSocioFocusBtn'),()=>{characterDockFocus='socios';drawCharacterGroupsPanel();});
   if(helpPanel){
     helpPanel.addEventListener('click',e=>{
       const close=e.target.closest('[data-help-close]');
