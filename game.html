@@ -112,6 +112,9 @@
     .char-tab-btn{border:1px solid rgba(120,243,255,.28);border-radius:999px;background:#071721;color:#86aeba;font-family:monospace;font-size:8px;font-weight:bold;letter-spacing:.06em;text-transform:uppercase;padding:2px 9px;cursor:pointer}
     .char-tab-btn.is-active{background:linear-gradient(180deg,#164555,#0c2b38);border-color:#78f3ff;color:#ffffff;box-shadow:0 0 12px rgba(120,243,255,.22)}
     .char-tab-btn.clients.is-active{border-color:#ffd86b;box-shadow:0 0 12px rgba(255,216,107,.20)}
+    .char-tab-btn.socio.is-active{border-color:#ff7eb6;color:#ffffff;background:linear-gradient(180deg,#3a1a28,#1a0a14);box-shadow:0 0 12px rgba(255,126,182,.30)}
+    .char-tab-btn.is-alert{border-color:#ff7eb6;color:#ffd6e8;animation:socioPulse 1.4s ease-in-out infinite}
+    @keyframes socioPulse{0%,100%{box-shadow:0 0 6px rgba(255,126,182,.3)}50%{box-shadow:0 0 16px rgba(255,126,182,.7)}}
     .char-toggle-btn{border:1px solid #2a7585;border-radius:4px;background:#0c2a35;color:#bff7ff;font-family:monospace;font-size:8px;font-weight:bold;padding:1px 6px;cursor:pointer}
     .char-body{flex:1;padding:7px 8px;background:linear-gradient(180deg,#041019,#02080d);font-size:10px;line-height:1.3;color:#cceef5;display:flex;flex-direction:column;gap:2px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:#2a7585 #07131b}
     .char-body::-webkit-scrollbar{width:8px}
@@ -413,7 +416,7 @@
       <div class="char-head-left char-tabs">
         <button type="button" class="char-tab-btn team" id="characterTeamFocusBtn">Team</button>
         <button type="button" class="char-tab-btn clients" id="characterClientFocusBtn">Customers</button>
-        <button type="button" class="char-tab-btn socio" id="characterSocioFocusBtn">Socios</button>
+        <button type="button" class="char-tab-btn socio" id="characterSocioFocusBtn" style="display:none">Socios</button>
       </div>
       <span class="char-status" id="characterPanelStatus">0 inside</span>
     </div>
@@ -15367,12 +15370,27 @@ function drawCharacterGroupsPanel(){
     panelBody.innerHTML='';
     return;
   }
+  // Mostrar el tab Socios solo si hay socios en la tienda o se ha registrado
+  // alguien nuevo online (loyaltyCard.pending del LoyaltyBridge).
+  const hasSocios=(G.custs||[]).some(c=>c&&c.fanCustomerId);
+  const hasPendingFan=!!(G.loyaltyCard&&G.loyaltyCard.pending);
+  const showSocioTab=hasSocios||hasPendingFan;
+  // Si el usuario estaba en el tab Socios y ya no hay, caer en Clientes.
+  if(characterDockFocus==='socios' && !showSocioTab) characterDockFocus='clients';
   const activePane=characterDockFocus==='team'?'team':characterDockFocus==='socios'?'socios':'clients';
   dock.classList.toggle('focus-team',activePane==='team');
   if(teamFocusBtn) teamFocusBtn.classList.toggle('is-active',activePane==='team');
   if(clientFocusBtn) clientFocusBtn.classList.toggle('is-active',activePane==='clients');
   const socioFocusBtn=document.getElementById('characterSocioFocusBtn');
-  if(socioFocusBtn) socioFocusBtn.classList.toggle('is-active',activePane==='socios');
+  if(socioFocusBtn){
+    socioFocusBtn.style.display=showSocioTab?'':'none';
+    socioFocusBtn.textContent=isEs?'Socios':'Members';
+    socioFocusBtn.classList.toggle('is-active',activePane==='socios');
+    // Glow si entra alguien nuevo registrado online (pending fan)
+    socioFocusBtn.classList.toggle('is-alert',hasPendingFan&&!hasSocios);
+  }
+  if(teamFocusBtn) teamFocusBtn.textContent=isEs?'Equipo':'Team';
+  if(clientFocusBtn) clientFocusBtn.textContent=isEs?'Clientes':'Customers';
   const hired=(G.staff||[]).filter(s=>s.hired&&!s.fired);
   const clients=(G.custs||[]).slice().sort((a,b)=>{
     const prDiff=customerPriority(a)-customerPriority(b);
