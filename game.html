@@ -211,10 +211,10 @@
     .tg-actions{min-height:32px;display:flex;flex-wrap:wrap;gap:6px;padding:5px 6px;background:#071720;border-top:1px solid rgba(120,243,255,.16)}
     .tg-actions button{border:1px solid #2a7585;border-radius:999px;background:#0c2a35;color:#bff7ff;font-family:monospace;font-size:10px;font-weight:bold;padding:2px 10px;cursor:pointer}
     .tg-actions button.primary{background:linear-gradient(180deg,#1e7d8d,#11515f);color:#ffffff;border-color:#75ecff}
-    .tg-quick-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;padding:6px;background:#05131c;border-top:1px solid #14323c}
-    .tg-quick-btn{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:2px;min-height:42px;padding:7px 9px;border:1px solid #24505d;border-radius:9px;background:linear-gradient(180deg,#0c2630,#071720);color:#dff8ff;font-family:monospace;font-size:10px;line-height:1.1;cursor:pointer;text-align:left}
-    .tg-quick-btn strong{font-size:10px}
-    .tg-quick-btn span{font-size:8px;color:#94c2cf}
+    .tg-quick-actions{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;padding:5px;background:#05131c;border-top:1px solid #14323c}
+    .tg-quick-btn{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:1px;min-height:36px;padding:5px 7px;border:1px solid #24505d;border-radius:8px;background:linear-gradient(180deg,#0c2630,#071720);color:#dff8ff;font-family:monospace;font-size:9px;line-height:1.1;cursor:pointer;text-align:left}
+    .tg-quick-btn strong{font-size:9px}
+    .tg-quick-btn span{font-size:7px;color:#94c2cf}
     .tg-quick-btn.is-active{border-color:#6ce6a2;background:#123427;color:#f0fff4}
     .tg-quick-btn.is-active span{color:#a7e6be}
     .tg-quick-btn.is-alert{border-color:#d48b52;background:#31170d;color:#fff2df}
@@ -430,7 +430,6 @@
       <button type="button" id="telegramHelpBtn">/help</button>
       <button type="button" id="telegramStatusBtn">/status</button>
       <button type="button" id="telegramHideBtn">Hide</button>
-      <button type="button" id="telegramSignageBtn" title="Playlist Digital Signage"><svg class="ds-tv-icon" viewBox="0 0 24 20" aria-hidden="true"><line x1="6" y1="1" x2="9" y2="5"/><line x1="18" y1="1" x2="15" y2="5"/><rect x="2" y="5" width="20" height="13" rx="1.5"/><rect x="4" y="7" width="13" height="9" rx="0.6"/><circle cx="19.5" cy="9" r="0.7"/><circle cx="19.5" cy="14" r="0.7"/><line x1="9" y1="19" x2="15" y2="19"/></svg> Digital Signage</button>
     </div>
     <div class="tg-quick-actions" id="telegramQuickActions" aria-label="Acciones rápidas de escena"></div>
   </div>
@@ -17569,6 +17568,11 @@ window.xtAPI = (function(){
     const loyaltyReady=!!(hasGame&&G.loyaltyCard&&(G.loyaltyCard.pending||G.loyaltyCard.targetId));
     return [
       {
+        label:'📺 Signage',
+        status:isEs?'playlist':'playlist',
+        customAction:'signage'
+      },
+      {
         label:'DJ Novah',
         status:djActive?(isEs?'ON':'ON'):(isEs?'OFF':'OFF'),
         command:djActive?'/dj off':'/dj on',
@@ -17620,7 +17624,10 @@ window.xtAPI = (function(){
       const classes=['tg-quick-btn'];
       if(action.active) classes.push('is-active');
       if(action.alert) classes.push('is-alert');
-      return '<button type="button" class="'+classes.join(' ')+'" data-quick-command="'+String(action.command).replace(/"/g,'&quot;')+'" data-quick-idx="'+idx+'">'
+      const dataAttr=action.customAction
+        ? 'data-quick-action="'+action.customAction+'"'
+        : 'data-quick-command="'+String(action.command||'').replace(/"/g,'&quot;')+'"';
+      return '<button type="button" class="'+classes.join(' ')+'" '+dataAttr+' data-quick-idx="'+idx+'">'
         +'<strong>'+action.label+'</strong>'
         +'<span>'+action.status+'</span>'
         +'</button>';
@@ -19496,6 +19503,13 @@ window.xtAPI = (function(){
   }
   if(quickActionsEl){
     quickActionsEl.addEventListener('click',e=>{
+      const action=e.target.closest('[data-quick-action]');
+      if(action){
+        e.preventDefault();e.stopPropagation();
+        const kind=action.getAttribute('data-quick-action');
+        if(kind==='signage'&&typeof toggleSignagePanel==='function') toggleSignagePanel();
+        return;
+      }
       const button=e.target.closest('[data-quick-command]');
       if(!button) return;
       e.preventDefault();
