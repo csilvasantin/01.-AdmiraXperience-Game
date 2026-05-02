@@ -16426,6 +16426,7 @@ function handleNPCEditorClick(id){
   if(id==='npcEdSendTg'){
     (async()=>{
       const d=npcEdDraft||{};
+      const subjectName=String(d.name||'').replace(/\s*🎂.*$/,'').trim()||'cliente';
       const header=(d.title||'Ficha')+' — '+(d.name||'');
       const body=(d.lines||[]).join('\n');
       const text=header+'\n'+body;
@@ -16439,22 +16440,26 @@ function handleNPCEditorClick(id){
           errMsg='xtAPI.telegramSend no disponible';
         }
       }catch(e){errMsg=e&&e.message?e.message:String(e);}
-      if(sent){
-        if(typeof showEv==='function') showEv('📤 Ficha enviada a Telegram','#78f3ff');
-      } else {
-        // Fallback: copiar al portapapeles para que Carlos pueda pegarla
-        let copied=false;
+      let copied=false;
+      if(!sent){
         try{
           if(navigator.clipboard&&navigator.clipboard.writeText){
             await navigator.clipboard.writeText(text);copied=true;
           }
         }catch(e){}
-        if(typeof showEv==='function') showEv(copied
-          ? '📋 Telegram offline — ficha copiada al portapapeles'
-          : '⚠️ Telegram offline ('+errMsg+')',
-          copied?'#88ccff':'#ff8866');
         try{console.log('[Ficha → Telegram fallback]\n'+text);}catch(e){}
       }
+      // Feedback unificado: bocadillo del Store Manager + campana + banner.
+      // Asi Carlos ve y oye que la informacion ha llegado al equipo, da igual
+      // si fue por el bot, por portapapeles o solo por consola.
+      const bubbleMsg=sent
+        ? '📤 Mensaje recibido por Telegram: '+subjectName
+        : copied
+          ? '📋 Telegram offline · ficha de '+subjectName+' copiada al portapapeles'
+          : '⚠️ Telegram offline · sin destino disponible';
+      try{ if(typeof setManagerSayBubble==='function') setManagerSayBubble(bubbleMsg); }catch(e){}
+      try{ if(typeof SFX!=='undefined' && SFX.eventChime) SFX.eventChime(); }catch(e){}
+      try{ if(typeof showEv==='function') showEv(bubbleMsg, sent?'#78f3ff':copied?'#88ccff':'#ff8866'); }catch(e){}
     })();
     return true;
   }
