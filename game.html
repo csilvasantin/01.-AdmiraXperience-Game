@@ -6226,6 +6226,20 @@ function doAction(id){
         else showEv('🪪 Pantallas saludan a '+cust.fanName,'#78f3ff');
       }
       try{ SFX&&SFX.cashRegister&&SFX.cashRegister(); }catch(e){}
+      // Notificar al personal por Telegram con nombre + cumple del socio
+      // Cooldown 8s por socio para no saturar el chat con clicks repetidos.
+      try{
+        if(!window.SOCIO_TG_LAST) window.SOCIO_TG_LAST=Object.create(null);
+        const now=Date.now();
+        const last=window.SOCIO_TG_LAST[cust.fanCustomerId]||0;
+        if(now-last>8000 && window.xtAPI && typeof window.xtAPI.telegramSend==='function'){
+          window.SOCIO_TG_LAST[cust.fanCustomerId]=now;
+          const cake=cust.fanIsBirthday?' 🎂 ¡CUMPLE HOY!':'';
+          const bday=cust.fanBirthday?(' · nac. '+cust.fanBirthday):'';
+          const stamps=Number.isFinite(cust.fanStamps)?(' · '+cust.fanStamps+'/5 sellos'):'';
+          window.xtAPI.telegramSend('🪪 Personal · Socio Xtanco Club\n'+(cust.fanEmoji||'🪪')+' '+(cust.fanName||'Socio')+cake+bday+stamps);
+        }
+      }catch(e){}
     }
     if(cust) openCustomerEditor(ci);
     return;
@@ -18639,6 +18653,7 @@ window.xtAPI = (function(){
       {title:'Tiempo y ambiente',items:['/reloj 14:30','/reloj 14 30','/time am','/time pm','/time night','/weather normal','/weather rain','/weather sun','/lamp','/lamp auto','/hue','/hue auto']},
       {title:'Pantalla y directo',items:['/livecam','/mocap','/AdmiraLive texto','/comunicar texto','/comunicar texto --grok','/comunicar texto --elevenlabs','/AdmiraTube URL 2 audio','/say texto']},
       {title:'Escena en vivo',items:['/dj','/ladron','/guardiacivil','/opinador','/robot','/sponsor','/door open','/door close','/door auto']},
+      {title:'Notificaciones al personal',items:['/personal socio']},
       {title:'IA y contenido',items:['/grok pregunta','/draw dibujo','/metahuman pregunta','/log','/log thief','/log customer','/import','/import list','/import remove 1','/importTube https://youtu.be/...']},
       {title:'Ajustes rápidos',items:['/money 12000','/sat 90','/fame 80','/set week 12','/set year 2','/set revenue 5000','/set storeLevel 2','/set customers 30']},
       {title:'Musica y layout',items:['/song 1','/song bad bunny','/music','/next','/prev','/equipo inicio ana 3 4','/equipo zona dj 12 2 2','/mobiliario','/mobiliario inicio','/layout','/layout save','/layout factory']},
@@ -19040,6 +19055,23 @@ window.xtAPI = (function(){
       if(cmd==='ladron'||cmd==='ladrón'||cmd==='thief') return setThiefCommand(arg);
       if(cmd==='guardiacivil'||cmd==='guardia-civil'||cmd==='gc') return setGuardiaCivilCommand(arg);
       if(cmd==='guardia') return setGuardiaCivilCommand(arg.replace(/^civil\s+/i,''));
+      if(cmd==='personal'||cmd==='staff-notif'||cmd==='notif'){
+        const errPN=needsGame();if(errPN)return errPN;
+        const sub=String(arg||'').trim().toLowerCase();
+        if(!sub) return 'Uso: /personal socio  (otros tipos proximamente)';
+        if(['socio','socios','club','xtancoclub','member','members','fan','fans'].includes(sub)){
+          const list=Array.isArray(G.custs)?G.custs.filter(c=>c&&c.fanCustomerId):[];
+          if(!list.length) return '🪪 Personal · Sin socios del Xtanco Club en la tienda ahora mismo.';
+          const lines=list.map(c=>{
+            const cake=c.fanIsBirthday?' 🎂 ¡CUMPLE HOY!':'';
+            const bday=c.fanBirthday?(' · nac. '+c.fanBirthday):'';
+            const stamps=Number.isFinite(c.fanStamps)?(' · '+c.fanStamps+'/5 sellos'):'';
+            return (c.fanEmoji||'🪪')+' '+(c.fanName||'Socio')+cake+bday+stamps;
+          });
+          return '🪪 Personal · Socios Xtanco Club en tienda ('+list.length+'):\n'+lines.join('\n');
+        }
+        return 'Subtipo no soportado: '+sub+'. Disponibles: socio.';
+      }
       if(cmd==='sponsor'||cmd==='gilito'||cmd==='tio-gilito'||cmd==='scrooge'){
         const errSp=needsGame();if(errSp)return errSp;
         const sponsorActive=Array.isArray(G.custs)&&G.custs.some(c=>c&&c.sponsor);
