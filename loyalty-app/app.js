@@ -126,6 +126,27 @@
     $('#me-name').textContent = c.name;
     $('#me-visits').textContent = c.totalVisits;
     $('#me-spend').textContent = c.totalSpend;
+    // Antigüedad: socio desde createdAt + tiempo transcurrido
+    const sinceEl = $('#me-since'), sinceLapseEl = $('#me-since-lapse');
+    if (sinceEl && sinceLapseEl) {
+      if (c.createdAt) {
+        const sinceMs = c.createdAt > 1e12 ? c.createdAt : c.createdAt * 1000;
+        const d = new Date(sinceMs);
+        const dStr = String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();
+        sinceEl.textContent = dStr;
+        const days = Math.max(0, Math.floor((Date.now() - sinceMs) / 86400000));
+        const years = Math.floor(days / 365);
+        const months = Math.floor((days % 365) / 30);
+        let lapse;
+        if (years > 0) lapse = years + ' año' + (years === 1 ? '' : 's') + (months > 0 ? ' ' + months + ' mes' + (months === 1 ? '' : 'es') : '');
+        else if (months > 0) lapse = months + ' mes' + (months === 1 ? '' : 'es');
+        else lapse = days + ' día' + (days === 1 ? '' : 's');
+        sinceLapseEl.textContent = 'hace ' + lapse;
+      } else {
+        sinceEl.textContent = '—';
+        sinceLapseEl.textContent = '';
+      }
+    }
     const N = state.stampsForFree || 5;
     const row = $('#stamps-row');
     row.innerHTML = '';

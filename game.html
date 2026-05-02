@@ -7966,6 +7966,7 @@ function spawnCust(isVip,isSponsor){
         newCust.fanFreePending=!!fan.freePending;
         newCust.fanBirthday=fan.birthday||null;
         newCust.fanIsBirthday=!!fan.isBirthday;
+        newCust.fanSince=fan.createdAt||fan.since||null;
         newCust.persona='loyal';
         newCust.col=fan.isBirthday?'#ff7eb6':'#78f3ff'; // pink for birthday, cyan for regular fans
         if(fan.freePending) newCust.loyaltyFree=true;
@@ -16077,18 +16078,39 @@ function openCustomerEditor(custIdx){
     const stampBar='● '.repeat(stamps)+'○ '.repeat(Math.max(0,5-stamps));
     const cake=c.fanIsBirthday?' 🎂 ¡CUMPLE HOY!':'';
     const tier=stamps>=5?'Premium · sello canjeable':stamps>=3?'Activo':'Nuevo';
+    // Antigüedad: c.fanSince viene en segundos UNIX (createdAt del backend o sintetico)
+    let antiguedad='—';
+    if(c.fanSince){
+      const sinceMs=c.fanSince>1e12?c.fanSince:c.fanSince*1000;
+      const d=new Date(sinceMs);
+      const dStr=String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();
+      const days=Math.max(0,Math.floor((Date.now()-sinceMs)/86400000));
+      const years=Math.floor(days/365);
+      const months=Math.floor((days%365)/30);
+      let lapse;
+      if(years>0) lapse=years+'a '+months+'m';
+      else if(months>0) lapse=months+'m';
+      else lapse=days+'d';
+      antiguedad=dStr+' · '+lapse;
+    }
+    // Tiempo en tienda: c.dwellTicks a 60 ticks/seg
+    const dwellSec=Math.max(0,Math.floor((c.dwellTicks||0)/60));
+    const dwellMm=Math.floor(dwellSec/60);
+    const dwellSs=dwellSec%60;
+    const tiempoTienda=dwellMm>0?(dwellMm+'m '+String(dwellSs).padStart(2,'0')+'s'):(dwellSec+' seg');
     npcEdDraft={
       title:'FICHA DE SOCIO · XTANCO CLUB',
       name:(c.fanEmoji?c.fanEmoji+' ':'')+(c.fanName||'Socio')+cake,
       look:JSON.parse(JSON.stringify(c.look||{shirt:1,hair:0,skin:1,pants:0,shoes:0,accessory:0})),
       lines:[
         'ID socio: '+c.fanCustomerId,
+        'Antiguedad: '+antiguedad,
         'Nacimiento: '+(c.fanBirthday||'—'),
         'Sellos: '+stamps+'/5  '+stampBar,
         'Categoria: '+tier,
         'Ticket esperado: '+(Math.round(c.avgTicket||0))+'€',
         'Producto que busca: '+(c.wantsProdIdx>=0?prodName(c.wantsProdIdx):'—'),
-        'Estado en tienda: '+customerStateLabel(c),
+        'Tiempo en tienda: '+tiempoTienda,
         'Compra realizada: '+(c.bought?'sí':'no'),
       ],
     };
@@ -19185,6 +19207,9 @@ window.xtAPI = (function(){
         last.fanBirthday=dd+'/'+mm+'/'+yy;
         last.fanIsBirthday=isBday;
         last.fanStamps=1+Math.floor(Math.random()*5);
+        // Antiguedad: socio desde una fecha aleatoria entre hace 4 años y hace 1 mes
+        const sinceMs=Date.now()-Math.floor(Math.random()*(4*365*86400000)+30*86400000);
+        last.fanSince=Math.floor(sinceMs/1000);
         last.col=isBday?'#ff7eb6':'#78f3ff';
         const cake=isBday?' 🎂':'';
         last.bMsg=last.fanEmoji+' '+last.fanName+cake+' · '+last.fanStamps+'/5';
