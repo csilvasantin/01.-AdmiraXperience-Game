@@ -18079,14 +18079,14 @@ window.xtAPI = (function(){
       },
       {
         label:'🦆 Sponsor',
-        status:sponsorActive?(isEs?'en tienda':'in store'):(isEs?'invitar':'invite'),
-        command:'/sponsor',
+        status:sponsorActive?(isEs?'+1 más':'add 1 more'):(isEs?'invitar':'invite'),
+        command:'/sponsor on',
         active:sponsorActive
       },
       {
         label:'❤️ Socio',
-        status:socioActive?(isEs?'en tienda':'in store'):(isEs?'invitar':'invite'),
-        command:'/socio',
+        status:socioActive?(isEs?'+1 más':'add 1 more'):(isEs?'invitar':'invite'),
+        command:'/socio on',
         active:socioActive
       }
     ];
@@ -19890,14 +19890,17 @@ window.xtAPI = (function(){
     });
   }
 
-  bindDockButton(sendBtn,()=>sendComposerText(composer&&composer.value));
+  // Helper: pequeño chime tipo Super Mario al pulsar botones de la barra
+  function marioBeep(){try{if(typeof SFX!=='undefined'&&SFX.marioCoin)SFX.marioCoin();}catch(e){}}
+  bindDockButton(sendBtn,()=>{marioBeep();sendComposerText(composer&&composer.value);});
   bindDockButton(helpBtn,()=>{
+    marioBeep();
     if(sendPane&&sendPane.classList.contains('help-open')) hideHelpPanel();
     else commandHelp();
   });
-  bindDockButton(statusBtn,()=>sendComposerText('/status'));
-  bindDockButton(hideBtn,()=>setTelegramDockHidden(!telegramDockHidden));
-  bindDockButton(signageBtn,()=>toggleSignagePanel());
+  bindDockButton(statusBtn,()=>{marioBeep();sendComposerText('/status');});
+  bindDockButton(hideBtn,()=>{marioBeep();setTelegramDockHidden(!telegramDockHidden);});
+  bindDockButton(signageBtn,()=>{marioBeep();toggleSignagePanel();});
   if(signagePanel){
     signagePanel.addEventListener('dragstart',e=>{
       const row=e.target.closest('[data-signage-play]');
