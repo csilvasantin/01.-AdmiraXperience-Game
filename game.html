@@ -16402,16 +16402,38 @@ function handleNPCEditorClick(id){
   if(!npcEdOpen||!npcEdDraft)return false;
   if(id==='npcEdClose'){closeNPCEditor();return true;}
   if(id==='npcEdSendTg'){
-    try{
+    (async()=>{
       const d=npcEdDraft||{};
       const header=(d.title||'Ficha')+' — '+(d.name||'');
       const body=(d.lines||[]).join('\n');
       const text=header+'\n'+body;
-      if(window.xtAPI&&typeof window.xtAPI.telegramSend==='function'){
-        window.xtAPI.telegramSend(text);
+      let sent=false, errMsg='';
+      try{
+        if(window.xtAPI&&typeof window.xtAPI.telegramSend==='function'){
+          const r=await window.xtAPI.telegramSend(text);
+          sent=!!(r&&r.ok);
+          if(!sent) errMsg=(r&&r.message)||'sin respuesta';
+        } else {
+          errMsg='xtAPI.telegramSend no disponible';
+        }
+      }catch(e){errMsg=e&&e.message?e.message:String(e);}
+      if(sent){
+        if(typeof showEv==='function') showEv('📤 Ficha enviada a Telegram','#78f3ff');
+      } else {
+        // Fallback: copiar al portapapeles para que Carlos pueda pegarla
+        let copied=false;
+        try{
+          if(navigator.clipboard&&navigator.clipboard.writeText){
+            await navigator.clipboard.writeText(text);copied=true;
+          }
+        }catch(e){}
+        if(typeof showEv==='function') showEv(copied
+          ? '📋 Telegram offline — ficha copiada al portapapeles'
+          : '⚠️ Telegram offline ('+errMsg+')',
+          copied?'#88ccff':'#ff8866');
+        try{console.log('[Ficha → Telegram fallback]\n'+text);}catch(e){}
       }
-      if(typeof showEv==='function') showEv('📤 Ficha enviada a Telegram','#78f3ff');
-    }catch(e){}
+    })();
     return true;
   }
   if(npcEdKind!=='staff') return false;
@@ -18727,7 +18749,7 @@ window.xtAPI = (function(){
   function showHelpPanel(){
     if(!helpPanel||!sendPane) return;
     const sections=helpSections();
-    helpPanel.innerHTML='<div class="tg-help-top"><strong>Comandos de control</strong><button type="button" class="tg-help-close" data-help-close>Cerrar</button></div>'
+    helpPanel.innerHTML='<div class="tg-help-top"><strong>Comandos de control</strong></div>'
       +'<div class="tg-help-grid">'
       +sections.map(section=>'<div class="tg-help-section"><h4>'+section.title+'</h4>'
         +section.items.map(cmd=>'<button type="button" class="tg-help-cmd" data-help-cmd="'+cmd.replace(/"/g,'&quot;')+'">'+cmd+'</button>').join('')
@@ -19560,7 +19582,10 @@ window.xtAPI = (function(){
   }
 
   bindDockButton(sendBtn,()=>sendComposerText(composer&&composer.value));
-  bindDockButton(helpBtn,()=>sendComposerText('/help'));
+  bindDockButton(helpBtn,()=>{
+    if(sendPane&&sendPane.classList.contains('help-open')) hideHelpPanel();
+    else commandHelp();
+  });
   bindDockButton(statusBtn,()=>sendComposerText('/status'));
   bindDockButton(hideBtn,()=>setTelegramDockHidden(!telegramDockHidden));
   bindDockButton(signageBtn,()=>toggleSignagePanel());
