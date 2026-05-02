@@ -18636,11 +18636,11 @@ window.xtAPI = (function(){
       {title:'Equipo y stock',items:['/hire 1','/hire dj','/hire all','/train 1','/train all','/restock 2','/restock all','/restock prensa']},
       {title:'Tienda',items:['/ad 0','/ad 1','/ad 2','/upgrade','/visit com','/visit tec','/visit del','/visit gc','/save']},
       {title:'Tiempo y ambiente',items:['/reloj 14:30','/reloj 14 30','/time am','/time pm','/time night','/weather normal','/weather rain','/weather sun','/lamp','/lamp auto','/hue','/hue auto']},
-      {title:'Pantalla y directo',items:['/livecam','/livecam off','/mocap','/mocap off','/AdmiraLive texto','/AdmiraLive off','/comunicar texto','/comunicar texto --grok','/comunicar texto --elevenlabs','/comunicar off','/AdmiraTube URL 2 audio','/AdmiraTube off','/say texto']},
-      {title:'Escena en vivo',items:['/dj on','/dj off','/ladron on','/ladron off','/guardiacivil on','/guardiacivil off','/opinador on','/opinador off','/robot on','/robot off','/door open','/door close','/door auto']},
+      {title:'Pantalla y directo',items:['/livecam','/mocap','/AdmiraLive texto','/comunicar texto','/comunicar texto --grok','/comunicar texto --elevenlabs','/AdmiraTube URL 2 audio','/say texto']},
+      {title:'Escena en vivo',items:['/dj','/ladron','/guardiacivil','/opinador','/robot','/sponsor','/door open','/door close','/door auto']},
       {title:'IA y contenido',items:['/grok pregunta','/draw dibujo','/metahuman pregunta','/log','/log thief','/log customer','/import','/import list','/import remove 1','/importTube https://youtu.be/...']},
       {title:'Ajustes rápidos',items:['/money 12000','/sat 90','/fame 80','/set week 12','/set year 2','/set revenue 5000','/set storeLevel 2','/set customers 30']},
-      {title:'Musica y layout',items:['/song 1','/song bad bunny','/music','/next','/prev','/equipo inicio ana 3 4','/equipo zona dj 12 2 2','/mobiliario inicio','/mobiliario on','/mobiliario off','/layout','/layout factory']},
+      {title:'Musica y layout',items:['/song 1','/song bad bunny','/music','/next','/prev','/equipo inicio ana 3 4','/equipo zona dj 12 2 2','/mobiliario','/mobiliario inicio','/layout','/layout save','/layout factory']},
     ];
   }
 
@@ -19041,8 +19041,9 @@ window.xtAPI = (function(){
       if(cmd==='guardia') return setGuardiaCivilCommand(arg.replace(/^civil\s+/i,''));
       if(cmd==='sponsor'||cmd==='gilito'||cmd==='tio-gilito'||cmd==='scrooge'){
         const errSp=needsGame();if(errSp)return errSp;
-        const sub=String(arg||'').trim().toLowerCase();
-        if(['off','out','clear','limpiar','despedir'].includes(sub)){
+        const sponsorActive=Array.isArray(G.custs)&&G.custs.some(c=>c&&c.sponsor);
+        const clean=binaryToggleArg(arg,sponsorActive);
+        if(['off','out','clear','limpiar','despedir','fuera','sale','salir','stop'].includes(clean)){
           if(!Array.isArray(G.custs)) return 'Sin clientes';
           const removed=G.custs.filter(c=>c&&c.sponsor).length;
           G.custs=G.custs.filter(c=>!(c&&c.sponsor));
@@ -19054,7 +19055,7 @@ window.xtAPI = (function(){
         if(!last||!last.sponsor) return '⚠️ No se pudo invocar al sponsor (capacidad o pathing).';
         showEv('🦆 Sponsor en la tienda','#ffd700');
         addFloat(last.x+7,last.y-30,'$$$','#ffd700');
-        return '🦆 Tio Gilito ha entrado a la tienda. Ticket esperado ~'+last.avgTicket+'€. Usa /sponsor off para echarlo.';
+        return '🦆 Tio Gilito ha entrado a la tienda. Ticket esperado ~'+last.avgTicket+'€.';
       }
       if(cmd==='admiralive'||cmd==='live'||cmd==='led') return setAdmiraLive(arg);
       if(cmd==='comunicar'||cmd==='comunicado'||cmd==='announce'||cmd==='megafonia'||cmd==='megafonía') return await setComunicado(arg);
