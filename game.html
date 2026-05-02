@@ -222,6 +222,7 @@
     .tg-quick-btn.is-active{border-color:#6ce6a2;background:#123427;color:#f0fff4}
     .tg-quick-btn.is-active span{color:#a7e6be}
     .tg-quick-btn.is-alert{border-color:#d48b52;background:#31170d;color:#fff2df}
+    .tg-quick-btn.is-flash{transform:scale(.96);background:linear-gradient(180deg,#1a4d6e,#0c2630);border-color:#78f3ff;box-shadow:0 0 14px rgba(120,243,255,.55);transition:transform .08s ease-out, box-shadow .08s ease-out, background .08s}
     .tg-quick-btn.is-alert span{color:#ffca98}
     .tg-diagnostics{display:flex;flex-direction:column;gap:6px;padding:6px 8px;border-bottom:1px solid #14323c;background:#04111a;font-size:9px;line-height:1.3;color:#9ec7d0}
     .tg-card{display:flex;flex-direction:column;gap:4px;padding:5px 6px;border:1px solid #1d5260;border-radius:6px;background:#071720}
@@ -8007,6 +8008,11 @@ function spawnCust(isVip,isSponsor){
           if(fan.isBirthday) showEv('🎂 ¡Cumple de '+newCust.fanName+'! Pulsa encima para felicitar','#ff7eb6');
           else showEv('🪪 '+newCust.fanName+' entró del Xtanco Club','#78f3ff');
         }
+        try{
+          const cakeBubble=fan.isBirthday?' Hoy cumple, ¡felicítale!':'';
+          setManagerSayBubble('AdmiraNext AI dice que está con nosotros '+(newCust.fanName||'el socio')+'. ¡Cuídale mucho!'+cakeBubble);
+          if(typeof SFX!=='undefined' && SFX.eventChime) SFX.eventChime();
+        }catch(e){}
       }
     }
   }catch(e){ console.warn('LoyaltyBridge spawn hook',e); }
@@ -16326,9 +16332,19 @@ function drawNPCEditor(){
     }
     tx(d.name||d.title,px+126,cy+24,'#1a3a4a',14);
     const lines=d.lines||[];
-    lines.forEach((line,i)=>tx(line,px+126,cy+50+i*20,'#26201a',12));
+    // Auto-fit: si hay muchas lineas, comprimir spacing y font para que entren
+    // en la caja de la ficha sin desbordar (la caja mide ph-56-btnAreaH).
+    const boxH=ph-56-btnAreaH-30; // espacio util desde donde empiezan las lineas
+    const lineSpacing=lines.length<=8?20:lines.length<=10?17:14;
+    const lineFont=lines.length<=8?12:lines.length<=10?11:10;
+    const maxLines=Math.max(1,Math.floor(boxH/lineSpacing));
+    const visible=lines.slice(0,maxLines);
+    visible.forEach((line,i)=>tx(line,px+126,cy+50+i*lineSpacing,'#26201a',lineFont));
+    if(lines.length>maxLines){
+      tx('… +'+(lines.length-maxLines)+' más',px+126,cy+50+maxLines*lineSpacing,'#9a9080',9);
+    }
     const subL=npcEdKind==='customer'?'Ficha de cliente':'Ficha NPC';
-    tx(subL,px+126,cy+50+lines.length*20+8,'#7a7060',9);
+    tx(subL,px+126,cy+50+visible.length*lineSpacing+(lines.length>maxLines?16:8),'#7a7060',9);
     // Boton "📤 Enviar a Telegram"
     const btnW=200, btnH=26;
     const btnXp=px+(pw-btnW)/2, btnYp=py+ph-btnH-10;
@@ -19318,6 +19334,11 @@ window.xtAPI = (function(){
         last.bMsg=last.fanEmoji+' '+last.fanName+cake+' · '+last.fanStamps+'/5';
         last.bTimer=240;
         showEv('🪪 Socio en la tienda: '+last.fanName+(isBday?' 🎂 ¡cumple hoy!':''),isBday?'#ff7eb6':'#78f3ff');
+        try{
+          const cakeBubble=isBday?' Hoy cumple, ¡felicítale!':'';
+          setManagerSayBubble('AdmiraNext AI dice que está con nosotros '+last.fanName+'. ¡Cuídale mucho!'+cakeBubble);
+          if(typeof SFX!=='undefined' && SFX.eventChime) SFX.eventChime();
+        }catch(e){}
         return '🪪 Socio Xtanco Club en la tienda:\n'+last.fanEmoji+' '+last.fanName+cake+' · nac. '+last.fanBirthday+' · '+last.fanStamps+'/5 sellos.';
       }
       if(cmd==='sponsor'||cmd==='gilito'||cmd==='tio-gilito'||cmd==='scrooge'){
@@ -19947,11 +19968,18 @@ window.xtAPI = (function(){
   if(characterDock){
     characterDock.addEventListener('click',e=>openCharacterDockDetail(e.target));
   }
+  function flashQuickBtn(btn){
+    if(!btn) return;
+    btn.classList.add('is-flash');
+    setTimeout(()=>{try{btn.classList.remove('is-flash');}catch(e){}},220);
+  }
   if(quickActionsEl){
     quickActionsEl.addEventListener('click',e=>{
       const action=e.target.closest('[data-quick-action]');
       if(action){
         e.preventDefault();e.stopPropagation();
+        flashQuickBtn(action);
+        try{if(typeof SFX!=='undefined'&&SFX.eventChime)SFX.eventChime();}catch(err){}
         const kind=action.getAttribute('data-quick-action');
         if(kind==='signage'&&typeof toggleSignagePanel==='function') toggleSignagePanel();
         return;
@@ -19960,7 +19988,13 @@ window.xtAPI = (function(){
       if(!button) return;
       e.preventDefault();
       e.stopPropagation();
-      sendComposerText(button.getAttribute('data-quick-command')||'');
+      flashQuickBtn(button);
+      try{if(typeof SFX!=='undefined'&&SFX.eventChime)SFX.eventChime();}catch(err){}
+      const cmdRaw=String(button.getAttribute('data-quick-command')||'').trim();
+      const labelEl=button.querySelector('strong');
+      const label=labelEl?labelEl.textContent.trim():cmdRaw;
+      if(typeof showEv==='function' && cmdRaw) showEv('💬 Enviado: '+label+' ('+cmdRaw+')','#bff7ff');
+      sendComposerText(cmdRaw);
     });
   }
   if(hideBtn) hideBtn.textContent=telegramDockHidden?(lang==='es'?'Mostrar':'Show'):(lang==='es'?'Ocultar':'Hide');
