@@ -18388,7 +18388,7 @@ window.xtAPI = (function(){
       {title:'Escena en vivo',items:['/dj on','/dj off','/ladron on','/ladron off','/guardiacivil on','/guardiacivil off','/opinador on','/opinador off','/robot on','/robot off','/door open','/door close','/door auto']},
       {title:'IA y contenido',items:['/grok pregunta','/draw dibujo','/metahuman pregunta','/log','/log thief','/log customer','/import','/import list','/import remove 1','/importTube https://youtu.be/...']},
       {title:'Ajustes rápidos',items:['/money 12000','/sat 90','/fame 80','/set week 12','/set year 2','/set revenue 5000','/set storeLevel 2','/set customers 30']},
-      {title:'Musica y layout',items:['/song 1','/song bad bunny','/music','/next','/prev','/equipo inicio ana 3 4','/equipo zona dj 12 2 2','/mobiliario inicio','/mobiliario on','/mobiliario off']},
+      {title:'Musica y layout',items:['/song 1','/song bad bunny','/music','/next','/prev','/equipo inicio ana 3 4','/equipo zona dj 12 2 2','/mobiliario inicio','/mobiliario on','/mobiliario off','/layout','/layout factory']},
     ];
   }
 
@@ -18789,6 +18789,22 @@ window.xtAPI = (function(){
       if(cmd==='guardia') return setGuardiaCivilCommand(arg.replace(/^civil\s+/i,''));
       if(cmd==='admiralive'||cmd==='live'||cmd==='led') return setAdmiraLive(arg);
       if(cmd==='comunicar'||cmd==='comunicado'||cmd==='announce'||cmd==='megafonia'||cmd==='megafonía') return await setComunicado(arg);
+      if(cmd==='layout'||cmd==='ordena'||cmd==='ordenar'||cmd==='resetlayout'){
+        const errL=needsGame();if(errL)return errL;
+        const sub=String(arg||'').trim().toLowerCase();
+        if(sub==='factory'||sub==='wipe'||sub==='reset-all'){
+          try{resetToFactory();}catch(e){return 'Error reset factory: '+e.message;}
+          shopFurnitureVisible=true;edSelIdx=-1;
+          try{buildWalkGrid();}catch(e){}
+          showEv('🏗️ Layout factory','#ffaa55');
+          return '🏗️ Layout factory: localStorage limpio y mobiliario en posicion canonica ('+shopLayout.length+' items).';
+        }
+        try{resetLayout();}catch(e){return 'Error reset layout: '+e.message;}
+        shopFurnitureVisible=true;edSelIdx=-1;
+        try{buildWalkGrid();}catch(e){}
+        showEv('🏗️ Layout en su sitio','#88ccff');
+        return '🏗️ Mobiliario reordenado a la posicion canonica ('+shopLayout.length+' items). Usa "/layout factory" para limpiar localStorage tambien.';
+      }
       if(cmd==='admiratube'||cmd==='tube'||cmd==='youtube') return setAdmiraTube(arg);
       if(cmd==='pause'){
         const err=needsGame();if(err)return err;
