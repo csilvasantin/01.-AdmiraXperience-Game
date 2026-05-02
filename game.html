@@ -14373,27 +14373,40 @@ function drawIsoCust(c){
   } else {
     chibi(c.x,c.y,c.dir||1,shirtIdx,hairIdx,c.fr,false,tt,1,false,cLook);
   }
-  // Xtanco Club fan emblem — a cyan X painted over the chest so members of the
+  // Xtanco Club fan emblem — a heart painted over the chest so members of the
   // Club are instantly recognizable in the shop, regardless of their shirt
   // colour or pattern. Drawn after chibi() so it sits on top of any shirt.
   if(c.fanCustomerId){
-    const cxX=c.x+7, cxY=renderY+13, arm=3.4;
+    const hxX=c.x+7, hxY=renderY+13;
+    const isBday=!!c.fanIsBirthday;
+    const fillCol=isBday?'#ff4d8a':'#ff3344';
+    const haloCol=isBday?'#ff7eb6':'#ff5566';
     cx.save();
-    // Outer glow halo
     const pulse=0.55+0.30*Math.abs(Math.sin(tt*0.10));
-    cx.shadowColor='#78f3ff';
-    cx.shadowBlur=4*pulse;
-    cx.lineCap='round';
-    // Dark outline so the X stays readable on light shirts too
-    cx.strokeStyle='rgba(2,16,28,0.85)';
-    cx.lineWidth=2.6;
-    cx.beginPath();cx.moveTo(cxX-arm,cxY-arm);cx.lineTo(cxX+arm,cxY+arm);
-    cx.moveTo(cxX+arm,cxY-arm);cx.lineTo(cxX-arm,cxY+arm);cx.stroke();
-    // Bright cyan core
-    cx.strokeStyle='#78f3ff';
-    cx.lineWidth=1.5;
-    cx.beginPath();cx.moveTo(cxX-arm,cxY-arm);cx.lineTo(cxX+arm,cxY+arm);
-    cx.moveTo(cxX+arm,cxY-arm);cx.lineTo(cxX-arm,cxY+arm);cx.stroke();
+    cx.shadowColor=haloCol;
+    cx.shadowBlur=5*pulse;
+    // Heart shape: two top arcs + bottom triangle. Tweaked to read at 14px wide.
+    const drawHeart=(scale,col)=>{
+      const s=scale;
+      cx.beginPath();
+      // Left bump
+      cx.arc(hxX-2.0*s, hxY-0.6*s, 2.1*s, Math.PI, 0, false);
+      // Right bump
+      cx.arc(hxX+2.0*s, hxY-0.6*s, 2.1*s, Math.PI, 0, false);
+      // Down to point
+      cx.lineTo(hxX, hxY+3.6*s);
+      cx.closePath();
+      cx.fillStyle=col;
+      cx.fill();
+    };
+    // Dark outline behind (slightly bigger) for legibility on light shirts
+    drawHeart(1.15,'rgba(2,8,14,0.9)');
+    // Bright fill on top
+    drawHeart(1.0,fillCol);
+    // Inner highlight — small white dot top-left of the heart
+    cx.shadowBlur=0;
+    cx.fillStyle='rgba(255,255,255,0.55)';
+    cx.beginPath();cx.arc(hxX-1.6,hxY-1.0,0.8,0,Math.PI*2);cx.fill();
     cx.restore();
   }
   const ci=G&&G.custs?G.custs.indexOf(c):-1;
@@ -18652,7 +18665,7 @@ window.xtAPI = (function(){
       {title:'Tienda',items:['/ad 0','/ad 1','/ad 2','/upgrade','/visit com','/visit tec','/visit del','/visit gc','/save']},
       {title:'Tiempo y ambiente',items:['/reloj 14:30','/reloj 14 30','/time am','/time pm','/time night','/weather normal','/weather rain','/weather sun','/lamp','/lamp auto','/hue','/hue auto']},
       {title:'Pantalla y directo',items:['/livecam','/mocap','/AdmiraLive texto','/comunicar texto','/comunicar texto --grok','/comunicar texto --elevenlabs','/AdmiraTube URL 2 audio','/say texto']},
-      {title:'Escena en vivo',items:['/dj','/ladron','/guardiacivil','/opinador','/robot','/sponsor','/door open','/door close','/door auto']},
+      {title:'Escena en vivo',items:['/dj','/ladron','/guardiacivil','/opinador','/robot','/sponsor','/socio','/door open','/door close','/door auto']},
       {title:'Notificaciones al personal',items:['/personal socio']},
       {title:'IA y contenido',items:['/grok pregunta','/draw dibujo','/metahuman pregunta','/log','/log thief','/log customer','/import','/import list','/import remove 1','/importTube https://youtu.be/...']},
       {title:'Ajustes rápidos',items:['/money 12000','/sat 90','/fame 80','/set week 12','/set year 2','/set revenue 5000','/set storeLevel 2','/set customers 30']},
@@ -19071,6 +19084,40 @@ window.xtAPI = (function(){
           return '🪪 Personal · Socios Xtanco Club en tienda ('+list.length+'):\n'+lines.join('\n');
         }
         return 'Subtipo no soportado: '+sub+'. Disponibles: socio.';
+      }
+      if(cmd==='socio'||cmd==='socios'||cmd==='club'||cmd==='member'){
+        const errSc=needsGame();if(errSc)return errSc;
+        const socioActive=Array.isArray(G.custs)&&G.custs.some(c=>c&&c.fanCustomerId);
+        const cleanSc=binaryToggleArg(arg,socioActive);
+        if(['off','out','clear','limpiar','despedir','fuera','sale','salir','stop'].includes(cleanSc)){
+          if(!Array.isArray(G.custs)) return 'Sin clientes';
+          const removed=G.custs.filter(c=>c&&c.fanCustomerId).length;
+          G.custs=G.custs.filter(c=>!(c&&c.fanCustomerId));
+          showEv('🪪 Socios fuera','#78f3ff');
+          return removed?'🪪 '+removed+' socio(s) fuera de la tienda.':'No habia ningun socio en la tienda.';
+        }
+        // Spawn fake socio synthesizing fan* fields directly on a fresh customer
+        try{spawnCust(false,false);}catch(e){return 'Error invocando socio: '+e.message;}
+        const last=G.custs[G.custs.length-1];
+        if(!last) return '⚠️ No se pudo invocar al socio (capacidad).';
+        const namesSp=['Carla Ruiz','Juan Pérez','Marta Soler','David Vidal','Ana Cabrera','Luis Mora','Nuria Sanz','Pablo Gil','Elena Vega','Mario León','Sofía Ríos','Iván Bravo'];
+        const emojis=['🦊','🐼','🐧','🦉','🦄','🐢','🐝','🐬','🦁','🐱','🐶','🐰'];
+        const dd=String(1+Math.floor(Math.random()*28)).padStart(2,'0');
+        const mm=String(1+Math.floor(Math.random()*12)).padStart(2,'0');
+        const yy=1955+Math.floor(Math.random()*55);
+        const isBday=Math.random()<0.25;
+        last.fanCustomerId='dev-'+Date.now();
+        last.fanName=namesSp[Math.floor(Math.random()*namesSp.length)];
+        last.fanEmoji=emojis[Math.floor(Math.random()*emojis.length)];
+        last.fanBirthday=dd+'/'+mm+'/'+yy;
+        last.fanIsBirthday=isBday;
+        last.fanStamps=1+Math.floor(Math.random()*5);
+        last.col=isBday?'#ff7eb6':'#78f3ff';
+        const cake=isBday?' 🎂':'';
+        last.bMsg=last.fanEmoji+' '+last.fanName+cake+' · '+last.fanStamps+'/5';
+        last.bTimer=240;
+        showEv('🪪 Socio en la tienda: '+last.fanName+(isBday?' 🎂 ¡cumple hoy!':''),isBday?'#ff7eb6':'#78f3ff');
+        return '🪪 Socio Xtanco Club en la tienda:\n'+last.fanEmoji+' '+last.fanName+cake+' · nac. '+last.fanBirthday+' · '+last.fanStamps+'/5 sellos.';
       }
       if(cmd==='sponsor'||cmd==='gilito'||cmd==='tio-gilito'||cmd==='scrooge'){
         const errSp=needsGame();if(errSp)return errSp;
