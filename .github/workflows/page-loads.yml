@@ -1,0 +1,35 @@
+name: page-loads
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Playwright Chromium
+        run: |
+          npm init -y
+          npm install --no-audit --no-fund playwright@1
+          npx playwright install --with-deps chromium
+
+      - name: Serve static files
+        run: |
+          npx --yes serve@14 -l 5050 . &
+          sleep 3
+
+      - name: Run smoke test
+        run: node smoke.mjs
+
+      - name: Show server log on failure
+        if: failure()
+        run: echo "Server might have crashed; this is the smoke test fail."

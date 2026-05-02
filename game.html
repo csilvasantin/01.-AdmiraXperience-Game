@@ -7613,6 +7613,47 @@ function updateGame(){
   }
   // Ambient engine — sync volumen del rumor/lluvia con el estado del juego
   try{ if(G.ambient && G.ambient.enabled){ AMBIENT.init(); AMBIENT.update(); } }catch(e){}
+  // ── AdmiraGrok comenta el día — al cruzar la hora de cierre, pide a Grok un análisis y lo manda a Telegram ──
+  try{
+    if(typeof G.gameTime==='number' && shopTimeSettings && typeof shopTimeSettings.closeHour==='number'){
+      const closingNow=G.gameTime>=shopTimeSettings.closeHour && (G.lastClosedAtHour|0)<Math.floor(G.gameTime);
+      if(closingNow && !G._grokDayCommentInFlight){
+        G._grokDayCommentInFlight=true;
+        G.lastClosedAtHour=Math.floor(G.gameTime);
+        // Recolectar stats del día
+        const stats={
+          ventas:Math.round(G.weekRevenue||0),
+          satisfaccion:Math.round(G.satisfaction||0),
+          fama:Math.round(G.fame||0),
+          clientes:G.customersToday||0,
+          pasan:G.passersbyToday||0,
+          socios:Array.isArray(G.socioRegistry)?G.socioRegistry.length:0,
+          sociosTienda:(G.socioRegistry||[]).filter(r=>r.source==='tienda').length,
+          sociosWeb:(G.socioRegistry||[]).filter(r=>r.source==='web').length,
+          ladronesPillados:(G.thiefCaughtCount||0),
+          dia:Math.round((G.gameTime-shopTimeSettings.openHour)/(shopTimeSettings.closeHour-shopTimeSettings.openHour)*100)+'% completado',
+        };
+        const prompt='Eres AdmiraGrok, analista del Xpace OS. Comenta en 2-3 frases en español el cierre del día del estanco Xtanco con estos datos: '+JSON.stringify(stats)+'. Tono profesional pero cercano. NO uses markdown ni emojis.';
+        (async()=>{
+          try{
+            if(typeof grokFetch==='function' && GROK && GROK.enabled){
+              const out=await grokFetch('/grok/ask',{
+                method:'POST',
+                headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({prompt,context:'Cierre diario del estanco Xtanco. Datos resumidos para el equipo.'})
+              });
+              const txt=String(out&&out.text||'').replace(/\s+/g,' ').trim();
+              if(txt && window.xtAPI && typeof window.xtAPI.telegramSend==='function'){
+                window.xtAPI.telegramSend('📊 Cierre del día — AdmiraGrok\n\n'+txt+'\n\nVentas: '+stats.ventas+'€ · Satisfacción: '+stats.satisfaccion+'% · Fama: '+stats.fama+'%\nClientes: '+stats.clientes+' · Socios: '+stats.socios+' ('+stats.sociosTienda+' tienda + '+stats.sociosWeb+' web)');
+              }
+              if(typeof showEv==='function') showEv('📊 AdmiraGrok ha comentado el cierre del día','#88ccff');
+            }
+          }catch(e){}
+          finally{ G._grokDayCommentInFlight=false; }
+        })();
+      }
+    }
+  }catch(e){}
   // Heat map de socios — sample cada 15 ticks (~0.25s) para no saturar
   if(G.socioHeat && G.socioHeat.enabled){
     G.socioHeat.sampleTick=(G.socioHeat.sampleTick||0)+1;
@@ -19247,6 +19288,7 @@ window.xtAPI = (function(){
       {title:'Notificaciones al personal',items:['/personal socio','/personal dashboard','/socios listado','/heatmap','/heatmap reset','/sponsor recurrente 120 10']},
       {title:'Atmósfera',items:['/ambiente','/ambiente vol 50','/voces']},
       {title:'Operativa real',items:['/devolucion','/pedido']},
+      {title:'Integración AdmiraNext',items:['/socios export']},
       {title:'IA y contenido',items:['/grok pregunta','/draw dibujo','/metahuman pregunta','/log','/log thief','/log customer','/import','/import list','/import remove 1','/importTube https://youtu.be/...']},
       {title:'Ajustes rápidos',items:['/money 12000','/sat 90','/fame 80','/set week 12','/set year 2','/set revenue 5000','/set storeLevel 2','/set customers 30']},
       {title:'Musica y layout',items:['/song 1','/song bad bunny','/music','/next','/prev','/equipo inicio ana 3 4','/equipo zona dj 12 2 2','/mobiliario','/mobiliario inicio','/layout','/layout save','/layout factory']},
@@ -19801,6 +19843,44 @@ window.xtAPI = (function(){
         const errSc=needsGame();if(errSc)return errSc;
         const argLow=String(arg||'').trim().toLowerCase();
         // Subcomando /socios listado | /members list — listado historico por origen
+        if(['export','exportar','csv','json','omnipublicity','adtech'].includes(argLow)){
+          const reg=Array.isArray(G.socioRegistry)?G.socioRegistry.slice():[];
+          const tienda=reg.filter(r=>r.source==='tienda').length;
+          const web=reg.filter(r=>r.source==='web').length;
+          // Stats agregadas anonimizadas (no hay PII real en el sintético)
+          const payload={
+            generatedAt:new Date().toISOString(),
+            generatedFrom:(window.XTANCO_APP&&window.XTANCO_APP.version)||'dev',
+            xpaceOs:{
+              estanco:'xtanco-generic',
+              ciudad:'Madrid',
+              hora:G.gameTime?G.gameTime.toFixed(2):'8.00',
+            },
+            audiencia:{
+              totalSocios:reg.length,
+              altaTienda:tienda,
+              altaWeb:web,
+              ratioWebPct:reg.length?Math.round(web*100/reg.length):0,
+              cumpleHoy:(G.custs||[]).filter(c=>c&&c.fanIsBirthday).length,
+              ticketMedioEur:(()=>{const arr=(G.custs||[]).filter(c=>c&&c.avgTicket).map(c=>c.avgTicket);return arr.length?Math.round(arr.reduce((a,b)=>a+b,0)/arr.length):0;})(),
+            },
+            socios:reg.map(r=>({
+              id:r.id,
+              source:r.source,
+              joinedAtRealMs:r.joinedAtRealMs,
+              fanSince:r.fanSince,
+              hasBirthday:!!r.birthday,
+            })),
+          };
+          try{
+            const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+            const url=URL.createObjectURL(blob);
+            const a=document.createElement('a');a.href=url;a.download='omnipublicity-audiencia-'+new Date().toISOString().slice(0,10)+'.json';
+            document.body.appendChild(a);a.click();
+            setTimeout(()=>{try{document.body.removeChild(a);URL.revokeObjectURL(url);}catch(e){}},800);
+            return '📤 Export descargado: '+a.download+'\nMuévelo a https://github.com/csilvasantin/csilvasantin.github.io/blob/main/omnipublicity/data.json y commitea para que la landing de OmniPublicity actualice las métricas reales de audiencia capturada por el Xpace OS.';
+          }catch(e){return 'Error exportando: '+e.message;}
+        }
         if(['listado','list','listar','histórico','historico','registro','registry','all'].includes(argLow)){
           if(!Array.isArray(G.socioRegistry)) G.socioRegistry=[];
           const reg=G.socioRegistry.slice();
