@@ -149,6 +149,15 @@ Telegram en la version publica:
 - Los secrets de Cloudflare son `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `TELEGRAM_ALLOWED_CHAT_IDS` y `TELEGRAM_WEBHOOK_SECRET`.
 - Para publicar el worker: `wrangler deploy --config workers/admira-telegram-bridge/wrangler.toml`.
 
+TTS premium con ElevenLabs (`/comunicar --elevenlabs`):
+
+- El navegador llama a `https://admira-tts.csilvasantin.workers.dev/tts/elevenlabs` con el texto.
+- El worker `workers/admira-tts/` añade el header `xi-api-key` desde el secret `ELEVENLABS_API_KEY` y devuelve audio MP3.
+- Voz por defecto: `EXAVITQu4vr4xnSDxMaL` (Bella, multilingüe). Modelo: `eleven_multilingual_v2`.
+- Para configurar el secret: `wrangler secret put ELEVENLABS_API_KEY --config workers/admira-tts/wrangler.toml`.
+- Para publicar el worker: `wrangler deploy --config workers/admira-tts/wrangler.toml`.
+- Para verificar: `curl https://admira-tts.csilvasantin.workers.dev/health` debería devolver `hasKey: true`.
+
 Comandos soportados desde Telegram:
 
 - `/status`, `/staff`, `/stock`
@@ -177,6 +186,7 @@ Comandos soportados desde Telegram:
 - `/door open`, `/door close`, `/door auto`
 - `/lamp`, `/music`, `/next`, `/prev`, `/save`
 - `/say texto` muestra el texto como bocadillo del Store Manager en la tienda.
+- `/comunicar texto [--grok | --elevenlabs]` lanza un comunicado por megafonía: pinta el texto en la franja LED unificada (paredes izquierda + trasera) con prefijo `📢 COMUNICADO:` y lo locuta por audio. Sin flag usa `speechSynthesis` del navegador (gratis). `--grok` pide a Grok que reescriba el texto en estilo de locutor profesional y lo locuta con la voz del navegador. `--elevenlabs` envía el texto al worker `admira-tts` y reproduce el MP3 devuelto por ElevenLabs (DE PAGO, ~$0.30/1k chars; el chat avisa antes). `/comunicar off` limpia el LED y detiene cualquier audio activo.
 - `/grok pregunta`, `/ask pregunta` consulta a Grok y muestra la respuesta en el panel del juego.
 - `/draw dibujo`, `/dibuja dibujo` pide a Grok un pixel art y lo pinta en la pantalla principal de la pared larga.
 - `/AdmiraLive texto` publica un mensaje en tiempo real en la pantalla LED de la pared larga; `/AdmiraLive off` lo limpia.

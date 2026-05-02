@@ -5472,6 +5472,7 @@ function initGame(){
     tftStockTimer:0,  // how long to show product on Admira
     tftGrokArt:null,  // Grok-generated pixel art for the main wall screen
     admiraLiveMsg:'',
+    comunicadoMsg:'',
     admiraTube:null,
     securityCam:{active:true},
     guardiaCivil:{phase:'idle',x:820,y:0,dir:-1,aFrame:0,aTimer:0,patrolTimer:0,targetCol:9,targetRow:3},
@@ -12521,6 +12522,9 @@ let ledUnifiedOffset=0;
 
 function _getLedParams(){
   const msgs=T().ledMsgs;
+  const comunicado=(G&&G.comunicadoMsg)
+    ? `  📢  COMUNICADO: ${G.comunicadoMsg.toUpperCase()}  📢  `
+    : '';
   const admiraLive=(G&&G.admiraLiveMsg)
     ? `  ◆  ADMIRA LIVE: ${G.admiraLiveMsg.toUpperCase()}  ◆  `
     : '';
@@ -12530,7 +12534,7 @@ function _getLedParams(){
   const liveData=(state===S.GAME||state===S.PAUSE)
     ? `  ◈  ${lang==='es'?'PASAN':'PASS'}: ${G?(G.passersbyToday||0):0}  ◈  ${lang==='es'?'ENTRAN':'IN'}: ${G?(G.customersToday||0):0}  ◈  ${T().satisfaction}: ${G?(G.satisfaction|0):0}%  ◈  ${T().fame}: ${G?(G.fame|0):0}%  ◈  `
     : '  ◈  ';
-  const fullMsg=admiraLive+currentVideoMsg+msgs.join('   ◆   ')+liveData;
+  const fullMsg=comunicado+admiraLive+currentVideoMsg+msgs.join('   ◆   ')+liveData;
   cx.font='bold 9px monospace';
   const msgW=cx.measureText(fullMsg).width;
   return {fullMsg, msgW};
@@ -17974,6 +17978,126 @@ window.xtAPI = (function(){
     return 'AdmiraLive en pantalla LED: '+G.admiraLiveMsg;
   }
 
+  // ─── COMUNICAR ────────────────────────────────────────────────────────────
+  // Megafonía del Xpace OS: pinta texto en la franja LED unificada (pared
+  // izquierda + trasera) Y lo locuta por audio. Tres motores TTS:
+  //   default    → window.speechSynthesis (gratis, navegador)
+  //   --grok     → Grok reescribe en estilo locutor + browser TTS
+  //   --elevenlabs → worker admira-tts → ElevenLabs (de pago, avisa coste)
+  let ANNOUNCE_AUDIO=null;
+  function ttsCandidates(){
+    const list=[];
+    const cfg=window.XTANCO_RUNTIME_CONFIG||{};
+    if(cfg.tts&&cfg.tts.proxyUrl) list.push(String(cfg.tts.proxyUrl).replace(/\/+$/,''));
+    list.push('https://admira-tts.csilvasantin.workers.dev');
+    return list;
+  }
+  function speakAnnouncementBrowser(text){
+    const clean=String(text||'').replace(/\s+/g,' ').trim();
+    if(!clean) return false;
+    if(!('speechSynthesis' in window)||typeof window.SpeechSynthesisUtterance!=='function') return false;
+    try{window.speechSynthesis.cancel();}catch(e){}
+    const u=new SpeechSynthesisUtterance(clean.slice(0,700));
+    u.lang='es-ES';u.rate=0.96;u.pitch=1;u.volume=1;
+    try{window.speechSynthesis.speak(u);return true;}catch(e){return false;}
+  }
+  async function speakAnnouncementGrok(text){
+    if(typeof grokFetch!=='function'||!GROK||!GROK.enabled){
+      speakAnnouncementBrowser(text);
+      return {ok:false,polished:text,note:'Grok no configurado, usando voz local'};
+    }
+    try{
+      const out=await grokFetch('/grok/ask',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          prompt:'Reescribe este comunicado como un locutor profesional de megafonía de tienda en español: claro, breve, máximo 2 frases, sin saludos ni emojis ni markdown. Devuelve SOLO el texto a locutar.\n\nComunicado: '+text,
+          context:'Megafonia del Xpace OS / Admira XP. Tono institucional cercano.'
+        })
+      });
+      const polished=String(out&&out.text||text).replace(/\s+/g,' ').trim()||text;
+      speakAnnouncementBrowser(polished);
+      return {ok:true,polished};
+    }catch(e){
+      speakAnnouncementBrowser(text);
+      return {ok:false,polished:text,note:'Grok falló ('+e.message+'), usando voz local'};
+    }
+  }
+  async function speakAnnouncementElevenLabs(text){
+    const clean=String(text||'').slice(0,1500);
+    let lastError=null;
+    for(const baseUrl of ttsCandidates()){
+      try{
+        const res=await fetch(baseUrl+'/tts/elevenlabs',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({text:clean})
+        });
+        if(!res.ok){
+          let detail='';try{const j=await res.json();detail=j.message||j.error||'';}catch(e){}
+          throw new Error(detail||('HTTP '+res.status));
+        }
+        const blob=await res.blob();
+        if(ANNOUNCE_AUDIO){try{ANNOUNCE_AUDIO.pause();}catch(e){}}
+        ANNOUNCE_AUDIO=new Audio(URL.createObjectURL(blob));
+        ANNOUNCE_AUDIO.play().catch(()=>{});
+        return {ok:true};
+      }catch(e){lastError=e;}
+    }
+    speakAnnouncementBrowser(text);
+    return {ok:false,note:'ElevenLabs no disponible ('+(lastError&&lastError.message||'sin proxy')+'), usando voz local'};
+  }
+
+  function parseComunicarFlags(arg){
+    const tokens=String(arg||'').split(/\s+/).filter(Boolean);
+    let engine='browser';
+    const rest=[];
+    for(const tok of tokens){
+      const low=tok.toLowerCase();
+      if(low==='--grok'||low==='-g'){engine='grok';continue;}
+      if(low==='--elevenlabs'||low==='--eleven'||low==='-e'){engine='elevenlabs';continue;}
+      if(low==='--browser'||low==='--free'){engine='browser';continue;}
+      rest.push(tok);
+    }
+    return {engine,text:rest.join(' ').trim()};
+  }
+
+  async function setComunicado(arg){
+    const err=needsGame();if(err)return err;
+    const raw=String(arg||'').replace(/\s+/g,' ').trim();
+    if(!raw) return 'Uso: /comunicar <texto> [--grok | --elevenlabs]';
+    if(['off','stop','clear','limpiar','borrar'].includes(raw.toLowerCase())){
+      G.comunicadoMsg='';
+      if(ANNOUNCE_AUDIO){try{ANNOUNCE_AUDIO.pause();}catch(e){}}
+      try{window.speechSynthesis&&window.speechSynthesis.cancel();}catch(e){}
+      showEv('Comunicado desactivado','#ffaa55');
+      return 'Comunicado desactivado';
+    }
+    const {engine,text}=parseComunicarFlags(raw);
+    if(!text) return 'Uso: /comunicar <texto> [--grok | --elevenlabs]';
+    G.comunicadoMsg=text.slice(0,160);
+    ledUnifiedOffset=0;
+    showEv('📢 Comunicado en LED','#ffaa55');
+    setManagerSayBubble('📢 '+G.comunicadoMsg);
+    let voiceLine='voz navegador (gratis)';
+    let extra='';
+    if(engine==='grok'){
+      const r=await speakAnnouncementGrok(text);
+      voiceLine=r.ok?'Grok locutor + voz navegador':(r.note||'Grok fallback');
+      if(r.ok&&r.polished&&r.polished!==text){
+        G.comunicadoMsg=r.polished.slice(0,160);
+        extra='\nLocutado: '+r.polished;
+      }
+    }else if(engine==='elevenlabs'){
+      voiceLine='⚠️ ElevenLabs (DE PAGO, ~$0.30/1k chars). Reproduciendo…';
+      const r=await speakAnnouncementElevenLabs(text);
+      if(!r.ok) voiceLine='⚠️ ElevenLabs falló — '+(r.note||'sin detalle');
+    }else{
+      speakAnnouncementBrowser(text);
+    }
+    return '📢 Comunicado en LED: '+G.comunicadoMsg+'\nMotor TTS: '+voiceLine+extra;
+  }
+
   function setAdmiraTube(arg){
     const err=needsGame();if(err)return err;
     const clean=String(arg||'').trim();
@@ -18260,7 +18384,7 @@ window.xtAPI = (function(){
       {title:'Equipo y stock',items:['/hire 1','/hire dj','/hire all','/train 1','/train all','/restock 2','/restock all','/restock prensa']},
       {title:'Tienda',items:['/ad 0','/ad 1','/ad 2','/upgrade','/visit com','/visit tec','/visit del','/visit gc','/save']},
       {title:'Tiempo y ambiente',items:['/reloj 14:30','/reloj 14 30','/time am','/time pm','/time night','/weather normal','/weather rain','/weather sun','/lamp','/lamp auto','/hue','/hue auto']},
-      {title:'Pantalla y directo',items:['/livecam','/livecam off','/mocap','/mocap off','/AdmiraLive texto','/AdmiraLive off','/AdmiraTube URL 2 audio','/AdmiraTube off','/say texto']},
+      {title:'Pantalla y directo',items:['/livecam','/livecam off','/mocap','/mocap off','/AdmiraLive texto','/AdmiraLive off','/comunicar texto','/comunicar texto --grok','/comunicar texto --elevenlabs','/comunicar off','/AdmiraTube URL 2 audio','/AdmiraTube off','/say texto']},
       {title:'Escena en vivo',items:['/dj on','/dj off','/ladron on','/ladron off','/guardiacivil on','/guardiacivil off','/opinador on','/opinador off','/robot on','/robot off','/door open','/door close','/door auto']},
       {title:'IA y contenido',items:['/grok pregunta','/draw dibujo','/metahuman pregunta','/log','/log thief','/log customer','/import','/import list','/import remove 1','/importTube https://youtu.be/...']},
       {title:'Ajustes rápidos',items:['/money 12000','/sat 90','/fame 80','/set week 12','/set year 2','/set revenue 5000','/set storeLevel 2','/set customers 30']},
@@ -18664,6 +18788,7 @@ window.xtAPI = (function(){
       if(cmd==='guardiacivil'||cmd==='guardia-civil'||cmd==='gc') return setGuardiaCivilCommand(arg);
       if(cmd==='guardia') return setGuardiaCivilCommand(arg.replace(/^civil\s+/i,''));
       if(cmd==='admiralive'||cmd==='live'||cmd==='led') return setAdmiraLive(arg);
+      if(cmd==='comunicar'||cmd==='comunicado'||cmd==='announce'||cmd==='megafonia'||cmd==='megafonía') return await setComunicado(arg);
       if(cmd==='admiratube'||cmd==='tube'||cmd==='youtube') return setAdmiraTube(arg);
       if(cmd==='pause'){
         const err=needsGame();if(err)return err;

@@ -1,0 +1,13 @@
+name = "admira-tts"
+main = "src/index.js"
+compatibility_date = "2025-12-01"
+
+[vars]
+# Voz por defecto: "Bella" (ElevenLabs multilingual v2, funciona en español)
+ELEVENLABS_DEFAULT_VOICE = "EXAVITQu4vr4xnSDxMaL"
+ELEVENLABS_MODEL = "eleven_multilingual_v2"
+ELEVENLABS_BASE_URL = "https://api.elevenlabs.io/v1"
+ALLOWED_ORIGINS = "https://csilvasantin.github.io,http://localhost:9124,http://127.0.0.1:9124,http://localhost:9126,http://127.0.0.1:9126"
+
+# Secrets (NO commitear, configurar con wrangler):
+#   wrangler secret put ELEVENLABS_API_KEY --config workers/admira-tts/wrangler.toml
