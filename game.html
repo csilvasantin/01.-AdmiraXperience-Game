@@ -4273,6 +4273,26 @@ function isSupermarketClient(clientIndex){
   const idx=Number.isInteger(clientIndex)?clientIndex:activeClient;
   return (CLIENTS[idx]||{}).id==='supermercado';
 }
+// ── Registry de socios — histórico persistente con origen ──────────────────
+// Se llama cada vez que un cliente se convierte en socio del Xtanco Club, sin
+// importar el origen. Mantiene una entrada por fanCustomerId (no duplica).
+function registerSocio(c, source){
+  if(!G||!c||!c.fanCustomerId) return;
+  if(!Array.isArray(G.socioRegistry)) G.socioRegistry=[];
+  const id=String(c.fanCustomerId);
+  if(G.socioRegistry.some(r=>String(r.id)===id)) return; // ya registrado
+  G.socioRegistry.push({
+    id:id,
+    name:c.fanName||'Socio',
+    emoji:c.fanEmoji||'🪪',
+    birthday:c.fanBirthday||null,
+    fanSince:c.fanSince||Math.floor(Date.now()/1000),
+    source:source||'tienda',
+    joinedAtTick:typeof tt==='number'?tt:0,
+    joinedAtRealMs:Date.now(),
+  });
+}
+
 // ── Admira IA — sugerencias de venta cruzada / upselling por producto ─────
 // Heuristica determinista. La IA propone que ofrecer al socio en funcion de
 // lo que ya esta buscando. Indices alineados con prodLabel en LANGS:
@@ -5508,6 +5528,8 @@ function initGame(){
     comunicadoMsg:'',
     socioHeat:{enabled:false,grid:Object.create(null),max:0,sampleTick:0},
     recurringSponsor:{enabled:false,intervalSec:120,lastVisitTick:0,discountPct:10,visits:0},
+    socioRegistry:[], // historico {id,name,emoji,birthday,fanSince,source:'tienda'|'web',joinedAtTick}
+    socioJoinHour:-1, // ultima hora del juego (entera) en que se acerco un wantToJoin
     admiraTube:null,
     securityCam:{active:true},
     guardiaCivil:{phase:'idle',x:820,y:0,dir:-1,aFrame:0,aTimer:0,patrolTimer:0,targetCol:9,targetRow:3},
@@ -5662,6 +5684,8 @@ function loadGame(){
       if(!G.loyaltyCard) G.loyaltyCard={pending:false,targetId:null,nextId:1};
       if(!G.socioHeat) G.socioHeat={enabled:false,grid:Object.create(null),max:0,sampleTick:0};
       if(!G.recurringSponsor) G.recurringSponsor={enabled:false,intervalSec:120,lastVisitTick:0,discountPct:10,visits:0};
+      if(!Array.isArray(G.socioRegistry)) G.socioRegistry=[];
+      if(typeof G.socioJoinHour!=='number') G.socioJoinHour=-1;
       if(G.customerSpawnDelay===undefined) G.customerSpawnDelay=0;
       if(!G.escaparate) G.escaparate={active:true,phase:0,boost:0,smTimer:900};
       if(!G.saca) G.saca={phase:'idle',cooldown:1800,x:820,y:0,dir:-1,aFrame:0,aTimer:0,unloadTimer:0,boxes:6};
@@ -7384,6 +7408,73 @@ function updateGame(){
   const promoSpawnBoost=G.managerActions&&G.managerActions.flashPromo&&G.managerActions.flashPromo.buffTimer>0?1.35:1;
   if(G.custs.length<currentCustomerCap&&Math.random()<0.006*Math.max(1,G.staff.filter(s=>s.hired).length)*(G.rush.active?2:1)*weatherMod*holidaySpawn*(1-compSteal)*repMod*escapMod*hourSpawnMod*promoSpawnBoost) spawnCust();
   updatePassersby();
+  // ── Cliente "Quiero ser socio !!" — cada hora del juego entra alguien que quiere darse de alta ──
+  if(typeof G.gameTime==='number'){
+    const hourNow=Math.floor(G.gameTime);
+    if(hourNow!==G.socioJoinHour){
+      // Solo dispara si es la primera vez que llegamos a esta hora en la sesion
+      // y no es la hora del arranque del juego (evita spawn nada mas empezar).
+      if(G.socioJoinHour>=0){
+        try{
+          const candidate=spawnCust(false,false,true);
+          if(candidate){
+            // Marca de "wantToJoin" y bocadillo distintivo. La conversion a
+            // socio se ejecuta cuando llega cerca del mostrador.
+            candidate.wantToJoin=true;
+            candidate.bMsg='¡Quiero ser socio !!';
+            candidate.bTimer=360;
+            candidate.col='#ffaa44';
+            // Forzar destino al kiosco de turno (mostrador) para que se acerque
+            try{
+              const kiosk=getTurnKioskTarget&&getTurnKioskTarget();
+              if(kiosk){
+                candidate.tx=toIso(kiosk.col,kiosk.row).x-7;
+                candidate.ty=toIso(kiosk.col,kiosk.row).y-20;
+                candidate.path=astarPath(ISO.cols-1,3,kiosk.col,kiosk.row)||candidate.path;
+                candidate.pathIdx=0;
+                candidate.wantsTurn=true;
+              }
+            }catch(e){}
+            if(typeof showEv==='function') showEv('🪪 Cliente quiere ser socio: se acerca al mostrador','#ffaa44');
+          }
+        }catch(e){}
+      }
+      G.socioJoinHour=hourNow;
+    }
+  }
+  // Conversion: cualquier wantToJoin que llegue al area del mostrador → socio
+  for(const c of G.custs){
+    if(!c||!c.wantToJoin||c.fanCustomerId) continue;
+    try{
+      const kiosk=getTurnKioskTarget&&getTurnKioskTarget();
+      if(!kiosk) continue;
+      const target=toIso(kiosk.col,kiosk.row);
+      const dx=c.x-(target.x-7), dy=c.y-(target.y-20);
+      if(dx*dx+dy*dy < 26*26){
+        // Lo damos de alta como socio en tienda
+        const namesSp=['Marta Cano','Pedro Lara','Inés Vega','Andrés Soto','Lucía Mora','Hugo Vera','Clara Rey','Tomás Olmo','Eva Reina','Iván Pol'];
+        const emojis=['🦊','🐼','🐧','🦉','🦄','🐢','🐝','🐬','🦁','🐱'];
+        const dd=String(1+Math.floor(Math.random()*28)).padStart(2,'0');
+        const mm=String(1+Math.floor(Math.random()*12)).padStart(2,'0');
+        const yy=1955+Math.floor(Math.random()*55);
+        c.fanCustomerId='shop-'+Date.now()+'-'+Math.floor(Math.random()*1000);
+        c.fanName=namesSp[Math.floor(Math.random()*namesSp.length)];
+        c.fanEmoji=emojis[Math.floor(Math.random()*emojis.length)];
+        c.fanBirthday=dd+'/'+mm+'/'+yy;
+        c.fanIsBirthday=false;
+        c.fanStamps=1;
+        c.fanSince=Math.floor(Date.now()/1000);
+        c.col='#78f3ff';
+        c.wantToJoin=false;
+        c.bMsg='¡Ya soy socio! '+c.fanEmoji;
+        c.bTimer=300;
+        try{ registerSocio(c,'tienda'); }catch(e){}
+        try{ if(typeof setManagerSayBubble==='function') setManagerSayBubble('AdmiraNext AI: alta nuevo socio en tienda — '+c.fanName+'. ¡Bienvenid@!'); }catch(e){}
+        try{ if(typeof SFX!=='undefined' && SFX.eventChime) SFX.eventChime(); }catch(e){}
+        if(typeof showEv==='function') showEv('🪪 Alta nuevo socio: '+c.fanName,'#78f3ff');
+      }
+    }catch(e){}
+  }
   // Sponsor recurrente — visita programada del Tio Gilito cada N segundos
   if(G.recurringSponsor && G.recurringSponsor.enabled){
     const rs=G.recurringSponsor;
@@ -8074,6 +8165,7 @@ function spawnCust(isVip,isSponsor,force){
           setManagerSayBubble('AdmiraNext AI dice que está con nosotros '+(newCust.fanName||'el socio')+'. ¡Cuídale mucho!'+cakeBubble);
           if(typeof SFX!=='undefined' && SFX.eventChime) SFX.eventChime();
         }catch(e){}
+        try{ registerSocio(newCust,'web'); }catch(e){}
       }
     }
   }catch(e){ console.warn('LoyaltyBridge spawn hook',e); }
@@ -18970,7 +19062,7 @@ window.xtAPI = (function(){
       {title:'Tiempo y ambiente',items:['/reloj 14:30','/reloj 14 30','/time am','/time pm','/time night','/weather normal','/weather rain','/weather sun','/lamp','/lamp auto','/hue','/hue auto']},
       {title:'Pantalla y directo',items:['/livecam','/mocap','/AdmiraLive texto','/comunicar texto','/comunicar texto --grok','/comunicar texto --elevenlabs','/AdmiraTube URL 2 audio','/say texto']},
       {title:'Escena en vivo',items:['/dj','/ladron','/guardiacivil','/opinador','/robot','/sponsor','/socio','/door open','/door close','/door auto']},
-      {title:'Notificaciones al personal',items:['/personal socio','/personal dashboard','/heatmap','/heatmap reset','/sponsor recurrente 120 10']},
+      {title:'Notificaciones al personal',items:['/personal socio','/personal dashboard','/socios listado','/heatmap','/heatmap reset','/sponsor recurrente 120 10']},
       {title:'IA y contenido',items:['/grok pregunta','/draw dibujo','/metahuman pregunta','/log','/log thief','/log customer','/import','/import list','/import remove 1','/importTube https://youtu.be/...']},
       {title:'Ajustes rápidos',items:['/money 12000','/sat 90','/fame 80','/set week 12','/set year 2','/set revenue 5000','/set storeLevel 2','/set customers 30']},
       {title:'Musica y layout',items:['/song 1','/song bad bunny','/music','/next','/prev','/equipo inicio ana 3 4','/equipo zona dj 12 2 2','/mobiliario','/mobiliario inicio','/layout','/layout save','/layout factory']},
@@ -19440,8 +19532,30 @@ window.xtAPI = (function(){
           ? '🗺️ Heat map de socios ACTIVADO. '+tiles+' tiles trackeados (max '+G.socioHeat.max+'). Sigue las zonas calientes en el suelo del estanco.'
           : '🗺️ Heat map de socios DESACTIVADO. Datos ('+tiles+' tiles) preservados — vuelve a activar para verlos. Usa /heatmap reset para borrar.';
       }
-      if(cmd==='socio'||cmd==='socios'||cmd==='club'||cmd==='member'){
+      if(cmd==='socio'||cmd==='socios'||cmd==='club'||cmd==='member'||cmd==='members'){
         const errSc=needsGame();if(errSc)return errSc;
+        const argLow=String(arg||'').trim().toLowerCase();
+        // Subcomando /socios listado | /members list — listado historico por origen
+        if(['listado','list','listar','histórico','historico','registro','registry','all'].includes(argLow)){
+          if(!Array.isArray(G.socioRegistry)) G.socioRegistry=[];
+          const reg=G.socioRegistry.slice();
+          if(!reg.length) return '🪪 Sin socios registrados todavía. Usa /socio para invitar uno o espera a que entre alguien con QR del Xtanco Club.';
+          const tienda=reg.filter(r=>r.source==='tienda');
+          const web=reg.filter(r=>r.source==='web');
+          const fmt=(r)=>{
+            const cake=r.birthday?(' · nac. '+r.birthday):'';
+            return '  '+(r.emoji||'🪪')+' '+r.name+cake;
+          };
+          const lines=[];
+          lines.push('🪪 Socios Xtanco Club · Histórico ('+reg.length+')');
+          lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+          lines.push('🏪 Alta en tienda ('+tienda.length+'):');
+          lines.push(tienda.length?tienda.map(fmt).join('\n'):'  —');
+          lines.push('');
+          lines.push('🌐 Alta en web (QR app móvil) ('+web.length+'):');
+          lines.push(web.length?web.map(fmt).join('\n'):'  —');
+          return lines.join('\n');
+        }
         const socioActive=Array.isArray(G.custs)&&G.custs.some(c=>c&&c.fanCustomerId);
         const cleanSc=binaryToggleArg(arg,socioActive);
         if(['off','out','clear','limpiar','despedir','fuera','sale','salir','stop'].includes(cleanSc)){
@@ -19480,6 +19594,7 @@ window.xtAPI = (function(){
           setManagerSayBubble('AdmiraNext AI dice que está con nosotros '+last.fanName+'. ¡Cuídale mucho!'+cakeBubble);
           if(typeof SFX!=='undefined' && SFX.eventChime) SFX.eventChime();
         }catch(e){}
+        try{ registerSocio(last,'tienda'); }catch(e){}
         return '🪪 Socio Xtanco Club en la tienda:\n'+last.fanEmoji+' '+last.fanName+cake+' · nac. '+last.fanBirthday+' · '+last.fanStamps+'/5 sellos.';
       }
       if(cmd==='sponsor'||cmd==='gilito'||cmd==='tio-gilito'||cmd==='scrooge'){
