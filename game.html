@@ -4267,6 +4267,30 @@ function isSupermarketClient(clientIndex){
   const idx=Number.isInteger(clientIndex)?clientIndex:activeClient;
   return (CLIENTS[idx]||{}).id==='supermercado';
 }
+// ── Admira IA — sugerencias de venta cruzada / upselling por producto ─────
+// Heuristica determinista. La IA propone que ofrecer al socio en funcion de
+// lo que ya esta buscando. Indices alineados con prodLabel en LANGS:
+//   0 Tabaco · 1 Vapes · 2 Loteria · 3 Prensa · 4 Chuches · 5 Recarga
+//   6 Premium · 7 Accesorios
+const XSELL_RULES_ES = [
+  /*0 Tabaco*/      {upsell:6, cross:4},  // → Premium (vino), Chuches
+  /*1 Vapes*/       {upsell:7, cross:5},  // → Accesorios, Recarga
+  /*2 Loteria*/     {upsell:6, cross:3},  // → Premium, Prensa
+  /*3 Prensa*/      {upsell:6, cross:4},  // → Premium, Chuches
+  /*4 Chuches*/     {upsell:6, cross:5},  // → Premium, Recarga
+  /*5 Recarga*/     {upsell:1, cross:0},  // → Vapes, Tabaco
+  /*6 Premium*/     {upsell:6, cross:7},  // → Premium (otra ref), Accesorios
+  /*7 Accesorios*/  {upsell:1, cross:5},  // → Vapes, Recarga
+];
+function getAdmiraXSell(c){
+  const idx=(c&&c.wantsProdIdx>=0)?c.wantsProdIdx:-1;
+  if(idx<0) return {upsell:'—',cross:'—'};
+  const rule=XSELL_RULES_ES[idx]||{};
+  const up=rule.upsell!=null?prodName(rule.upsell):'—';
+  const cr=rule.cross!=null?prodName(rule.cross):'—';
+  return {upsell:up,cross:cr};
+}
+
 function getProductLabelsForClient(clientIndex){
   if(isSupermarketClient(clientIndex)){
     return lang==='es'
@@ -15434,9 +15458,9 @@ function drawCharacterGroupsPanel(){
     +clientHeadCell(isEs?'Antiguedad':'Since',1)
     +clientHeadCell(isEs?'Cumple':'Bday',2)
     +clientHeadCell(isEs?'Sellos':'Stamps',3)
-    +clientHeadCell(isEs?'Tiempo':'Time',4)
-    +clientHeadCell('Ticket',5)
-    +clientHeadCell(isEs?'Estado':'State',6)
+    +clientHeadCell('Upselling',4)
+    +clientHeadCell('Crosselling',5)
+    +clientHeadCell('Ticket',6)
     +'</div>';
   const formatSinceShort=(fanSince)=>{
     if(!fanSince) return '—';
@@ -15454,9 +15478,8 @@ function drawCharacterGroupsPanel(){
         const stamps=(c.fanStamps|0);
         const stampsLbl=stamps+'/5'+(c.fanFreePending?' 🎁':'');
         const cake=c.fanIsBirthday?'🎂':'—';
-        const dwell=customerDwellLabel(c);
         const ticket=customerTicketLabel(c);
-        const stateLbl=customerStateLabel(c);
+        const xsell=getAdmiraXSell(c);
         const rowClass=rowIdx%2===0?'row-even':'row-odd';
         const nameLbl=(c.fanEmoji||'🪪')+' '+(c.fanName||'Socio');
         return '<div class="char-row clients-grid '+rowClass+'">'
@@ -15464,9 +15487,9 @@ function drawCharacterGroupsPanel(){
           +'<span>'+formatSinceShort(c.fanSince)+'</span>'
           +'<span>'+cake+'</span>'
           +'<span>'+stampsLbl+'</span>'
-          +'<span>'+dwell+'</span>'
+          +'<span style="color:#ffd866">↑ '+xsell.upsell+'</span>'
+          +'<span style="color:#88ffaa">+ '+xsell.cross+'</span>'
           +'<span>'+ticket+'</span>'
-          +'<span class="muted">'+stateLbl+'</span>'
           +'</div>';
       }).join('')
     : '<div class="char-row clients-grid"><span class="muted">'+(isEs?'Sin socios del Xtanco Club en la tienda. Usa /socio para invitar uno.':'No Xtanco Club members inside. Use /socio to invite one.')+'</span><span></span><span></span><span></span><span></span><span></span><span></span></div>';
@@ -16155,17 +16178,22 @@ function openCustomerEditor(custIdx){
       title:'FICHA DE SOCIO · XTANCO CLUB',
       name:(c.fanEmoji?c.fanEmoji+' ':'')+(c.fanName||'Socio')+cake,
       look:JSON.parse(JSON.stringify(c.look||{shirt:1,hair:0,skin:1,pants:0,shoes:0,accessory:0})),
-      lines:[
-        'ID socio: '+c.fanCustomerId,
-        'Antiguedad: '+antiguedad,
-        'Nacimiento: '+(c.fanBirthday||'—'),
-        'Sellos: '+stamps+'/5  '+stampBar,
-        'Categoria: '+tier,
-        'Ticket esperado: '+(Math.round(c.avgTicket||0))+'€',
-        'Producto que busca: '+(c.wantsProdIdx>=0?prodName(c.wantsProdIdx):'—'),
-        'Tiempo en tienda: '+tiempoTienda,
-        'Compra realizada: '+(c.bought?'sí':'no'),
-      ],
+      lines:(()=>{
+        const xs=getAdmiraXSell(c);
+        return [
+          'ID socio: '+c.fanCustomerId,
+          'Antiguedad: '+antiguedad,
+          'Nacimiento: '+(c.fanBirthday||'—'),
+          'Sellos: '+stamps+'/5  '+stampBar,
+          'Categoria: '+tier,
+          'Ticket esperado: '+(Math.round(c.avgTicket||0))+'€',
+          'Producto que busca: '+(c.wantsProdIdx>=0?prodName(c.wantsProdIdx):'—'),
+          'Admira IA · Upselling: ↑ '+xs.upsell,
+          'Admira IA · Crosselling: + '+xs.cross,
+          'Tiempo en tienda: '+tiempoTienda,
+          'Compra realizada: '+(c.bought?'sí':'no'),
+        ];
+      })(),
     };
     return;
   }
