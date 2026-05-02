@@ -120,6 +120,7 @@
     .char-row{display:grid;grid-template-columns:58px minmax(74px,.95fr) minmax(126px,1.35fr) 58px 50px 46px auto;gap:3px;align-items:center;padding:2px 3px;border-radius:3px}
     .char-row.team-grid{grid-template-columns:var(--team-col-0,58px) var(--team-col-1,110px) var(--team-col-2,160px) var(--team-col-3,78px) var(--team-col-4,68px)}
     .char-row.clients-grid{grid-template-columns:var(--cust-col-0,44px) var(--cust-col-1,72px) var(--cust-col-2,150px) var(--cust-col-3,78px) var(--cust-col-4,56px) var(--cust-col-5,50px) var(--cust-col-6,80px)}
+    .char-row.socios-grid{grid-template-columns:minmax(110px,1.4fr) 56px 32px 50px minmax(140px,1.8fr) 56px}
     .char-row.is-head,.char-row.is-summary{padding:0;background:transparent}
     .char-col-head{position:relative;display:block;padding-right:8px}
     .char-col-resizer{position:absolute;top:-2px;right:-4px;width:8px;height:18px;border:0;background:transparent;cursor:col-resize;touch-action:none}
@@ -15453,14 +15454,13 @@ function drawCharacterGroupsPanel(){
   const socioStatusText=isEs
     ? socios.length+' socios · '+cumpleHoy+' cumple hoy · '+totalSellos+' sellos en total'
     : socios.length+' members · '+cumpleHoy+' birthday today · '+totalSellos+' total stamps';
-  const socioHead='<div class="char-row clients-grid is-head">'
-    +clientHeadCell(isEs?'Socio':'Member',0)
-    +clientHeadCell(isEs?'Antiguedad':'Since',1)
-    +clientHeadCell(isEs?'Cumple':'Bday',2)
-    +clientHeadCell(isEs?'Sellos':'Stamps',3)
-    +clientHeadCell('Upselling',4)
-    +clientHeadCell('Crosselling',5)
-    +clientHeadCell('Ticket',6)
+  const socioHead='<div class="char-row socios-grid is-head">'
+    +'<span>'+(isEs?'Socio':'Member')+'</span>'
+    +'<span>'+(isEs?'Antiguedad':'Since')+'</span>'
+    +'<span>'+(isEs?'Cumple':'Bday')+'</span>'
+    +'<span>'+(isEs?'Sellos':'Stamps')+'</span>'
+    +'<span>'+(isEs?'Sugerencias Admira IA':'Admira AI Suggestions')+'</span>'
+    +'<span>Ticket</span>'
     +'</div>';
   const formatSinceShort=(fanSince)=>{
     if(!fanSince) return '—';
@@ -15482,13 +15482,12 @@ function drawCharacterGroupsPanel(){
         const xsell=getAdmiraXSell(c);
         const rowClass=rowIdx%2===0?'row-even':'row-odd';
         const nameLbl=(c.fanEmoji||'🪪')+' '+(c.fanName||'Socio');
-        return '<div class="char-row clients-grid '+rowClass+'">'
+        return '<div class="char-row socios-grid '+rowClass+'">'
           +'<span><button type="button" class="char-trigger" data-customer-idx="'+custIdx+'" aria-label="Abrir ficha de socio '+(c.fanName||'')+'" onpointerdown="window.openCharacterDockCustomerDetail&&window.openCharacterDockCustomerDetail('+custIdx+');event.preventDefault();event.stopPropagation();return false;" onclick="event.preventDefault();event.stopPropagation();return false;">'+customerMiniAvatar(c)+'</button> <span style="color:'+(c.fanIsBirthday?'#ff7eb6':'#78f3ff')+'">'+nameLbl+'</span></span>'
           +'<span>'+formatSinceShort(c.fanSince)+'</span>'
           +'<span>'+cake+'</span>'
           +'<span>'+stampsLbl+'</span>'
-          +'<span style="color:#ffd866">↑ '+xsell.upsell+'</span>'
-          +'<span style="color:#88ffaa">+ '+xsell.cross+'</span>'
+          +'<span><span style="color:#ffd866">↑ '+xsell.upsell+'</span> <span style="color:#88ffaa">+ '+xsell.cross+'</span></span>'
           +'<span>'+ticket+'</span>'
           +'</div>';
       }).join('')
