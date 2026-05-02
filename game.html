@@ -18062,6 +18062,108 @@ window.xtAPI = (function(){
     return {engine,text:rest.join(' ').trim()};
   }
 
+  // ─── PERFECT LAYOUT (fichero externo, portable entre navegadores) ────────
+  // Carga/guarda el layout "perfecto" desde un fichero del repo:
+  //   layouts/xtanco-{modelKey}-perfect.json
+  // Servido por GitHub Pages, sin localStorage, igual en todas las máquinas.
+  function getActiveModelKey(){
+    try{
+      const M=(typeof getActiveModels==='function'?getActiveModels():XTANCO_MODELS)||[];
+      const idx=(typeof activeModel==='number'?activeModel:0);
+      const m=M[idx]||M[0]||{};
+      return String(m.id||'generic').toLowerCase();
+    }catch(e){return 'generic';}
+  }
+  function getPerfectLayoutPath(modelKey){
+    const key=String(modelKey||getActiveModelKey()).toLowerCase().replace(/[^a-z0-9_-]/g,'');
+    return 'layouts/xtanco-'+key+'-perfect.json';
+  }
+  function buildPerfectLayoutPayload(){
+    return {
+      name:'xtanco-'+getActiveModelKey()+'-perfect',
+      client:(typeof getActiveClient==='function'&&getActiveClient()&&getActiveClient().id)||'xtanco',
+      modelKey:getActiveModelKey(),
+      schemaVersion:LAYOUT_SCHEMA_VERSION,
+      savedAt:new Date().toISOString(),
+      savedFrom:(window.XTANCO_APP&&window.XTANCO_APP.version)||'dev',
+      shopLayout:JSON.parse(JSON.stringify(shopLayout||[])),
+      shopStaffPos:JSON.parse(JSON.stringify(shopStaffPos||[])),
+      shopStaffZones:JSON.parse(JSON.stringify(shopStaffZones||[])),
+    };
+  }
+  function applyPerfectLayoutPayload(payload){
+    if(!payload||!Array.isArray(payload.shopLayout)) throw new Error('Payload invalido (sin shopLayout)');
+    shopLayout=JSON.parse(JSON.stringify(payload.shopLayout));
+    if(Array.isArray(payload.shopStaffPos)) shopStaffPos=JSON.parse(JSON.stringify(payload.shopStaffPos));
+    if(Array.isArray(payload.shopStaffZones)) shopStaffZones=JSON.parse(JSON.stringify(payload.shopStaffZones));
+    shopFurnitureVisible=true;
+    edSelIdx=-1;
+    try{saveLayout();}catch(e){}
+    try{buildWalkGrid();}catch(e){}
+  }
+  async function loadPerfectLayoutFromRepo(){
+    const errL=needsGame();if(errL)return errL;
+    const modelKey=getActiveModelKey();
+    const path=getPerfectLayoutPath(modelKey);
+    try{
+      const res=await fetch(path+'?ts='+Date.now(),{cache:'no-store'});
+      if(!res.ok) throw new Error('HTTP '+res.status);
+      const payload=await res.json();
+      applyPerfectLayoutPayload(payload);
+      showEv('🏗️ Layout perfect cargado','#88ffcc');
+      return '🏗️ Layout perfect cargado desde '+path+' ('+shopLayout.length+' items, guardado '+(payload.savedAt||'?')+'). Usa "/layout default" para volver al canonico del codigo.';
+    }catch(e){
+      // Fallback: canónico del código
+      try{resetLayout();}catch(e2){}
+      shopFurnitureVisible=true;edSelIdx=-1;
+      try{buildWalkGrid();}catch(e2){}
+      showEv('🏗️ Sin perfect, canonico','#ffaa55');
+      return '⚠️ No hay layout perfect en '+path+' ('+e.message+'). Aplicado canonico del codigo. Usa "/layout save" para crear el perfect.';
+    }
+  }
+  async function savePerfectLayoutToRepo(){
+    const errL=needsGame();if(errL)return errL;
+    const payload=buildPerfectLayoutPayload();
+    const path=getPerfectLayoutPath(payload.modelKey);
+    // 1) intenta proxy local (escribe directo al repo)
+    const proxyBases=[];
+    if(typeof location!=='undefined'&&/^(localhost|127\.0\.0\.1)/.test(location.hostname)){
+      proxyBases.push(location.origin);
+    }
+    proxyBases.push('http://localhost:9124','http://127.0.0.1:9124');
+    let savedVia=null,lastErr=null;
+    for(const base of proxyBases){
+      try{
+        const res=await fetch(base+'/layout/save',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({path:path,payload:payload})
+        });
+        if(!res.ok){const j=await res.json().catch(()=>({}));throw new Error(j.message||'HTTP '+res.status);}
+        const out=await res.json().catch(()=>({}));
+        savedVia=base+(out.path?' → '+out.path:'');
+        break;
+      }catch(e){lastErr=e;}
+    }
+    if(savedVia){
+      showEv('💾 Perfect guardado en disco','#88ffcc');
+      return '💾 Layout perfect guardado via proxy local: '+savedVia+'\nHaz `git add '+path+' && git commit && git push` para que viaje a otras maquinas.';
+    }
+    // 2) fallback descarga manual
+    try{
+      const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement('a');
+      a.href=url;a.download='xtanco-'+payload.modelKey+'-perfect.json';
+      document.body.appendChild(a);a.click();
+      setTimeout(()=>{try{document.body.removeChild(a);URL.revokeObjectURL(url);}catch(e){}},800);
+      showEv('💾 Perfect descargado','#88ccff');
+      return '💾 Proxy no disponible ('+(lastErr&&lastErr.message||'sin proxy')+'). Descargado xtanco-'+payload.modelKey+'-perfect.json al disco. Movelo a '+path+' del repo y commitea.';
+    }catch(e){
+      return '❌ Error guardando layout perfect: '+e.message;
+    }
+  }
+
   async function setComunicado(arg){
     const err=needsGame();if(err)return err;
     const raw=String(arg||'').replace(/\s+/g,' ').trim();
@@ -18799,11 +18901,18 @@ window.xtAPI = (function(){
           showEv('🏗️ Layout factory','#ffaa55');
           return '🏗️ Layout factory: localStorage limpio y mobiliario en posicion canonica ('+shopLayout.length+' items).';
         }
-        try{resetLayout();}catch(e){return 'Error reset layout: '+e.message;}
-        shopFurnitureVisible=true;edSelIdx=-1;
-        try{buildWalkGrid();}catch(e){}
-        showEv('🏗️ Layout en su sitio','#88ccff');
-        return '🏗️ Mobiliario reordenado a la posicion canonica ('+shopLayout.length+' items). Usa "/layout factory" para limpiar localStorage tambien.';
+        if(sub==='default'||sub==='code'||sub==='codigo'||sub==='canonico'||sub==='canónico'){
+          try{resetLayout();}catch(e){return 'Error reset layout: '+e.message;}
+          shopFurnitureVisible=true;edSelIdx=-1;
+          try{buildWalkGrid();}catch(e){}
+          showEv('🏗️ Layout canonico','#88ccff');
+          return '🏗️ Layout canonico del codigo aplicado ('+shopLayout.length+' items).';
+        }
+        if(sub==='save'||sub==='guardar'||sub==='grabar'||sub==='export'||sub==='exportar'){
+          return await savePerfectLayoutToRepo();
+        }
+        // Default: cargar el "perfect" desde el repo (layouts/xtanco-{model}-perfect.json)
+        return await loadPerfectLayoutFromRepo();
       }
       if(cmd==='admiratube'||cmd==='tube'||cmd==='youtube') return setAdmiraTube(arg);
       if(cmd==='pause'){

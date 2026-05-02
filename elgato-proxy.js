@@ -930,6 +930,35 @@ const server = http.createServer((req, res) => {
   }
   if (requestPath === '/tube/health' && req.method === 'OPTIONS') { setCors(res); res.writeHead(204); res.end(); return; }
 
+  // ─── /layout/save ─ persiste el layout perfect en disco (repo) ──────────
+  // Body: { path: 'layouts/xtanco-{model}-perfect.json', payload: { ... } }
+  // Restricción: el path debe empezar por 'layouts/' y terminar en '.json'.
+  if (requestPath === '/layout/save' && req.method === 'OPTIONS') { setCors(res); res.writeHead(204); res.end(); return; }
+  if (requestPath === '/layout/save' && req.method === 'POST') {
+    setCors(res);
+    collectJsonBody(req, (err, body) => {
+      if (err || !body || typeof body.path !== 'string' || !body.payload) {
+        sendJson(res, 400, { ok: false, message: 'Body invalido: { path, payload } requeridos' });
+        return;
+      }
+      const rel = body.path.replace(/^\/+/, '');
+      if (!/^layouts\/[a-z0-9_-]+\.json$/i.test(rel)) {
+        sendJson(res, 400, { ok: false, message: 'Path debe ser layouts/<nombre>.json' });
+        return;
+      }
+      const target = path.join(__dirname, rel);
+      const dir = path.dirname(target);
+      try {
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(target, JSON.stringify(body.payload, null, 2) + '\n', 'utf8');
+        sendJson(res, 200, { ok: true, path: rel, bytes: fs.statSync(target).size });
+      } catch (e) {
+        sendJson(res, 500, { ok: false, message: 'Error escribiendo: ' + (e.message || String(e)) });
+      }
+    });
+    return;
+  }
+
   if (requestPath === '/tube/download' && req.method === 'OPTIONS') { setCors(res); res.writeHead(204); res.end(); return; }
   if (requestPath === '/tube/download' && req.method === 'POST') {
     setCors(res);
