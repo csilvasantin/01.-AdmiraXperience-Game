@@ -7529,6 +7529,28 @@ function updateGame(){
       G.socioJoinHour=hourNow;
     }
   }
+  // ── Devolución / queja: cliente con returnRequest llega al mostrador ──
+  for(const c of G.custs){
+    if(!c||!c.returnRequest||c.returnProcessed) continue;
+    try{
+      const kiosk=getTurnKioskTarget&&getTurnKioskTarget();
+      if(!kiosk) continue;
+      const target=toIso(kiosk.col,kiosk.row);
+      const dx=c.x-(target.x-7), dy=c.y-(target.y-20);
+      if(dx*dx+dy*dy < 26*26){
+        c.returnProcessed=true;
+        const refund=10+Math.floor(Math.random()*30);
+        G.money=Math.max(0,G.money-refund);
+        G.satisfaction=Math.max(0,G.satisfaction-3);
+        if(typeof addFloat==='function') addFloat(c.x+7,c.y-30,'-'+refund+'€','#ff5544');
+        if(typeof setManagerSayBubble==='function') setManagerSayBubble('⚠️ Devolución procesada: -'+refund+'€ y -3% satisfacción');
+        if(typeof showEv==='function') showEv('⚠️ Devolución: -'+refund+'€','#ff5544');
+        c.bMsg='Gracias, hasta nunca';c.bTimer=200;
+        // Marcar para que se vaya
+        try{const path=astarPath(kiosk.col,kiosk.row,ISO.cols-1,3);if(path){c.path=path;c.pathIdx=0;}}catch(e){}
+      }
+    }catch(e){}
+  }
   // Conversion: cualquier wantToJoin que llegue al area del mostrador → socio
   for(const c of G.custs){
     if(!c||!c.wantToJoin||c.fanCustomerId) continue;
@@ -8458,6 +8480,22 @@ function resolveCustomerCheckout(c){
       showEv(freeMsg,'#55ccff');
       if(G.loyaltyCard) G.loyaltyCard.targetId=null;
     }
+    // ── TPV TICKET — ticker desglose en bocadillo del Store Manager ──
+    try{
+      const prodLbl=(typeof prodName==='function')?prodName(c.wantsProdIdx>=0?c.wantsProdIdx:0):'Producto';
+      const priceLbl=baseRev+'€';
+      let modifiers=[];
+      if(c.vip) modifiers.push('VIP +50%');
+      if(c.persona==='impulsive') modifiers.push('+impulsivo');
+      if(c.persona==='loyal') modifiers.push('+fiel');
+      if(c.recurringDiscount) modifiers.push('-'+c.recurringDiscount+'% sponsor');
+      if(c.fanCustomerId) modifiers.push('🪪 socio');
+      const modTxt=modifiers.length?(' · '+modifiers.join(' · ')):'';
+      const totalTxt=c.loyaltyFree?'GRATIS (sello)':(rev+'€');
+      if(typeof setManagerSayBubble==='function'){
+        setManagerSayBubble('🧾 '+prodLbl+' '+priceLbl+modTxt+' = '+totalTxt);
+      }
+    }catch(e){}
     // Xtanco Club: persist this purchase server-side so the fan's stamps update
     // on their phone. Fire-and-forget; if the worker is down the game keeps going.
     if(c.fanCustomerId && window.LoyaltyBridge){
@@ -19208,6 +19246,7 @@ window.xtAPI = (function(){
       {title:'Escena en vivo',items:['/dj','/ladron','/guardiacivil','/opinador','/robot','/sponsor','/socio','/door open','/door close','/door auto']},
       {title:'Notificaciones al personal',items:['/personal socio','/personal dashboard','/socios listado','/heatmap','/heatmap reset','/sponsor recurrente 120 10']},
       {title:'Atmósfera',items:['/ambiente','/ambiente vol 50','/voces']},
+      {title:'Operativa real',items:['/devolucion','/pedido']},
       {title:'IA y contenido',items:['/grok pregunta','/draw dibujo','/metahuman pregunta','/log','/log thief','/log customer','/import','/import list','/import remove 1','/importTube https://youtu.be/...']},
       {title:'Ajustes rápidos',items:['/money 12000','/sat 90','/fame 80','/set week 12','/set year 2','/set revenue 5000','/set storeLevel 2','/set customers 30']},
       {title:'Musica y layout',items:['/song 1','/song bad bunny','/music','/next','/prev','/equipo inicio ana 3 4','/equipo zona dj 12 2 2','/mobiliario','/mobiliario inicio','/layout','/layout save','/layout factory']},
@@ -19658,6 +19697,56 @@ window.xtAPI = (function(){
             +'Admira IA · Top Crosselling: '+topCross;
         }
         return 'Subtipo no soportado: '+sub+'. Disponibles: socio, dashboard.';
+      }
+      if(cmd==='devolucion'||cmd==='devolución'||cmd==='return'||cmd==='reclamacion'||cmd==='reclamación'){
+        const errD=needsGame();if(errD)return errD;
+        // Spawn cliente especial con flag returnRequest. Se acerca al mostrador
+        // y el bocadillo dice "¡Esto está caducado, devolución!". Cuando llega,
+        // el Store Manager lo registra y se descuenta del cash.
+        let cust=null;
+        try{cust=spawnCust(false,false,true);}catch(e){return 'Error invocando devolucion: '+e.message;}
+        if(!cust) return '⚠️ No se pudo invocar al cliente con devolucion.';
+        const motivos=['¡Esto está caducado, devolución!','¡El producto está mal, quiero el dinero!','¡No funciona, devolución!','¡Esto está roto, queja!'];
+        cust.returnRequest=true;
+        cust.bMsg=motivos[Math.floor(Math.random()*motivos.length)];
+        cust.bTimer=360;
+        cust.col='#ff5544';
+        try{
+          const kiosk=getTurnKioskTarget&&getTurnKioskTarget();
+          if(kiosk){
+            cust.tx=toIso(kiosk.col,kiosk.row).x-7;
+            cust.ty=toIso(kiosk.col,kiosk.row).y-20;
+            cust.path=astarPath(ISO.cols-1,3,kiosk.col,kiosk.row)||cust.path;
+            cust.pathIdx=0;cust.wantsTurn=true;
+          }
+        }catch(e){}
+        if(typeof setManagerSayBubble==='function') setManagerSayBubble('⚠️ Cliente con queja se acerca al mostrador');
+        if(typeof showEv==='function') showEv('⚠️ Devolución entrante','#ff5544');
+        return '⚠️ Cliente con devolución invocado. Se acerca al mostrador. Cuando llegue, el Store Manager registrará la queja y descontará el importe estimado.';
+      }
+      if(cmd==='pedido'||cmd==='pedidoespecial'||cmd==='reserva'||cmd==='specialorder'){
+        const errPe=needsGame();if(errPe)return errPe;
+        // Pedido especial de un socio premium — bocadillo "¿lo tenéis para mañana?"
+        let cust=null;
+        try{cust=spawnCust(false,false,true);}catch(e){return 'Error invocando pedido especial: '+e.message;}
+        if(!cust) return '⚠️ No se pudo invocar al cliente con pedido especial.';
+        // Convertirlo en socio premium para que tenga sentido
+        const namesSp=['Luis Premium','Marta Reserva','Andrés Especial','Sofía Encargo'];
+        cust.fanCustomerId='special-'+Date.now();
+        cust.fanName=namesSp[Math.floor(Math.random()*namesSp.length)];
+        cust.fanEmoji='🎩';
+        cust.fanStamps=5;
+        cust.fanSince=Math.floor(Date.now()/1000);
+        cust.specialOrder=true;
+        const products=['Vapes premium','Tabaco importado','Lotería extranjera','Prensa colección'];
+        cust.specialOrderItem=products[Math.floor(Math.random()*products.length)];
+        cust.bMsg='¿Tenéis '+cust.specialOrderItem+' para mañana?';
+        cust.bTimer=420;
+        cust.col='#cc99ff';
+        try{ registerSocio(cust,'tienda'); }catch(e){}
+        if(typeof setManagerSayBubble==='function') setManagerSayBubble('🎩 Pedido especial de '+cust.fanName+': '+cust.specialOrderItem+'. Apuntado para mañana.');
+        if(typeof showEv==='function') showEv('🎩 Pedido especial: '+cust.specialOrderItem,'#cc99ff');
+        return '🎩 Pedido especial registrado de '+cust.fanName+': "'+cust.specialOrderItem+'" para mañana.';
       }
       if(cmd==='ambiente'||cmd==='ambient'||cmd==='atmosfera'||cmd==='atmósfera'){
         const errA=needsGame();if(errA)return errA;
