@@ -590,6 +590,7 @@ const SFX=(()=>{
     gameOver(){tone(400,0.2);tone(300,0.2,'sine',0.12,0.22);tone(200,0.3,'sine',0.14,0.44);},
     levelUp(){tone(784,0.08);tone(988,0.08,'sine',0.1,0.1);tone(1175,0.12,'sine',0.12,0.2);},
     eventChime(){tone(880,0.08,'sine',0.08);tone(1100,0.1,'sine',0.1,0.1);},
+    marioCoin(){tone(988,0.08,'square',0.10);tone(1319,0.18,'square',0.12,0.08);},
     thunder(){tone(60,0.4,'sawtooth',0.2);tone(40,0.6,'sawtooth',0.15,0.15);tone(80,0.3,'triangle',0.1,0.4);tone(30,0.5,'sawtooth',0.08,0.6);},
     rainLoop(){tone(200,0.05,'triangle',0.02);tone(350,0.04,'triangle',0.015,0.03);tone(150,0.06,'triangle',0.01,0.06);},
     voteHappy(){tone(659,0.08,'sine',0.1);tone(784,0.08,'sine',0.1,0.09);tone(1047,0.15,'sine',0.12,0.18);},
@@ -7896,8 +7897,11 @@ function updateGame(){
   updateBars();
 }
 
-function spawnCust(isVip,isSponsor){
-  if(G.custs.length>=getCurrentCustomerCap()) return;
+function spawnCust(isVip,isSponsor,force){
+  // 'force' (true) salta el limite de capacidad — usado por /sponsor y /socio
+  // desde el CLI para invocar al instante, donde es aceptable colarlos por encima
+  // del cap normal del spawner pasivo.
+  if(!force && G.custs.length>=getCurrentCustomerCap()) return null;
   const ci=Math.floor(Math.random()*6);
   const isSp=!!isSponsor;
   const isV=!!isVip||isSp; // sponsor implies VIP-tier perks
@@ -7919,8 +7923,16 @@ function spawnCust(isVip,isSponsor){
     tRow=1+Math.random()*4|0;
     attempts++;
   }while(!isGridWalkable(tCol,tRow)&&attempts<20);
-  const entryTarget=findNearestWalkableTile(tCol,tRow,{from:{col:ISO.cols-1,row:3}});
-  if(!entryTarget) return;
+  let entryTarget=findNearestWalkableTile(tCol,tRow,{from:{col:ISO.cols-1,row:3}});
+  if(!entryTarget){
+    // Reintento robusto barriendo el grid antes de rendirse
+    for(let r=1;r<=4&&!entryTarget;r++){
+      for(let c=2;c<=8&&!entryTarget;c++){
+        entryTarget=findNearestWalkableTile(c,r,{from:{col:ISO.cols-1,row:3}});
+      }
+    }
+  }
+  if(!entryTarget) return null;
   tCol=entryTarget.col;tRow=entryTarget.row;
   const tIso=toIso(tCol,tRow);
   const path=astarPath(ISO.cols-1,3,tCol,tRow);
@@ -8018,6 +8030,7 @@ function spawnCust(isVip,isSponsor){
   }catch(e){ console.warn('LoyaltyBridge spawn hook',e); }
   G.doorOpen=60;SFX.doorBell(); // open door for customer entering
   G.customersToday++;G.totalCustomers++;G.custIn++; // count entry
+  return newCust;
 }
 
 function getDoorThresholdPos(){
@@ -19311,9 +19324,9 @@ window.xtAPI = (function(){
           return removed?'🪪 '+removed+' socio(s) fuera de la tienda.':'No habia ningun socio en la tienda.';
         }
         // Spawn fake socio synthesizing fan* fields directly on a fresh customer
-        try{spawnCust(false,false);}catch(e){return 'Error invocando socio: '+e.message;}
-        const last=G.custs[G.custs.length-1];
-        if(!last) return '⚠️ No se pudo invocar al socio (capacidad).';
+        let last=null;
+        try{last=spawnCust(false,false,true);}catch(e){return 'Error invocando socio: '+e.message;}
+        if(!last) return '⚠️ No se pudo invocar al socio (no hay tile libre cerca de la puerta).';
         const namesSp=['Carla Ruiz','Juan Pérez','Marta Soler','David Vidal','Ana Cabrera','Luis Mora','Nuria Sanz','Pablo Gil','Elena Vega','Mario León','Sofía Ríos','Iván Bravo'];
         const emojis=['🦊','🐼','🐧','🦉','🦄','🐢','🐝','🐬','🦁','🐱','🐶','🐰'];
         const dd=String(1+Math.floor(Math.random()*28)).padStart(2,'0');
@@ -19352,9 +19365,9 @@ window.xtAPI = (function(){
           showEv('🦆 Sponsor despedido','#ffaa55');
           return removed?'🦆 '+removed+' sponsor(s) fuera de la tienda.':'No habia ningun sponsor en la tienda.';
         }
-        try{spawnCust(false,true);}catch(e){return 'Error invocando sponsor: '+e.message;}
-        const last=G.custs[G.custs.length-1];
-        if(!last||!last.sponsor) return '⚠️ No se pudo invocar al sponsor (capacidad o pathing).';
+        let last=null;
+        try{last=spawnCust(false,true,true);}catch(e){return 'Error invocando sponsor: '+e.message;}
+        if(!last||!last.sponsor) return '⚠️ No se pudo invocar al sponsor (no hay tile libre cerca de la puerta).';
         showEv('🦆 Sponsor en la tienda','#ffd700');
         addFloat(last.x+7,last.y-30,'$$$','#ffd700');
         return '🦆 Tio Gilito ha entrado a la tienda. Ticket esperado ~'+last.avgTicket+'€.';
@@ -19979,7 +19992,7 @@ window.xtAPI = (function(){
       if(action){
         e.preventDefault();e.stopPropagation();
         flashQuickBtn(action);
-        try{if(typeof SFX!=='undefined'&&SFX.eventChime)SFX.eventChime();}catch(err){}
+        try{if(typeof SFX!=='undefined'&&SFX.marioCoin)SFX.marioCoin();}catch(err){}
         const kind=action.getAttribute('data-quick-action');
         if(kind==='signage'&&typeof toggleSignagePanel==='function') toggleSignagePanel();
         return;
