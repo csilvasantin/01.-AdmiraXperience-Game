@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ayuda · Admira XP // Xpace OS</title>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+<meta name="description" content="Guía completa de funcionalidades de Admira XP — el simulador del Xpace OS de AdmiraNext.">
+<style>
+  :root{--bg:#02080d;--ink:#dff8ff;--mut:#75aab9;--brand:#78f3ff;--accent:#ffd866;--card:#0a1620;--line:rgba(120,243,255,.18);--good:#88ffaa;--warn:#ffaa55}
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen,Ubuntu,sans-serif;line-height:1.55}
+  a{color:var(--brand);text-decoration:none}
+  a:hover{text-decoration:underline}
+  code{background:#0a1a26;color:var(--accent);padding:1px 6px;border-radius:4px;font-family:monospace;font-size:0.92em;border:1px solid var(--line)}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 22px}
+  header{padding:18px 0;border-bottom:1px solid var(--line);position:sticky;top:0;background:rgba(2,8,13,.92);backdrop-filter:blur(8px);z-index:10}
+  header .wrap{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+  .logo{font-family:monospace;font-size:13px;letter-spacing:.16em;color:var(--accent);font-weight:bold}
+  .logo .dot{color:var(--brand)}
+  nav{margin-left:auto;display:flex;gap:14px;font-size:12px;flex-wrap:wrap}
+  nav a{color:var(--mut)}
+  nav a:hover{color:var(--ink)}
+  .hero{padding:60px 0 30px;background:radial-gradient(ellipse at 20% 0%,rgba(120,243,255,.10),transparent 55%)}
+  .hero h1{font-size:42px;line-height:1.1;margin:0 0 16px;letter-spacing:-.02em;font-weight:800}
+  .hero h1 .grad{background:linear-gradient(90deg,var(--brand),var(--accent));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .hero p.lede{font-size:17px;color:var(--mut);max-width:760px;margin:0 0 20px}
+  section{padding:36px 0;border-top:1px solid var(--line)}
+  section h2{font-size:24px;margin:0 0 18px;letter-spacing:-.01em;display:flex;align-items:center;gap:10px}
+  section h2 .num{color:var(--brand);font-family:monospace;font-size:14px;background:#0a1a26;padding:3px 9px;border-radius:6px;border:1px solid var(--line)}
+  section .lede{color:var(--mut);font-size:15px;max-width:760px;margin:0 0 22px}
+  .cmd-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
+  .cmd{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+  .cmd h3{margin:0 0 6px;font-size:14px;color:var(--accent);font-family:monospace;letter-spacing:.02em}
+  .cmd p{margin:0;color:var(--mut);font-size:13px}
+  .cmd .alias{display:inline-block;font-size:11px;color:var(--mut);margin-top:6px;font-family:monospace;background:#06121b;padding:2px 6px;border-radius:4px}
+  .tip{background:linear-gradient(180deg,rgba(255,216,102,.10),rgba(255,216,102,.02));border-left:3px solid var(--accent);padding:10px 14px;border-radius:6px;color:var(--ink);font-size:13px;margin:14px 0}
+  .tip strong{color:var(--accent)}
+  footer{padding:40px 0;border-top:1px solid var(--line);font-size:13px;color:var(--mut)}
+  footer .wrap{display:flex;flex-wrap:wrap;gap:14px;align-items:center}
+  footer a{color:var(--mut)}
+  footer .sig{margin-left:auto;font-family:monospace;font-size:11px;letter-spacing:.1em;color:var(--accent)}
+  @media (max-width:720px){.hero h1{font-size:30px} nav{font-size:11px;gap:10px}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <span class="logo">ADMIRA XP<span class="dot">·</span>AYUDA</span>
+    <nav>
+      <a href="#consulta">Consulta</a>
+      <a href="#equipo">Equipo</a>
+      <a href="#tienda">Tienda</a>
+      <a href="#ambiente">Ambiente</a>
+      <a href="#pantallas">Pantallas</a>
+      <a href="#escena">Escena</a>
+      <a href="#socios">Socios</a>
+      <a href="#operativa">Operativa</a>
+      <a href="#atmosfera">Atmósfera</a>
+      <a href="#integracion">Integración</a>
+      <a href="./" target="_blank">↗ Volver al juego</a>
+    </nav>
+  </div>
+</header>
+
+<div class="hero">
+  <div class="wrap">
+    <h1>Ayuda · <span class="grad">Admira XP // Xpace OS</span></h1>
+    <p class="lede">Guía completa de comandos del simulador. Todos se escriben en la consola Telegram inferior y respetan la convención: invocar sin argumentos hace toggle, los aliases en mayúsculas/minúsculas funcionan igual.</p>
+    <div class="tip"><strong>Modo Demo</strong> — pulsa <code>DEMO</code> en la pantalla 0 para que el simulador ejecute todas las funciones sin tu intervención. También arranca solo si el tótem queda 60s sin tocarse, y vuelve a la pantalla 0 tras 5 minutos.</div>
+  </div>
+</div>
+
+<section id="consulta">
+  <div class="wrap">
+    <h2><span class="num">01</span>Consulta</h2>
+    <div class="cmd-grid">
+      <div class="cmd"><h3>/status</h3><p>Resumen del estanco: caja, semana/año, ingresos, satisfacción, fama, staff, flags activos.</p></div>
+      <div class="cmd"><h3>/staff</h3><p>Lista de empleados contratados, energía, moral, rol y estado actual.</p></div>
+      <div class="cmd"><h3>/stock</h3><p>Stock por producto y bajo umbral.</p></div>
+      <div class="cmd"><h3>/turno N</h3><p>Avanza al turno N en el kiosco.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="equipo">
+  <div class="wrap">
+    <h2><span class="num">02</span>Equipo y stock</h2>
+    <div class="cmd-grid">
+      <div class="cmd"><h3>/hire 1 · /hire dj · /hire all</h3><p>Contrata staff por índice, por rol o todos.</p></div>
+      <div class="cmd"><h3>/train 1 · /train all</h3><p>Entrena staff (sube nivel y eficiencia).</p></div>
+      <div class="cmd"><h3>/restock 2 · /restock all · /restock prensa</h3><p>Repone stock por índice, todos o por nombre.</p></div>
+      <div class="cmd"><h3>/equipo inicio ana 3 4</h3><p>Mueve a Ana al tile (3,4). Se persiste como home.</p></div>
+      <div class="cmd"><h3>/equipo zona dj 12 2 2</h3><p>Define la zona de patrulla del DJ con radio 2.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="tienda">
+  <div class="wrap">
+    <h2><span class="num">03</span>Tienda</h2>
+    <div class="cmd-grid">
+      <div class="cmd"><h3>/ad 0 · /ad 1 · /ad 2</h3><p>Activa publicidad básica / media / premium.</p></div>
+      <div class="cmd"><h3>/upgrade</h3><p>Sube de nivel la tienda (más capacidad, mejor look).</p></div>
+      <div class="cmd"><h3>/visit com · /visit tec · /visit del · /visit gc</h3><p>Recibe visita comercial / técnica / delegación / Guardia Civil.</p></div>
+      <div class="cmd"><h3>/save</h3><p>Guarda la partida en localStorage.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="ambiente">
+  <div class="wrap">
+    <h2><span class="num">04</span>Tiempo y ambiente</h2>
+    <div class="cmd-grid">
+      <div class="cmd"><h3>/reloj 14:30</h3><p>Cambia la hora del juego al instante.</p></div>
+      <div class="cmd"><h3>/time am · pm · night</h3><p>Salta al tramo del día.</p></div>
+      <div class="cmd"><h3>/weather normal · rain · sun</h3><p>Cambia el clima. La lluvia activa sonido ambiente y bocadillos especiales.</p></div>
+      <div class="cmd"><h3>/lamp · /lamp auto</h3><p>Enciende lámpara o pasa a auto según hora.</p></div>
+      <div class="cmd"><h3>/hue · /hue auto</h3><p>Sincroniza luces Hue reales con el juego.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="pantallas">
+  <div class="wrap">
+    <h2><span class="num">05</span>Pantallas y directo</h2>
+    <div class="cmd-grid">
+      <div class="cmd"><h3>/livecam</h3><p>Activa webcam en la pantalla principal.</p></div>
+      <div class="cmd"><h3>/mocap</h3><p>Motion capture del DJ Novah desde la webcam.</p></div>
+      <div class="cmd"><h3>/AdmiraLive texto</h3><p>Texto scrolling en LED unificado de paredes izquierda + trasera.</p></div>
+      <div class="cmd"><h3>/comunicar texto</h3><p>Megafonía: texto en LED + voz por TTS del navegador.<br><span class="alias">--grok = Grok reescribe en estilo locutor · --elevenlabs = voz premium</span></p></div>
+      <div class="cmd"><h3>/AdmiraTube URL [1|2] [audio|mute]</h3><p>YouTube en signage TFT (1 o 2 pantallas).</p></div>
+      <div class="cmd"><h3>/say texto</h3><p>Bocadillo del Store Manager.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="escena">
+  <div class="wrap">
+    <h2><span class="num">06</span>Escena en vivo</h2>
+    <p class="lede">Toggle: invocar sin argumentos alterna entre activar y desactivar.</p>
+    <div class="cmd-grid">
+      <div class="cmd"><h3>/dj</h3><p>Activa el DJ Novah, música electrónica, luces de cabina, vinilos girando.</p></div>
+      <div class="cmd"><h3>/ladron</h3><p>Entra un ladrón por la puerta. CCTV en pantalla principal. Si hay Guardia Civil lo intercepta.</p></div>
+      <div class="cmd"><h3>/guardiacivil</h3><p>Entra Guardia Civil patrullando.</p></div>
+      <div class="cmd"><h3>/opinador</h3><p>Cliente que va al tótem de satisfacción a votar y se va. Aliases: <code>happy</code>, <code>neutral</code>, <code>sad</code>.</p></div>
+      <div class="cmd"><h3>/robot</h3><p>Unitree Bot escanea estanterías y emite +DATA flotantes.</p></div>
+      <div class="cmd"><h3>/sponsor</h3><p>Tío Gilito, sponsor con sombrero de copa, levita roja, monóculo y bastón. Ticket alto (90-150€).</p></div>
+      <div class="cmd"><h3>/sponsor recurrente 120 10</h3><p>Visita programada cada 120s con 10% descuento configurable.</p></div>
+      <div class="cmd"><h3>/socio</h3><p>Socio del Xtanco Club. Lleva corazón rojo en la camiseta (rosa si cumple hoy).</p></div>
+      <div class="cmd"><h3>/door open · close · auto</h3><p>Control manual de la puerta corredera.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="socios">
+  <div class="wrap">
+    <h2><span class="num">07</span>Socios del Xtanco Club</h2>
+    <p class="lede">Sistema completo de fidelización con app móvil PWA, registro histórico y propuestas de venta vía Admira IA.</p>
+    <div class="cmd-grid">
+      <div class="cmd"><h3>/socio</h3><p>Invoca un socio sintético (toggle desde CLI; el botón de la rejilla acumula).</p></div>
+      <div class="cmd"><h3>/socios listado</h3><p>Histórico de TODOS los socios agrupados por origen: 🏪 Alta en tienda · 🌐 Alta en web (QR app móvil).</p></div>
+      <div class="cmd"><h3>/socios export</h3><p>JSON anonimizado con stats agregadas para subir a OmniPublicity como datos de audiencia adtech.</p></div>
+      <div class="cmd"><h3>/personal socio</h3><p>Lista los socios actualmente en tienda con sellos y cumple.</p></div>
+      <div class="cmd"><h3>/personal dashboard</h3><p>Panel de stats: por categoría (Nuevo/Activo/Premium), top Upselling y Crosselling sugeridos por Admira IA.</p></div>
+      <div class="cmd"><h3>/heatmap</h3><p>Mapa de calor en el suelo con las zonas más pisadas por socios. <code>reset</code> para limpiar.</p></div>
+    </div>
+    <div class="tip"><strong>Auto-spawn cada hora</strong> — un cliente normal se acerca al mostrador con bocadillo "¡Quiero ser socio!" y se da de alta automáticamente.</div>
+    <div class="tip"><strong>Ficha desplegada</strong> — pulsa sobre el sprite de un socio para ver su ficha completa: ID, antigüedad, fecha nacimiento, sellos, categoría, ticket esperado, sugerencias Admira IA. Botón 📤 envía la ficha a Telegram.</div>
+  </div>
+</section>
+
+<section id="operativa">
+  <div class="wrap">
+    <h2><span class="num">08</span>Operativa real</h2>
+    <div class="cmd-grid">
+      <div class="cmd"><h3>/devolucion</h3><p>Cliente con queja se acerca al mostrador. Store Manager procesa: -10/40€ y -3% satisfacción.</p></div>
+      <div class="cmd"><h3>/pedido</h3><p>Socio premium pide producto especial para mañana ("¿Tenéis X para mañana?").</p></div>
+    </div>
+    <div class="tip"><strong>TPV ticket</strong> — cuando un cliente compra, el bocadillo del Store Manager muestra el desglose: <code>🧾 Vapes 12€ · VIP +50% · -25% sponsor · 🪪 socio = 14€</code>.</div>
+  </div>
+</section>
+
+<section id="atmosfera">
+  <div class="wrap">
+    <h2><span class="num">09</span>Atmósfera</h2>
+    <div class="cmd-grid">
+      <div class="cmd"><h3>/ambiente</h3><p>Sonido ambiente continuo: rumor de gente, lluvia auto cuando llueve, cafetera ocasional. <code>vol N</code> ajusta volumen 0-100.</p></div>
+      <div class="cmd"><h3>/voces</h3><p>Voz TTS española en los bocadillos de cliente. Cooldown 2.3s.</p></div>
+    </div>
+    <div class="tip"><strong>Sol y luna</strong> — el cielo cambia automáticamente según la hora (amanecer, mediodía, atardecer, noche con estrellas titilantes).</div>
+  </div>
+</section>
+
+<section id="integracion">
+  <div class="wrap">
+    <h2><span class="num">10</span>Integración con AdmiraNext</h2>
+    <div class="cmd-grid">
+      <div class="cmd"><h3>AdmiraGrok end-of-day</h3><p>Al cruzar la hora de cierre (22h), Grok genera un análisis automático y lo manda al chat AdmiraXP con las stats del día.</p></div>
+      <div class="cmd"><h3>OmniPublicity sync</h3><p>El comando <code>/socios export</code> genera el JSON que la landing <a href="https://csilvasantin.github.io/omnipublicity/" target="_blank">OmniPublicity</a> usa para mostrar audiencia real capturada.</p></div>
+      <div class="cmd"><h3>Botón en el Consejo</h3><p><a href="https://csilvasantin.github.io/admiranext.html" target="_blank">admiranext.html</a> tiene un botón verde ADMIRA XP que abre el simulador.</p></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2><span class="num">11</span>Atajos de teclado y feedback</h2>
+    <ul style="color:var(--mut);font-size:14px;line-height:1.8">
+      <li><strong style="color:var(--ink)">Sonido Mario</strong> al pulsar cualquier botón de la rejilla inferior o de la barra del composer.</li>
+      <li><strong style="color:var(--ink)">Bocadillo del Store Manager</strong> con el resultado de cada acción importante.</li>
+      <li><strong style="color:var(--ink)">Banner showEv</strong> top-center en cian/azul/naranja según éxito/fallo.</li>
+      <li><strong style="color:var(--ink)">Tab Socios</strong> aparece solo cuando hay alguno en la tienda o registrado online (glow rosa pulsante).</li>
+      <li><strong style="color:var(--ink)">/help</strong> abre el panel de comandos rápidos. Vuelve a pulsar para cerrar.</li>
+    </ul>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 AdmiraNext · Admira XP</span>
+    <a href="./" target="_blank">↗ Jugar</a>
+    <a href="https://github.com/csilvasantin/01.-AdmiraXperience-Game" target="_blank">↗ GitHub</a>
+    <a href="https://csilvasantin.github.io/omnipublicity/" target="_blank">↗ OmniPublicity</a>
+    <span class="sig">_Admirito by Claude_</span>
+  </div>
+</footer>
+
+</body>
+</html>
