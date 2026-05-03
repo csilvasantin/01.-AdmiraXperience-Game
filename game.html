@@ -20644,25 +20644,97 @@ window.xtAPI = (function(){
 })();
 </script>
 
-<!-- Pixer signage heartbeat: la Xtore se anuncia al worker pixer-eleven cada 5s -->
+<!-- Pixer signage: la Xtore se anuncia al worker, polea el feed y muestra el último item en overlay -->
 <script>
 (function(){
   const PIXER_WORKER='https://pixer-eleven.csilvasantin.workers.dev';
   const KEY='pixer-xtore-screen-id';
-  let id=localStorage.getItem(KEY);
-  if(!id){ id='xtore-'+Math.random().toString(36).slice(2,8); localStorage.setItem(KEY,id); }
+  let screenId=localStorage.getItem(KEY);
+  if(!screenId){ screenId='xtore-'+Math.random().toString(36).slice(2,8); localStorage.setItem(KEY,screenId); }
   function getVersion(){
     try{ const a=window.XTANCO_APP||{}; return (a.version||'')+(a.build?(' build '+a.build):''); }catch{ return 'unknown'; }
   }
-  function ping(){
-    fetch(PIXER_WORKER+'/signage/heartbeat',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({screen:id,role:'xtore-game',version:getVersion()}),
-    }).catch(()=>{});
+
+  // Overlay para mostrar el item recibido desde Pixer
+  const css=document.createElement('style');
+  css.textContent=`
+    #pixerFeedOverlay{position:fixed;top:90px;right:18px;width:280px;z-index:9000;
+      background:rgba(2,6,2,.92);border:1px solid #00ff41;color:#c8ffd0;
+      font-family:"JetBrains Mono",ui-monospace,monospace;font-size:11px;
+      box-shadow:0 0 24px rgba(0,255,65,.35);transition:opacity .3s;display:none;}
+    #pixerFeedOverlay.visible{display:block;}
+    #pixerFeedOverlay .pix-head{display:flex;justify-content:space-between;
+      padding:6px 10px;border-bottom:1px dashed #2f8a3e;letter-spacing:.08em;}
+    #pixerFeedOverlay .pix-head strong{color:#00ff41;text-shadow:0 0 4px #00ff41;}
+    #pixerFeedOverlay .pix-head .pix-close{cursor:pointer;color:#999;}
+    #pixerFeedOverlay .pix-body{padding:8px;background:#000;}
+    #pixerFeedOverlay .pix-body img,
+    #pixerFeedOverlay .pix-body video{width:100%;height:auto;display:block;
+      max-height:200px;object-fit:cover;}
+    #pixerFeedOverlay .pix-body audio{width:100%;}
+    #pixerFeedOverlay .pix-foot{padding:6px 10px;font-size:10px;
+      letter-spacing:.06em;color:#7dff9e;opacity:.85;
+      white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  `;
+  document.head.appendChild(css);
+  const overlay=document.createElement('div');
+  overlay.id='pixerFeedOverlay';
+  overlay.innerHTML=`
+    <div class="pix-head"><strong>▶ PIXER FEED</strong>
+      <span class="pix-close" title="Ocultar">×</span></div>
+    <div class="pix-body"><div style="padding:18px;text-align:center;opacity:.5;">// esperando contenido</div></div>
+    <div class="pix-foot">screen: ${screenId}</div>`;
+  document.body.appendChild(overlay);
+  overlay.querySelector('.pix-close').onclick=()=>overlay.classList.remove('visible');
+
+  let lastItemId=null, totalCount=0;
+
+  function renderItem(item){
+    const body=overlay.querySelector('.pix-body');
+    if(item.kind==='image'){
+      body.innerHTML=`<img src="${item.url}" alt="${item.title||''}">`;
+    } else if(item.kind==='video'){
+      body.innerHTML=`<video src="${item.url}" autoplay muted loop playsinline></video>`;
+    } else if(item.kind==='audio'){
+      body.innerHTML=`<audio src="${item.url}" controls autoplay style="width:100%"></audio>`;
+    }
+    overlay.querySelector('.pix-foot').textContent=
+      `${item.kind} · ${item.title||''} · ${screenId.slice(-6)}`;
+    overlay.classList.add('visible');
   }
-  // Esperar a que el game cargue del todo antes del primer ping
-  setTimeout(()=>{ ping(); setInterval(ping,5000); },3000);
+
+  async function ackItem(id){
+    try{
+      await fetch(PIXER_WORKER+'/signage/ack/'+id,{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({screen:screenId}),
+      });
+    }catch{}
+  }
+
+  async function tick(){
+    // Heartbeat (anuncio de vida)
+    fetch(PIXER_WORKER+'/signage/heartbeat',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({screen:screenId,role:'xtore-game',version:getVersion(),
+        feed_count:totalCount,showing_id:lastItemId}),
+    }).catch(()=>{});
+
+    // Feed: si hay un nuevo item, mostrarlo y acks
+    try{
+      const r=await fetch(PIXER_WORKER+'/signage/feed?limit=1');
+      if(!r.ok) return;
+      const data=await r.json();
+      totalCount=(data.items||[]).length;
+      const item=(data.items||[])[0];
+      if(item && item.id!==lastItemId){
+        lastItemId=item.id;
+        renderItem(item);
+        ackItem(item.id);
+      }
+    }catch{}
+  }
+  setTimeout(()=>{ tick(); setInterval(tick,5000); },3000);
 })();
 </script>
 
