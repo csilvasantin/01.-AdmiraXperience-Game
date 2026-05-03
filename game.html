@@ -237,7 +237,13 @@
     .tg-line.bot{border-left-color:#f0cc5b;color:#fff3c4}
     .tg-line.err{border-left-color:#f05b5b;color:#ffd0d0}
     #mobileSkipBtn{display:none;position:fixed;left:50%;bottom:12px;transform:translateX(-50%);z-index:40;border:1px solid #77ffe1;border-radius:999px;background:linear-gradient(180deg,#0d2f2a,#06110f);color:#d9fff5;font-family:monospace;font-size:13px;font-weight:bold;letter-spacing:.08em;padding:11px 20px;box-shadow:0 0 22px rgba(85,255,204,.36);cursor:pointer;touch-action:manipulation;text-transform:uppercase}
+    #demoBtn{display:none;position:fixed;left:50%;bottom:62px;transform:translateX(-50%);z-index:40;border:1px solid #ffaa44;border-radius:999px;background:linear-gradient(180deg,#3a2a0d,#1a1206);color:#ffe1a3;font-family:monospace;font-size:12px;font-weight:bold;letter-spacing:.10em;padding:9px 18px;box-shadow:0 0 22px rgba(255,170,68,.32);cursor:pointer;touch-action:manipulation;text-transform:uppercase}
+    #demoBtn::before{content:"▶ ";color:#ffd866}
+    #demoOverlay{display:none;position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:38;background:linear-gradient(90deg,rgba(255,170,68,.22),rgba(255,216,107,.10),rgba(255,170,68,.22));border:1px solid #ffaa44;border-radius:999px;padding:6px 18px;color:#ffe1a3;font-family:monospace;font-size:11px;font-weight:bold;letter-spacing:.18em;text-transform:uppercase;pointer-events:none;animation:demoPulse 1.6s ease-in-out infinite}
+    body.demo-on #demoOverlay{display:block}
+    @keyframes demoPulse{0%,100%{box-shadow:0 0 8px rgba(255,170,68,.3)}50%{box-shadow:0 0 22px rgba(255,170,68,.7)}}
     #mobileSkipBtn.show{display:block}
+    #demoBtn.show{display:block}
     #eraVerticalDock{display:none;position:fixed;left:50%;bottom:78px;transform:translateX(-50%);z-index:39;width:min(860px,calc(100vw - 28px));padding:14px 16px;border:1px solid rgba(120,243,255,.42);border-radius:18px;background:radial-gradient(circle at 12% 0,rgba(120,243,255,.16),transparent 36%),linear-gradient(135deg,rgba(4,10,16,.96),rgba(12,28,34,.96));box-shadow:0 0 0 1px rgba(247,201,93,0.12),0 18px 48px rgba(0,0,0,0.48),inset 0 1px 0 rgba(255,255,255,.10);backdrop-filter:blur(8px)}
     #eraVerticalDock.show{display:block}
     .evd-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;color:#dce8f6;font-size:11px}
@@ -410,6 +416,8 @@
   </div>
 </div>
 <button id="mobileSkipBtn" type="button" aria-label="Saltar al juego">SKIP AL JUEGO</button>
+<button id="demoBtn" type="button" aria-label="Modo Demo automático">MODO DEMO</button>
+<div id="demoOverlay">▶ MODO DEMO · sin intervención humana</div>
 <div id="characterDock" aria-label="Team and customers">
   <div class="dock-resize-handle" data-dock-resize aria-hidden="true"></div>
   <div class="char-pane people">
@@ -480,6 +488,7 @@
 <script src="assets/js/sfx.js"></script>
 <script src="assets/js/ambient.js"></script>
 <script src="assets/js/sky.js"></script>
+<script src="assets/js/heatmap.js"></script>
 <script>
 // Direct game.html loads can otherwise keep an old public service worker alive.
 (function clearOldRuntimeFromGamePage(){
@@ -4510,6 +4519,8 @@ function updateMobileSkipButton(){
   if(!mobileSkipBtn) return;
   const show=[S.ERA_SEL,S.PRELOAD,S.CLIENT_SEL,S.MODEL_SEL,S.INTRO].includes(state);
   mobileSkipBtn.classList.toggle('show',show);
+  const demoBtnEl=document.getElementById('demoBtn');
+  if(demoBtnEl) demoBtnEl.classList.toggle('show',show);
 }
 function updateEraVerticalDock(){
   if(!eraVerticalDock) return;
@@ -5608,6 +5619,76 @@ if(mobileSkipBtn){
   mobileSkipBtn.addEventListener('click',e=>{
     e.preventDefault();
     quickStartLoteriasGame();
+    updateMobileSkipButton();
+  });
+}
+
+// ── MODO DEMO — entra al juego y ejecuta una secuencia ciclica de comandos ──
+// para mostrar todas las funcionalidades sin intervencion humana. Pensado para
+// ferias, demos comerciales o video promocional.
+const DEMO_SCRIPT=[
+  '/comunicar Bienvenidos al simulador del Xpace OS · Admira XP',
+  '/socio on',
+  '/socio on',
+  '/sponsor on',
+  '/dj on',
+  '/heatmap on',
+  '/AdmiraLive Demo del Xpace OS · sin intervención humana',
+  '/personal dashboard',
+  '/socio on',
+  '/opinador on',
+  '/sponsor recurrente 30 25',
+  '/robot on',
+  '/socios listado',
+  '/ladron on',
+  '/weather rain',
+  '/comunicar La lluvia activa el ambiente sonoro automaticamente',
+  '/ladron off',
+  '/devolucion',
+  '/pedido',
+  '/time night',
+  '/comunicar De noche aparece la luna y las estrellas en el cielo',
+  '/dj off',
+  '/sponsor off',
+  '/heatmap reset',
+  '/weather normal',
+  '/time am',
+  '/AdmiraLive Demo completada · vuelta al ciclo',
+];
+let demoStepIdx=0,demoStepCooldown=0;
+const DEMO_STEP_TICKS=420; // ~7s entre comandos a 60fps
+const demoBtnEl=document.getElementById('demoBtn');
+function startDemoMode(){
+  quickStartLoteriasGame();
+  demoMode=true;demoStepIdx=0;demoStepCooldown=60;
+  document.body.classList.add('demo-on');
+  try{if(typeof showEv==='function') showEv('▶ MODO DEMO activado · sin intervencion humana','#ffaa44');}catch(e){}
+  try{if(window.SFX&&window.SFX.hireFanfare) window.SFX.hireFanfare();}catch(e){}
+}
+function stopDemoMode(){
+  demoMode=false;
+  document.body.classList.remove('demo-on');
+}
+function tickDemoMode(){
+  if(!demoMode) return;
+  if(demoStepCooldown>0){demoStepCooldown--;return;}
+  demoStepCooldown=DEMO_STEP_TICKS;
+  const cmd=DEMO_SCRIPT[demoStepIdx%DEMO_SCRIPT.length];
+  demoStepIdx++;
+  // Ejecutar via sendComposerText (mismo flujo que escribir en el composer).
+  try{
+    if(typeof window.sendComposerText==='function'){
+      window.sendComposerText(cmd).catch(()=>{});
+    }
+  }catch(e){}
+}
+if(demoBtnEl){
+  ['keydown','keyup','keypress','mousedown','mouseup','click','touchstart','touchend','wheel'].forEach(ev=>{
+    demoBtnEl.addEventListener(ev,e=>e.stopPropagation(),{passive:false});
+  });
+  demoBtnEl.addEventListener('click',e=>{
+    e.preventDefault();
+    startDemoMode();
     updateMobileSkipButton();
   });
 }
@@ -11438,33 +11519,8 @@ function drawShop(){
     }
   }
 
-  // ── SOCIO HEAT MAP — overlay rojo según concentración de visitas de socios ──
-  if(G&&G.socioHeat&&G.socioHeat.enabled&&G.socioHeat.max>0){
-    const grid=G.socioHeat.grid, mx=G.socioHeat.max;
-    cx.save();
-    for(const k in grid){
-      const v=grid[k];if(!v) continue;
-      const parts=k.split(',');const c=parseInt(parts[0]),r=parseInt(parts[1]);
-      if(!Number.isFinite(c)||!Number.isFinite(r)) continue;
-      if(c<0||c>=ISO.cols||r<0||r>=ISO.rows) continue;
-      const intensity=Math.min(1,v/mx);
-      const pulse=0.85+0.15*Math.sin(tt*0.06);
-      // Gradiente: amarillo (frío) → naranja → rojo (caliente)
-      const red=200+Math.floor(55*intensity);
-      const green=Math.floor(180*(1-intensity));
-      const alpha=(0.18+0.42*intensity)*pulse;
-      cx.fillStyle='rgba('+red+','+green+',40,'+alpha.toFixed(3)+')';
-      const p=toIso(c,r);
-      cx.beginPath();
-      cx.moveTo(p.x,p.y-ISO.tileH/2);
-      cx.lineTo(p.x+ISO.tileW/2,p.y);
-      cx.lineTo(p.x,p.y+ISO.tileH/2);
-      cx.lineTo(p.x-ISO.tileW/2,p.y);
-      cx.closePath();
-      cx.fill();
-    }
-    cx.restore();
-  }
+  // ── SOCIO HEAT MAP — extraído a assets/js/heatmap.js (Fase 1 modularización) ──
+  if(window.drawSocioHeatmap) window.drawSocioHeatmap({cx,ISO,tt,G,toIso});
 
   // ── WEATHER FLOOR EFFECTS ──
   const weatherFloor=G&&G.weather&&G.weather.type;
@@ -17259,6 +17315,8 @@ function drawDemoCountdown(){
 function loop(){
   requestAnimationFrame(loop);
   tt++;
+  // Modo Demo — ejecutar siguiente comando de la secuencia ciclica
+  try{ if(typeof tickDemoMode==='function') tickDemoMode(); }catch(e){}
   resetSpeechOverlay();
   try{
     if(isLocalRuntime()&&(state===S.GAME||state===S.PAUSE||state===S.SETTINGS)) huePollPhysicalState(false);
@@ -20205,6 +20263,8 @@ window.xtAPI = (function(){
     return false;
   };
 
+  // Exponer al global para que el modo Demo (fuera del IIFE) pueda invocar
+  window.sendComposerText = sendComposerText;
   async function sendComposerText(text){
     const clean=String(text||'').trim();
     if(!clean) return;
