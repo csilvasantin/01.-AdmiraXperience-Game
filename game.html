@@ -477,6 +477,9 @@
 <script src="qrcode.min.js"></script>
 <script src="xtanco-loyalty-client.js"></script>
 <script src="xtanco-marketplace-client.js"></script>
+<script src="assets/js/sfx.js"></script>
+<script src="assets/js/ambient.js"></script>
+<script src="assets/js/sky.js"></script>
 <script>
 // Direct game.html loads can otherwise keep an old public service worker alive.
 (function clearOldRuntimeFromGamePage(){
@@ -565,106 +568,12 @@ bootVideoEl.setAttribute('playsinline','');
 bootVideoEl.setAttribute('webkit-playsinline','');
 
 // ── SFX ENGINE ───────────────────────────────────────────────
-const SFX=(()=>{
-  let ac=null;
-  const vol=()=>(typeof G!=='undefined'&&G&&G.sfxVolume!==undefined)?G.sfxVolume:0.7;
-  function ctx(){if(!ac)try{ac=new(window.AudioContext||window.webkitAudioContext)();}catch(e){}return ac;}
-  function tone(freq,dur,type='sine',gain=0.15,delay=0){
-    const a=ctx();if(!a)return;
-    const o=a.createOscillator(),g=a.createGain();
-    o.type=type;o.frequency.value=freq;
-    g.gain.setValueAtTime(gain*vol(),a.currentTime+delay);
-    g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+delay+dur);
-    o.connect(g);g.connect(a.destination);
-    o.start(a.currentTime+delay);o.stop(a.currentTime+delay+dur);
-  }
-  return{
-    cashRegister(){tone(1200,0.06);tone(1600,0.06,'sine',0.12,0.07);tone(2200,0.1,'sine',0.1,0.14);},
-    doorBell(){tone(659,0.15);tone(784,0.15,'sine',0.12,0.16);},
-    salePop(){tone(500,0.04);tone(800,0.04,'sine',0.1,0.05);},
-    hireFanfare(){tone(523,0.1);tone(659,0.1,'sine',0.12,0.12);tone(784,0.12,'sine',0.14,0.24);},
-    restockThud(){tone(120,0.12,'triangle',0.2);tone(80,0.08,'triangle',0.1,0.1);},
-    rushSiren(){tone(600,0.15,'sawtooth',0.08);tone(800,0.15,'sawtooth',0.08,0.16);tone(600,0.15,'sawtooth',0.08,0.32);},
-    inspectionAlarm(){tone(1000,0.08,'square',0.06);tone(1000,0.08,'square',0.06,0.12);tone(1000,0.08,'square',0.06,0.24);},
-    weekEnd(){tone(523,0.15,'sine',0.1);tone(659,0.12,'sine',0.08,0.16);tone(784,0.2,'sine',0.12,0.3);},
-    gameOver(){tone(400,0.2);tone(300,0.2,'sine',0.12,0.22);tone(200,0.3,'sine',0.14,0.44);},
-    levelUp(){tone(784,0.08);tone(988,0.08,'sine',0.1,0.1);tone(1175,0.12,'sine',0.12,0.2);},
-    eventChime(){tone(880,0.08,'sine',0.08);tone(1100,0.1,'sine',0.1,0.1);},
-    marioCoin(){tone(988,0.08,'square',0.10);tone(1319,0.18,'square',0.12,0.08);},
-    thunder(){tone(60,0.4,'sawtooth',0.2);tone(40,0.6,'sawtooth',0.15,0.15);tone(80,0.3,'triangle',0.1,0.4);tone(30,0.5,'sawtooth',0.08,0.6);},
-    rainLoop(){tone(200,0.05,'triangle',0.02);tone(350,0.04,'triangle',0.015,0.03);tone(150,0.06,'triangle',0.01,0.06);},
-    voteHappy(){tone(659,0.08,'sine',0.1);tone(784,0.08,'sine',0.1,0.09);tone(1047,0.15,'sine',0.12,0.18);},
-    voteNeutral(){tone(440,0.12,'triangle',0.08);tone(440,0.08,'triangle',0.05,0.14);},
-    voteSad(){tone(400,0.12,'sine',0.1);tone(300,0.15,'sine',0.1,0.13);tone(220,0.2,'sine',0.08,0.28);},
-  };
-})();
+// Extraído a assets/js/sfx.js como Fase 1 de la modularización (ver
+// MODULES_PLAN.md). El IIFE original sigue accesible vía window.SFX.
+const SFX = window.SFX;
 
-// ── AMBIENT ENGINE — rumor de fondo + cafetera + lluvia, loop continuo ──
-const AMBIENT=(()=>{
-  let ac=null,master=null,started=false,nodes=[];
-  function ctx(){
-    if(!ac){try{ac=new(window.AudioContext||window.webkitAudioContext)();}catch(e){return null;}}
-    return ac;
-  }
-  function buildRumorNoise(a){
-    // Ruido marrón filtrado para simular rumor de gente
-    const buf=a.createBuffer(1,a.sampleRate*2,a.sampleRate);
-    const d=buf.getChannelData(0);let last=0;
-    for(let i=0;i<d.length;i++){const w=Math.random()*2-1;last=(last+0.02*w)/1.02;d[i]=last*3.5;}
-    const src=a.createBufferSource();src.buffer=buf;src.loop=true;
-    const f=a.createBiquadFilter();f.type='lowpass';f.frequency.value=460;
-    const g=a.createGain();g.gain.value=0.0;
-    src.connect(f);f.connect(g);g.connect(master);
-    src.start();
-    return {src,gain:g,fade:0.15};
-  }
-  function buildRainNoise(a){
-    const buf=a.createBuffer(1,a.sampleRate*2,a.sampleRate);
-    const d=buf.getChannelData(0);
-    for(let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*0.6;
-    const src=a.createBufferSource();src.buffer=buf;src.loop=true;
-    const f=a.createBiquadFilter();f.type='bandpass';f.frequency.value=2200;f.Q.value=0.6;
-    const g=a.createGain();g.gain.value=0.0;
-    src.connect(f);f.connect(g);g.connect(master);
-    src.start();
-    return {src,gain:g,fade:0.2};
-  }
-  function start(){
-    const a=ctx();if(!a||started) return;
-    started=true;
-    master=a.createGain();master.gain.value=0;master.connect(a.destination);
-    nodes.push(buildRumorNoise(a));
-    nodes.push(buildRainNoise(a));
-    // Cafetera ocasional cada 12-25s
-    setInterval(()=>{
-      if(!G||!G.ambient||!G.ambient.enabled) return;
-      try{
-        const t=a.currentTime;
-        const o=a.createOscillator(),g=a.createGain();
-        o.type='triangle';o.frequency.value=1200;
-        g.gain.setValueAtTime(0,t);
-        g.gain.linearRampToValueAtTime(0.05*(G.ambient.volume||0.25),t+0.05);
-        g.gain.exponentialRampToValueAtTime(0.001,t+0.6);
-        const f=a.createBiquadFilter();f.type='bandpass';f.frequency.value=2400;f.Q.value=4;
-        o.connect(f);f.connect(g);g.connect(master);
-        o.start(t);o.stop(t+0.65);
-      }catch(e){}
-    },12000+Math.floor(Math.random()*13000));
-  }
-  function applyVolumes(){
-    if(!ac||!master||!nodes.length) return;
-    const vol=(G&&G.ambient&&G.ambient.enabled)?(G.ambient.volume||0.25):0;
-    const isRain=G&&G.weather&&G.weather.type==='rain';
-    master.gain.setTargetAtTime(vol,ac.currentTime,0.4);
-    nodes[0].gain.gain.setTargetAtTime(vol*0.7,ac.currentTime,0.4); // rumor
-    nodes[1].gain.gain.setTargetAtTime(isRain?vol*0.9:0,ac.currentTime,0.4); // lluvia
-  }
-  return {
-    init(){start();},
-    update(){applyVolumes();},
-    pulseTill(){applyVolumes();},
-  };
-})();
+// ── AMBIENT ENGINE — extraído a assets/js/ambient.js (Fase 1 modularización) ──
+const AMBIENT = window.AMBIENT;
 
 // ── Voces de clientes — TTS corto del bocadillo, con cooldown ──
 function speakCustomerBubble(text){
@@ -3593,16 +3502,7 @@ function saveShopSettings(){
 loadShopSettings();
 
 // Get sky colors based on game hour (returns [top, mid, bottom])
-function getSkyColors(hour){
-  if(hour<7)  return ['#0a0a2a','#1a1a3a','#2a2a4a']; // night
-  if(hour<9)  return ['#3a5a8a','#5a7aaa','#8aaacc']; // dawn
-  if(hour<12) return ['#5a99cc','#7ab8dd','#a8d4ee']; // morning
-  if(hour<16) return ['#4a8acc','#6aaadd','#98ccee']; // midday
-  if(hour<18) return ['#cc8844','#dd9955','#eebb77']; // sunset
-  if(hour<19) return ['#aa4433','#cc5544','#dd7755']; // dusk
-  if(hour<20) return ['#3a2244','#4a3355','#5a4466']; // twilight
-  return ['#0a0a1a','#1a1a2a','#2a2a3a']; // night
-}
+// getSkyColors extraído a assets/js/sky.js — sigue accesible en window.
 
 const MAX_CUSTOMERS_IN_STORE=7;
 function getCustomerFlowProfile(hour){

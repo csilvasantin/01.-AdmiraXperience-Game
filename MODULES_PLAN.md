@@ -20,10 +20,10 @@ primero), para hacerlo en sesiones dedicadas.
 ## Fase 1 — módulos sin dependencias del estado del juego (más fácil)
 Cada uno puede salir aislado, exporta su API, se importa al inicio del IIFE de `game.html`.
 
-1. **`assets/js/sfx.js`** — el SFX engine completo (líneas ~568-620). Solo depende de `AudioContext` y de un getter de volumen `vol()`. Puede recibir `volGetter` como parámetro al inicializar.
-2. **`assets/js/ambient.js`** — el AMBIENT engine (líneas ~625-720). Igual que SFX.
-3. **`assets/js/sky.js`** — `getSkyColors(hour)` + render del sol/luna/estrellas. Depende solo de `tt`, `cx`, `W`, `skyTop`, `skyH`. Recibe `ctxBundle`.
-4. **`assets/js/heatmap.js`** — render del overlay de socios (~líneas 11203-11230). Recibe `G.socioHeat`, `cx`, `ISO`, `tt`.
+1. ✅ **`assets/js/sfx.js`** — el SFX engine completo. Expone `window.SFX` con 17 funciones. Hecho en v26.03.05.1.
+2. ✅ **`assets/js/ambient.js`** — el AMBIENT engine (rumor + lluvia + cafetera). Expone `window.AMBIENT.{init,update,pulseTill}`. Hecho en v26.03.05.1.
+3. ⚠️ **`assets/js/sky.js`** — `getSkyColors(hour)` extraído en v26.03.05.2. El render del sol/luna sigue inline en `drawCityBg` porque depende de `cx, tt, W, skyTop, skyH` — extraerlo es trabajo de Fase 3.
+4. ⏳ **`assets/js/heatmap.js`** — render del overlay de socios (~líneas 11220+). Recibe `G.socioHeat`, `cx`, `ISO`, `tt`. Pendiente.
 
 ## Fase 2 — módulos con estado compartido pero contenido (medio)
 5. **`assets/js/sponsor-render.js`** — `drawSponsorScrooge()`.
