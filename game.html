@@ -236,8 +236,8 @@
     .tg-line.out{border-left-color:#5bc9ff;color:#dff6ff}
     .tg-line.bot{border-left-color:#f0cc5b;color:#fff3c4}
     .tg-line.err{border-left-color:#f05b5b;color:#ffd0d0}
-    #mobileSkipBtn{display:none;position:fixed;left:50%;bottom:12px;transform:translateX(-50%);z-index:40;border:1px solid #77ffe1;border-radius:999px;background:linear-gradient(180deg,#0d2f2a,#06110f);color:#d9fff5;font-family:monospace;font-size:13px;font-weight:bold;letter-spacing:.08em;padding:11px 20px;box-shadow:0 0 22px rgba(85,255,204,.36);cursor:pointer;touch-action:manipulation;text-transform:uppercase}
-    #demoBtn{display:none;position:fixed;left:50%;bottom:62px;transform:translateX(-50%);z-index:40;border:1px solid #ffaa44;border-radius:999px;background:linear-gradient(180deg,#3a2a0d,#1a1206);color:#ffe1a3;font-family:monospace;font-size:12px;font-weight:bold;letter-spacing:.10em;padding:9px 18px;box-shadow:0 0 22px rgba(255,170,68,.32);cursor:pointer;touch-action:manipulation;text-transform:uppercase}
+    #mobileSkipBtn{display:none;position:fixed;right:calc(50% + 6px);bottom:12px;z-index:40;border:1px solid #77ffe1;border-radius:999px;background:linear-gradient(180deg,#0d2f2a,#06110f);color:#d9fff5;font-family:monospace;font-size:13px;font-weight:bold;letter-spacing:.10em;padding:11px 22px;box-shadow:0 0 22px rgba(85,255,204,.36);cursor:pointer;touch-action:manipulation;text-transform:uppercase}
+    #demoBtn{display:none;position:fixed;left:calc(50% + 6px);bottom:12px;z-index:40;border:1px solid #ffaa44;border-radius:999px;background:linear-gradient(180deg,#3a2a0d,#1a1206);color:#ffe1a3;font-family:monospace;font-size:13px;font-weight:bold;letter-spacing:.10em;padding:11px 22px;box-shadow:0 0 22px rgba(255,170,68,.36);cursor:pointer;touch-action:manipulation;text-transform:uppercase}
     #demoBtn::before{content:"▶ ";color:#ffd866}
     #demoOverlay{display:none;position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:38;background:linear-gradient(90deg,rgba(255,170,68,.22),rgba(255,216,107,.10),rgba(255,170,68,.22));border:1px solid #ffaa44;border-radius:999px;padding:6px 18px;color:#ffe1a3;font-family:monospace;font-size:11px;font-weight:bold;letter-spacing:.18em;text-transform:uppercase;pointer-events:none;animation:demoPulse 1.6s ease-in-out infinite}
     body.demo-on #demoOverlay{display:block}
@@ -277,7 +277,7 @@
       .evd-btn strong{font-size:11px}
       .evd-btn span{font-size:8px}
       #telegramLog{font-size:9px}
-      #mobileSkipBtn{bottom:10px;font-size:12px;padding:9px 16px}
+      #mobileSkipBtn,#demoBtn{bottom:10px;font-size:12px;padding:9px 16px}
     }
     #dsImportDrop{position:fixed;inset:0;z-index:9999;display:none;align-items:center;justify-content:center;background:rgba(2,8,14,.55);backdrop-filter:blur(2px);pointer-events:none}
     #dsImportDrop.is-active{display:flex}
@@ -415,8 +415,8 @@
     <button type="button" class="evd-btn" data-client="2"><strong>CONTINUAR</strong><span>Enter para seguir</span></button>
   </div>
 </div>
-<button id="mobileSkipBtn" type="button" aria-label="Saltar al juego">SKIP AL JUEGO</button>
-<button id="demoBtn" type="button" aria-label="Modo Demo automático">MODO DEMO</button>
+<button id="mobileSkipBtn" type="button" aria-label="Entrar al juego">JUEGO</button>
+<button id="demoBtn" type="button" aria-label="Demo automático">DEMO</button>
 <div id="demoOverlay">▶ MODO DEMO · sin intervención humana</div>
 <div id="characterDock" aria-label="Team and customers">
   <div class="dock-resize-handle" data-dock-resize aria-hidden="true"></div>
