@@ -5661,21 +5661,44 @@ const demoBtnEl=document.getElementById('demoBtn');
 function startDemoMode(){
   quickStartLoteriasGame();
   demoMode=true;demoStepIdx=0;demoStepCooldown=60;
+  demoStartedAt=Date.now();
   document.body.classList.add('demo-on');
   try{if(typeof showEv==='function') showEv('▶ MODO DEMO activado · sin intervencion humana','#ffaa44');}catch(e){}
   try{if(window.SFX&&window.SFX.hireFanfare) window.SFX.hireFanfare();}catch(e){}
 }
 function stopDemoMode(){
   demoMode=false;
+  demoStartedAt=0;
   document.body.classList.remove('demo-on');
+  // Volver a la pantalla 0 (intro)
+  try{
+    if(typeof state!=='undefined' && typeof S!=='undefined' && typeof startTransition==='function'){
+      startTransition(S.ERA_SEL);
+    }
+  }catch(e){}
+  lastInput=Date.now();
 }
 function tickDemoMode(){
+  const cfg=window.DEMO_CONFIG||{idleMs:60000,durationMs:5*60*1000};
+  // Auto-arrancar: si llevamos cfg.idleMs sin input EN una pantalla intro
+  // y no estamos ya en demo, lanzamos la demo automaticamente.
+  if(!demoMode && typeof state!=='undefined' && typeof S!=='undefined'){
+    const inIntro=[S.ERA_SEL,S.PRELOAD,S.MENU,S.CLIENT_SEL,S.MODEL_SEL,S.INTRO].includes(state);
+    if(inIntro && Date.now()-lastInput >= cfg.idleMs){
+      startDemoMode();
+      return;
+    }
+  }
   if(!demoMode) return;
+  // Auto-parar tras cfg.durationMs y volver a pantalla 0
+  if(demoStartedAt && Date.now()-demoStartedAt >= cfg.durationMs){
+    stopDemoMode();
+    return;
+  }
   if(demoStepCooldown>0){demoStepCooldown--;return;}
   demoStepCooldown=DEMO_STEP_TICKS;
   const cmd=DEMO_SCRIPT[demoStepIdx%DEMO_SCRIPT.length];
   demoStepIdx++;
-  // Ejecutar via sendComposerText (mismo flujo que escribir en el composer).
   try{
     if(typeof window.sendComposerText==='function'){
       window.sendComposerText(cmd).catch(()=>{});
@@ -5817,11 +5840,15 @@ let editorSceneActive=false;
 // ── AUTO-START — skip to game after 5s idle on menu ──────────
 let menuEnteredAt=Date.now();
 const AUTOSTART_MS=5000; // 5 seconds idle before auto-start
-// ── DEMO MODE — auto-play after 30s idle from menu ───────────
+// ── DEMO MODE — auto-play tras 1 min idle en pantalla intro, dura 5 min ──
 let lastInput=Date.now();
 let demoMode=false;
 let demoTimer=0;
-const DEMO_IDLE_MS=30000; // 30 seconds idle before demo starts
+let demoStartedAt=0;
+// Config expuesto para test/demo runtime: window.DEMO_CONFIG.{idleMs,durationMs}
+window.DEMO_CONFIG = window.DEMO_CONFIG || { idleMs: 60000, durationMs: 5*60*1000 };
+window.__getLastInput = function(){ return lastInput; };
+window.__setLastInput = function(v){ lastInput=v; };
 function resetIdleTimer(){
   lastInput=Date.now();
   menuEnteredAt=Date.now(); // reset auto-start countdown
