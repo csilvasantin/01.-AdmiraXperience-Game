@@ -20640,5 +20640,28 @@ window.xtAPI = (function(){
   console.log('%cTelegram bridge ready — '+modeLabel(TELEGRAM.bridgeMode),'color:#55ccff;font-size:14px;font-weight:bold');
 })();
 </script>
+
+<!-- Pixer signage heartbeat: la Xtore se anuncia al worker pixer-eleven cada 5s -->
+<script>
+(function(){
+  const PIXER_WORKER='https://pixer-eleven.csilvasantin.workers.dev';
+  const KEY='pixer-xtore-screen-id';
+  let id=localStorage.getItem(KEY);
+  if(!id){ id='xtore-'+Math.random().toString(36).slice(2,8); localStorage.setItem(KEY,id); }
+  function getVersion(){
+    try{ const a=window.XTANCO_APP||{}; return (a.version||'')+(a.build?(' build '+a.build):''); }catch{ return 'unknown'; }
+  }
+  function ping(){
+    fetch(PIXER_WORKER+'/signage/heartbeat',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({screen:id,role:'xtore-game',version:getVersion()}),
+    }).catch(()=>{});
+  }
+  // Esperar a que el game cargue del todo antes del primer ping
+  setTimeout(()=>{ ping(); setInterval(ping,5000); },3000);
+})();
+</script>
+
 </body>
 </html>
