@@ -78,7 +78,9 @@
     .mh-club-info b{color:#78f3ff}
     .mh-club-url{font-size:9px;color:#9ec7d0;overflow-wrap:anywhere}
     .mh-club-hint{margin-top:4px;font-size:9px;color:#7da6ad;line-height:1.35}
-    #telegramDock{display:none;position:fixed;left:0;bottom:0;height:228px;background:linear-gradient(180deg,rgba(5,16,24,.97),rgba(1,6,10,.98));border:1px solid rgba(120,243,255,.34);border-bottom:none;color:#d9f7ff;font-family:monospace;z-index:30;gap:8px;padding:8px;box-shadow:0 -18px 38px rgba(0,0,0,.42)}
+    #telegramDock{display:none;position:fixed;left:0;bottom:0;height:228px;color:#d9f7ff;font-family:monospace;z-index:30;gap:8px}
+    /* Container del dock sin background ni border: la estetica vive en el pane interior,
+       igual que characterDock. Esto unifica visualmente ambos panels inferiores. */
     #telegramDock.show{display:flex}
     #telegramDock.hide-dock{display:none}
     #telegramDock.compose-start{display:flex}
@@ -88,6 +90,13 @@
     #telegramDock.focus-send .tg-pane.conversation{display:none}
     #telegramDock.focus-send .tg-pane.send{display:flex;flex:1 1 100%;width:100%;max-width:none;height:100%}
     #characterDock{display:none;position:fixed;left:0;bottom:228px;height:64px;color:#d9f7ff;font-family:monospace;z-index:29;gap:8px}
+    /* Handle vertical entre los dos docks: drag horizontal para repartir espacio,
+       drag fuerte hasta el extremo oculta uno de los dos paneles. */
+    #dockSplitHandle{display:none;position:fixed;bottom:0;width:14px;z-index:31;cursor:ew-resize;align-items:center;justify-content:center;touch-action:none}
+    #dockSplitHandle.show{display:flex}
+    #dockSplitHandle .grip{width:4px;height:64px;border-radius:2px;background:rgba(120,243,255,.42);box-shadow:0 0 12px rgba(120,243,255,.22);transition:background .12s}
+    #dockSplitHandle:hover .grip,#dockSplitHandle.is-dragging .grip{background:#78f3ff}
+    #dockSplitHandle.near-snap .grip{background:#ffd866;box-shadow:0 0 18px rgba(255,216,102,.5)}
     #characterDock.show{display:flex}
     #characterDock.compose-start{display:flex;height:228px}
     #characterDock.hide-telegram{height:228px}
@@ -440,6 +449,7 @@
     <div class="char-actions" id="characterDockActions" aria-label="Acciones contextuales del tab activo"></div>
   </div>
 </div>
+<div id="dockSplitHandle" data-dock-split aria-label="Resize and hide bottom panels"><div class="grip"></div></div>
 <div id="telegramDock" aria-label="Telegram AdmiraXPBot">
   <div class="dock-resize-handle" data-dock-resize aria-hidden="true"></div>
   <div class="tg-pane send">
@@ -552,6 +562,10 @@ const AMIGA_PAGE0_TODO=['BUY SHIP','FIND BIGWHOOP','DEFEAT LECHUCK','MARRY ELAIN
 let amigaPage0Todo=AMIGA_PAGE0_TODO.slice();
 let amigaPage0TodoLoaded=false;
 let telegramDockHidden=false;
+// Reparto horizontal del bottom area entre telegramDock (izq) y characterDock (der).
+// 0..1: 0 = solo characterDock visible, 1 = solo telegramDock, 0.5 = mitad y mitad.
+let dockSplitRatio=parseFloat(localStorage.getItem('xtanco_dock_split')||'0.5');
+if(!Number.isFinite(dockSplitRatio)) dockSplitRatio=0.5;
 let characterDockFocus='clients';
 let telegramComposeStart=true;
 const DOCK_HEIGHT_KEY='admira_xp_dock_height';
@@ -770,8 +784,29 @@ function resizeCanvas(){
   const canvasRect=cv.getBoundingClientRect();
   const dockLeft=inGameplay?0:Math.max(0,Math.round(canvasRect.left));
   const dockWidth=inGameplay?vw:Math.max(0,Math.round(canvasRect.width));
+  // Reparto horizontal en composeStart segun dockSplitRatio (0..1).
+  // Snap a 0 → solo characterDock visible; snap a 1 → solo telegramDock.
+  const splitR=Math.max(0,Math.min(1,(typeof dockSplitRatio==='number')?dockSplitRatio:0.5));
+  const handleW=14;
+  const splitHandle=document.getElementById('dockSplitHandle');
+  const onlyTg=splitR>=0.97;
+  const onlyChar=splitR<=0.03;
   if(dock){
-    dock.style.width=(composeStart?Math.max(0,Math.floor((dockWidth-8)/2)):dockWidth)+'px';
+    let dockShown=true;
+    if(composeStart){
+      if(onlyChar){
+        dock.style.width='0px'; dockShown=false;
+        dock.style.display='none';
+      } else if(onlyTg){
+        dock.style.width=dockWidth+'px';
+      } else {
+        dock.style.width=Math.max(0,Math.floor(dockWidth*splitR - handleW/2))+'px';
+      }
+    } else {
+      dock.style.width=dockWidth+'px';
+    }
+    if(dockShown && composeStart) dock.style.display='';
+    if(!composeStart) dock.style.display='';
     dock.style.left=dockLeft+'px';
     if(inGameplay&&!telegramDockHidden) dock.style.height=dockH+'px';
     dock.style.top='auto';
@@ -779,13 +814,26 @@ function resizeCanvas(){
   }
   if(characterDock){
     if(composeStart){
-      const leftWidth=Math.max(0,Math.floor((dockWidth-8)/2));
-      const rightLeft=dockLeft+leftWidth+8;
-      characterDock.style.width=Math.max(0,dockWidth-leftWidth-8)+'px';
-      characterDock.style.left=rightLeft+'px';
-      characterDock.style.height=dockH+'px';
-      characterDock.style.top='auto';
-      characterDock.style.bottom='0px';
+      if(onlyTg){
+        characterDock.style.width='0px';
+        characterDock.style.display='none';
+      } else if(onlyChar){
+        characterDock.style.width=dockWidth+'px';
+        characterDock.style.left=dockLeft+'px';
+        characterDock.style.height=dockH+'px';
+        characterDock.style.top='auto';
+        characterDock.style.bottom='0px';
+        characterDock.style.display='';
+      } else {
+        const leftWidth=Math.max(0,Math.floor(dockWidth*splitR - handleW/2));
+        const rightLeft=dockLeft+leftWidth+handleW;
+        characterDock.style.width=Math.max(0,dockWidth-leftWidth-handleW)+'px';
+        characterDock.style.left=rightLeft+'px';
+        characterDock.style.height=dockH+'px';
+        characterDock.style.top='auto';
+        characterDock.style.bottom='0px';
+        characterDock.style.display='';
+      }
     } else {
       characterDock.style.width=dockWidth+'px';
       characterDock.style.left=dockLeft+'px';
@@ -793,6 +841,27 @@ function resizeCanvas(){
       else characterDock.style.removeProperty('height');
       characterDock.style.removeProperty('top');
       characterDock.style.bottom=(inGameplay&&!telegramDockHidden?dockH:0)+'px';
+      characterDock.style.display='';
+    }
+  }
+  // Posicionar el handle entre los dos paneles cuando hay reparto activo.
+  if(splitHandle){
+    if(composeStart && !onlyTg && !onlyChar){
+      const leftWidth=Math.max(0,Math.floor(dockWidth*splitR - handleW/2));
+      splitHandle.style.left=(dockLeft+leftWidth)+'px';
+      splitHandle.style.width=handleW+'px';
+      splitHandle.style.height=dockH+'px';
+      splitHandle.style.bottom='0px';
+      splitHandle.classList.add('show');
+    } else if(composeStart){
+      // En modo solo-uno, dejar el handle pegado al borde para poder arrastrarlo de vuelta.
+      splitHandle.style.left=(onlyChar?(dockLeft+2):(dockLeft+dockWidth-handleW-2))+'px';
+      splitHandle.style.width=handleW+'px';
+      splitHandle.style.height=dockH+'px';
+      splitHandle.style.bottom='0px';
+      splitHandle.classList.add('show');
+    } else {
+      splitHandle.classList.remove('show');
     }
   }
   const tb=document.getElementById('topBar');
@@ -838,6 +907,71 @@ function setupDockResizers(){
   });
 }
 setupDockResizers();
+
+// Handle horizontal entre los dos docks (split izq/der).
+// Drag a los extremos (<3% / >97%) oculta uno de los dos paneles.
+function setupDockSplitHandle(){
+  const handle=document.getElementById('dockSplitHandle');
+  if(!handle) return;
+  let drag=null;
+  const move=e=>{
+    if(!drag) return;
+    e.preventDefault();
+    const x=e.clientX!=null?e.clientX:(e.touches&&e.touches[0]?e.touches[0].clientX:drag.x);
+    const dockLeft=drag.dockLeft;
+    const dockWidth=Math.max(1,drag.dockWidth);
+    let r=(x-dockLeft)/dockWidth;
+    r=Math.max(0,Math.min(1,r));
+    dockSplitRatio=r;
+    if(r<=0.05||r>=0.95) handle.classList.add('near-snap');
+    else handle.classList.remove('near-snap');
+    resizeCanvas();
+  };
+  const end=e=>{
+    if(!drag) return;
+    if(e) e.preventDefault();
+    handle.classList.remove('is-dragging');
+    handle.classList.remove('near-snap');
+    // Snap a 0 o 1 si esta cerca del extremo, o vuelve a 0.5 si rebaja del snap.
+    if(dockSplitRatio<=0.05) dockSplitRatio=0;
+    else if(dockSplitRatio>=0.95) dockSplitRatio=1;
+    try{localStorage.setItem('xtanco_dock_split',String(dockSplitRatio));}catch(err){}
+    resizeCanvas();
+    drag=null;
+    document.removeEventListener('pointermove',move);
+    document.removeEventListener('pointerup',end);
+    document.removeEventListener('pointercancel',end);
+  };
+  handle.addEventListener('pointerdown',e=>{
+    if(!isGameplayUiState(state)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    handle.classList.add('is-dragging');
+    const cv=document.getElementById('c');
+    const cvRect=cv.getBoundingClientRect();
+    const inGameplay=isGameplayUiState(state);
+    const dockLeft=inGameplay?0:Math.max(0,Math.round(cvRect.left));
+    const dockWidth=inGameplay?window.innerWidth:Math.max(0,Math.round(cvRect.width));
+    drag={x:e.clientX,dockLeft,dockWidth,r:dockSplitRatio};
+    // Si estabamos en estado snap (0 o 1), arrancar desde 0.5 al primer drag.
+    if(dockSplitRatio<=0||dockSplitRatio>=1){
+      dockSplitRatio=0.5;
+      resizeCanvas();
+    }
+    try{handle.setPointerCapture(e.pointerId);}catch(err){}
+    document.addEventListener('pointermove',move,{passive:false});
+    document.addEventListener('pointerup',end,{passive:false});
+    document.addEventListener('pointercancel',end,{passive:false});
+  });
+  // Doble-click reset 50/50.
+  handle.addEventListener('dblclick',e=>{
+    e.preventDefault();
+    dockSplitRatio=0.5;
+    try{localStorage.setItem('xtanco_dock_split',String(dockSplitRatio));}catch(err){}
+    resizeCanvas();
+  });
+}
+setupDockSplitHandle();
 
 function setupClientColumnResizers(){
   const panelBody=document.getElementById('characterPanelBody');
