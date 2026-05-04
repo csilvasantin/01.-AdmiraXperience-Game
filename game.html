@@ -28,6 +28,8 @@
     .btn-telegram{background:linear-gradient(180deg,#145c39,#092a1d);color:#bfffd9;border:1px solid #55dc88 !important}
     .btn-edit{background:linear-gradient(180deg,#41325f,#1d1730);color:#dec8ff;border:1px solid #a991ff !important}
     .btn-menu{background:linear-gradient(180deg,#6a4618,#2b1a08);color:#ffe0a0;border:1px solid #f0bd55 !important}
+    .btn-quit{background:linear-gradient(180deg,#7a1818,#2c0606);color:#ffd0d0;border:1px solid #ff5e5e !important;font-weight:bold;letter-spacing:.04em}
+    .btn-quit:hover{background:linear-gradient(180deg,#a02020,#3a0808);color:#fff}
     #speechOverlay{display:none;position:fixed;left:0;top:0;width:100vw;height:100vh;pointer-events:none;z-index:8}
     .speech-bubble{position:fixed;border:1px solid #8a7a60;border-radius:4px;background:#ffffffe8;color:#4a3a20;font-family:monospace;font-weight:bold;letter-spacing:0;white-space:pre-wrap;overflow-wrap:anywhere;box-shadow:0 8px 18px rgba(0,0,0,.22)}
     .speech-bubble.is-emphasis{box-shadow:0 0 0 1px currentColor,0 10px 22px rgba(0,0,0,.24)}
@@ -330,8 +332,7 @@
   <div class="comp-box" style="border-color:#333399"><span class="comp-name">BAT</span><span class="comp-pct" id="compBAT">0%</span></div>
   <div class="spacer"></div>
   <button class="btn-telegram" id="btnTelegram">Telegram</button>
-  <button class="btn-edit" id="btnEdit">✏ Edit</button>
-  <button class="btn-menu" id="btnMenu">☰ Menu</button>
+  <button class="btn-quit" id="btnQuit" title="Cerrar audios y videos, volver al menú principal">⏻ Quit</button>
 </div>
 <div id="topBarSub" style="display:none;position:fixed;z-index:15;display:flex;flex-direction:column;align-items:flex-end;gap:2px;pointer-events:none">
   <div id="empMonthBadge" style="display:none;padding:2px 8px;border-radius:3px;background:#2a1a08;border:1px solid #cc9900;font-family:monospace;font-size:9px;font-weight:bold;color:#ffd700;text-align:center;white-space:nowrap">🏆 <span id="empMonthName"></span></div>
@@ -2519,18 +2520,17 @@ function drawLiveCamScreen(vW,vH){
 const bbEl=document.getElementById('topBar');
 document.getElementById('btnSave').onclick=()=>{if(G)doAction('save');};
 document.getElementById('btnTelegram').onclick=()=>{if(window.toggleTelegramDock) window.toggleTelegramDock();};
-document.getElementById('btnEdit').onclick=()=>{if(G)doAction('editor');};
-document.getElementById('btnMenu').onclick=()=>{if(G)doAction('menu');};
+document.getElementById('btnQuit').onclick=()=>{doAction('quit');};
 document.getElementById('btnSite').onclick=()=>{window.open('https://csilvasantin.github.io/omnipublicity/','_blank','noopener');};
 (function(){var v=document.getElementById('btnSiteVer');if(v){var raw=(window.XTANCO_APP&&window.XTANCO_APP.version)||'';var m=raw.match(/v[\d.]+/i);v.textContent=m?m[0]:(raw||'v—');}})();
 updateLiveCamButtonUi();
 
-// ── Position topBarSub always anchored below Edit/Menu/Quit buttons ──
+// ── Position topBarSub always anchored below the rightmost topBar button (Quit) ──
 function repositionTopBarSub(){
   const subBar=document.getElementById('topBarSub');
-  const menuBtn=document.getElementById('btnMenu');
-  if(!subBar||!menuBtn) return;
-  const mr=menuBtn.getBoundingClientRect();
+  const anchor=document.getElementById('btnQuit')||document.getElementById('btnTelegram');
+  if(!subBar||!anchor) return;
+  const mr=anchor.getBoundingClientRect();
   subBar.style.top=(mr.bottom+2)+'px';
   subBar.style.right=(window.innerWidth-mr.right)+'px';
 }
@@ -18433,6 +18433,16 @@ window.xtAPI = (function(){
           :((typeof LIVE_CAM!=='undefined'&&LIVE_CAM&&LIVE_CAM.active)?'ON':'OFF'),
         command:'/livecam',
         active:!!(typeof LIVE_CAM!=='undefined'&&LIVE_CAM&&LIVE_CAM.active)
+      },
+      {
+        label:'✏ Edit',
+        status:isEs?'editor':'editor',
+        customAction:'editor'
+      },
+      {
+        label:'☰ Menu',
+        status:isEs?'panel':'panel',
+        customAction:'menu'
       }
     ];
   }
@@ -20662,6 +20672,8 @@ window.xtAPI = (function(){
         try{if(typeof SFX!=='undefined'&&SFX.marioCoin)SFX.marioCoin();}catch(err){}
         const kind=action.getAttribute('data-quick-action');
         if(kind==='signage'&&typeof toggleSignagePanel==='function') toggleSignagePanel();
+        else if(kind==='editor'&&typeof doAction==='function'&&G) doAction('editor');
+        else if(kind==='menu'&&typeof doAction==='function'&&G) doAction('menu');
         return;
       }
       const button=e.target.closest('[data-quick-command]');
