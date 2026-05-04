@@ -25,9 +25,6 @@
     .comp-name{font-size:6px;color:#8db0b9;text-transform:uppercase;letter-spacing:0.5px}
     .comp-pct{font-size:10px;font-weight:bold;color:#eee}
     .btn-save{background:linear-gradient(180deg,#1d7f45,#0c3c24);color:#d8ffe8;border:1px solid #58ff97 !important}
-    .btn-livecam{background:linear-gradient(180deg,#5e1123,#2a0811);color:#ffd8df;border:1px solid #ff6f9a !important}
-    .btn-livecam.is-active{background:linear-gradient(180deg,#18613f,#0a2b1b);color:#ddffe7;border-color:#6ef0a2 !important}
-    .btn-livecam.is-busy{background:linear-gradient(180deg,#6a5322,#2c220b);color:#ffefb7;border-color:#f3c55a !important}
     .btn-telegram{background:linear-gradient(180deg,#145c39,#092a1d);color:#bfffd9;border:1px solid #55dc88 !important}
     .btn-edit{background:linear-gradient(180deg,#41325f,#1d1730);color:#dec8ff;border:1px solid #a991ff !important}
     .btn-menu{background:linear-gradient(180deg,#6a4618,#2b1a08);color:#ffe0a0;border:1px solid #f0bd55 !important}
@@ -331,7 +328,6 @@
   <div class="comp-box" style="border-color:#cc2222"><span class="comp-name">JTI</span><span class="comp-pct" id="compJTI">0%</span></div>
   <div class="comp-box" style="border-color:#2266aa"><span class="comp-name">PM</span><span class="comp-pct" id="compPM">0%</span></div>
   <div class="comp-box" style="border-color:#333399"><span class="comp-name">BAT</span><span class="comp-pct" id="compBAT">0%</span></div>
-  <button class="btn-livecam" id="btnLiveCam">📷 LiveCam</button>
   <div class="spacer"></div>
   <button class="btn-telegram" id="btnTelegram">Telegram</button>
   <button class="btn-edit" id="btnEdit">✏ Edit</button>
@@ -2522,7 +2518,6 @@ function drawLiveCamScreen(vW,vH){
 // ── HTML BOTTOM BAR — wiring ─────────────────────────────────
 const bbEl=document.getElementById('topBar');
 document.getElementById('btnSave').onclick=()=>{if(G)doAction('save');};
-document.getElementById('btnLiveCam').onclick=()=>{toggleLiveCam().catch(()=>{});};
 document.getElementById('btnTelegram').onclick=()=>{if(window.toggleTelegramDock) window.toggleTelegramDock();};
 document.getElementById('btnEdit').onclick=()=>{if(G)doAction('editor');};
 document.getElementById('btnMenu').onclick=()=>{if(G)doAction('menu');};
@@ -15597,7 +15592,10 @@ function syncDockLanguage(){
   const sendBtn=document.getElementById('telegramSendBtn');
   const hideBtn=document.getElementById('telegramHideBtn');
   if(sendBtn) sendBtn.textContent=isEs?'Enviar':'Send';
-  if(hideBtn) hideBtn.textContent=telegramDockHidden?(isEs?'Mostrar':'Show'):(isEs?'Ocultar':'Hide');
+  if(hideBtn){
+    const qHidden=!!(window.isQuickActionsHidden&&window.isQuickActionsHidden());
+    hideBtn.textContent=qHidden?(isEs?'Mostrar':'Show'):(isEs?'Ocultar':'Hide');
+  }
   const connStatus=document.getElementById('telegramConnStatus');
   const telegramCardStatus=document.getElementById('telegramCardStatus');
   const grokCardStatus=document.getElementById('grokCardStatus');
@@ -18427,6 +18425,14 @@ window.xtAPI = (function(){
         status:socioActive?(isEs?'+1 más':'add 1 more'):(isEs?'invitar':'invite'),
         command:'/socio on',
         active:socioActive
+      },
+      {
+        label:'📷 LiveCam',
+        status:(typeof LIVE_CAM!=='undefined'&&LIVE_CAM&&LIVE_CAM.requesting)
+          ?(isEs?'pidiendo…':'requesting…')
+          :((typeof LIVE_CAM!=='undefined'&&LIVE_CAM&&LIVE_CAM.active)?'ON':'OFF'),
+        command:'/livecam',
+        active:!!(typeof LIVE_CAM!=='undefined'&&LIVE_CAM&&LIVE_CAM.active)
       }
     ];
   }
@@ -20289,7 +20295,6 @@ window.xtAPI = (function(){
 
   function setTelegramDockHidden(active){
     telegramDockHidden=!!active;
-    if(hideBtn) hideBtn.textContent=telegramDockHidden?(lang==='es'?'Mostrar':'Show'):(lang==='es'?'Ocultar':'Hide');
     if(telegramBtn){
       telegramBtn.textContent=telegramDockHidden?'Telegram OFF':'Telegram ON';
       telegramBtn.style.opacity=telegramDockHidden?'0.75':'1';
@@ -20297,6 +20302,16 @@ window.xtAPI = (function(){
     resizeCanvas();
     renderQuickActionButtons();
   }
+
+  // Estado del grid 4x3 de acciones rápidas (botón Ocultar/Mostrar del dock)
+  let quickActionsHidden=false;
+  function setQuickActionsHidden(active){
+    quickActionsHidden=!!active;
+    if(quickActionsEl) quickActionsEl.style.display=quickActionsHidden?'none':'';
+    if(hideBtn) hideBtn.textContent=quickActionsHidden?(lang==='es'?'Mostrar':'Show'):(lang==='es'?'Ocultar':'Hide');
+  }
+  // Exponer estado para que la función i18n pueda reflejarlo al cambiar idioma
+  window.isQuickActionsHidden=()=>quickActionsHidden;
 
   function openCharacterDockDetail(target){
     if(!target||!G||!(target instanceof Element)) return;
@@ -20401,7 +20416,7 @@ window.xtAPI = (function(){
     else commandHelp();
   });
   bindDockButton(statusBtn,()=>{marioBeep();sendComposerText('/status');});
-  bindDockButton(hideBtn,()=>{marioBeep();setTelegramDockHidden(!telegramDockHidden);});
+  bindDockButton(hideBtn,()=>{marioBeep();setQuickActionsHidden(!quickActionsHidden);});
   bindDockButton(signageBtn,()=>{marioBeep();toggleSignagePanel();});
   if(signagePanel){
     signagePanel.addEventListener('dragstart',e=>{
@@ -20662,7 +20677,7 @@ window.xtAPI = (function(){
       sendComposerText(cmdRaw);
     });
   }
-  if(hideBtn) hideBtn.textContent=telegramDockHidden?(lang==='es'?'Mostrar':'Show'):(lang==='es'?'Ocultar':'Hide');
+  if(hideBtn) hideBtn.textContent=quickActionsHidden?(lang==='es'?'Mostrar':'Show'):(lang==='es'?'Ocultar':'Hide');
   if(telegramBtn){
     telegramBtn.textContent=telegramDockHidden?'Telegram OFF':'Telegram ON';
     window.toggleTelegramDock=()=>setTelegramDockHidden(!telegramDockHidden);
