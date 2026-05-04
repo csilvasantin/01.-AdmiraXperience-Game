@@ -1219,15 +1219,46 @@ function dsApplyAudioForPins(){
     else if(typeof applyDSAudioRouting==='function') applyDSAudioRouting();
   }catch(e){}
 }
+// Guarda los valores previos para restaurar al desactivar el master mute.
+let _dsMutePrev={sfxVolume:null,bgMusicPaused:false};
 function setMasterMute(on){
+  const wasOn=dsMasterMute;
   dsMasterMute=!!on;
-  try{ if(typeof bgMusic!=='undefined') bgMusic.muted=dsMasterMute; }catch(e){}
-  try{ if(typeof homeMusicMuted!=='undefined' && dsMasterMute && typeof stopHomeMusic==='function') stopHomeMusic(); }catch(e){}
+  // Background music: en lugar de solo mutar, pausar (asi tampoco consume).
+  try{
+    if(typeof bgMusic!=='undefined'){
+      bgMusic.muted=dsMasterMute;
+      if(dsMasterMute){
+        _dsMutePrev.bgMusicPaused=!!bgMusic.paused;
+        if(!bgMusic.paused) bgMusic.pause();
+      } else if(wasOn && !_dsMutePrev.bgMusicPaused){
+        bgMusic.play().catch(()=>{});
+      }
+    }
+  }catch(e){}
+  // Home music (ERA/MENU intro)
+  try{ if(dsMasterMute && typeof stopHomeMusic==='function') stopHomeMusic(); }catch(e){}
+  // Boot video
   try{ if(typeof bootVideoEl!=='undefined') bootVideoEl.muted=dsMasterMute; }catch(e){}
+  // SFX: el usuario quiere que mute todo, incluidos efectos (cash register,
+  // marioCoin, voteHappy, eventChime, etc.). G.sfxVolume>0 → suenan.
+  try{
+    if(typeof G!=='undefined' && G){
+      if(dsMasterMute){
+        if(_dsMutePrev.sfxVolume===null) _dsMutePrev.sfxVolume=G.sfxVolume;
+        G.sfxVolume=0;
+      } else if(wasOn && _dsMutePrev.sfxVolume!==null){
+        G.sfxVolume=_dsMutePrev.sfxVolume;
+        _dsMutePrev.sfxVolume=null;
+      }
+    }
+  }catch(e){}
+  // Per-surface videos (incluye los pineados): cede al control de pin si no master mute.
   dsApplyAudioForPins();
+  // Iframes AdmiraTube
   if(typeof DS_DISPLAYS!=='undefined' && typeof sendAdmiraTubeCommand==='function'){
     DS_DISPLAYS.forEach((display,idx)=>{
-      try{ if(dsMasterMute) sendAdmiraTubeCommand(idx,'mute'); }catch(e){}
+      try{ if(dsMasterMute) sendAdmiraTubeCommand(idx,'mute'); else sendAdmiraTubeCommand(idx,'unMute'); }catch(e){}
     });
   }
   return dsMasterMute;
@@ -20588,7 +20619,9 @@ window.xtAPI = (function(){
       if(!row) return;
       dsDragSrcIdx=Number(row.getAttribute('data-signage-play'));
       dsDragging=true;
-      try{ e.dataTransfer.effectAllowed='move'; e.dataTransfer.setData('text/plain',String(dsDragSrcIdx)); }catch(err){}
+      const name=VIDEO_LIST[dsDragSrcIdx];
+      console.log('[DS-DROP dragstart]',{idx:dsDragSrcIdx,name});
+      try{ e.dataTransfer.effectAllowed='copyMove'; e.dataTransfer.setData('text/plain',String(dsDragSrcIdx)); }catch(err){}
       row.classList.add('is-dragging');
     });
     signagePanel.addEventListener('dragover',e=>{
@@ -20781,6 +20814,44 @@ window.xtAPI = (function(){
       }
       renderSignagePanel();
     });
+    // Listener redundante sobre el game canvas (#c) — algunos navegadores no
+    // propagan el drop hasta window cuando se suelta sobre <canvas>. Estos
+    // handlers garantizan la captura en el target mas comun.
+    const gameCanvas=document.getElementById('c');
+    if(gameCanvas){
+      gameCanvas.addEventListener('dragover',e=>{
+        if(dsDragSrcIdx<0) return;
+        if(typeof dsSurfaceAtClientPoint!=='function') return;
+        const sid=dsSurfaceAtClientPoint(e.clientX,e.clientY);
+        if(!sid){ dsHighlightCanvasSurface(null); return; }
+        e.preventDefault();
+        try{ if(e.dataTransfer) e.dataTransfer.dropEffect='copy'; }catch(err){}
+        dsHighlightCanvasSurface(sid);
+      });
+      gameCanvas.addEventListener('drop',e=>{
+        if(dsDragSrcIdx<0) return;
+        if(typeof dsSurfaceAtClientPoint!=='function') return;
+        const sid=dsSurfaceAtClientPoint(e.clientX,e.clientY);
+        if(!sid){ dsHighlightCanvasSurface(null); return; }
+        e.preventDefault(); e.stopPropagation();
+        const name=VIDEO_LIST[dsDragSrcIdx];
+        dsDragSrcIdx=-1; dsDragging=false;
+        dsHighlightCanvasSurface(null);
+        const url=(typeof VIDEO_FILES!=='undefined')?VIDEO_FILES[name]:null;
+        const isImport=!!(typeof DS_IMPORT!=='undefined' && DS_IMPORT.KIND && DS_IMPORT.KIND[name]);
+        console.log('[DS-DROP canvas-direct]',{sid,name,hasUrl:!!url,url,isImport});
+        if(typeof dsPinSurface==='function' && name){
+          const ok=dsPinSurface(sid,name);
+          if(ok && typeof showEv==='function') showEv('📌 '+name+' → '+(typeof dsSurfaceLabel==='function'?dsSurfaceLabel(sid):sid),'#ffd866');
+          else if(!ok){
+            const why=!url?'sin media file':(isImport?'import sin kind':'kind no detectable');
+            if(typeof showEv==='function') showEv('⚠️ No se pudo fijar: '+why+' ('+name+')','#ff8866');
+            if(typeof appendTelegramLog==='function') appendTelegramLog('err','DS-DROP','canvas-direct='+sid+' clip="'+name+'" why='+why);
+          }
+        }
+        renderSignagePanel();
+      });
+    }
     signagePanel.addEventListener('click',e=>{
       // Delete clip — boton × en cada fila de la playlist, con confirmacion
       const delBtn=e.target.closest('[data-signage-delete]');
