@@ -25,7 +25,6 @@
     .comp-name{font-size:6px;color:#8db0b9;text-transform:uppercase;letter-spacing:0.5px}
     .comp-pct{font-size:10px;font-weight:bold;color:#eee}
     .btn-save{background:linear-gradient(180deg,#1d7f45,#0c3c24);color:#d8ffe8;border:1px solid #58ff97 !important}
-    .btn-cli{background:linear-gradient(180deg,#17495a,#0b2531);color:#b9f8ff;border:1px solid #48d5ed !important}
     .btn-livecam{background:linear-gradient(180deg,#5e1123,#2a0811);color:#ffd8df;border:1px solid #ff6f9a !important}
     .btn-livecam.is-active{background:linear-gradient(180deg,#18613f,#0a2b1b);color:#ddffe7;border-color:#6ef0a2 !important}
     .btn-livecam.is-busy{background:linear-gradient(180deg,#6a5322,#2c220b);color:#ffefb7;border-color:#f3c55a !important}
@@ -334,7 +333,6 @@
   <div class="comp-box" style="border-color:#333399"><span class="comp-name">BAT</span><span class="comp-pct" id="compBAT">0%</span></div>
   <button class="btn-livecam" id="btnLiveCam">📷 LiveCam</button>
   <div class="spacer"></div>
-  <button class="btn-cli" id="btnCLI">&gt; CLI</button>
   <button class="btn-telegram" id="btnTelegram">Telegram</button>
   <button class="btn-edit" id="btnEdit">✏ Edit</button>
   <button class="btn-menu" id="btnMenu">☰ Menu</button>
@@ -2524,7 +2522,6 @@ function drawLiveCamScreen(vW,vH){
 // ── HTML BOTTOM BAR — wiring ─────────────────────────────────
 const bbEl=document.getElementById('topBar');
 document.getElementById('btnSave').onclick=()=>{if(G)doAction('save');};
-document.getElementById('btnCLI').onclick=()=>{if(window.toggleCliDock) window.toggleCliDock();};
 document.getElementById('btnLiveCam').onclick=()=>{toggleLiveCam().catch(()=>{});};
 document.getElementById('btnTelegram').onclick=()=>{if(window.toggleTelegramDock) window.toggleTelegramDock();};
 document.getElementById('btnEdit').onclick=()=>{if(G)doAction('editor');};
@@ -18206,7 +18203,6 @@ window.xtAPI = (function(){
   const signagePanel=document.getElementById('telegramSignagePanel');
   let signageRefreshInterval=null;
   const quickActionsEl=document.getElementById('telegramQuickActions');
-  const cliBtn=document.getElementById('btnCLI');
   const telegramBtn=document.getElementById('btnTelegram');
   const characterDock=document.getElementById('characterDock');
   const teamFocusBtn=document.getElementById('characterTeamFocusBtn');
@@ -20294,10 +20290,6 @@ window.xtAPI = (function(){
   function setTelegramDockHidden(active){
     telegramDockHidden=!!active;
     if(hideBtn) hideBtn.textContent=telegramDockHidden?(lang==='es'?'Mostrar':'Show'):(lang==='es'?'Ocultar':'Hide');
-    if(cliBtn){
-      cliBtn.textContent=telegramDockHidden?'> CLI':'v CLI';
-      cliBtn.style.opacity=telegramDockHidden?'0.75':'1';
-    }
     if(telegramBtn){
       telegramBtn.textContent=telegramDockHidden?'Telegram OFF':'Telegram ON';
       telegramBtn.style.opacity=telegramDockHidden?'0.75':'1';
@@ -20671,13 +20663,11 @@ window.xtAPI = (function(){
     });
   }
   if(hideBtn) hideBtn.textContent=telegramDockHidden?(lang==='es'?'Mostrar':'Show'):(lang==='es'?'Ocultar':'Hide');
-  if(cliBtn){
-    cliBtn.textContent=telegramDockHidden?'> CLI':'v CLI';
-    window.toggleCliDock=()=>setTelegramDockHidden(!telegramDockHidden);
-  }
   if(telegramBtn){
     telegramBtn.textContent=telegramDockHidden?'Telegram OFF':'Telegram ON';
     window.toggleTelegramDock=()=>setTelegramDockHidden(!telegramDockHidden);
+    // Alias para compat con código que aún llame a toggleCliDock
+    window.toggleCliDock=window.toggleTelegramDock;
   }
   setTelegramFocusMode(false,false);
   renderQuickActionButtons();
