@@ -448,7 +448,7 @@
 <div id="telegramDock" aria-label="Telegram AdmiraXPBot">
   <div class="dock-resize-handle" data-dock-resize aria-hidden="true"></div>
   <div class="tg-pane send">
-    <div class="tg-head"><span>Control de la Store desde Telegram / WhatsApp</span><span style="display:flex;align-items:center;gap:6px"><a class="tg-site-link" id="dockSiteLink" href="https://csilvasantin.github.io/omnipublicity/" target="_blank" rel="noopener" title="Abrir OmniPublicity — modulo programatico del Xpace OS">↗ SITE <span class="tg-site-ver" id="dockSiteVer">v—</span></a><span class="tg-status" id="telegramSendStatus">AdmiraXPBot</span></span></div>
+    <div class="tg-head"><span>Control de la Store desde Telegram / WhatsApp</span><a class="tg-site-link" id="dockSiteLink" href="https://csilvasantin.github.io/omnipublicity/" target="_blank" rel="noopener" title="Abrir OmniPublicity — modulo programatico del Xpace OS">↗ SITE <span class="tg-site-ver" id="dockSiteVer">v—</span></a><span class="tg-status" id="telegramSendStatus" style="display:none">AdmiraXPBot</span></div>
     <div id="telegramHelpPanel" aria-label="Comandos disponibles"></div>
     <div id="telegramSignagePanel" aria-label="Playlist Digital Signage"></div>
     <textarea id="telegramComposer" placeholder="Write to @AdmiraXPBot... Enter sends, Shift+Enter newline"></textarea>
@@ -20591,11 +20591,18 @@ window.xtAPI = (function(){
       if(card){
         e.preventDefault(); e.stopPropagation();
         const sid=card.getAttribute('data-pin-target');
+        const url=(typeof VIDEO_FILES!=='undefined')?VIDEO_FILES[srcName]:null;
+        const isImport=!!(typeof DS_IMPORT!=='undefined' && DS_IMPORT.KIND && DS_IMPORT.KIND[srcName]);
+        console.log('[DS-DROP card]',{sid,srcName,hasUrl:!!url,url,isImport,kind:isImport?DS_IMPORT.KIND[srcName]:null});
         const ok=(typeof dsPinSurface==='function') ? dsPinSurface(sid,srcName) : false;
         dsDragging=false; dsDragSrcIdx=-1;
         dsClearDropIndicators();
-        if(ok && typeof showEv==='function') showEv('📌 '+srcName+' fijado en '+dsSurfaceLabel(sid),'#ffd866');
-        else if(!ok && typeof showEv==='function') showEv('No se pudo fijar (item sin media file)','#ff8866');
+        if(ok && typeof showEv==='function') showEv('📌 '+srcName+' → '+dsSurfaceLabel(sid),'#ffd866');
+        else if(!ok){
+          const why=!url?'sin media file':(isImport?'import sin kind':'kind no detectable');
+          if(typeof showEv==='function') showEv('⚠️ No se pudo fijar: '+why+' ('+srcName+')','#ff8866');
+          if(typeof appendTelegramLog==='function') appendTelegramLog('err','DS-DROP','card='+sid+' clip="'+srcName+'" why='+why+' url='+url);
+        }
         renderSignagePanel();
         return;
       }
@@ -20681,11 +20688,16 @@ window.xtAPI = (function(){
       const name=VIDEO_LIST[dsDragSrcIdx];
       dsDragSrcIdx=-1; dsDragging=false;
       dsHighlightCanvasSurface(null);
+      const url=(typeof VIDEO_FILES!=='undefined')?VIDEO_FILES[name]:null;
+      const isImport=!!(typeof DS_IMPORT!=='undefined' && DS_IMPORT.KIND && DS_IMPORT.KIND[name]);
+      console.log('[DS-DROP canvas]',{sid,name,hasUrl:!!url,url,isImport,kind:isImport?DS_IMPORT.KIND[name]:null});
       if(typeof dsPinSurface==='function' && name){
         const ok=dsPinSurface(sid,name);
-        if(typeof showEv==='function'){
-          if(ok) showEv((lang==='en'?'📌 ':'📌 ')+name+(lang==='en'?' pinned to ':' fijado en ')+(typeof dsSurfaceLabel==='function'?dsSurfaceLabel(sid):sid),'#ffd866');
-          else showEv(lang==='en'?'Could not pin (no media file)':'No se pudo fijar (item sin media file)','#ff8866');
+        if(ok && typeof showEv==='function') showEv('📌 '+name+(lang==='en'?' → ':' → ')+(typeof dsSurfaceLabel==='function'?dsSurfaceLabel(sid):sid),'#ffd866');
+        else if(!ok){
+          const why=!url?'sin media file':(isImport?'import sin kind':'kind no detectable');
+          if(typeof showEv==='function') showEv('⚠️ No se pudo fijar: '+why+' ('+name+')','#ff8866');
+          if(typeof appendTelegramLog==='function') appendTelegramLog('err','DS-DROP','canvas='+sid+' clip="'+name+'" why='+why+' url='+url);
         }
       }
       renderSignagePanel();
