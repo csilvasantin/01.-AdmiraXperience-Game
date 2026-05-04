@@ -17600,6 +17600,9 @@ window.xtAPI = (function(){
     }
     return {ok:true,value:parsed===null?!current:parsed};
   }
+  // Exponer al global para el segundo IIFE (Telegram bridge) que tiene su
+  // propio handler async de /livecam y /mocap que necesita esta utilidad.
+  window.resolveBinaryRequest=resolveBinaryRequest;
 
   function binaryResponse(label,on){
     return {ok:true,message:label+' '+(on?'ON':'OFF'),data:{on:!!on}};
@@ -18461,9 +18464,17 @@ window.xtAPI = (function(){
   }
 
   const characterDockActionsEl=document.getElementById('characterDockActions');
+  let lastCharacterDockActionsHtml='';
   function renderCharacterDockActions(focus){
     if(!characterDockActionsEl) return;
-    characterDockActionsEl.innerHTML=getCharacterTabActions(focus||'clients').map(buildQuickButtonHtml).join('');
+    // drawCharacterGroupsPanel runs cada frame (60fps): si re-creamos los
+    // botones cada vez, el click se pierde entre pointerdown y pointerup.
+    // Solo actualizamos el DOM cuando el HTML cambia de verdad.
+    const html=getCharacterTabActions(focus||'clients').map(buildQuickButtonHtml).join('');
+    if(html!==lastCharacterDockActionsHtml){
+      characterDockActionsEl.innerHTML=html;
+      lastCharacterDockActionsHtml=html;
+    }
   }
   window.renderCharacterDockActions=renderCharacterDockActions;
 
