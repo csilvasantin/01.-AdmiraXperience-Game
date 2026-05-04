@@ -1182,12 +1182,58 @@ function dsPinSurface(surfaceId,name){
   } else {
     m.img.removeAttribute('src');
     m.video.src=url;
+    m.video.volume=0.7;
+    try{ m.video.load&&m.video.load(); }catch(e){}
     try{ m.video.play().catch(()=>{}); }catch(e){}
   }
   DS_PIN[surfaceId]={name,kind};
   dsSavePins();
+  // El video pineado toma el control del audio: silencia la rotacion global
+  // (dsVideoEl) y desmutea m.video, salvo que el master este en mute total.
+  if(typeof dsApplyAudioForPins==='function') dsApplyAudioForPins();
   return true;
 }
+// Master mute global: cuando esta activo, silencia bgMusic, dsVideoEl, todos los
+// m.video pineados y los iframes de AdmiraTube. Se controla con /audio mute.
+let dsMasterMute=false;
+function dsAnyVideoPinActive(){
+  if(typeof DS_PIN!=='object') return false;
+  for(const sid in DS_PIN){
+    if(DS_PIN[sid] && DS_PIN[sid].kind==='video') return true;
+  }
+  return false;
+}
+function dsApplyAudioForPins(){
+  // Per-surface video audio: solo desmutea los pines kind=video (uno o varios).
+  // Si master mute esta on, todo silencio.
+  for(const id in DS_SURFACE_MEDIA){
+    const m=DS_SURFACE_MEDIA[id];
+    if(!m||!m.video) continue;
+    const pinned=DS_PIN[id]&&DS_PIN[id].kind==='video';
+    try{ m.video.muted=dsMasterMute || !pinned; }catch(e){}
+  }
+  // Si hay algun pin de video, la rotacion global cede el audio al pinado.
+  // Master mute fuerza dsVideoEl muted independientemente.
+  try{
+    if(dsMasterMute) { dsVideoEl.muted=true; dsVideoEl.volume=0; }
+    else if(dsAnyVideoPinActive()){ dsVideoEl.muted=true; dsVideoEl.volume=0; }
+    else if(typeof applyDSAudioRouting==='function') applyDSAudioRouting();
+  }catch(e){}
+}
+function setMasterMute(on){
+  dsMasterMute=!!on;
+  try{ if(typeof bgMusic!=='undefined') bgMusic.muted=dsMasterMute; }catch(e){}
+  try{ if(typeof homeMusicMuted!=='undefined' && dsMasterMute && typeof stopHomeMusic==='function') stopHomeMusic(); }catch(e){}
+  try{ if(typeof bootVideoEl!=='undefined') bootVideoEl.muted=dsMasterMute; }catch(e){}
+  dsApplyAudioForPins();
+  if(typeof DS_DISPLAYS!=='undefined' && typeof sendAdmiraTubeCommand==='function'){
+    DS_DISPLAYS.forEach((display,idx)=>{
+      try{ if(dsMasterMute) sendAdmiraTubeCommand(idx,'mute'); }catch(e){}
+    });
+  }
+  return dsMasterMute;
+}
+
 function dsUnpinSurface(surfaceId){
   const m=DS_SURFACE_MEDIA[surfaceId];
   if(m){
@@ -1197,6 +1243,9 @@ function dsUnpinSurface(surfaceId){
   }
   delete DS_PIN[surfaceId];
   dsSavePins();
+  // Despues de despinear, recalcular audio routing — si era el ultimo video
+  // pineado, la rotacion global recupera el audio.
+  if(typeof dsApplyAudioForPins==='function') dsApplyAudioForPins();
 }
 function dsSavePins(){
   try{ localStorage.setItem(DS_PIN_KEY,JSON.stringify(DS_PIN)); }catch(e){}
@@ -1919,7 +1968,8 @@ function renderDSCanvas(ctx,w,h,frame,displayIdx){
   // Per-surface pin override: if this physical screen is pinned to an imported item, render that.
   if(surfaceId && DS_PIN[surfaceId]){
     const m=DS_SURFACE_MEDIA[surfaceId];
-    if(m && dsDrawMediaCover(ctx,m,w,h)){
+    const drewMedia=m && dsDrawMediaCover(ctx,m,w,h);
+    if(drewMedia){
       ctx.globalAlpha=0.04;
       for(let y=0;y<h;y+=3){ctx.fillStyle='#fff';ctx.fillRect(0,y,w,1);}
       ctx.globalAlpha=1;
@@ -1933,6 +1983,16 @@ function renderDSCanvas(ctx,w,h,frame,displayIdx){
       }
       return;
     }
+    // Pin presente pero el media aun carga (readyState<2 / sin loadeddata).
+    // Mostrar placeholder en vez de caer a la rotacion global — asi el usuario
+    // sabe que el drag-drop si se aplico.
+    ctx.fillStyle='#000';ctx.fillRect(0,0,w,h);
+    ctx.fillStyle='#ffd866';ctx.font='bold 8px monospace';ctx.textAlign='center';
+    ctx.fillText('📌 '+DS_PIN[surfaceId].name,w/2,h/2-6);
+    ctx.fillStyle='#888';ctx.font='8px monospace';
+    const dots=['',' .',' ..',' ...'][Math.floor(frame/20)%4];
+    ctx.fillText((typeof lang!=='undefined'&&lang==='en'?'Loading':'Cargando')+dots,w/2,h/2+8);
+    return;
   }
   // If we have a video file playing, draw the video frame
   if(dsMode==='video' && dsVideoEl.readyState>=2 && !dsVideoEl.paused){
@@ -18048,7 +18108,28 @@ window.xtAPI = (function(){
       }
       if(['sfx','fx','efectos'].includes(cmd)) return runBinaryCommand('FX',arg,()=>!!(G&&G.sfxVolume>0),setSfxState,true);
       if(['ds','pantalla','video','signage','monitor'].includes(cmd)) return runBinaryCommand('Pantalla',arg,()=>!!(videoPlaying&&!videoPaused),setDSState,false);
-      if(['dsaudio','audio','monitoraudio'].includes(cmd)) return runBinaryCommand('Audio DS',arg,()=>!dsAudioMuted,setDSAudioState,false);
+      if(['dsaudio','audio','monitoraudio'].includes(cmd)){
+        const sub=String(arg||'').trim().toLowerCase();
+        // /audio mute (silencio total) y /audio unmute → controlan el master
+        // mute global. Si no, /audio on/off sigue afectando solo a la rotacion DS.
+        if(['mute','silencio','silenciar','silence','quiet','off-all','muteall'].includes(sub)){
+          if(typeof setMasterMute==='function') setMasterMute(true);
+          if(typeof showEv==='function') showEv('🔇 Audio total silenciado','#aaaaaa');
+          return {ok:true,message:'Audio total silenciado (master mute ON)',data:{masterMute:true}};
+        }
+        if(['unmute','desmutear','desilenciar','sound','sonido','on-all','sonar'].includes(sub)){
+          if(typeof setMasterMute==='function') setMasterMute(false);
+          if(typeof showEv==='function') showEv('🔊 Audio reactivado','#ffd866');
+          return {ok:true,message:'Audio reactivado (master mute OFF)',data:{masterMute:false}};
+        }
+        if(['toggle','flip'].includes(sub)){
+          const next=!(typeof dsMasterMute!=='undefined'&&dsMasterMute);
+          if(typeof setMasterMute==='function') setMasterMute(next);
+          if(typeof showEv==='function') showEv(next?'🔇 Audio total silenciado':'🔊 Audio reactivado',next?'#aaaaaa':'#ffd866');
+          return {ok:true,message:(next?'Master mute ON':'Master mute OFF'),data:{masterMute:next}};
+        }
+        return runBinaryCommand('Audio DS',arg,()=>!dsAudioMuted,setDSAudioState,false);
+      }
       if(['livecam','cam','camera','camara','cámara','webcam'].includes(cmd)) return {ok:false,message:'LiveCam requiere ejecución asíncrona. Usa /livecam en la consola o el botón superior.'};
       if(['mocap','novahmocap','motioncap','motioncapture'].includes(cmd)) return runBinaryCommand('Mocap Novah',arg,()=>!!LIVE_MOCAP.enabled,setLiveMocapEnabled,false);
       if(['luz','luces','lamp','lampara','lámpara','light'].includes(cmd)){
@@ -20191,6 +20272,7 @@ window.xtAPI = (function(){
       if(cmd==='door'||cmd==='puerta') return setDoorMode(arg);
       if(cmd==='lamp'||cmd==='luz') return api.command('/luz'+(arg?' '+arg:'')).message;
       if(cmd==='music'||cmd==='musica') return api.command('/music'+(arg?' '+arg:'')).message;
+      if(cmd==='audio'||cmd==='dsaudio'||cmd==='monitoraudio') return api.command('/audio'+(arg?' '+arg:'')).message;
       if(cmd==='next') return api.nextTrack().message;
       if(cmd==='prev') return api.prevTrack().message;
       if(cmd==='save') return api.save().message;
