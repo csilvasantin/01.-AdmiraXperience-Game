@@ -403,7 +403,7 @@
 <div id="eraVerticalDock" aria-label="Selector inferior">
   <div class="evd-head">
     <div class="evd-head-left">
-      <strong id="evdTitle">ADMIRANEXT XP</strong>
+      <a id="evdTitle" href="https://csilvasantin.github.io/pixer-ai-content/v.2026.05.02-r35/audio.html" target="_blank" rel="noopener" style="font-weight:bold;color:inherit;text-decoration:none;border-bottom:1px dashed rgba(120,243,255,.35);transition:border-color .15s,color .15s" title="Pixer.ai · última versión">ADMIRANEXT XP</a>
       <span id="evdHint">Selecciona idioma antes de entrar</span>
     </div>
     <div class="evd-head-right">
@@ -4562,7 +4562,12 @@ function updateEraVerticalDock(){
   const show=state===S.ERA_SEL;
   eraVerticalDock.classList.toggle('show',show);
   const evdTitle=document.getElementById('evdTitle');
-  if(evdTitle) evdTitle.textContent='AdmiraNext XP · '+APP_VERSION;
+  if(evdTitle){
+    // Quitar el prefijo "AdmiraNext " del APP_VERSION para no repetir.
+    // El conjunto entero es un enlace a la última versión de Pixer.ai.
+    const ver=String(APP_VERSION||'').replace(/^AdmiraNext\s+/i,'');
+    evdTitle.textContent='AdmiraNext XP · '+ver;
+  }
   const evdHint=document.getElementById('evdHint');
   const grid=eraVerticalDock.querySelector('.evd-grid');
   if(show&&evdHint) evdHint.textContent=lang==='es'?'Selecciona idioma antes de entrar':'Choose language before entering';
