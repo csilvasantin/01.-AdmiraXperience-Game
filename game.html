@@ -115,6 +115,10 @@
     @keyframes socioPulse{0%,100%{box-shadow:0 0 6px rgba(255,126,182,.3)}50%{box-shadow:0 0 16px rgba(255,126,182,.7)}}
     .char-toggle-btn{border:1px solid #2a7585;border-radius:4px;background:#0c2a35;color:#bff7ff;font-family:monospace;font-size:8px;font-weight:bold;padding:1px 6px;cursor:pointer}
     .char-body{flex:1;padding:7px 8px;background:linear-gradient(180deg,#041019,#02080d);font-size:10px;line-height:1.3;color:#cceef5;display:flex;flex-direction:column;gap:2px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:#2a7585 #07131b}
+    .char-actions{flex:0 0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(86px,1fr));gap:4px;padding:5px 6px;background:linear-gradient(180deg,#06181f,#03101a);border-top:1px solid #14323c}
+    .char-actions:empty{display:none}
+    .char-actions .tg-quick-btn{min-height:32px}
+    @media (max-width:600px){.char-actions{grid-template-columns:repeat(2,minmax(0,1fr))}}
     .char-body::-webkit-scrollbar{width:8px}
     .char-body::-webkit-scrollbar-track{background:#07131b}
     .char-body::-webkit-scrollbar-thumb{background:#2a7585;border-radius:6px}
@@ -428,6 +432,7 @@
       <span class="char-status" id="characterPanelStatus">0 inside</span>
     </div>
     <div class="char-body" id="characterPanelBody"></div>
+    <div class="char-actions" id="characterDockActions" aria-label="Acciones contextuales del tab activo"></div>
   </div>
 </div>
 <div id="telegramDock" aria-label="Telegram AdmiraXPBot">
@@ -2201,6 +2206,18 @@ function stopAllMedia(){
     }
   });
   G&& (G.admiraTube=null);
+  // Cerrar el overlay de Pixer Feed y parar cualquier audio/video en el (autoplay)
+  const pixerOverlay=document.getElementById('pixerFeedOverlay');
+  if(pixerOverlay){
+    pixerOverlay.querySelectorAll('video,audio').forEach(el=>{
+      try{el.pause();}catch(e){}
+      try{el.removeAttribute('src');el.load&&el.load();}catch(e){}
+    });
+    pixerOverlay.classList.remove('visible');
+  }
+  if(typeof window.setPixerFeedVisible==='function'){
+    try{window.setPixerFeedVisible(false);}catch(e){}
+  }
 }
 
 function updateLiveCamButtonUi(){
@@ -15810,6 +15827,7 @@ function drawCharacterGroupsPanel(){
   // Si el usuario estaba en el tab Socios y ya no hay, caer en Clientes.
   if(characterDockFocus==='socios' && !showSocioTab) characterDockFocus='clients';
   const activePane=characterDockFocus==='team'?'team':characterDockFocus==='socios'?'socios':'clients';
+  if(typeof window.renderCharacterDockActions==='function') window.renderCharacterDockActions(activePane);
   dock.classList.toggle('focus-team',activePane==='team');
   if(teamFocusBtn) teamFocusBtn.classList.toggle('is-active',activePane==='team');
   if(clientFocusBtn) clientFocusBtn.classList.toggle('is-active',activePane==='clients');
@@ -18356,16 +18374,7 @@ window.xtAPI = (function(){
   function getQuickSceneActions(){
     const isEs=lang==='es';
     const hasGame=!!G;
-    const djStaff=hasGame&&G.staff?G.staff.find(s=>s.role===4):null;
-    const djActive=!!(djStaff&&djStaff.hired&&!djStaff.fired);
-    const thiefActive=hasGame&&isEntityActive(G.thief);
-    const guardiaActive=hasGame&&isEntityActive(G.guardiaCivil);
-    const opinadorActive=hasGame&&isEntityActive(G.opinador);
-    const robotActive=hasGame&&isEntityActive(G.unitreeBot);
     const liveActive=!!(hasGame&&G.admiraLiveMsg);
-    const loyaltyReady=!!(hasGame&&G.loyaltyCard&&(G.loyaltyCard.pending||G.loyaltyCard.targetId));
-    const sponsorActive=!!(hasGame&&G.custs&&G.custs.some(c=>c&&c.sponsor));
-    const socioActive=!!(hasGame&&G.custs&&G.custs.some(c=>c&&c.fanCustomerId));
     return [
       {
         label:'📺 Signage',
@@ -18373,58 +18382,10 @@ window.xtAPI = (function(){
         customAction:'signage'
       },
       {
-        label:'DJ Novah',
-        status:djActive?(isEs?'ON':'ON'):(isEs?'OFF':'OFF'),
-        command:'/dj',
-        active:djActive
-      },
-      {
-        label:isEs?'Ladrón':'Thief',
-        status:thiefActive?(isEs?'en tienda':'in store'):(isEs?'listo':'ready'),
-        command:'/ladron',
-        alert:thiefActive
-      },
-      {
-        label:'Guardia Civil',
-        status:guardiaActive?(isEs?'activo':'active'):(isEs?'fuera':'away'),
-        command:'/guardiacivil',
-        active:guardiaActive
-      },
-      {
-        label:isEs?'Opinador':'Reviewer',
-        status:opinadorActive?(isEs?'en ruta':'en route'):(isEs?'rápido':'quick'),
-        command:'/opinador',
-        active:opinadorActive
-      },
-      {
-        label:'Unitree Bot',
-        status:robotActive?(isEs?'en tienda':'in store'):'demo',
-        command:'/robot',
-        active:robotActive
-      },
-      {
         label:'AdmiraLive',
         status:liveActive?trimLabel(G.admiraLiveMsg,22):(isEs?'texto LED':'LED text'),
         command:liveActive?'/AdmiraLive off':'/AdmiraLive Bienvenidos a Admira XP',
         active:liveActive
-      },
-      {
-        label:isEs?'Fidelidad':'Loyalty',
-        status:loyaltyReady?(isEs?'preparada':'armed'):(isEs?'regalo':'gift'),
-        command:'/tarjetaFidelidad',
-        active:loyaltyReady
-      },
-      {
-        label:'🦆 Sponsor',
-        status:sponsorActive?(isEs?'+1 más':'add 1 more'):(isEs?'invitar':'invite'),
-        command:'/sponsor on',
-        active:sponsorActive
-      },
-      {
-        label:'❤️ Socio',
-        status:socioActive?(isEs?'+1 más':'add 1 more'):(isEs?'invitar':'invite'),
-        command:'/socio on',
-        active:socioActive
       },
       {
         label:'📷 LiveCam',
@@ -18447,22 +18408,64 @@ window.xtAPI = (function(){
     ];
   }
 
+  // Acciones contextuales por tab del characterDock (Equipo/Clientes/Socios)
+  function getCharacterTabActions(focus){
+    const isEs=lang==='es';
+    const hasGame=!!G;
+    if(focus==='team'){
+      const djStaff=hasGame&&G.staff?G.staff.find(s=>s.role===4):null;
+      const djActive=!!(djStaff&&djStaff.hired&&!djStaff.fired);
+      return [
+        {label:'DJ Novah',status:djActive?'ON':'OFF',command:'/dj',active:djActive}
+      ];
+    }
+    if(focus==='socios'){
+      const loyaltyReady=!!(hasGame&&G.loyaltyCard&&(G.loyaltyCard.pending||G.loyaltyCard.targetId));
+      const socioActive=!!(hasGame&&G.custs&&G.custs.some(c=>c&&c.fanCustomerId));
+      return [
+        {label:'❤️ Socio',status:socioActive?(isEs?'+1 más':'add 1 more'):(isEs?'invitar':'invite'),command:'/socio on',active:socioActive},
+        {label:isEs?'Fidelidad':'Loyalty',status:loyaltyReady?(isEs?'preparada':'armed'):(isEs?'regalo':'gift'),command:'/tarjetaFidelidad',active:loyaltyReady}
+      ];
+    }
+    // clients (default)
+    const thiefActive=hasGame&&isEntityActive(G.thief);
+    const guardiaActive=hasGame&&isEntityActive(G.guardiaCivil);
+    const opinadorActive=hasGame&&isEntityActive(G.opinador);
+    const robotActive=hasGame&&isEntityActive(G.unitreeBot);
+    const sponsorActive=!!(hasGame&&G.custs&&G.custs.some(c=>c&&c.sponsor));
+    return [
+      {label:isEs?'Ladrón':'Thief',status:thiefActive?(isEs?'en tienda':'in store'):(isEs?'listo':'ready'),command:'/ladron',alert:thiefActive},
+      {label:'Guardia Civil',status:guardiaActive?(isEs?'activo':'active'):(isEs?'fuera':'away'),command:'/guardiacivil',active:guardiaActive},
+      {label:isEs?'Opinador':'Reviewer',status:opinadorActive?(isEs?'en ruta':'en route'):(isEs?'rápido':'quick'),command:'/opinador',active:opinadorActive},
+      {label:'Unitree Bot',status:robotActive?(isEs?'en tienda':'in store'):'demo',command:'/robot',active:robotActive},
+      {label:'🦆 Sponsor',status:sponsorActive?(isEs?'+1 más':'add 1 more'):(isEs?'invitar':'invite'),command:'/sponsor on',active:sponsorActive}
+    ];
+  }
+
+  function buildQuickButtonHtml(action,idx){
+    const classes=['tg-quick-btn'];
+    if(action.active) classes.push('is-active');
+    if(action.alert) classes.push('is-alert');
+    const dataAttr=action.customAction
+      ? 'data-quick-action="'+action.customAction+'"'
+      : 'data-quick-command="'+String(action.command||'').replace(/"/g,'&quot;')+'"';
+    return '<button type="button" class="'+classes.join(' ')+'" '+dataAttr+' data-quick-idx="'+idx+'">'
+      +'<strong>'+action.label+'</strong>'
+      +'<span>'+action.status+'</span>'
+      +'</button>';
+  }
+
   function renderQuickActionButtons(){
     if(!quickActionsEl) return;
-    const actions=getQuickSceneActions();
-    quickActionsEl.innerHTML=actions.map((action,idx)=>{
-      const classes=['tg-quick-btn'];
-      if(action.active) classes.push('is-active');
-      if(action.alert) classes.push('is-alert');
-      const dataAttr=action.customAction
-        ? 'data-quick-action="'+action.customAction+'"'
-        : 'data-quick-command="'+String(action.command||'').replace(/"/g,'&quot;')+'"';
-      return '<button type="button" class="'+classes.join(' ')+'" '+dataAttr+' data-quick-idx="'+idx+'">'
-        +'<strong>'+action.label+'</strong>'
-        +'<span>'+action.status+'</span>'
-        +'</button>';
-    }).join('');
+    quickActionsEl.innerHTML=getQuickSceneActions().map(buildQuickButtonHtml).join('');
   }
+
+  const characterDockActionsEl=document.getElementById('characterDockActions');
+  function renderCharacterDockActions(focus){
+    if(!characterDockActionsEl) return;
+    characterDockActionsEl.innerHTML=getCharacterTabActions(focus||'clients').map(buildQuickButtonHtml).join('');
+  }
+  window.renderCharacterDockActions=renderCharacterDockActions;
 
   function appendTelegramLog(kind,label,text){
     if(!logEl) return;
@@ -20665,6 +20668,32 @@ window.xtAPI = (function(){
   }
   if(quickActionsEl){
     quickActionsEl.addEventListener('click',e=>{
+      const action=e.target.closest('[data-quick-action]');
+      if(action){
+        e.preventDefault();e.stopPropagation();
+        flashQuickBtn(action);
+        try{if(typeof SFX!=='undefined'&&SFX.marioCoin)SFX.marioCoin();}catch(err){}
+        const kind=action.getAttribute('data-quick-action');
+        if(kind==='signage'&&typeof toggleSignagePanel==='function') toggleSignagePanel();
+        else if(kind==='editor'&&typeof doAction==='function'&&G) doAction('editor');
+        else if(kind==='menu'&&typeof doAction==='function'&&G) doAction('menu');
+        return;
+      }
+      const button=e.target.closest('[data-quick-command]');
+      if(!button) return;
+      e.preventDefault();
+      e.stopPropagation();
+      flashQuickBtn(button);
+      try{if(typeof SFX!=='undefined'&&SFX.eventChime)SFX.eventChime();}catch(err){}
+      const cmdRaw=String(button.getAttribute('data-quick-command')||'').trim();
+      const labelEl=button.querySelector('strong');
+      const label=labelEl?labelEl.textContent.trim():cmdRaw;
+      if(typeof showEv==='function' && cmdRaw) showEv('💬 Enviado: '+label+' ('+cmdRaw+')','#bff7ff');
+      sendComposerText(cmdRaw);
+    });
+  }
+  if(characterDockActionsEl){
+    characterDockActionsEl.addEventListener('click',e=>{
       const action=e.target.closest('[data-quick-action]');
       if(action){
         e.preventDefault();e.stopPropagation();
