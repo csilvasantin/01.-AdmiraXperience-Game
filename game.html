@@ -20631,7 +20631,64 @@ window.xtAPI = (function(){
     signagePanel.addEventListener('dragend',()=>{
       dsDragging=false; dsDragSrcIdx=-1;
       dsClearDropIndicators();
+      dsHighlightCanvasSurface(null);
       signagePanel.querySelectorAll('.is-dragging').forEach(el=>el.classList.remove('is-dragging'));
+    });
+
+    // ── Drop sobre las pantallas del juego (canvas) — ds1, ds2, escaparate, metahuman.
+    // Reusa la deteccion de superficie ya existente para imports de archivos.
+    function dsHighlightCanvasSurface(sid){
+      const svg=document.getElementById('dsImportTargetSVG');
+      const poly=document.getElementById('dsImportTargetPoly');
+      if(!sid){
+        if(svg) svg.classList.remove('is-active');
+        return;
+      }
+      let clientQuad=null;
+      if(sid==='ds1'||sid==='ds2'){
+        const el=document.getElementById(sid==='ds1'?'videoMonitor':'videoMonitor2');
+        if(el){
+          const r=el.getBoundingClientRect();
+          clientQuad=[{x:r.left,y:r.top},{x:r.right,y:r.top},{x:r.right,y:r.bottom},{x:r.left,y:r.bottom}];
+        }
+      } else if(typeof dsQuadCvToClient==='function' && DS_SURFACE_QUADS && DS_SURFACE_QUADS[sid]){
+        clientQuad=dsQuadCvToClient(DS_SURFACE_QUADS[sid]);
+      }
+      if(svg && poly && clientQuad){
+        poly.setAttribute('points',clientQuad.map(p=>p.x+','+p.y).join(' '));
+        svg.classList.add('is-active');
+      }
+    }
+    window.addEventListener('dragover',e=>{
+      // Solo aplica cuando hay un drag interno de la playlist (no archivos del SO)
+      if(dsDragSrcIdx<0) return;
+      // Si el drag esta sobre el panel/dock, deja que el handler especifico actue
+      if(signagePanel && (e.target===signagePanel || signagePanel.contains(e.target))) return;
+      if(typeof dsSurfaceAtClientPoint!=='function') return;
+      const sid=dsSurfaceAtClientPoint(e.clientX,e.clientY);
+      if(!sid){ dsHighlightCanvasSurface(null); return; }
+      e.preventDefault();
+      try{ if(e.dataTransfer) e.dataTransfer.dropEffect='copy'; }catch(err){}
+      dsHighlightCanvasSurface(sid);
+    });
+    window.addEventListener('drop',e=>{
+      if(dsDragSrcIdx<0) return;
+      if(signagePanel && (e.target===signagePanel || signagePanel.contains(e.target))) return;
+      if(typeof dsSurfaceAtClientPoint!=='function') return;
+      const sid=dsSurfaceAtClientPoint(e.clientX,e.clientY);
+      if(!sid){ dsHighlightCanvasSurface(null); return; }
+      e.preventDefault(); e.stopPropagation();
+      const name=VIDEO_LIST[dsDragSrcIdx];
+      dsDragSrcIdx=-1; dsDragging=false;
+      dsHighlightCanvasSurface(null);
+      if(typeof dsPinSurface==='function' && name){
+        const ok=dsPinSurface(sid,name);
+        if(typeof showEv==='function'){
+          if(ok) showEv((lang==='en'?'📌 ':'📌 ')+name+(lang==='en'?' pinned to ':' fijado en ')+(typeof dsSurfaceLabel==='function'?dsSurfaceLabel(sid):sid),'#ffd866');
+          else showEv(lang==='en'?'Could not pin (no media file)':'No se pudo fijar (item sin media file)','#ff8866');
+        }
+      }
+      renderSignagePanel();
     });
     signagePanel.addEventListener('click',e=>{
       // Delete clip — boton × en cada fila de la playlist, con confirmacion
