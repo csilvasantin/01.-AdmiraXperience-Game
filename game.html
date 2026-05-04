@@ -1220,7 +1220,7 @@ function dsApplyAudioForPins(){
   }catch(e){}
 }
 // Guarda los valores previos para restaurar al desactivar el master mute.
-let _dsMutePrev={sfxVolume:null,bgMusicPaused:false};
+let _dsMutePrev={sfxVolume:null,bgMusicPaused:false,ambientEnabled:null,custVoicesEnabled:null};
 function setMasterMute(on){
   const wasOn=dsMasterMute;
   dsMasterMute=!!on;
@@ -1255,6 +1255,32 @@ function setMasterMute(on){
   }catch(e){}
   // Per-surface videos (incluye los pineados): cede al control de pin si no master mute.
   dsApplyAudioForPins();
+  // Ambient engine: rumor de fondo, cafetera, lluvia (G.ambient.enabled).
+  try{
+    if(typeof G!=='undefined' && G && G.ambient){
+      if(dsMasterMute){
+        if(_dsMutePrev.ambientEnabled===null) _dsMutePrev.ambientEnabled=!!G.ambient.enabled;
+        G.ambient.enabled=false;
+      } else if(wasOn && _dsMutePrev.ambientEnabled!==null){
+        G.ambient.enabled=_dsMutePrev.ambientEnabled;
+        _dsMutePrev.ambientEnabled=null;
+      }
+    }
+  }catch(e){}
+  // TTS de clientes (bocadillos hablados).
+  try{
+    if(typeof G!=='undefined' && G && G.custVoices){
+      if(dsMasterMute){
+        if(_dsMutePrev.custVoicesEnabled===null) _dsMutePrev.custVoicesEnabled=!!G.custVoices.enabled;
+        G.custVoices.enabled=false;
+      } else if(wasOn && _dsMutePrev.custVoicesEnabled!==null){
+        G.custVoices.enabled=_dsMutePrev.custVoicesEnabled;
+        _dsMutePrev.custVoicesEnabled=null;
+      }
+    }
+  }catch(e){}
+  // Cancela cualquier locucion en cola del browser TTS.
+  try{ if(dsMasterMute && window.speechSynthesis) window.speechSynthesis.cancel(); }catch(e){}
   // Iframes AdmiraTube
   if(typeof DS_DISPLAYS!=='undefined' && typeof sendAdmiraTubeCommand==='function'){
     DS_DISPLAYS.forEach((display,idx)=>{
@@ -18523,6 +18549,11 @@ window.xtAPI = (function(){
         active:!!(typeof LIVE_CAM!=='undefined'&&LIVE_CAM&&LIVE_CAM.active)
       },
       {
+        label:'🎨 Pixer.ai',
+        status:isEs?'creador':'creator',
+        customAction:'pixerai'
+      },
+      {
         label:'✏ Edit',
         status:isEs?'editor':'editor',
         customAction:'editor'
@@ -20985,6 +21016,7 @@ window.xtAPI = (function(){
         if(kind==='signage'&&typeof toggleSignagePanel==='function') toggleSignagePanel();
         else if(kind==='editor'&&typeof doAction==='function'&&G) doAction('editor');
         else if(kind==='menu'&&typeof doAction==='function'&&G) doAction('menu');
+        else if(kind==='pixerai') window.open('https://csilvasantin.github.io/pixer-ai-content/latest/','_blank','noopener');
         return;
       }
       const button=e.target.closest('[data-quick-command]');
@@ -21011,6 +21043,7 @@ window.xtAPI = (function(){
         if(kind==='signage'&&typeof toggleSignagePanel==='function') toggleSignagePanel();
         else if(kind==='editor'&&typeof doAction==='function'&&G) doAction('editor');
         else if(kind==='menu'&&typeof doAction==='function'&&G) doAction('menu');
+        else if(kind==='pixerai') window.open('https://csilvasantin.github.io/pixer-ai-content/latest/','_blank','noopener');
         return;
       }
       const button=e.target.closest('[data-quick-command]');
