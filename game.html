@@ -454,9 +454,8 @@
     <textarea id="telegramComposer" placeholder="Write to @AdmiraXPBot... Enter sends, Shift+Enter newline"></textarea>
     <div class="tg-actions">
       <button type="button" class="primary" id="telegramSendBtn">Send</button>
-      <button type="button" id="telegramHideBtn">Hide</button>
       <button type="button" id="telegramHelpBtn">/help</button>
-      <button type="button" id="telegramStatusBtn">/status</button>
+      <button type="button" id="telegramHideBtn">Hide</button>
     </div>
     <div class="tg-quick-actions" id="telegramQuickActions" aria-label="Acciones rápidas de escena"></div>
   </div>
@@ -18311,7 +18310,6 @@ window.xtAPI = (function(){
   const sendPane=document.querySelector('#telegramDock .tg-pane.send');
   const sendBtn=document.getElementById('telegramSendBtn');
   const helpBtn=document.getElementById('telegramHelpBtn');
-  const statusBtn=document.getElementById('telegramStatusBtn');
   const hideBtn=document.getElementById('telegramHideBtn');
   const signageBtn=document.getElementById('telegramSignageBtn');
   const signagePanel=document.getElementById('telegramSignagePanel');
@@ -20582,7 +20580,6 @@ window.xtAPI = (function(){
     if(sendPane&&sendPane.classList.contains('help-open')) hideHelpPanel();
     else commandHelp();
   });
-  bindDockButton(statusBtn,()=>{marioBeep();sendComposerText('/status');});
   bindDockButton(hideBtn,()=>{marioBeep();setQuickActionsHidden(!quickActionsHidden);});
   bindDockButton(signageBtn,()=>{marioBeep();toggleSignagePanel();});
   if(signagePanel){
