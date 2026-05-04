@@ -347,9 +347,6 @@
   <button class="btn-telegram" id="btnTelegram">Telegram</button>
   <button class="btn-quit" id="btnQuit" title="Cerrar audios y videos, volver al menú principal">⏻ Quit</button>
 </div>
-<div id="topBarSub" style="display:none;position:fixed;z-index:15;display:flex;flex-direction:column;align-items:flex-end;gap:2px;pointer-events:none">
-  <div id="empMonthBadge" style="display:none;padding:2px 8px;border-radius:3px;background:#2a1a08;border:1px solid #cc9900;font-family:monospace;font-size:9px;font-weight:bold;color:#ffd700;text-align:center;white-space:nowrap">🏆 <span id="empMonthName"></span></div>
-</div>
 <audio id="bgMusic" loop preload="auto"><source src="music/titi.mp3" type="audio/mpeg"></audio>
 <video id="dsVideo" preload="auto" playsinline style="display:none"></video>
 <input type="file" id="dsImportInput" accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm" multiple style="display:none">
@@ -3375,19 +3372,10 @@ function updateHtmlBar(){
       el.style.fontWeight=isPromo?'bold':'normal';
     });
   }
-  // Employee of the Month badge + sub-bar visibility
-  const empBadge=document.getElementById('empMonthBadge');
-  const subBar=document.getElementById('topBarSub');
-  if(empBadge){
-    if(G.empOfMonth){
-      empBadge.style.display='block';
-      document.getElementById('empMonthName').textContent=G.empOfMonth;
-      if(subBar) subBar.style.display='flex';
-      repositionTopBarSub();
-    } else {
-      empBadge.style.display='none';
-    }
-  }
+  // Employee of the Month badge eliminado en v26.04.05.18 — el badge HTML
+  // que aparecia debajo de Quit con el nombre del empleado del mes se quito
+  // por ruido visual. G.empOfMonth se sigue calculando internamente para
+  // metricas pero no se renderiza como popup HTML.
   resizeCanvas();
 }
 // ── MOBILE UX ────────────────────────────────────────────────
@@ -21156,9 +21144,62 @@ window.xtAPI = (function(){
     return overlay.classList.contains('visible');
   };
 
-  let lastItemId=null, totalCount=0;
+  let lastItemId=null, totalCount=0, currentPixerItem=null;
+
+  function pixerItemToPlaylistName(item){
+    const t=String(item.title||'Pixer item').replace(/[^\w\s\-áéíóúñÁÉÍÓÚÑ.,!?]/g,'').trim().slice(0,40);
+    const idTail=String(item.id||Date.now()).slice(0,6);
+    return 'Pixer · '+(t||'item')+' · '+idTail;
+  }
+
+  // Click en el overlay → añade el item actual a la playlist en posicion 0
+  // y lo deja listo para asignar a cualquier surface via drag o click.
+  function addPixerItemToTopOfPlaylist(){
+    const item=currentPixerItem;
+    if(!item||!item.url){
+      if(typeof showEv==='function') showEv('⚠️ No hay item Pixer para añadir','#ff8866');
+      return false;
+    }
+    if(item.kind==='audio'){
+      if(typeof showEv==='function') showEv('⚠️ Pixer audio no se puede fijar a pantallas','#ff8866');
+      return false;
+    }
+    const safeKind=item.kind==='video'?'video':'image';
+    const name=pixerItemToPlaylistName(item);
+    if(typeof VIDEO_FILES==='object') VIDEO_FILES[name]=item.url;
+    if(typeof DS_IMPORT!=='undefined' && DS_IMPORT.KIND) DS_IMPORT.KIND[name]=safeKind;
+    if(Array.isArray(VIDEO_LIST)){
+      const existingIdx=VIDEO_LIST.indexOf(name);
+      if(existingIdx>=0) VIDEO_LIST.splice(existingIdx,1);
+      VIDEO_LIST.unshift(name);
+      if(typeof dsVideoIdx==='number'){
+        if(existingIdx>=0){
+          if(dsVideoIdx===existingIdx) dsVideoIdx=0;
+          else if(dsVideoIdx<existingIdx) dsVideoIdx+=1;
+        } else {
+          dsVideoIdx+=1;
+        }
+      }
+    }
+    if(typeof dsSavePlaylistOrder==='function') dsSavePlaylistOrder();
+    if(typeof renderSignagePanel==='function') renderSignagePanel();
+    if(typeof showEv==='function') showEv('📌 Pixer → playlist #1: '+name,'#aa66ff');
+    return true;
+  }
+  window.addPixerItemToTopOfPlaylist=addPixerItemToTopOfPlaylist;
+
+  // Click sobre el body del overlay (no sobre la X de cerrar) lanza el add.
+  overlay.addEventListener('click',(e)=>{
+    if(e.target.closest('.pix-close')) return;
+    addPixerItemToTopOfPlaylist();
+  });
+  overlay.style.cursor='pointer';
+  overlay.title=(typeof lang!=='undefined'&&lang==='en')
+    ? 'Click to add to signage playlist (position #1)'
+    : 'Click para añadir a la playlist de signage (posición #1)';
 
   function renderItem(item){
+    currentPixerItem=item;
     const body=overlay.querySelector('.pix-body');
     if(item.kind==='image'){
       body.innerHTML=`<img src="${item.url}" alt="${item.title||''}">`;
