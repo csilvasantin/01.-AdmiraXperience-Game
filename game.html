@@ -21244,15 +21244,29 @@ window.xtAPI = (function(){
     }catch{}
   }
 
-  async function tick(){
-    // Heartbeat (anuncio de vida)
-    fetch(PIXER_WORKER+'/signage/heartbeat',{
-      method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({screen:screenId,role:'xtore-game',version:getVersion(),
-        feed_count:totalCount,showing_id:lastItemId}),
-    }).catch(()=>{});
-
-    // Feed: si hay un nuevo item, mostrarlo y acks
+  // Heartbeat — limitado a 60s entre POSTs para no agotar la cuota diaria
+  // de KV writes del worker (Cloudflare free tier: 1000 puts/dia). Cada
+  // game con tick a 5s antes consumia ~17k puts/dia y disparaba 500
+  // 'KV put() limit exceeded' cortando la deteccion online en Pixer.ai.
+  let lastHeartbeatAt=0, lastHeartbeatState='';
+  async function sendHeartbeat(force){
+    const now=Date.now();
+    const state=(lastItemId||'')+'|'+totalCount;
+    const stateChanged=state!==lastHeartbeatState;
+    const elapsed=now-lastHeartbeatAt;
+    // Permite forzar el primer envio, los cambios de estado y 1 vez por minuto.
+    if(!force && !stateChanged && elapsed<60000) return;
+    lastHeartbeatAt=now;
+    lastHeartbeatState=state;
+    try{
+      await fetch(PIXER_WORKER+'/signage/heartbeat',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({screen:screenId,role:'xtore-game',version:getVersion(),
+          feed_count:totalCount,showing_id:lastItemId}),
+      });
+    }catch{}
+  }
+  async function pollFeed(){
     try{
       const r=await fetch(PIXER_WORKER+'/signage/feed?limit=1');
       if(!r.ok) return;
@@ -21263,10 +21277,18 @@ window.xtAPI = (function(){
         lastItemId=item.id;
         renderItem(item);
         ackItem(item.id);
+        // Forzar heartbeat al cambiar de showing_id para que Pixer.ai vea live.
+        sendHeartbeat(true);
       }
     }catch{}
   }
-  setTimeout(()=>{ tick(); setInterval(tick,5000); },3000);
+  // Arranque: heartbeat inmediato + poll feed; despues feed a 5s y heartbeat a 60s.
+  setTimeout(()=>{
+    sendHeartbeat(true);
+    pollFeed();
+    setInterval(pollFeed,5000);
+    setInterval(()=>sendHeartbeat(false),60000);
+  },3000);
 })();
 </script>
 
