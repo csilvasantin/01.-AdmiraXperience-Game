@@ -437,13 +437,14 @@
       <span class="char-status" id="characterPanelStatus">0 inside</span>
     </div>
     <div class="char-body" id="characterPanelBody"></div>
+    <div class="char-actions-bar"><button type="button" id="charActionsHideBtn" title="Mostrar/ocultar acciones contextuales">Hide</button></div>
     <div class="char-actions" id="characterDockActions" aria-label="Acciones contextuales del tab activo"></div>
   </div>
 </div>
 <div id="telegramDock" aria-label="Telegram AdmiraXPBot">
   <div class="dock-resize-handle" data-dock-resize aria-hidden="true"></div>
   <div class="tg-pane send">
-    <div class="tg-head"><span>Control de la Store desde Telegram / WhatsApp</span><span class="tg-status" id="telegramSendStatus">AdmiraXPBot</span></div>
+    <div class="tg-head"><span>Control de la Store desde Telegram / WhatsApp</span><span style="display:flex;align-items:center;gap:6px"><a class="tg-site-link" id="dockSiteLink" href="https://csilvasantin.github.io/omnipublicity/" target="_blank" rel="noopener" title="Abrir OmniPublicity — modulo programatico del Xpace OS">↗ SITE <span class="tg-site-ver" id="dockSiteVer">v—</span></a><span class="tg-status" id="telegramSendStatus">AdmiraXPBot</span></span></div>
     <div id="telegramHelpPanel" aria-label="Comandos disponibles"></div>
     <div id="telegramSignagePanel" aria-label="Playlist Digital Signage"></div>
     <textarea id="telegramComposer" placeholder="Write to @AdmiraXPBot... Enter sends, Shift+Enter newline"></textarea>
@@ -2543,8 +2544,7 @@ const bbEl=document.getElementById('topBar');
 document.getElementById('btnSave').onclick=()=>{if(G)doAction('save');};
 document.getElementById('btnTelegram').onclick=()=>{if(window.toggleTelegramDock) window.toggleTelegramDock();};
 document.getElementById('btnQuit').onclick=()=>{doAction('quit');};
-document.getElementById('btnSite').onclick=()=>{window.open('https://csilvasantin.github.io/omnipublicity/','_blank','noopener');};
-(function(){var v=document.getElementById('btnSiteVer');if(v){var raw=(window.XTANCO_APP&&window.XTANCO_APP.version)||'';var m=raw.match(/v[\d.]+/i);v.textContent=m?m[0]:(raw||'v—');}})();
+(function(){var v=document.getElementById('dockSiteVer');if(v){var raw=(window.XTANCO_APP&&window.XTANCO_APP.version)||'';var m=raw.match(/v[\d.]+/i);v.textContent=m?m[0]:(raw||'v—');}})();
 updateLiveCamButtonUi();
 
 // ── Position topBarSub always anchored below the rightmost topBar button (Quit) ──
@@ -15618,6 +15618,11 @@ function syncDockLanguage(){
     const qHidden=!!(window.isQuickActionsHidden&&window.isQuickActionsHidden());
     hideBtn.textContent=qHidden?(isEs?'Mostrar':'Show'):(isEs?'Ocultar':'Hide');
   }
+  const charHideBtn=document.getElementById('charActionsHideBtn');
+  if(charHideBtn){
+    const cHidden=!!(window.isCharActionsHidden&&window.isCharActionsHidden());
+    charHideBtn.textContent=cHidden?(isEs?'Mostrar':'Show'):(isEs?'Ocultar':'Hide');
+  }
   const connStatus=document.getElementById('telegramConnStatus');
   const telegramCardStatus=document.getElementById('telegramCardStatus');
   const grokCardStatus=document.getElementById('grokCardStatus');
@@ -18469,6 +18474,22 @@ window.xtAPI = (function(){
   }
 
   const characterDockActionsEl=document.getElementById('characterDockActions');
+  const charActionsHideBtn=document.getElementById('charActionsHideBtn');
+  let charActionsHidden=false;
+  function setCharActionsHidden(active){
+    charActionsHidden=!!active;
+    if(characterDockActionsEl) characterDockActionsEl.classList.toggle('is-hidden',charActionsHidden);
+    if(charActionsHideBtn) charActionsHideBtn.textContent=charActionsHidden?(lang==='es'?'Mostrar':'Show'):(lang==='es'?'Ocultar':'Hide');
+  }
+  window.isCharActionsHidden=()=>charActionsHidden;
+  if(charActionsHideBtn){
+    charActionsHideBtn.addEventListener('click',e=>{
+      e.preventDefault();e.stopPropagation();
+      try{if(typeof SFX!=='undefined'&&SFX.marioCoin)SFX.marioCoin();}catch(err){}
+      setCharActionsHidden(!charActionsHidden);
+    });
+    setCharActionsHidden(false);
+  }
   let lastCharacterDockActionsHtml='';
   function renderCharacterDockActions(focus){
     if(!characterDockActionsEl) return;
