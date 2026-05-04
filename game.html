@@ -19188,6 +19188,25 @@ window.xtAPI = (function(){
     return 'Uso: /dj [on|off]';
   }
 
+  function setPixerFeedCommand(arg){
+    if(typeof window.setPixerFeedVisible!=='function'){
+      return 'Pixer Feed no inicializado todavía';
+    }
+    const currentOn=!!(window.isPixerFeedVisible&&window.isPixerFeedVisible());
+    const clean=binaryToggleArg(arg,currentOn);
+    if(['on','show','mostrar','visible','open','abrir'].includes(clean)){
+      window.setPixerFeedVisible(true);
+      showEv&&showEv('▶ Pixer Feed visible','#00ff41');
+      return 'Pixer Feed activado';
+    }
+    if(['off','hide','ocultar','close','cerrar','invisible'].includes(clean)){
+      window.setPixerFeedVisible(false);
+      showEv&&showEv('▶ Pixer Feed oculto','#55ccff');
+      return 'Pixer Feed desactivado';
+    }
+    return 'Uso: /pixeria [on|off]';
+  }
+
   function ensureOpinador(){
     if(!G.opinador) G.opinador={phase:'idle',x:820,y:0,dir:-1,aFrame:0,aTimer:0,voteTimer:0,voteFace:0,look:null,opinion:''};
     return G.opinador;
@@ -19311,7 +19330,7 @@ window.xtAPI = (function(){
       {title:'Equipo y stock',items:['/hire 1','/hire dj','/hire all','/train 1','/train all','/restock 2','/restock all','/restock prensa']},
       {title:'Tienda',items:['/ad 0','/ad 1','/ad 2','/upgrade','/visit com','/visit tec','/visit del','/visit gc','/save']},
       {title:'Tiempo y ambiente',items:['/reloj 14:30','/reloj 14 30','/time am','/time pm','/time night','/weather normal','/weather rain','/weather sun','/lamp','/lamp auto','/hue','/hue auto']},
-      {title:'Pantalla y directo',items:['/livecam','/mocap','/AdmiraLive texto','/comunicar texto','/comunicar texto --grok','/comunicar texto --elevenlabs','/AdmiraTube URL 2 audio','/say texto']},
+      {title:'Pantalla y directo',items:['/livecam','/mocap','/pixeria','/AdmiraLive texto','/comunicar texto','/comunicar texto --grok','/comunicar texto --elevenlabs','/AdmiraTube URL 2 audio','/say texto']},
       {title:'Escena en vivo',items:['/dj','/ladron','/guardiacivil','/opinador','/robot','/sponsor','/socio','/door open','/door close','/door auto']},
       {title:'Notificaciones al personal',items:['/personal socio','/personal dashboard','/socios listado','/heatmap','/heatmap reset','/sponsor recurrente 120 10']},
       {title:'Atmósfera',items:['/ambiente','/ambiente vol 50','/voces']},
@@ -19684,6 +19703,7 @@ window.xtAPI = (function(){
       }
       if(cmd==='song'||cmd==='track') return setSong(arg);
       if(cmd==='dj'||cmd==='djnovah'||cmd==='novah') return setDJCommand(arg);
+      if(cmd==='pixeria'||cmd==='pixerfeed'||cmd==='pixer') return setPixerFeedCommand(arg);
       if(cmd==='tarjetafidelidad'||cmd==='fidelidad'||cmd==='loyaltycard') return setLoyaltyCardCommand();
       if(cmd==='opinador'||cmd==='opinion'||cmd==='opinión') return setOpinadorCommand(arg);
       if(cmd==='robot'||cmd==='unitree'||cmd==='unitreebot'||cmd==='bot') return setUnitreeBotCommand(arg);
@@ -20726,6 +20746,18 @@ window.xtAPI = (function(){
     <div class="pix-foot">screen: ${screenId}</div>`;
   document.body.appendChild(overlay);
   overlay.querySelector('.pix-close').onclick=()=>overlay.classList.remove('visible');
+
+  // Expose visibility controls so /pixeria (CLI Telegram) pueda alternar el overlay
+  window.isPixerFeedVisible=function(){ return overlay.classList.contains('visible'); };
+  window.setPixerFeedVisible=function(on){
+    if(on){ overlay.classList.add('visible'); }
+    else { overlay.classList.remove('visible'); }
+    return overlay.classList.contains('visible');
+  };
+  window.togglePixerFeed=function(){
+    overlay.classList.toggle('visible');
+    return overlay.classList.contains('visible');
+  };
 
   let lastItemId=null, totalCount=0;
 
