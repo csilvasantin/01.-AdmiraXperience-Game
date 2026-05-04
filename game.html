@@ -608,7 +608,22 @@ let homeMusicCtx=null;
 let homeMusicTimer=null;
 let homeMusicStep=0;
 let homeMusicArmed=false;
-let homeMusicMuted=false;
+// Audio master: arranca SILENCIADO. Solo se activa cuando el usuario pulsa el
+// icono 🔊 (botón de música del selector de idioma). Aplica a la música del
+// menú, SFX, ambient engine y voces TTS.
+let homeMusicMuted=true;
+function setAudioMaster(on){
+  homeMusicMuted=!on;
+  homeMusicArmed=true;
+  try{ if(G && typeof on==='boolean'){ G.sfxVolume = on ? 0.7 : 0; } }catch(e){}
+  try{ if(G && G.ambient){ G.ambient.enabled = !!on; if(window.AMBIENT && window.AMBIENT.update) window.AMBIENT.update(); } }catch(e){}
+  try{ if(G && G.custVoices){ G.custVoices.enabled = !!on; } }catch(e){}
+  try{ if(!on && bgMusic && !bgMusic.paused) bgMusic.pause(); }catch(e){}
+  try{ if(!on && window.speechSynthesis) window.speechSynthesis.cancel(); }catch(e){}
+  try{ if(typeof updateEraVerticalDock==='function') updateEraVerticalDock(); }catch(e){}
+  try{ syncHomeMusic(); }catch(e){}
+}
+window.setAudioMaster = setAudioMaster;
 const HOME_MUSIC_TEMPO=0.18;
 const HOME_MUSIC_SCORE=[
   {lead:659,bass:131},
@@ -4516,7 +4531,24 @@ let codexMapOpen=false;
 let tt=0;
 let tran={active:false,from:null,to:null,timer:0,dur:30};
 function startTransition(toState){if(tran.active)return;tran={active:true,from:state,to:toState,timer:0,dur:30};}
-function updateTransition(){if(!tran.active)return;tran.timer++;if(tran.timer===Math.floor(tran.dur/2))state=tran.to;if(tran.timer>=tran.dur)tran.active=false;}
+function updateTransition(){
+  if(!tran.active)return;
+  tran.timer++;
+  if(tran.timer===Math.floor(tran.dur/2)){
+    const prevState=state;
+    state=tran.to;
+    // Si salimos del juego (de GAME/PAUSE/EDITOR a otro estado), silenciar
+    // todo el audio para no dejar musica/sfx sonando en pantallas de menu.
+    try{
+      const wasInGame=['game','pause','editor'].includes(prevState);
+      const goingOut=!['game','pause','editor'].includes(state);
+      if(wasInGame && goingOut && typeof setAudioMaster==='function'){
+        setAudioMaster(false);
+      }
+    }catch(e){}
+  }
+  if(tran.timer>=tran.dur)tran.active=false;
+}
 function drawTransition(){if(!tran.active)return;const half=tran.dur/2;const alpha=tran.timer<=half?tran.timer/half:1-(tran.timer-half)/half;cx.globalAlpha=Math.max(0,Math.min(1,alpha));cx.fillStyle='#000';cx.fillRect(0,0,W,H);cx.globalAlpha=1;}
 function updateMobileSkipButton(){
   if(!mobileSkipBtn) return;
@@ -5682,10 +5714,10 @@ function stopDemoMode(){
   lastInput=Date.now();
 }
 function tickDemoMode(){
-  const cfg=window.DEMO_CONFIG||{idleMs:60000,durationMs:5*60*1000};
-  // Auto-arrancar: si llevamos cfg.idleMs sin input EN una pantalla intro
-  // y no estamos ya en demo, lanzamos la demo automaticamente.
-  if(!demoMode && typeof state!=='undefined' && typeof S!=='undefined'){
+  const cfg=window.DEMO_CONFIG||{autoStart:false,idleMs:60000,durationMs:5*60*1000};
+  // Auto-arrancar SOLO si cfg.autoStart=true. Por defecto desactivado: la
+  // demo solo arranca si el usuario pulsa el boton DEMO.
+  if(cfg.autoStart && !demoMode && typeof state!=='undefined' && typeof S!=='undefined'){
     const inIntro=[S.ERA_SEL,S.PRELOAD,S.MENU,S.CLIENT_SEL,S.MODEL_SEL,S.INTRO].includes(state);
     if(inIntro && Date.now()-lastInput >= cfg.idleMs){
       startDemoMode();
@@ -5744,11 +5776,13 @@ if(eraVerticalDock){
     evdMuteBtn.addEventListener('click',e=>{
       e.preventDefault();
       e.stopPropagation();
-      toggleHomeMusic();
+      // Audio master: alterna música del menú + SFX + ambient + voces TTS.
+      setAudioMaster(homeMusicMuted);
     });
   }
 }
-window.addEventListener('pointerdown',armHomeMusic,{passive:true});
+// Importante: NO armar la música automáticamente al pulsar — arranca muteado.
+// El usuario debe pulsar 🔊 para activar todo el audio (master).
 window.addEventListener('keydown',armHomeMusic,{passive:true});
 
 // ── SAVE / LOAD ───────────────────────────────────────────────
@@ -5848,8 +5882,9 @@ let lastInput=Date.now();
 let demoMode=false;
 let demoTimer=0;
 let demoStartedAt=0;
-// Config expuesto para test/demo runtime: window.DEMO_CONFIG.{idleMs,durationMs}
-window.DEMO_CONFIG = window.DEMO_CONFIG || { idleMs: 60000, durationMs: 5*60*1000 };
+// Config expuesto para test/demo runtime: window.DEMO_CONFIG.{autoStart,idleMs,durationMs}
+// autoStart:false → la demo NO arranca sola por idle; solo si pulsas el boton DEMO.
+window.DEMO_CONFIG = window.DEMO_CONFIG || { autoStart: false, idleMs: 60000, durationMs: 5*60*1000 };
 window.__getLastInput = function(){ return lastInput; };
 window.__setLastInput = function(v){ lastInput=v; };
 function resetIdleTimer(){
