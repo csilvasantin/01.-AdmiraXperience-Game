@@ -344,7 +344,6 @@
   <div class="comp-box" style="border-color:#2266aa"><span class="comp-name">PM</span><span class="comp-pct" id="compPM">0%</span></div>
   <div class="comp-box" style="border-color:#333399"><span class="comp-name">BAT</span><span class="comp-pct" id="compBAT">0%</span></div>
   <div class="spacer"></div>
-  <button class="btn-telegram" id="btnTelegram">Telegram</button>
   <button class="btn-quit" id="btnQuit" title="Cerrar audios y videos, volver al menú principal">⏻ Quit</button>
 </div>
 <audio id="bgMusic" loop preload="auto"><source src="music/titi.mp3" type="audio/mpeg"></audio>
@@ -2658,7 +2657,6 @@ function drawLiveCamScreen(vW,vH){
 // ── HTML BOTTOM BAR — wiring ─────────────────────────────────
 const bbEl=document.getElementById('topBar');
 document.getElementById('btnSave').onclick=()=>{if(G)doAction('save');};
-document.getElementById('btnTelegram').onclick=()=>{if(window.toggleTelegramDock) window.toggleTelegramDock();};
 document.getElementById('btnQuit').onclick=()=>{doAction('quit');};
 (function(){var v=document.getElementById('dockSiteVer');if(v){var raw=(window.XTANCO_APP&&window.XTANCO_APP.version)||'';var m=raw.match(/v[\d.]+/i);v.textContent=m?m[0]:(raw||'v—');}})();
 updateLiveCamButtonUi();
@@ -18568,34 +18566,54 @@ window.xtAPI = (function(){
     const opinadorActive=hasGame&&isEntityActive(G.opinador);
     const robotActive=hasGame&&isEntityActive(G.unitreeBot);
     const sponsorActive=!!(hasGame&&G.custs&&G.custs.some(c=>c&&c.sponsor));
+    const tgHidden=!!(window.isTelegramDockHidden&&window.isTelegramDockHidden());
     return [
       {label:isEs?'Ladrón':'Thief',status:thiefActive?(isEs?'en tienda':'in store'):(isEs?'listo':'ready'),command:'/ladron',alert:thiefActive},
       {label:'Guardia Civil',status:guardiaActive?(isEs?'activo':'active'):(isEs?'fuera':'away'),command:'/guardiacivil',active:guardiaActive},
       {label:isEs?'Opinador':'Reviewer',status:opinadorActive?(isEs?'en ruta':'en route'):(isEs?'rápido':'quick'),command:'/opinador',active:opinadorActive},
       {label:'Unitree Bot',status:robotActive?(isEs?'en tienda':'in store'):'demo',command:'/robot',active:robotActive},
-      {label:'🦆 Sponsor',status:sponsorActive?(isEs?'+1 más':'add 1 more'):(isEs?'invitar':'invite'),command:'/sponsor on',active:sponsorActive}
+      {label:'🦆 Sponsor',status:sponsorActive?(isEs?'+1 más':'add 1 more'):(isEs?'invitar':'invite'),command:'/sponsor on',active:sponsorActive},
+      {label:'💬 Telegram',status:tgHidden?'OFF':'ON',customAction:'telegram',active:!tgHidden}
     ];
   }
 
   // Abre Pixer.ai consultando el manifest.json para obtener la version vigente.
-  // Si manifest.json falla (404, parse error), abre la raiz del repo de Pixer
-  // y deja que el index.html principal redirija. Falla-segura.
-  let _pixerWin=null;
-  async function openPixerAi(){
-    // Pre-abre la pestania para evitar el bloqueo de popups; despues navegamos.
-    try{ _pixerWin=window.open('about:blank','_blank','noopener'); }catch(err){}
-    const fallback='https://csilvasantin.github.io/pixer-ai-content/v.2026.05.02-r35/';
-    let url=fallback;
+  // El manifest se cachea al primer click para evitar el race con el popup blocker
+  // en clicks posteriores. Si manifest falla, usa la version conocida v.2026.05.02-r35.
+  let _pixerCachedUrl=null;
+  function _pixerFallbackUrl(){ return 'https://csilvasantin.github.io/pixer-ai-content/v.2026.05.02-r35/'; }
+  async function _pixerResolveUrl(){
+    if(_pixerCachedUrl) return _pixerCachedUrl;
     try{
       const r=await fetch('https://csilvasantin.github.io/pixer-ai-content/manifest.json',{cache:'no-cache'});
       if(r.ok){
         const data=await r.json();
-        if(data && data.latest){ url='https://csilvasantin.github.io/pixer-ai-content/'+encodeURIComponent(data.latest)+'/'; }
+        if(data && data.latest){
+          _pixerCachedUrl='https://csilvasantin.github.io/pixer-ai-content/'+encodeURIComponent(data.latest)+'/';
+          return _pixerCachedUrl;
+        }
       }
     }catch(err){}
-    if(_pixerWin){ try{ _pixerWin.location.href=url; }catch(e){ window.open(url,'_blank','noopener'); } }
-    else { window.open(url,'_blank','noopener'); }
-    if(typeof showEv==='function') showEv((lang==='en'?'🎨 Pixer.ai abierto · ':'🎨 Pixer.ai abierto · ')+url.split('/').filter(Boolean).pop(),'#aa66ff');
+    _pixerCachedUrl=_pixerFallbackUrl();
+    return _pixerCachedUrl;
+  }
+  // Pre-resolve al cargar para tener la URL lista en el primer click.
+  setTimeout(()=>{ _pixerResolveUrl(); },1500);
+  function openPixerAi(){
+    // Si tenemos URL resuelta, abrir SINCRONAMENTE en el evento de click —
+    // sin awaits — para que el navegador no marque popup blocker.
+    if(_pixerCachedUrl){
+      const w=window.open(_pixerCachedUrl,'_blank');
+      if(w){ try{ w.opener=null; }catch(e){} }
+      if(typeof showEv==='function') showEv('🎨 Pixer.ai · '+_pixerCachedUrl.split('/').filter(Boolean).pop(),'#aa66ff');
+      return;
+    }
+    // Sin cache: abrir el fallback ya, y disparar la resolucion para el proximo click.
+    const fb=_pixerFallbackUrl();
+    const w=window.open(fb,'_blank');
+    if(w){ try{ w.opener=null; }catch(e){} }
+    _pixerResolveUrl();
+    if(typeof showEv==='function') showEv('🎨 Pixer.ai · v.2026.05.02-r35','#aa66ff');
   }
 
   function buildQuickButtonHtml(action,idx){
@@ -21015,6 +21033,7 @@ window.xtAPI = (function(){
         else if(kind==='editor'&&typeof doAction==='function'&&G) doAction('editor');
         else if(kind==='menu'&&typeof doAction==='function'&&G) doAction('menu');
         else if(kind==='pixerai') openPixerAi();
+        else if(kind==='telegram' && typeof window.toggleTelegramDock==='function') window.toggleTelegramDock();
         return;
       }
       const button=e.target.closest('[data-quick-command]');
@@ -21042,6 +21061,7 @@ window.xtAPI = (function(){
         else if(kind==='editor'&&typeof doAction==='function'&&G) doAction('editor');
         else if(kind==='menu'&&typeof doAction==='function'&&G) doAction('menu');
         else if(kind==='pixerai') openPixerAi();
+        else if(kind==='telegram' && typeof window.toggleTelegramDock==='function') window.toggleTelegramDock();
         return;
       }
       const button=e.target.closest('[data-quick-command]');
@@ -21060,10 +21080,12 @@ window.xtAPI = (function(){
   if(hideBtn) hideBtn.textContent=quickActionsHidden?(lang==='es'?'Mostrar':'Show'):(lang==='es'?'Ocultar':'Hide');
   if(telegramBtn){
     telegramBtn.textContent=telegramDockHidden?'Telegram OFF':'Telegram ON';
-    window.toggleTelegramDock=()=>setTelegramDockHidden(!telegramDockHidden);
-    // Alias para compat con código que aún llame a toggleCliDock
-    window.toggleCliDock=window.toggleTelegramDock;
   }
+  // Toggle expuesto siempre (el btnTelegram del topBar se quito en v26.04.05.19,
+  // ahora el control vive en la fila contextual de Clientes via customAction:'telegram').
+  window.toggleTelegramDock=()=>setTelegramDockHidden(!telegramDockHidden);
+  window.toggleCliDock=window.toggleTelegramDock;
+  window.isTelegramDockHidden=()=>telegramDockHidden;
   setTelegramFocusMode(false,false);
   renderQuickActionButtons();
   if(composer){
