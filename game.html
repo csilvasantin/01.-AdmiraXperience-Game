@@ -2036,6 +2036,103 @@ function setManagerSayBubble(text){
   return clean;
 }
 
+// Traduce comandos CLI (/store close, /people store 5, /audio mute, /lluvia on...)
+// a un texto amigable que el Store Manager dice en su bocadillo.
+// Reglas: sin "/", en el idioma actual (es/en), max 120 chars. Si no hay
+// mapeo especifico, devuelve el cmd capitalizado + args (limpio, sin barra).
+function commandToBubble(cmd,args,curLang){
+  const isEs=(curLang||'es')!=='en';
+  const head=String((args&&args[0])||'').toLowerCase();
+  const next=String((args&&args[1])||'').toLowerCase();
+  const ON=['on','si','sí','yes','1','true','activar','activate'];
+  const OFF=['off','no','0','false','desactivar','deactivate','apagar'];
+  const AUTO=['off','auto','reset','default','none','clear','quita','quitar'];
+  if(cmd==='store'||cmd==='xtore'||cmd==='xtanco'||cmd==='tienda'){
+    if(['close','cerrar','cierra','off'].includes(head)) return isEs?'Tienda cerrada':'Store closed';
+    if(['open','abrir','abre','on','reabrir','abierto'].includes(head)) return isEs?'Tienda abierta':'Store open';
+    return isEs?'Tienda':'Store';
+  }
+  if(['people','gente','personas','clientes'].includes(cmd)){
+    if(head==='store'||head==='tienda'){
+      if(AUTO.includes(next)) return isEs?'Aforo en automático':'Customers auto';
+      const n=parseInt(next,10);
+      if(Number.isFinite(n)){
+        if(n===0) return isEs?'Sin clientes en la tienda':'No customers in store';
+        return isEs?(n+' clientes en la tienda'):(n+' customers in store');
+      }
+    }
+    return isEs?'Aforo':'Customers';
+  }
+  if(['audio','dsaudio','monitoraudio'].includes(cmd)){
+    if(['mute','silencio','silenciar','silence','quiet','off-all','muteall'].includes(head)) return isEs?'Audio silenciado':'Audio muted';
+    if(['unmute','desmutear','desilenciar','sound','sonido','on-all','sonar'].includes(head)) return isEs?'Audio reactivado':'Audio on';
+    if(['toggle','flip'].includes(head)) return isEs?'Cambio de audio':'Audio toggle';
+    return isEs?'Audio':'Audio';
+  }
+  if(['lluvia','rain'].includes(cmd)){
+    if(ON.includes(head)) return isEs?'Empieza a llover':'Rain on';
+    if(OFF.includes(head)) return isEs?'Para de llover':'Rain off';
+    return isEs?'Lluvia':'Rain';
+  }
+  if(['sol','sun'].includes(cmd)){
+    if(ON.includes(head)) return isEs?'Sale el sol':'Sun on';
+    if(OFF.includes(head)) return isEs?'Se va el sol':'Sun off';
+    return isEs?'Sol':'Sun';
+  }
+  if(['sfx','fx','efectos'].includes(cmd)){
+    if(ON.includes(head)) return isEs?'Efectos de sonido activados':'SFX on';
+    if(OFF.includes(head)) return isEs?'Efectos de sonido desactivados':'SFX off';
+    return isEs?'Efectos de sonido':'SFX';
+  }
+  if(['music','musica','música'].includes(cmd)){
+    if(['next','siguiente'].includes(head)) return isEs?'Siguiente canción':'Next track';
+    if(['prev','anterior','previous'].includes(head)) return isEs?'Canción anterior':'Previous track';
+    if(ON.includes(head)) return isEs?'Música puesta':'Music on';
+    if(OFF.includes(head)) return isEs?'Música parada':'Music off';
+    return isEs?'Música':'Music';
+  }
+  if(['ds','pantalla','video','signage','monitor'].includes(cmd)){
+    if(ON.includes(head)) return isEs?'Pantalla encendida':'Screen on';
+    if(OFF.includes(head)) return isEs?'Pantalla apagada':'Screen off';
+    return isEs?'Pantalla':'Screen';
+  }
+  if(['luz','luces','lamp','lampara','lámpara','light'].includes(cmd)){
+    if(ON.includes(head)) return isEs?'Luces encendidas':'Lights on';
+    if(OFF.includes(head)) return isEs?'Luces apagadas':'Lights off';
+    return isEs?'Luces':'Lights';
+  }
+  if(['hue'].includes(cmd)){
+    if(ON.includes(head)) return isEs?'Ambient Hue activado':'Hue on';
+    if(OFF.includes(head)) return isEs?'Ambient Hue apagado':'Hue off';
+    return isEs?'Ambient Hue':'Hue';
+  }
+  if(['aroma','aromatizador'].includes(cmd)){
+    if(ON.includes(head)) return isEs?'Aroma activado':'Aroma on';
+    if(OFF.includes(head)) return isEs?'Aroma desactivado':'Aroma off';
+    return isEs?'Aroma':'Aroma';
+  }
+  if(['ac','aire','aireacondicionado'].includes(cmd)){
+    if(ON.includes(head)) return isEs?'Aire acondicionado encendido':'A/C on';
+    if(OFF.includes(head)) return isEs?'Aire acondicionado apagado':'A/C off';
+    return isEs?'Aire acondicionado':'A/C';
+  }
+  if(['ladron','ladrón','thief'].includes(cmd)){
+    if(ON.includes(head)) return isEs?'¡Ladrón en la tienda!':'Thief in the store!';
+    if(OFF.includes(head)) return isEs?'Ladrón fuera':'Thief gone';
+    return isEs?'Ladrón':'Thief';
+  }
+  if(['guardiacivil','guardia-civil','guardia','gc'].includes(cmd)){
+    if(ON.includes(head)) return isEs?'Llega la Guardia Civil':'Guardia Civil arrives';
+    if(OFF.includes(head)) return isEs?'Guardia Civil fuera':'Guardia Civil gone';
+    return isEs?'Guardia Civil':'Guardia Civil';
+  }
+  // Fallback: capitaliza cmd + args, sin "/"
+  const tail=(args||[]).map(a=>String(a).trim()).filter(Boolean).join(' ');
+  if(!cmd) return '';
+  const niceCmd=cmd.charAt(0).toUpperCase()+cmd.slice(1);
+  return (niceCmd+(tail?' '+tail:'')).slice(0,120);
+}
+
 function extractYouTubeId(input){
   const raw=String(input||'').trim();
   if(/^[a-zA-Z0-9_-]{11}$/.test(raw)) return raw;
@@ -18302,14 +18399,15 @@ window.xtAPI = (function(){
       const parts=normalized.split(/\s+/).filter(Boolean);
       const cmd=(parts.shift()||'').toLowerCase();
       const arg=parts.join(' ');
-      // Echo del comando en el bocadillo del Store Manager para que el usuario
-      // VEA en pantalla la accion que se ejecuta ("/store close" → la tienda se
-      // vacia con el manager anunciandolo). Saltamos comandos diagnosticos
-      // (que ya devuelven texto largo en el chat).
+      // Echo del comando en el bocadillo del Store Manager — TRADUCIDO al
+      // idioma actual y sin barras: "/store close" → "Tienda cerrada" (es) o
+      // "Store closed" (en). Saltamos comandos diagnosticos (/audio probe etc.)
+      // que ya escupen texto largo en el chat.
       try{
         const isDiag=cmd==='probe'||(cmd==='audio'&&/^(probe|diag|debug|test|check|que-?suena)/i.test(arg||''));
-        if(!isDiag && typeof setManagerSayBubble==='function'){
-          setManagerSayBubble(raw.startsWith('/')?raw:'/'+raw);
+        if(!isDiag && typeof setManagerSayBubble==='function' && typeof commandToBubble==='function'){
+          const friendly=commandToBubble(cmd,parts,typeof lang!=='undefined'?lang:'es');
+          if(friendly) setManagerSayBubble(friendly);
         }
       }catch(e){}
       const head=(parts[0]||'').toLowerCase();
