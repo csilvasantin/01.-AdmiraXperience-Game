@@ -33,7 +33,9 @@ const path = require('path');
 const PORT = parseInt(process.env.SUNO_LOCAL_PORT || '3777', 10);
 const SUNO_COOKIE = process.env.SUNO_COOKIE || '';
 const CLERK_HOST = process.env.SUNO_CLERK_HOST || 'auth.suno.com';
-const CLERK_VER = process.env.SUNO_CLERK_JS_VERSION || '5.0.0';
+const CLERK_VER = process.env.SUNO_CLERK_JS_VERSION || '5.117.0';
+const CLERK_API_VER = process.env.SUNO_CLERK_API_VERSION || '2025-11-10';
+const CLERK_QS = `__clerk_api_version=${encodeURIComponent(CLERK_API_VER)}&_clerk_js_version=${encodeURIComponent(CLERK_VER)}`;
 const SUNO_API = process.env.SUNO_API_BASE || 'https://studio-api.suno.ai';
 const ALLOWED_ORIGINS = (process.env.SUNO_ALLOWED_ORIGINS
   || 'https://csilvasantin.github.io,http://localhost,http://127.0.0.1')
@@ -54,7 +56,7 @@ let cachedJwtExp = 0;
 
 async function getSessionId() {
   if (cachedSid) return cachedSid;
-  const r = await fetch(`https://${CLERK_HOST}/v1/client?_clerk_js_version=${CLERK_VER}`, {
+  const r = await fetch(`https://${CLERK_HOST}/v1/client?${CLERK_QS}`, {
     headers: {
       cookie: SUNO_COOKIE, 'user-agent': UA, accept: 'application/json',
       origin: 'https://suno.com', referer: 'https://suno.com/',
@@ -73,7 +75,7 @@ async function getJwt() {
   if (cachedJwt && Date.now() < cachedJwtExp - 30_000) return cachedJwt;
   const sid = await getSessionId();
   const r = await fetch(
-    `https://${CLERK_HOST}/v1/client/sessions/${sid}/tokens?_clerk_js_version=${CLERK_VER}`,
+    `https://${CLERK_HOST}/v1/client/sessions/${sid}/tokens?${CLERK_QS}`,
     { method: 'POST', headers: {
       cookie: SUNO_COOKIE, 'user-agent': UA, accept: 'application/json',
       origin: 'https://suno.com', referer: 'https://suno.com/',
