@@ -7750,7 +7750,7 @@ function updateGame(){
 
     if(saca.phase==='idle'){
       if(saca.cooldown>0) saca.cooldown--;
-      else if(!G.dayEnded&&G.custs.length<5){
+      else if(!G.dayEnded&&G.custs.length<5&&!G.storeClosed){
         saca.phase='incoming';
         saca.x=startX; saca.y=startY;
         saca.boxes=6; saca.aFrame=0; saca.aTimer=0;
@@ -7815,7 +7815,7 @@ function updateGame(){
 
     if(th.phase==='idle'){
       if(th.cooldown>0) th.cooldown--;
-      else if(!G.dayEnded&&!G.rush.active&&!G.inspect.active){
+      else if(!G.dayEnded&&!G.rush.active&&!G.inspect.active&&!G.storeClosed){
         // Pick a target tile near shelves/counter to steal from
         const stealTarget=findNearestWalkableTile(3+Math.floor(Math.random()*6),1+Math.floor(Math.random()*4),{from:{col:ISO.cols-1,row:3},ignore:th})||{col:5,row:3};
         th.targetCol=stealTarget.col;
@@ -8505,7 +8505,7 @@ function updateGame(){
 	    if(bot.y===0) bot.y=startY5;
 	    if(bot.phase==='idle'){
 	      if(bot.cooldown>0) bot.cooldown--;
-	      else if(!G.dayEnded&&G.custs.length<7&&(G.fame||0)>=18){
+	      else if(!G.dayEnded&&G.custs.length<7&&(G.fame||0)>=18&&!G.storeClosed){
 	        startUnitreeBot(bot);
 	      }
 	    }else if(bot.phase==='entering'){
@@ -18685,6 +18685,18 @@ window.xtAPI = (function(){
           }
           // Staff fuera: hired=false → no se renderizan en el canvas (linea 12150).
           (G.staff||[]).forEach(s=>{ s.hired=false; });
+          // NPCs especiales fuera: thief, bot Unitree, La Saca (proveedor) y
+          // Guardia Civil. Si estaban en cualquier fase activa (sneaking,
+          // looting, fleeing, scan, incoming, unloading, outgoing, etc.) los
+          // forzamos a idle + cooldown alto. Renderizado los oculta cuando
+          // phase==='idle' (linea 5656-5659).
+          try{
+            if(G.thief && G.thief.phase!=='idle'){ G.thief.phase='idle'; G.thief.cooldown=99999; G.thief.caught=false; }
+            if(G.unitreeBot && G.unitreeBot.phase!=='idle'){ G.unitreeBot.phase='idle'; G.unitreeBot.cooldown=99999; }
+            if(G.saca && G.saca.phase!=='idle'){ G.saca.phase='idle'; G.saca.cooldown=99999; }
+            if(G.guardiaCivil && G.guardiaCivil.phase!=='idle'){ G.guardiaCivil.phase='idle'; }
+            if(G.supplierDeal && G.supplierDeal.active){ G.supplierDeal.active=false; }
+          }catch(e){}
           // Sistemas off
           try{ if(typeof setMasterMute==='function') setMasterMute(true); }catch(e){}
           try{ if(typeof setLampState==='function') setLampState(false); }catch(e){}
