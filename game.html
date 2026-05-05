@@ -8517,9 +8517,14 @@ function updateGame(){
 }
 
 function spawnCust(isVip,isSponsor,force){
-  // 'force' (true) salta el limite de capacidad — usado por /sponsor y /socio
-  // desde el CLI para invocar al instante, donde es aceptable colarlos por encima
-  // del cap normal del spawner pasivo.
+  // 'force' (true) salta el limite del SPAWNER PASIVO (ej: cap horario que limita
+  // a 7), usado por /sponsor /socio /devolucion etc. del CLI para invocar al
+  // instante. Pero NO salta el override manual /people store <N> — ese cap es
+  // hard-stop (puerta cerrada): si la tienda esta al limite del override, no
+  // entra NADIE hasta que se suba el numero o se desactive con /people store auto.
+  // Esto incluye los spawns automaticos hourly del wantToJoin (linea ~7833) y
+  // del sponsor recurrente (linea ~7921), que tambien usan force=true.
+  if(G && Number.isFinite(G.peopleOverride) && G.custs.length>=G.peopleOverride) return null;
   if(!force && G.custs.length>=getCurrentCustomerCap()) return null;
   const ci=Math.floor(Math.random()*6);
   const isSp=!!isSponsor;
