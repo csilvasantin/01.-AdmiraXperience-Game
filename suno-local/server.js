@@ -36,7 +36,7 @@ const CLERK_HOST = process.env.SUNO_CLERK_HOST || 'auth.suno.com';
 const CLERK_VER = process.env.SUNO_CLERK_JS_VERSION || '5.117.0';
 const CLERK_API_VER = process.env.SUNO_CLERK_API_VERSION || '2025-11-10';
 const CLERK_QS = `__clerk_api_version=${encodeURIComponent(CLERK_API_VER)}&_clerk_js_version=${encodeURIComponent(CLERK_VER)}`;
-const SUNO_API = process.env.SUNO_API_BASE || 'https://studio-api.suno.ai';
+const SUNO_API = process.env.SUNO_API_BASE || 'https://studio-api-prod.suno.com';
 const ALLOWED_ORIGINS = (process.env.SUNO_ALLOWED_ORIGINS
   || 'https://csilvasantin.github.io,http://localhost,http://127.0.0.1')
   .split(',').map(s => s.trim()).filter(Boolean);

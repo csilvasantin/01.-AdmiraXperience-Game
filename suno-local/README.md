@@ -65,6 +65,10 @@ Ambas deben devolver `{"ok":true,"total_credits_left":<n>,...}`.
   a `auth.suno.com/v1/...` y actualiza `SUNO_CLERK_JS_VERSION` en `.env`.
 - **`suno generate 401|403`** → JWT no autorizado o `mv` desconocido. Comprueba
   que `chirp-v4-5` sigue activo en tu cuenta.
+- **`billing http 503` ("Service Suspended")** → Suno ha movido el host de la API.
+  Mira en devtools cualquier request a un host `studio-api-*.suno.*` o `api.suno.*`
+  y pon ese host en `SUNO_API_BASE` del `.env`. El default actual (mayo 2026) es
+  `https://studio-api-prod.suno.com`. El antiguo `studio-api.suno.ai` esta apagado.
 
 ## Riesgos asumidos
 
