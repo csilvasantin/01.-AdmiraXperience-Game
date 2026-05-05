@@ -21735,7 +21735,7 @@ window.xtAPI = (function(){
     return overlay.classList.contains('visible');
   };
 
-  let lastItemId=null, totalCount=0, currentPixerItem=null;
+  let lastItemId=null, totalCount=0, currentPixerItem=null, firstPollDone=false;
 
   function pixerItemToPlaylistName(item){
     const t=String(item.title||'Pixer item').replace(/[^\w\s\-áéíóúñÁÉÍÓÚÑ.,!?]/g,'').trim().slice(0,40);
@@ -21955,6 +21955,15 @@ window.xtAPI = (function(){
       const data=await r.json();
       totalCount=(data.items||[]).length;
       const item=(data.items||[])[0];
+      // Primer poll tras arrancar el game: si ya hay un item en el feed (de
+      // sesiones anteriores), SOLO recordamos su id como baseline — NO se
+      // renderiza ni se muestra el overlay. El usuario solo quiere ver el
+      // Pixer Feed cuando Pixer.ia empuje contenido NUEVO durante la sesion.
+      if(!firstPollDone){
+        firstPollDone=true;
+        if(item) lastItemId=item.id;
+        return;
+      }
       if(item && item.id!==lastItemId){
         lastItemId=item.id;
         renderItem(item);
