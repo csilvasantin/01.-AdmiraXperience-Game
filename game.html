@@ -21259,7 +21259,7 @@ window.xtAPI = (function(){
   // Overlay para mostrar el item recibido desde Pixer
   const css=document.createElement('style');
   css.textContent=`
-    #pixerFeedOverlay{position:fixed;right:18px;bottom:300px;width:280px;z-index:9000;
+    #pixerFeedOverlay{position:fixed;right:18px;bottom:300px;width:252px;z-index:9000;
       background:rgba(2,6,2,.92);border:1px solid #00ff41;color:#c8ffd0;
       font-family:"JetBrains Mono",ui-monospace,monospace;font-size:11px;
       box-shadow:0 0 24px rgba(0,255,65,.35);transition:opacity .3s;display:none;}
@@ -21274,6 +21274,9 @@ window.xtAPI = (function(){
       cursor:pointer;font-weight:bold;user-select:none;
       transition:background .15s,color .15s;padding:1px 4px;border-radius:2px;}
     #pixerFeedOverlay .pix-head .pix-send:hover{background:#00ff41;color:#000;text-shadow:none;}
+    #pixerFeedOverlay .pix-head .pix-kind{color:#7dff9e;opacity:.85;font-size:10px;
+      letter-spacing:.04em;margin-left:auto;margin-right:8px;text-transform:lowercase;
+      align-self:center;white-space:nowrap;}
     #pixerFeedOverlay .pix-head .pix-close{cursor:pointer;color:#999;}
     #pixerFeedOverlay .pix-body{padding:8px;background:#000;}
     #pixerFeedOverlay .pix-body img,
@@ -21289,6 +21292,7 @@ window.xtAPI = (function(){
   overlay.id='pixerFeedOverlay';
   overlay.innerHTML=`
     <div class="pix-head"><span class="pix-send" title="Enviar a playlist signage (#1)">▶ PIXER FEED</span>
+      <span class="pix-kind"></span>
       <span class="pix-close" title="Ocultar">×</span></div>
     <div class="pix-body"><div style="padding:18px;text-align:center;opacity:.5;">// esperando contenido</div></div>
     <div class="pix-foot">screen: ${screenId}</div>`;
@@ -21474,8 +21478,16 @@ window.xtAPI = (function(){
       body.innerHTML=(cover?`<img src="${cover}" alt="" style="width:100%;height:auto;max-height:200px;object-fit:cover;display:block;margin-bottom:6px;">`:'')+
         `<audio src="${item.url}" controls autoplay style="width:100%"></audio>`;
     }
+    // El kind va a la derecha del titulo "PIXER FEED" en el header (// image | imagen | video | audio)
+    // — libera el foot para que entre title completo + screen.
+    const isEs=(typeof lang!=='undefined' && lang==='es');
+    const kindLabel=item.kind==='image' ? (isEs?'imagen':'image')
+                  : item.kind==='video' ? 'video'
+                  : item.kind==='audio' ? 'audio' : item.kind;
+    const kindEl=overlay.querySelector('.pix-kind');
+    if(kindEl) kindEl.textContent='// '+kindLabel;
     overlay.querySelector('.pix-foot').textContent=
-      `${item.kind} · ${item.title||''} · ${screenId.slice(-6)}`;
+      `${item.title||''} · ${screenId.slice(-6)}`;
     // Item nuevo => permite reabrir si el usuario habia cerrado uno anterior.
     userClosedItemId=null;
     if(isPixerEligibleState()){
