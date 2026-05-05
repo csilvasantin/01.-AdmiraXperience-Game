@@ -18535,6 +18535,82 @@ window.xtAPI = (function(){
         return {ok:true,message:'Clientes: '+count+'/'+cap+(Number.isFinite(ov)?' (override '+ov+')':' (cap auto, hora '+(G.gameTime||0).toFixed(1)+'h)')+' · Staff: '+staff,data:{count,cap,peopleOverride:ov,staff}};
       }
 
+      // /store close → cierra TODO: clientes salen, staff desaparece, audio+luces+aroma+AC apagados
+      // /store open  → reabre y restaura el estado guardado al cerrar
+      // /store       → status
+      if(['store','xtore','xtanco'].includes(cmd) || (cmd==='tienda' && (parts[0]||'').match(/close|open|cierra|cerrar|abrir|abre/i))){
+        if(!G) return noGame();
+        const sub=(parts[0]||'').toLowerCase();
+        if(['close','cerrar','cierra','off'].includes(sub)){
+          // Snapshot del estado actual para poder restaurar con /store open.
+          // Solo si NO estaba ya cerrada (evita pisar el snapshot original).
+          if(!G.storeClosed){
+            G.storeShiftSnapshot={
+              peopleOverride:Number.isFinite(G.peopleOverride)?G.peopleOverride:null,
+              staffHired:(G.staff||[]).map(s=>!!s.hired),
+              masterMute:typeof dsMasterMute!=='undefined'?!!dsMasterMute:false,
+              lampOn:typeof elgatoState!=='undefined'?!!elgatoState.on:false,
+              hueOn:typeof HUE!=='undefined'?!!HUE.on:false,
+              acOn:typeof acOn!=='undefined'?!!acOn:false,
+              aromaOn:typeof aromaOn!=='undefined'?!!aromaOn:false,
+            };
+          }
+          G.storeClosed=true;
+          G.peopleOverride=0;
+          G.customerCapAdjustTimer=0;
+          // Salida instantanea de clientes (mismo patron que /people store 0).
+          const exit=(G.custs||[]).filter(c=>c && c.st!=='queue' && c.st!=='buy' && c.st!=='leave');
+          for(const t of exit){
+            t.bMsg=(lang==='en'?'Store closed':'Tienda cerrada');
+            t.bTimer=Math.max(t.bTimer||0,80);
+            t.timer=Math.min(t.timer||80,30);
+            t.stayTargetTicks=Math.min(t.stayTargetTicks||999999,(t.dwellTicks||0)+30);
+            try{ if(t.st==='walk' && typeof startCustomerLeave==='function') startCustomerLeave(t); }catch(e){}
+          }
+          // Staff fuera: hired=false → no se renderizan en el canvas (linea 12150).
+          (G.staff||[]).forEach(s=>{ s.hired=false; });
+          // Sistemas off
+          try{ if(typeof setMasterMute==='function') setMasterMute(true); }catch(e){}
+          try{ if(typeof setLampState==='function') setLampState(false); }catch(e){}
+          try{ if(typeof setHueState==='function') setHueState(false); }catch(e){}
+          try{ if(typeof setACState==='function') setACState(false); }catch(e){}
+          try{ if(typeof setAromaState==='function') setAromaState(false); }catch(e){}
+          saveGame();
+          if(typeof showEv==='function') showEv('🚪 Tienda cerrada','#888888');
+          return {ok:true,message:'Tienda CERRADA · clientes saliendo, staff fuera, audio+luces+aroma+AC apagados. Reabrir: /store open',data:{storeClosed:true}};
+        }
+        if(['open','abrir','abre','on','reabrir','abierto'].includes(sub)){
+          if(!G.storeClosed && !G.storeShiftSnapshot){
+            return {ok:true,message:'La tienda ya esta abierta.',data:{storeClosed:false}};
+          }
+          const snap=G.storeShiftSnapshot||{};
+          // Restaurar staff hired
+          if(Array.isArray(snap.staffHired)){
+            (G.staff||[]).forEach((s,i)=>{ if(i<snap.staffHired.length) s.hired=snap.staffHired[i]; });
+          }
+          // Restaurar peopleOverride
+          G.peopleOverride=(Number.isFinite(snap.peopleOverride))?snap.peopleOverride:null;
+          G.customerCapAdjustTimer=0;
+          // Restaurar sistemas SOLO si estaban ON antes (no encendemos lo que estaba apagado).
+          try{ if(snap.masterMute===false && typeof setMasterMute==='function') setMasterMute(false); }catch(e){}
+          try{ if(snap.lampOn && typeof setLampState==='function') setLampState(true); }catch(e){}
+          try{ if(snap.hueOn && typeof setHueState==='function') setHueState(true); }catch(e){}
+          try{ if(snap.acOn && typeof setACState==='function') setACState(true); }catch(e){}
+          try{ if(snap.aromaOn && typeof setAromaState==='function') setAromaState(true); }catch(e){}
+          G.storeClosed=false;
+          G.storeShiftSnapshot=null;
+          saveGame();
+          if(typeof showEv==='function') showEv('🔓 Tienda abierta','#88ddaa');
+          return {ok:true,message:'Tienda ABIERTA · staff vuelto, sistemas restaurados al estado previo a /store close',data:{storeClosed:false}};
+        }
+        // /store sin args o status
+        const cust=(G.custs||[]).length;
+        const staff=(G.staff||[]).filter(s=>s.hired).length;
+        return {ok:true,
+          message:'Tienda: '+(G.storeClosed?'CERRADA':'abierta')+' · Clientes: '+cust+' · Staff hired: '+staff+(G.storeClosed?'. Reabrir: /store open':''),
+          data:{storeClosed:!!G.storeClosed,cust,staff}};
+      }
+
       return {ok:false,message:'Comando no reconocido: '+raw};
     },
 
