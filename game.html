@@ -20853,6 +20853,17 @@ window.xtAPI = (function(){
         }
         return 'Uso: /import · /import list · /import surfaces · /import pin <surface> <n> · /import unpin <surface|all> · /import remove <n> · /import clear';
       }
+      // Fallback genérico: si el comando esta implementado en api.command()
+      // (CLI in-game) y aun no esta mapeado en este dispatcher de Telegram,
+      // delegamos. Cubre /store, /people, /gente, /clientes, /personas y futuros
+      // comandos sin necesidad de duplicar la logica.
+      if(['store','xtore','xtanco','tienda','people','gente','personas','clientes'].includes(cmd)){
+        try{
+          const res=api.command('/'+cmd+(arg?' '+arg:''));
+          return res && res.message ? res.message : 'OK';
+        }catch(e){ return 'Error: '+(e.message||e); }
+      }
+
       return 'No entiendo "'+cmd+'". Usa /help';
     }catch(e){
       return 'Error ejecutando comando: '+e.message;
