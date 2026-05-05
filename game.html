@@ -18302,6 +18302,16 @@ window.xtAPI = (function(){
       const parts=normalized.split(/\s+/).filter(Boolean);
       const cmd=(parts.shift()||'').toLowerCase();
       const arg=parts.join(' ');
+      // Echo del comando en el bocadillo del Store Manager para que el usuario
+      // VEA en pantalla la accion que se ejecuta ("/store close" → la tienda se
+      // vacia con el manager anunciandolo). Saltamos comandos diagnosticos
+      // (que ya devuelven texto largo en el chat).
+      try{
+        const isDiag=cmd==='probe'||(cmd==='audio'&&/^(probe|diag|debug|test|check|que-?suena)/i.test(arg||''));
+        if(!isDiag && typeof setManagerSayBubble==='function'){
+          setManagerSayBubble(raw.startsWith('/')?raw:'/'+raw);
+        }
+      }catch(e){}
       const head=(parts[0]||'').toLowerCase();
       const tierMap={basica:0,'básica':0,basic:0,media:1,medium:1,premium:2};
       const visitMap={com:'Com',comercial:'Com',tec:'Tec',tecnico:'Tec','técnico':'Tec',del:'Del',delegacion:'Del','delegación':'Del',gc:'GC',guardia:'GC','guardia-civil':'GC'};
