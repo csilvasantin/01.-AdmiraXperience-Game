@@ -253,6 +253,13 @@
     .tg-card-badges{display:flex;flex-wrap:wrap;gap:4px}
     .tg-card-badges span{display:inline-flex;max-width:100%;padding:1px 5px;border:1px solid #1d5260;border-radius:4px;background:#04111a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     #telegramLog{flex:1;overflow:auto;padding:7px 8px;background:#02080d;font-size:10px;line-height:1.35;color:#cceef5;white-space:pre-wrap}
+    /* Mini-display de la ultima respuesta en el panel de composer (tg-pane.send). */
+    #telegramLastResponse{padding:6px 10px;margin:0;background:linear-gradient(90deg,rgba(120,243,255,.06),rgba(120,243,255,.02));border-top:1px solid rgba(120,243,255,.18);border-bottom:1px solid rgba(120,243,255,.18);font-family:monospace;font-size:11px;line-height:1.4;color:#cceef5;white-space:pre-wrap;max-height:84px;overflow:auto;transition:background .3s}
+    #telegramLastResponse.fresh{background:linear-gradient(90deg,rgba(120,243,255,.18),rgba(120,243,255,.06));border-color:rgba(120,243,255,.42)}
+    #telegramLastResponse .lr-tag{display:inline-block;font-size:9px;letter-spacing:.12em;color:#78f3ff;margin-right:6px;text-transform:uppercase}
+    #telegramLastResponse .lr-time{display:inline-block;font-size:9px;color:#57747c;margin-left:6px}
+    #telegramLastResponse.err{background:linear-gradient(90deg,rgba(255,94,58,.16),rgba(255,94,58,.04));border-color:rgba(255,94,58,.45)}
+    #telegramLastResponse.err .lr-tag{color:#ff8866}
     .tg-line{margin:0 0 5px 0;border-left:2px solid #25515b;padding-left:6px}
     .tg-line.in{border-left-color:#52d37c;color:#dcffe6}
     .tg-line.out{border-left-color:#5bc9ff;color:#dff6ff}
@@ -462,6 +469,7 @@
       <button type="button" id="telegramHelpBtn">/help</button>
       <button type="button" id="telegramHideBtn">Hide</button>
     </div>
+    <div id="telegramLastResponse" class="tg-last-response" hidden aria-live="polite"></div>
     <div class="tg-quick-actions" id="telegramQuickActions" aria-label="Acciones rápidas de escena"></div>
   </div>
   <div class="tg-pane conversation">
@@ -21102,22 +21110,59 @@ window.xtAPI = (function(){
 
   // Exponer al global para que el modo Demo (fuera del IIFE) pueda invocar
   window.sendComposerText = sendComposerText;
+  // Pinta la respuesta del bot en el panel inline (#telegramLastResponse)
+  // que vive dentro del .tg-pane.send. Asi el usuario ve el feedback sin
+  // tener que abrir Telegram ni la pestaña conversation. Auto-clear "fresh"
+  // tras 3.5s para que la siguiente respuesta sea evidente.
+  function showLastResponse(text,kind){
+    const el=document.getElementById('telegramLastResponse');
+    if(!el) return;
+    const clean=String(text||'').replace(/^\s+|\s+$/g,'');
+    if(!clean){ el.hidden=true; el.textContent=''; return; }
+    el.hidden=false;
+    el.classList.remove('err','fresh');
+    if(kind==='err') el.classList.add('err');
+    el.classList.add('fresh');
+    const time=new Date().toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    el.innerHTML='';
+    const tag=document.createElement('span'); tag.className='lr-tag';
+    tag.textContent=kind==='err'?'ERROR':'AdmiraXPBot →';
+    const ts=document.createElement('span'); ts.className='lr-time'; ts.textContent=time;
+    const body=document.createElement('div'); body.textContent=clean;
+    el.appendChild(tag); el.appendChild(ts); el.appendChild(body);
+    el.scrollTop=0;
+    clearTimeout(showLastResponse._t);
+    showLastResponse._t=setTimeout(()=>{ try{ el.classList.remove('fresh'); }catch(e){} },3500);
+  }
+
   async function sendComposerText(text){
     const clean=String(text||'').trim();
     if(!clean) return;
     rememberMemory('dialog','Consola local: '+clean);
     appendTelegramLog('out','Juego',clean);
     if(clean.startsWith('/')){
-      const answer=await executeTelegramText(clean);
-      appendTelegramLog('bot','AdmiraXPBot',answer);
-      await telegramSend('Juego: '+clean+'\nAdmiraXPBot: '+answer);
+      try{
+        const answer=await executeTelegramText(clean);
+        appendTelegramLog('bot','AdmiraXPBot',answer);
+        showLastResponse(answer,'ok');
+        await telegramSend('Juego: '+clean+'\nAdmiraXPBot: '+answer);
+      }catch(e){
+        const errMsg='Error: '+(e&&e.message||e);
+        appendTelegramLog('err','Error',errMsg);
+        showLastResponse(errMsg,'err');
+      }
       if(composer&&clean.replace(/^\/([a-zA-Z0-9_]+).*/,'$1').toLowerCase()!=='help') composer.value='';
       renderQuickActionButtons();
       return;
     }
     hideHelpPanel();
     const result=await telegramSend(clean);
-    if(result.ok&&composer) composer.value='';
+    if(result&&result.ok){
+      showLastResponse('Mensaje enviado a Telegram','ok');
+      if(composer) composer.value='';
+    } else {
+      showLastResponse('No se pudo enviar a Telegram'+((result&&result.error)?(': '+result.error):''),'err');
+    }
     renderQuickActionButtons();
   }
 
