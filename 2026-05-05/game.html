@@ -1385,6 +1385,11 @@ function setMasterMute(on){
   // Per-surface videos (incluye los pineados): cede al control de pin si no master mute.
   dsApplyAudioForPins();
   // Ambient engine: rumor de fondo, cafetera, lluvia (G.ambient.enabled).
+  // Importante: tras cambiar G.ambient.enabled hay que llamar AMBIENT.update()
+  // para que el master gain del audio context se ajuste — si no, el ruido
+  // (especialmente el rain noise filtrado a 2200Hz) sigue sonando aunque
+  // .enabled sea false. El BUG: las "3 gotas" que se escuchaban venian de
+  // este nodo + cafetera + rumor sin update.
   try{
     if(typeof G!=='undefined' && G && G.ambient){
       if(dsMasterMute){
@@ -1394,6 +1399,8 @@ function setMasterMute(on){
         G.ambient.enabled=_dsMutePrev.ambientEnabled;
         _dsMutePrev.ambientEnabled=null;
       }
+      // Aplicar el cambio al audio graph del ambient engine inmediatamente.
+      try{ if(window.AMBIENT && window.AMBIENT.update) window.AMBIENT.update(); }catch(e){}
     }
   }catch(e){}
   // TTS de clientes (bocadillos hablados).
