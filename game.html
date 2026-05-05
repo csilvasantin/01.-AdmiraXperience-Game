@@ -3819,6 +3819,12 @@ function getCustomerFlowProfile(hour){
   return {cap:5,spawnMult:0.82,label:'cierre'};
 }
 function getCurrentCustomerCap(){
+  // Override manual via /people store <N>: bypassea el cap horario y el ceiling
+  // MAX_CUSTOMERS_IN_STORE (hasta 30 por seguridad). Para reactivar el cap
+  // automatico segun hora: /people store auto.
+  if (G && Number.isFinite(G.peopleOverride) && G.peopleOverride >= 0) {
+    return Math.min(30, G.peopleOverride);
+  }
   return Math.max(1,Math.min(MAX_CUSTOMERS_IN_STORE,getCustomerFlowProfile(G&&G.gameTime).cap|0));
 }
 function getCurrentCustomerSpawnMult(){
@@ -18465,6 +18471,44 @@ window.xtAPI = (function(){
         const type=visitMap[head];
         if(!type) return {ok:false,message:'Visita no válida. Usa com, tec, del o gc'};
         return api.visit(type);
+      }
+
+      // /people store <N> → fija manualmente la gente en la tienda hasta nueva orden.
+      // /people store auto|off|reset → vuelve al cap automatico segun hora.
+      // /people → muestra estado.
+      if(['people','gente','personas'].includes(cmd)){
+        if(!G) return noGame();
+        const sub=(parts[0]||'').toLowerCase();
+        const arg2=parts.slice(1).join(' ').trim();
+        if(sub==='store'||sub==='tienda'){
+          if(['off','auto','reset','default','none','clear','none','quita','quitar'].includes(arg2.toLowerCase())){
+            G.peopleOverride=null;
+            G.customerCapAdjustTimer=0;
+            saveGame();
+            return {ok:true,message:'Override de gente desactivado · cap automatico segun hora ('+getCurrentCustomerCap()+')',data:{peopleOverride:null,cap:getCurrentCustomerCap()}};
+          }
+          const n=parseInt(arg2,10);
+          if(!Number.isFinite(n)||n<0||n>30) return {ok:false,message:'Uso: /people store <N> (0-30) | /people store auto'};
+          G.peopleOverride=n;
+          G.customerCapAdjustTimer=0; // forzar trim/spawn inmediato en el siguiente tick
+          // Si estamos por debajo del target, fuerza spawn hasta llenar.
+          const current=(G.custs||[]).length;
+          let spawned=0;
+          if(current<n){
+            for(let i=current;i<n;i++){
+              try{ if(spawnCust(false,false,true)) spawned++; }catch(e){}
+            }
+          }
+          // Si estamos por encima, trimCustomersToHourCap se encargará en el siguiente tick.
+          saveGame();
+          const after=(G.custs||[]).length;
+          return {ok:true,message:'People store override = '+n+' · count actual: '+after+(spawned>0?' (+'+spawned+' spawned)':'')+'. Para volver al automatico: /people store auto',data:{peopleOverride:n,count:after,cap:getCurrentCustomerCap()}};
+        }
+        // /people sin subcomando: estado actual
+        const count=(G.custs||[]).length;
+        const cap=getCurrentCustomerCap();
+        const ov=G.peopleOverride;
+        return {ok:true,message:'Gente en tienda: '+count+'/'+cap+(Number.isFinite(ov)?' (override '+ov+')':' (cap auto segun hora '+(G.gameTime||0).toFixed(1)+'h)'),data:{count,cap,peopleOverride:ov}};
       }
 
       return {ok:false,message:'Comando no reconocido: '+raw};
