@@ -18322,6 +18322,75 @@ window.xtAPI = (function(){
           if(typeof showEv==='function') showEv(next?'🔇 Audio total silenciado':'🔊 Audio reactivado',next?'#aaaaaa':'#ffd866');
           return {ok:true,message:(next?'Master mute ON':'Master mute OFF'),data:{masterMute:next}};
         }
+        // /audio probe → diagnostico exhaustivo de TODAS las fuentes de audio.
+        // Util cuando /audio mute deja sonido residual: imprime todo lo que
+        // este reproduciendose para que se identifique la fuente concreta.
+        if(['probe','diag','debug','test','check','que-suena','que_suena'].includes(sub)){
+          const report={ts:new Date().toISOString(),masterMute:typeof dsMasterMute!=='undefined'?!!dsMasterMute:null,
+            G:{sfxVolume:G&&G.sfxVolume,ambientEnabled:G&&G.ambient&&!!G.ambient.enabled,ambientVolume:G&&G.ambient&&G.ambient.volume,
+               custVoicesEnabled:G&&G.custVoices&&!!G.custVoices.enabled,weatherType:G&&G.weather&&G.weather.type,
+               lampOn:typeof elgatoState!=='undefined'&&elgatoState.on},
+            mediaElements:[],surfaceMedia:[],announceAudio:null,pixerFeed:null,admiraTubeIframes:0};
+          // Todos los <audio>/<video> reproduciendo
+          document.querySelectorAll('audio,video').forEach(el=>{
+            const playing=!el.paused && (el.currentTime>0 || el.readyState>=2);
+            const audible=playing && !el.muted && el.volume>0;
+            if(playing||el.currentTime>0){
+              report.mediaElements.push({tag:el.tagName,id:el.id||'(no-id)',
+                src:String(el.currentSrc||el.src||'').slice(-70),
+                paused:el.paused,muted:el.muted,volume:Number(el.volume.toFixed(2)),
+                t:Number(el.currentTime.toFixed(1)),
+                audible:audible,playing:playing,
+                inOverlay:!!el.closest('#pixerFeedOverlay'),
+              });
+            }
+          });
+          // DS_SURFACE_MEDIA (per-surface videos pineados)
+          try{
+            if(typeof DS_SURFACE_MEDIA!=='undefined'){
+              for(const sid in DS_SURFACE_MEDIA){
+                const m=DS_SURFACE_MEDIA[sid]; if(!m||!m.video) continue;
+                const v=m.video;
+                report.surfaceMedia.push({surface:sid,kind:m.kind,name:m.name,
+                  paused:v.paused,muted:v.muted,volume:Number(v.volume.toFixed(2)),
+                  pinned:typeof DS_PIN!=='undefined'&&DS_PIN[sid]&&DS_PIN[sid].kind==='video'});
+              }
+            }
+          }catch(e){}
+          // ANNOUNCE_AUDIO (voz ElevenLabs)
+          try{
+            if(typeof ANNOUNCE_AUDIO!=='undefined' && ANNOUNCE_AUDIO){
+              report.announceAudio={paused:ANNOUNCE_AUDIO.paused,muted:ANNOUNCE_AUDIO.muted,
+                volume:Number(ANNOUNCE_AUDIO.volume.toFixed(2)),t:Number(ANNOUNCE_AUDIO.currentTime.toFixed(1))};
+            }
+          }catch(e){}
+          // Pixer Feed overlay state
+          try{
+            const pf=document.getElementById('pixerFeedOverlay');
+            if(pf){
+              report.pixerFeed={visible:pf.classList.contains('visible'),
+                hasAudio:!!pf.querySelector('audio'),hasVideo:!!pf.querySelector('video')};
+            }
+          }catch(e){}
+          // Admira Tube iframes (mute via postMessage no es introspectable directamente)
+          try{
+            if(typeof DS_DISPLAYS!=='undefined'){
+              report.admiraTubeIframes=DS_DISPLAYS.filter(d=>d&&d.kind==='admira-tube').length;
+            }
+          }catch(e){}
+          // Resumen para humanos: fuentes audibles probables
+          const audible=[];
+          report.mediaElements.filter(m=>m.audible).forEach(m=>audible.push(`${m.tag}#${m.id} vol=${m.volume} src=…${m.src.slice(-30)}`));
+          report.surfaceMedia.filter(m=>!m.paused && !m.muted && m.volume>0).forEach(m=>audible.push(`surface[${m.surface}] ${m.kind} ${m.name||''} vol=${m.volume}`));
+          if(report.G.ambientEnabled && (report.G.ambientVolume||0)>0) audible.push(`ambient.engine vol=${report.G.ambientVolume} (rumor+rain+cafetera)`);
+          if((report.G.sfxVolume||0)>0) audible.push(`SFX vol=${report.G.sfxVolume} (rainLoop si llueve, eventChime, etc.)`);
+          if(report.announceAudio && !report.announceAudio.paused && !report.announceAudio.muted) audible.push('ANNOUNCE_AUDIO ElevenLabs');
+          report.audibleSources=audible;
+          // Imprime al console y devuelve en data para Telegram/CLI
+          try{ console.group('🔊 /audio probe'); console.table(report.mediaElements); console.table(report.surfaceMedia); console.log('Globals:',report.G,'masterMute:',report.masterMute); console.log('Audible:',audible); console.groupEnd(); }catch(e){}
+          const summary=audible.length===0?'✅ Silencio total — ninguna fuente audible detectada':'⚠ Fuentes audibles ('+audible.length+'):\n• '+audible.join('\n• ');
+          return {ok:true,message:summary,data:report};
+        }
         return runBinaryCommand('Audio DS',arg,()=>!dsAudioMuted,setDSAudioState,false);
       }
       if(['livecam','cam','camera','camara','cámara','webcam'].includes(cmd)) return {ok:false,message:'LiveCam requiere ejecución asíncrona. Usa /livecam en la consola o el botón superior.'};
