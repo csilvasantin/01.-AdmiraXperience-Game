@@ -968,20 +968,24 @@ const server = http.createServer((req, res) => {
         return;
       }
       const url = body.url.trim();
-      // Whitelist YouTube hosts to avoid accidental SSRF on internal services.
+      const fmt = (body.format === 'audio') ? 'audio' : 'video';
+      // Whitelist por host. Evita SSRF a servicios internos.
       let host;
       try { host = new URL(url).hostname.toLowerCase(); }
       catch (e) { sendJson(res, 400, { ok: false, error: 'Invalid URL' }); return; }
-      const isYouTube = host === 'youtu.be' || host === 'm.youtube.com' || host.endsWith('youtube.com') || host.endsWith('youtube-nocookie.com');
-      if (!isYouTube) {
-        sendJson(res, 400, { ok: false, error: 'Only YouTube URLs are accepted' });
+      const isYouTube  = host === 'youtu.be' || host === 'm.youtube.com' || host.endsWith('youtube.com') || host.endsWith('youtube-nocookie.com');
+      const isVimeo    = host === 'vimeo.com' || host.endsWith('.vimeo.com') || host === 'player.vimeo.com';
+      const isTwitter  = host === 'twitter.com' || host === 'x.com' || host === 'mobile.twitter.com' || host === 't.co';
+      const isTikTok   = host === 'tiktok.com' || host.endsWith('.tiktok.com') || host === 'vm.tiktok.com';
+      const isInstagram= host === 'instagram.com' || host.endsWith('.instagram.com');
+      if (!(isYouTube || isVimeo || isTwitter || isTikTok || isInstagram)) {
+        sendJson(res, 400, { ok: false, error: 'Host not allowed', host, allowed: ['youtube','vimeo','twitter/x','tiktok','instagram'] });
         return;
       }
       const id = crypto.randomBytes(8).toString('hex');
       const outTpl = path.join(os.tmpdir(), `admira-tube-${id}.%(ext)s`);
-      const args = [
-        '-f', 'bv*[height<=720][ext=mp4]+ba[ext=m4a]/b[height<=720][ext=mp4]/b[ext=mp4]/b',
-        '--remux-video', 'mp4',
+      // Args base comunes
+      const baseArgs = [
         '--no-playlist',
         '--max-filesize', '300M',
         '--no-mtime',
@@ -990,8 +994,13 @@ const server = http.createServer((req, res) => {
         '--print-to-file', 'after_move:filepath', path.join(os.tmpdir(), `admira-tube-${id}.path`),
         '--print-to-file', 'before_dl:%(title)s', path.join(os.tmpdir(), `admira-tube-${id}.title`),
         '-o', outTpl,
-        url,
       ];
+      // Selector de formato: video mp4 720p preferente con fallback robusto para hosts que no tienen mp4 directo.
+      // Audio: bestaudio extraido a mp3 (requiere ffmpeg en PATH).
+      const formatArgs = (fmt === 'audio')
+        ? ['-f', 'bestaudio/best', '-x', '--audio-format', 'mp3', '--audio-quality', '0']
+        : ['-f', 'bv*[height<=720][ext=mp4]+ba[ext=m4a]/b[height<=720][ext=mp4]/b[ext=mp4]/b[height<=720]/b', '--remux-video', 'mp4'];
+      const args = [...formatArgs, ...baseArgs, url];
       const yt = spawn(YT_DLP_BIN, args, { stdio: ['ignore', 'pipe', 'pipe'] });
       let stderrBuf = '';
       yt.stderr.on('data', (d) => { stderrBuf += d.toString(); if (stderrBuf.length > 16384) stderrBuf = stderrBuf.slice(-16384); });
@@ -1019,8 +1028,9 @@ const server = http.createServer((req, res) => {
         try { title = fs.readFileSync(path.join(os.tmpdir(), `admira-tube-${id}.title`), 'utf8').trim().split('\n').pop() || ''; } catch (e) {}
         if (!outFile || !fs.existsSync(outFile)) {
           // Fallback: scan tmpdir for the matching prefix
+          const allowExt = (fmt === 'audio') ? /\.(mp3|m4a|opus|webm|aac|wav|ogg)$/i : /\.(mp4|webm|mkv|mov)$/i;
           try {
-            const files = fs.readdirSync(os.tmpdir()).filter(f => f.startsWith(`admira-tube-${id}.`) && /\.(mp4|webm|mkv)$/i.test(f));
+            const files = fs.readdirSync(os.tmpdir()).filter(f => f.startsWith(`admira-tube-${id}.`) && allowExt.test(f));
             if (files.length) outFile = path.join(os.tmpdir(), files[0]);
           } catch (e) {}
         }
@@ -1032,14 +1042,20 @@ const server = http.createServer((req, res) => {
         let st;
         try { st = fs.statSync(outFile); } catch (e) { cleanup(outFile); sendJson(res, 500, { ok: false, error: 'stat failed' }); return; }
         const ext = path.extname(outFile).toLowerCase();
-        const mime = ext === '.webm' ? 'video/webm' : (ext === '.mkv' ? 'video/x-matroska' : 'video/mp4');
+        const mimeByExt = {
+          '.mp4': 'video/mp4', '.webm': 'video/webm', '.mkv': 'video/x-matroska', '.mov': 'video/quicktime',
+          '.mp3': 'audio/mpeg', '.m4a': 'audio/mp4', '.opus': 'audio/ogg', '.aac': 'audio/aac', '.wav': 'audio/wav', '.ogg': 'audio/ogg',
+        };
+        const mime = mimeByExt[ext] || (fmt === 'audio' ? 'audio/mpeg' : 'video/mp4');
         res.writeHead(200, {
           'Content-Type': mime,
           'Content-Length': String(st.size),
-          'Content-Disposition': `inline; filename="${(title || 'youtube').replace(/[^\w\-. ]+/g, '_').slice(0, 120)}${ext}"`,
+          'Content-Disposition': `inline; filename="${(title || host || 'tube').replace(/[^\w\-. ]+/g, '_').slice(0, 120)}${ext}"`,
           'X-Tube-Title': encodeURIComponent(title || ''),
           'X-Tube-Source-Url': encodeURIComponent(url),
-          'Access-Control-Expose-Headers': 'X-Tube-Title, X-Tube-Source-Url',
+          'X-Tube-Format': fmt,
+          'X-Tube-Host': host,
+          'Access-Control-Expose-Headers': 'X-Tube-Title, X-Tube-Source-Url, X-Tube-Format, X-Tube-Host',
           'Access-Control-Allow-Origin': '*',
           'Cache-Control': 'no-store',
         });
