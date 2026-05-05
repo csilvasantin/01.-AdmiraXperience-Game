@@ -6,7 +6,7 @@
 //   GET  /status?ids=a,b    → [ {id, status, audio_url, ...} ]
 //
 // Auth: cookie Clerk pegada en .env (SUNO_COOKIE). Cada ~50s refrescamos el JWT
-// via https://clerk.suno.com/v1/client/sessions/<sid>/tokens y lo cacheamos.
+// via https://auth.suno.com/v1/client/sessions/<sid>/tokens y lo cacheamos.
 //
 // Suno no expone API publica — esto es reverse engineering: fragil, puede romperse,
 // y violar TOS si se abusa. Util solo para uso personal con cuenta loginada.
@@ -32,17 +32,18 @@ const path = require('path');
 
 const PORT = parseInt(process.env.SUNO_LOCAL_PORT || '3777', 10);
 const SUNO_COOKIE = process.env.SUNO_COOKIE || '';
-const CLERK_VER = process.env.SUNO_CLERK_JS_VERSION || '4.73.4';
+const CLERK_HOST = process.env.SUNO_CLERK_HOST || 'auth.suno.com';
+const CLERK_VER = process.env.SUNO_CLERK_JS_VERSION || '5.0.0';
 const SUNO_API = process.env.SUNO_API_BASE || 'https://studio-api.suno.ai';
 const ALLOWED_ORIGINS = (process.env.SUNO_ALLOWED_ORIGINS
   || 'https://csilvasantin.github.io,http://localhost,http://127.0.0.1')
   .split(',').map(s => s.trim()).filter(Boolean);
 const UA = process.env.SUNO_UA
-  || 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
+  || 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36';
 
 if (!SUNO_COOKIE) {
   console.error('✗ SUNO_COOKIE no esta definido en .env');
-  console.error('  Crea un .env desde .env.example y pega la cookie de clerk.suno.com');
+  console.error('  Crea un .env desde .env.example y pega la cookie de auth.suno.com');
   process.exit(1);
 }
 
@@ -53,8 +54,11 @@ let cachedJwtExp = 0;
 
 async function getSessionId() {
   if (cachedSid) return cachedSid;
-  const r = await fetch(`https://clerk.suno.com/v1/client?_clerk_js_version=${CLERK_VER}`, {
-    headers: { cookie: SUNO_COOKIE, 'user-agent': UA, accept: 'application/json' },
+  const r = await fetch(`https://${CLERK_HOST}/v1/client?_clerk_js_version=${CLERK_VER}`, {
+    headers: {
+      cookie: SUNO_COOKIE, 'user-agent': UA, accept: 'application/json',
+      origin: 'https://suno.com', referer: 'https://suno.com/',
+    },
   });
   if (!r.ok) throw new Error(`clerk client list failed ${r.status}: ${(await r.text()).slice(0, 200)}`);
   const data = await r.json();
@@ -69,8 +73,11 @@ async function getJwt() {
   if (cachedJwt && Date.now() < cachedJwtExp - 30_000) return cachedJwt;
   const sid = await getSessionId();
   const r = await fetch(
-    `https://clerk.suno.com/v1/client/sessions/${sid}/tokens?_clerk_js_version=${CLERK_VER}`,
-    { method: 'POST', headers: { cookie: SUNO_COOKIE, 'user-agent': UA, accept: 'application/json' } }
+    `https://${CLERK_HOST}/v1/client/sessions/${sid}/tokens?_clerk_js_version=${CLERK_VER}`,
+    { method: 'POST', headers: {
+      cookie: SUNO_COOKIE, 'user-agent': UA, accept: 'application/json',
+      origin: 'https://suno.com', referer: 'https://suno.com/',
+    } }
   );
   if (!r.ok) {
     cachedSid = null; // forzar redescubrimiento

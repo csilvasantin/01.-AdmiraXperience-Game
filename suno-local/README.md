@@ -18,12 +18,17 @@ GET  /status?ids=a,b    → [ {id, status, audio_url, ...} ]
 
 ## Setup (1 vez)
 
+Suno usa **Clerk v5** y el host de Clerk es **`auth.suno.com`** (no `clerk.suno.com`).
+
 1. Login en `https://suno.com` en Chrome.
 2. F12 → Network → recarga.
-3. Filtra por `clerk` y abre cualquier request a `clerk.suno.com`.
-4. Pestaña Headers → copia el valor entero del header `Cookie:`.
+3. Filtra por `auth.suno.com` y abre **la primera request a `/v1/client?_clerk_js_version=...`**.
+   - **NO** la del bundle JS (`/npm/@clerk/clerk-js@5/dist/clerk.browser.js`) — ese fichero estático no lleva cookie.
+   - Sí la API call: `auth.suno.com/v1/client?_clerk_js_version=...` (status 200, content-type JSON).
+4. Pestaña Headers → bloque Request Headers → copia el valor entero del header `Cookie:`
+   (la línea larguísima que empieza por `__client_uat=...; __client=...; __session=...`).
 5. `cp .env.example .env`
-6. Pega la cookie en `SUNO_COOKIE=` del `.env`.
+6. Pega la cookie en `SUNO_COOKIE=` del `.env` (todo en una sola línea, sin comillas).
 
 ## Arrancar
 
@@ -54,8 +59,10 @@ Ambas deben devolver `{"ok":true,"total_credits_left":<n>,...}`.
 
 - **`SUNO_COOKIE no esta definido`** → revisa `.env` (no debe llevar comillas).
 - **`clerk client list failed 401`** → cookie expiró, recopia.
+- **`clerk client list failed 404`** → host Clerk cambió. Mira el dominio real en
+  devtools (filtra por `clerk` o `auth.suno`) y pon `SUNO_CLERK_HOST=...` en `.env`.
 - **`clerk response missing jwt`** → versión Clerk JS cambió. Mira un request real
-  a `clerk.suno.com/v1/...` y actualiza `SUNO_CLERK_JS_VERSION` en `.env`.
+  a `auth.suno.com/v1/...` y actualiza `SUNO_CLERK_JS_VERSION` en `.env`.
 - **`suno generate 401|403`** → JWT no autorizado o `mv` desconocido. Comprueba
   que `chirp-v4-5` sigue activo en tu cuenta.
 
