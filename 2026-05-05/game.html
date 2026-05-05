@@ -1416,6 +1416,24 @@ function setMasterMute(on){
       try{ if(dsMasterMute) sendAdmiraTubeCommand(idx,'mute'); else sendAdmiraTubeCommand(idx,'unMute'); }catch(e){}
     });
   }
+  // Pixer Feed overlay: si hay un item de audio/video reproduciendose, sigue
+  // su mute (autoplay creado en renderItem ya respeta el flag al iniciarse,
+  // pero el toggle posterior necesita esto).
+  try{
+    const pf=document.getElementById('pixerFeedOverlay');
+    if(pf){
+      pf.querySelectorAll('audio,video').forEach(el=>{
+        try{ el.muted=dsMasterMute; }catch(e){}
+      });
+    }
+  }catch(e){}
+  // Voz ElevenLabs del comando /comunicar.
+  try{
+    if(typeof ANNOUNCE_AUDIO!=='undefined' && ANNOUNCE_AUDIO){
+      ANNOUNCE_AUDIO.muted=dsMasterMute;
+      if(dsMasterMute){ try{ ANNOUNCE_AUDIO.pause(); }catch(e){} }
+    }
+  }catch(e){}
   return dsMasterMute;
 }
 
@@ -3853,16 +3871,18 @@ async function applyStudioLightState(newOn,opts){
   elgatoState.skyRed=newOn;
   elgatoState.notify=120;
   if(G) G.lampIntensity=newOn?100:0;
-  // Play sound
-  try{
-    const ac=new(window.AudioContext||window.webkitAudioContext)();
-    const o=ac.createOscillator(),g=ac.createGain();
-    o.type='sine';o.frequency.value=newOn?660:440;
-    g.gain.setValueAtTime(0.12,ac.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.01,ac.currentTime+0.2);
-    o.connect(g);g.connect(ac.destination);
-    o.start();o.stop(ac.currentTime+0.2);
-  }catch(e){}
+  // Play sound (silenciado por /audio mute master).
+  if(typeof dsMasterMute==='undefined' || !dsMasterMute){
+    try{
+      const ac=new(window.AudioContext||window.webkitAudioContext)();
+      const o=ac.createOscillator(),g=ac.createGain();
+      o.type='sine';o.frequency.value=newOn?660:440;
+      g.gain.setValueAtTime(0.12,ac.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.01,ac.currentTime+0.2);
+      o.connect(g);g.connect(ac.destination);
+      o.start();o.stop(ac.currentTime+0.2);
+    }catch(e){}
+  }
   // Try to also toggle the real Elgato lamp (non-blocking)
   try{
     await elgatoFetch('/elgato/lights',{
@@ -16821,6 +16841,8 @@ let edSaveNotify=0; // countdown frames for save notification
 
 // Beep sound for save confirmation
 function playSaveBeep(){
+  // Silenciado cuando /audio mute esta activo.
+  if(typeof dsMasterMute!=='undefined' && dsMasterMute) return;
   try{
     const ac=new(window.AudioContext||window.webkitAudioContext)();
     // Two-tone confirmation beep
@@ -19212,6 +19234,8 @@ window.xtAPI = (function(){
         const blob=await res.blob();
         if(ANNOUNCE_AUDIO){try{ANNOUNCE_AUDIO.pause();}catch(e){}}
         ANNOUNCE_AUDIO=new Audio(URL.createObjectURL(blob));
+        // Respeta /audio mute master: si esta activo, queda silenciado.
+        try{ ANNOUNCE_AUDIO.muted = !!(typeof dsMasterMute!=='undefined' && dsMasterMute); }catch(e){}
         ANNOUNCE_AUDIO.play().catch(()=>{});
         return {ok:true};
       }catch(e){lastError=e;}
@@ -21475,8 +21499,10 @@ window.xtAPI = (function(){
       // Si el item trae caratula (cover_url), la mostramos encima del audio para
       // que el usuario identifique la pista de un vistazo desde la Xtore.
       const cover=item.cover_url||item.cover||'';
+      // Respeta /audio mute master: si esta activo el audio entra mudo.
+      const muteAttr=(typeof dsMasterMute!=='undefined' && dsMasterMute)?' muted':'';
       body.innerHTML=(cover?`<img src="${cover}" alt="" style="width:100%;height:auto;max-height:200px;object-fit:cover;display:block;margin-bottom:6px;">`:'')+
-        `<audio src="${item.url}" controls autoplay style="width:100%"></audio>`;
+        `<audio src="${item.url}" controls autoplay${muteAttr} style="width:100%"></audio>`;
     }
     // El kind va a la derecha del titulo "PIXER FEED" en el header (// image | imagen | video | audio)
     // — libera el foot para que entre title completo + screen.
