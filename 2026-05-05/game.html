@@ -21259,13 +21259,17 @@ window.xtAPI = (function(){
   // Overlay para mostrar el item recibido desde Pixer
   const css=document.createElement('style');
   css.textContent=`
-    #pixerFeedOverlay{position:fixed;top:90px;right:18px;width:280px;z-index:9000;
+    #pixerFeedOverlay{position:fixed;right:18px;bottom:300px;width:280px;z-index:9000;
       background:rgba(2,6,2,.92);border:1px solid #00ff41;color:#c8ffd0;
       font-family:"JetBrains Mono",ui-monospace,monospace;font-size:11px;
       box-shadow:0 0 24px rgba(0,255,65,.35);transition:opacity .3s;display:none;}
     #pixerFeedOverlay.visible{display:block;}
+    #pixerFeedOverlay.is-dragging{transition:none;opacity:.92;
+      box-shadow:0 0 36px rgba(0,255,65,.6);}
     #pixerFeedOverlay .pix-head{display:flex;justify-content:space-between;
-      padding:6px 10px;border-bottom:1px dashed #2f8a3e;letter-spacing:.08em;}
+      padding:6px 10px;border-bottom:1px dashed #2f8a3e;letter-spacing:.08em;
+      cursor:grab;user-select:none;touch-action:none;}
+    #pixerFeedOverlay .pix-head.is-grabbing{cursor:grabbing;}
     #pixerFeedOverlay .pix-head .pix-send{color:#00ff41;text-shadow:0 0 4px #00ff41;
       cursor:pointer;font-weight:bold;user-select:none;
       transition:background .15s,color .15s;padding:1px 4px;border-radius:2px;}
@@ -21357,6 +21361,82 @@ window.xtAPI = (function(){
     e.stopPropagation();
     addPixerItemToTopOfPlaylist();
   });
+
+  // --- Drag de la ventana desde el header ---
+  // Posicion persistida en localStorage; si no hay, se queda con el default CSS
+  // (right:18px, bottom:300px) que cae en la zona libre encima del menu inferior.
+  const POS_KEY='pixer-xtore-overlay-pos';
+  function clampPos(left,top,w,h){
+    const vw=window.innerWidth, vh=window.innerHeight;
+    const minLeft=8, minTop=8;
+    const maxLeft=Math.max(minLeft, vw-w-8);
+    const maxTop=Math.max(minTop, vh-h-8);
+    return {left:Math.min(Math.max(left,minLeft),maxLeft),
+            top:Math.min(Math.max(top,minTop),maxTop)};
+  }
+  function applyPos(left,top){
+    const w=overlay.offsetWidth||280, h=overlay.offsetHeight||220;
+    const c=clampPos(left,top,w,h);
+    overlay.style.left=c.left+'px';
+    overlay.style.top=c.top+'px';
+    overlay.style.right='auto';
+    overlay.style.bottom='auto';
+  }
+  function loadPos(){
+    try{
+      const raw=localStorage.getItem(POS_KEY);
+      if(!raw) return;
+      const p=JSON.parse(raw);
+      if(typeof p.left==='number' && typeof p.top==='number') applyPos(p.left,p.top);
+    }catch(e){}
+  }
+  function savePos(){
+    try{
+      const r=overlay.getBoundingClientRect();
+      localStorage.setItem(POS_KEY,JSON.stringify({left:r.left,top:r.top}));
+    }catch(e){}
+  }
+  // Restaurar al cargar; si la ventana se redimensiona, reajustar.
+  loadPos();
+  window.addEventListener('resize',()=>{
+    if(overlay.style.left){
+      const r=overlay.getBoundingClientRect();
+      applyPos(r.left,r.top);
+    }
+  });
+
+  const head=overlay.querySelector('.pix-head');
+  let drag=null;
+  function dragStart(e){
+    if(e.target.closest('.pix-send')||e.target.closest('.pix-close')) return;
+    const pt=e.touches?e.touches[0]:e;
+    const r=overlay.getBoundingClientRect();
+    drag={dx:pt.clientX-r.left, dy:pt.clientY-r.top, moved:false};
+    overlay.classList.add('is-dragging');
+    head.classList.add('is-grabbing');
+    if(e.cancelable) e.preventDefault();
+  }
+  function dragMove(e){
+    if(!drag) return;
+    const pt=e.touches?e.touches[0]:e;
+    drag.moved=true;
+    applyPos(pt.clientX-drag.dx, pt.clientY-drag.dy);
+    if(e.cancelable) e.preventDefault();
+  }
+  function dragEnd(){
+    if(!drag) return;
+    overlay.classList.remove('is-dragging');
+    head.classList.remove('is-grabbing');
+    if(drag.moved) savePos();
+    drag=null;
+  }
+  head.addEventListener('mousedown',dragStart);
+  window.addEventListener('mousemove',dragMove);
+  window.addEventListener('mouseup',dragEnd);
+  head.addEventListener('touchstart',dragStart,{passive:false});
+  window.addEventListener('touchmove',dragMove,{passive:false});
+  window.addEventListener('touchend',dragEnd);
+  window.addEventListener('touchcancel',dragEnd);
 
   // Pixer Feed solo es visible cuando estamos en la vista isometrica de la Xtore
   // (S.GAME o S.EDITOR). Fuera del juego (era select, menu, intro, preload, settings,
