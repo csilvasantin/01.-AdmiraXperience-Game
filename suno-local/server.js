@@ -189,24 +189,44 @@ async function handleGenerate(req, res) {
   try {
     const body = await readBody(req);
     const prompt = String(body.prompt || '').slice(0, 1500);
-    if (!prompt) { sendJson(res, 400, { error: 'missing prompt' }); return; }
-    const instrumental = !!body.instrumental;
+    const lyrics = String(body.lyrics || '').slice(0, 3000).trim();
+    const title = String(body.title || '').slice(0, 80).trim();
+    if (!prompt && !lyrics) { sendJson(res, 400, { error: 'missing prompt or lyrics' }); return; }
     const model = body.model === 'chirp-v4-5' ? 'chirp-v4-5' : 'chirp-v4';
-    const r = await sunoFetch('/api/generate/v2/', {
-      method: 'POST',
-      body: JSON.stringify({
+
+    // Dos modos:
+    //   - Custom mode (lyrics presente) → Suno espera prompt=<letra>, tags=<estilo>, make_instrumental:false.
+    //   - Auto mode (sin lyrics) → Suno usa gpt_description_prompt para inventar todo (estilo + letra
+    //     o instrumental segun make_instrumental).
+    let sunoPayload;
+    if (lyrics) {
+      sunoPayload = {
+        prompt: lyrics,
+        tags: prompt.slice(0, 200),
+        title: title || '',
+        make_instrumental: false,
+        mv: model,
+      };
+    } else {
+      const instrumental = !!body.instrumental;
+      sunoPayload = {
         gpt_description_prompt: prompt,
         make_instrumental: instrumental,
         mv: model,
         prompt: '',
-      }),
+      };
+    }
+
+    const r = await sunoFetch('/api/generate/v2/', {
+      method: 'POST',
+      body: JSON.stringify(sunoPayload),
     });
     const txt = await r.text();
     let data; try { data = JSON.parse(txt); } catch { data = { raw: txt.slice(0, 400) }; }
-    if (!r.ok) { sendJson(res, r.status, { error: `suno generate ${r.status}`, data }); return; }
+    if (!r.ok) { sendJson(res, r.status, { error: `suno generate ${r.status}`, data, mode: lyrics ? 'custom' : 'auto' }); return; }
     // Suno puede responder con array directo o con {clips:[...]}
     const clips = Array.isArray(data) ? data : (data.clips || []);
-    sendJson(res, 200, { clips });
+    sendJson(res, 200, { clips, mode: lyrics ? 'custom' : 'auto' });
   } catch (e) {
     sendJson(res, 500, { error: String(e.message || e) });
   }
