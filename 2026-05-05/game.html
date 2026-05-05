@@ -21468,7 +21468,11 @@ window.xtAPI = (function(){
     } else if(item.kind==='video'){
       body.innerHTML=`<video src="${item.url}" autoplay muted loop playsinline></video>`;
     } else if(item.kind==='audio'){
-      body.innerHTML=`<audio src="${item.url}" controls autoplay style="width:100%"></audio>`;
+      // Si el item trae caratula (cover_url), la mostramos encima del audio para
+      // que el usuario identifique la pista de un vistazo desde la Xtore.
+      const cover=item.cover_url||item.cover||'';
+      body.innerHTML=(cover?`<img src="${cover}" alt="" style="width:100%;height:auto;max-height:200px;object-fit:cover;display:block;margin-bottom:6px;">`:'')+
+        `<audio src="${item.url}" controls autoplay style="width:100%"></audio>`;
     }
     overlay.querySelector('.pix-foot').textContent=
       `${item.kind} · ${item.title||''} · ${screenId.slice(-6)}`;
