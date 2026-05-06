@@ -2129,6 +2129,14 @@ function commandToBubble(cmd,args,curLang){
     if(OFF.includes(head)) return isEs?'Ladrón fuera':'Thief gone';
     return isEs?'Ladrón':'Thief';
   }
+  if(['staff','personal'].includes(cmd)){
+    if(head==='bonus') return isEs?'Bonus al equipo':'Team bonus';
+    if(head==='eotm') return isEs?'Empleado del mes':'Employee of the month';
+    if(head==='train') return isEs?'Formación de personal':'Staff training';
+    if(head==='hire') return isEs?'Nueva contratación':'New hire';
+    if(head==='fire') return isEs?'Despido':'Firing';
+    return isEs?'Estado del personal':'Staff status';
+  }
   if(['guardiacivil','guardia-civil','guardia','gc'].includes(cmd)){
     if(ON.includes(head)) return isEs?'Llega la Guardia Civil':'Guardia Civil arrives';
     if(OFF.includes(head)) return isEs?'Guardia Civil fuera':'Guardia Civil gone';
@@ -18793,6 +18801,116 @@ window.xtAPI = (function(){
           data:{storeClosed:!!G.storeClosed,cust,staff}};
       }
 
+      // /staff [bonus|eotm|train|fire|hire|<sin args>]
+      // 'equipo' y 'team' NO se aceptan aqui porque /equipo ya esta tomado para
+      // gestionar zonas/inicio del staff (staffzone). /personal es el alias seguro.
+      if(['staff','personal'].includes(cmd)){
+        if(!G) return noGame();
+        const sub=(parts[0]||'').toLowerCase();
+        const ROLE_ES={0:'Cajero',1:'Reponedor',2:'Azafata',3:'Store Mgr',4:'DJ',5:'Staff'};
+        // Resolver el target por slot numerico o nombre
+        function findStaff(arg){
+          if(arg==null||arg==='') return null;
+          const n=parseInt(arg,10);
+          if(Number.isFinite(n)&&G.staff[n]) return {idx:n,s:G.staff[n]};
+          const low=String(arg).toLowerCase();
+          const idx=G.staff.findIndex(x=>(x.name||'').toLowerCase()===low);
+          if(idx>=0) return {idx,s:G.staff[idx]};
+          return null;
+        }
+
+        // /staff sin args → panel completo de personal
+        if(!sub){
+          const all=G.staff||[];
+          if(!all.length) return {ok:true,message:'No hay slots de staff definidos.',data:{staff:[]}};
+          const hired=all.filter(s=>s.hired);
+          const empty=all.length-hired.length;
+          const totalSalary=hired.reduce((a,s)=>a+(CFG.SALARY[s.role]||0)*s.level,0);
+          const avgMorale=hired.length?Math.round(hired.reduce((a,s)=>a+(s.morale||0),0)/hired.length):0;
+          const avgEnergy=hired.length?Math.round(hired.reduce((a,s)=>a+(s.energy||0),0)/hired.length):0;
+          const lines=[];
+          lines.push('━━━ PERSONAL DEL XTANCO ━━━');
+          lines.push(`Plantilla: ${hired.length} contratado${hired.length===1?'':'s'} · ${empty} libre${empty===1?'':'s'} · Salario sem: €${totalSalary}`);
+          lines.push(`Promedio: morale ${avgMorale}/100 · energy ${avgEnergy}/100`);
+          lines.push('───');
+          all.forEach((s,idx)=>{
+            const tag=s.hired?'●':'○';
+            const role=(ROLE_ES[s.role]||'?').padEnd(11);
+            const lvl=s.hired?('L'+s.level):'  ';
+            const en=s.hired?(' E'+Math.round(s.energy||0)):'';
+            const mo=s.hired?(' M'+Math.round(s.morale||0)):'';
+            const sal=s.hired?(' €'+(CFG.SALARY[s.role]||0)*s.level):'';
+            const eotm=s.eotm?(' 🏆'+(s.eotmWeeksLeft||0)+'w'):'';
+            lines.push(`[${idx}] ${tag} ${(s.name||'').padEnd(8)} ${role} ${lvl}${en}${mo}${sal}${eotm}`);
+          });
+          lines.push('───');
+          lines.push('/staff bonus <slot|nombre> <€> · /staff eotm <slot|nombre> · /staff train <slot> · /staff hire <slot> · /staff fire <slot>');
+          return {ok:true,message:lines.join('\n'),data:{hired:hired.length,empty,totalSalary,avgMorale,avgEnergy,roster:all.map((s,i)=>({slot:i,name:s.name,role:s.role,hired:!!s.hired,level:s.level||0,energy:Math.round(s.energy||0),morale:Math.round(s.morale||0),eotm:!!s.eotm,eotmWeeksLeft:s.eotmWeeksLeft||0}))}};
+        }
+
+        // /staff bonus <slot|nombre> <€> → bonus discrecional, +morale (1pt cada 5€, cap 40)
+        if(sub==='bonus'){
+          const t=findStaff(parts[1]);
+          const amount=parseInt(parts[2],10);
+          if(!t||!t.s.hired) return {ok:false,message:'No encuentro ese empleado o no esta contratado. Uso: /staff bonus <slot|nombre> <€>'};
+          if(!Number.isFinite(amount)||amount<=0) return {ok:false,message:'Indica un € valido. Ej: /staff bonus '+t.idx+' 100'};
+          if((G.money||0)<amount) return {ok:false,message:'Sin presupuesto: tienes €'+Math.floor(G.money||0)+' y pides €'+amount};
+          G.money-=amount;
+          const moraleGain=Math.min(40,Math.round(amount/5));
+          t.s.morale=Math.min(100,(t.s.morale||0)+moraleGain);
+          try{ if(typeof addFloat==='function') addFloat(t.s.x,t.s.y-30,'€'+amount+' bonus +M'+moraleGain,'#88ff88'); }catch(e){}
+          if(typeof showEv==='function') showEv('💰 Bonus €'+amount+' a '+t.s.name+' → +'+moraleGain+' morale','#88ff88');
+          return {ok:true,message:'Bonus €'+amount+' a '+t.s.name+' · morale +'+moraleGain+' ('+Math.round(t.s.morale)+'/100) · cash €'+Math.floor(G.money),data:{name:t.s.name,bonus:amount,moraleGain,newMorale:Math.round(t.s.morale)}};
+        }
+
+        // /staff eotm <slot|nombre> → fuerza empleado del mes (mismo efecto que el random)
+        if(sub==='eotm'){
+          const t=findStaff(parts[1]);
+          if(!t||!t.s.hired) return {ok:false,message:'No encuentro ese empleado o no esta contratado. Uso: /staff eotm <slot|nombre>'};
+          if(t.s.level>=5) return {ok:false,message:t.s.name+' ya esta a nivel maximo (5)'};
+          if(t.s.eotm) return {ok:false,message:t.s.name+' ya tiene el badge activo ('+t.s.eotmWeeksLeft+'w restantes)'};
+          const bonus=50*t.s.level;
+          if((G.money||0)<bonus) return {ok:false,message:'Sin presupuesto para el bonus (€'+bonus+')'};
+          G.money-=bonus;
+          t.s.morale=Math.min(100,t.s.morale+30);
+          t.s.level=Math.min(5,t.s.level+1);
+          t.s.eotm=true;
+          t.s.eotmWeeksLeft=4;
+          G.empOfMonth=t.s.name;
+          try{
+            if(typeof addFloat==='function') addFloat(t.s.x,t.s.y-40,'🏆 +LVL +€'+bonus,'#ffd866');
+            if(typeof addFloat==='function' && typeof SHOP!=='undefined') addFloat(SHOP.x+SHOP.w/2,SHOP.y+20,'-€'+bonus+' BONUS','#ff8866');
+          }catch(e){}
+          if(typeof showEv==='function') showEv('🏆 '+t.s.name+' empleado del mes! +€'+bonus+' bonus','#ffd866');
+          try{ if(typeof SFX!=='undefined' && SFX.levelUp) SFX.levelUp(); }catch(e){}
+          return {ok:true,message:'EOTM: '+t.s.name+' · L'+t.s.level+' · -€'+bonus+' · badge 4w',data:{name:t.s.name,level:t.s.level,bonus,weeksLeft:4}};
+        }
+
+        // /staff train <slot|nombre>
+        if(sub==='train'){
+          const t=findStaff(parts[1]);
+          if(!t) return {ok:false,message:'Uso: /staff train <slot|nombre>'};
+          if(typeof api.train==='function') return api.train(t.idx);
+          return {ok:false,message:'api.train no disponible'};
+        }
+        // /staff hire <slot|nombre>
+        if(sub==='hire'){
+          const t=findStaff(parts[1]);
+          if(!t) return {ok:false,message:'Uso: /staff hire <slot|nombre>'};
+          if(typeof api.hire==='function') return api.hire(t.idx);
+          return {ok:false,message:'api.hire no disponible'};
+        }
+        // /staff fire <slot|nombre>
+        if(sub==='fire'){
+          const t=findStaff(parts[1]);
+          if(!t) return {ok:false,message:'Uso: /staff fire <slot|nombre>'};
+          if(typeof api.fire==='function') return api.fire(t.idx);
+          return {ok:false,message:'api.fire no disponible'};
+        }
+
+        return {ok:false,message:'Subcomandos validos: bonus, eotm, train, hire, fire. /staff sin args = panel'};
+      }
+
       return {ok:false,message:'Comando no reconocido: '+raw};
     },
 
@@ -20101,6 +20219,7 @@ window.xtAPI = (function(){
     return [
       {title:'Consulta',items:['/status','/staff','/stock','/turno','/turno 12']},
       {title:'Equipo y stock',items:['/hire 1','/hire dj','/hire all','/train 1','/train all','/restock 2','/restock all','/restock prensa']},
+      {title:'Personal (panel /staff)',items:['/staff','/staff bonus 0 100','/staff eotm 0','/staff eotm ana','/staff train 1','/staff hire 2','/staff fire 1']},
       {title:'Tienda',items:['/ad 0','/ad 1','/ad 2','/upgrade','/visit com','/visit tec','/visit del','/visit gc','/save']},
       {title:'Tiempo y ambiente',items:['/reloj 14:30','/reloj 14 30','/time am','/time pm','/time night','/weather normal','/weather rain','/weather sun','/lamp','/lamp auto','/hue','/hue auto']},
       {title:'Pantalla y directo',items:['/livecam','/mocap','/pixeria','/AdmiraLive texto','/comunicar texto','/comunicar texto --grok','/comunicar texto --elevenlabs','/AdmiraTube URL 2 audio','/say texto']},
@@ -20495,7 +20614,6 @@ window.xtAPI = (function(){
     try{
       if(cmd==='start'||cmd==='help') return commandHelp();
       if(cmd==='status') return formatStatus();
-      if(cmd==='staff') return formatStaff();
       if(cmd==='stock') return formatStock();
       if(cmd==='set'){
         const setParts=arg.split(/\s+/);
@@ -21029,7 +21147,7 @@ window.xtAPI = (function(){
       // (CLI in-game) y aun no esta mapeado en este dispatcher de Telegram,
       // delegamos. Cubre /store, /people, /gente, /clientes, /personas y futuros
       // comandos sin necesidad de duplicar la logica.
-      if(['store','xtore','xtanco','tienda','people','gente','personas','clientes'].includes(cmd)){
+      if(['store','xtore','xtanco','tienda','people','gente','personas','clientes','staff','personal'].includes(cmd)){
         try{
           const res=api.command('/'+cmd+(arg?' '+arg:''));
           return res && res.message ? res.message : 'OK';
