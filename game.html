@@ -17131,7 +17131,7 @@ function openSpecialEditor(kind,label,lines){
   syncRobotGrokPanel();
 }
 function getNPCEditorBounds(){
-  const pw=420,ph=280,dockScale=0.58;
+  const pw=420,ph=280,dockScale=0.85;
   const dockW=pw*dockScale,dockH=ph*dockScale;
   const bottomGap=0;
   return {x:14,y:H-dockH-bottomGap,w:dockW,h:dockH};
@@ -17185,7 +17185,7 @@ function drawNPCEditor(){
   const d=npcEdDraft;
   syncRobotGrokPanel();
   const pw=420,ph=280;
-  const dockScale=0.58;
+  const dockScale=0.85;
   const dockW=pw*dockScale,dockH=ph*dockScale;
   const bottomGap=0;
   const dockX=14,dockY=H-dockH-bottomGap;
@@ -17256,7 +17256,7 @@ function drawNPCEditor(){
     const sel=npcEdTab===tabs[i];
     cx.fillStyle=sel?'#f0e8d4':'#d8d0b8';cx.fillRect(tx2,ty2,tabW,18);
     cx.strokeStyle='#8a7a60';cx.lineWidth=0.5;cx.strokeRect(tx2,ty2,tabW,18);
-    tx(tabLabels[i],tx2+tabW/2,ty2+13,sel?'#2a6a4a':'#7a7060',7,'center');
+    tx(tabLabels[i],tx2+tabW/2,ty2+13,sel?'#2a6a4a':'#7a7060',9,'center');
     npcBtn('npcEdTab'+i,tx2,ty2,tabW,18);
   }
 
@@ -17277,22 +17277,22 @@ function drawNPCEditor(){
 
     for(let i=0;i<labels.length;i++){
       const ry=cy+6+i*33;
-      tx(labels[i]+':',colX,ry+12,'#4a3a20',8);
+      tx(labels[i]+':',colX,ry+12,'#4a3a20',9);
       // Left arrow
       const lax=colX+65,lay=ry+2;
       npcBtn('npcLk'+i,lax,lay,16,16);
       cx.fillStyle='#d8d0b8';cx.fillRect(lax,lay,16,16);cx.strokeStyle='#8a7a60';cx.lineWidth=0.5;cx.strokeRect(lax,lay,16,16);
-      tx('◀',lax+8,lay+12,'#4a3a20',9,'center');
+      tx('◀',lax+8,lay+12,'#4a3a20',10,'center');
       // Right arrow
       const rax=colX+colW-30,ray=ry+2;
       npcBtn('npcRk'+i,rax,ray,16,16);
       cx.fillStyle='#d8d0b8';cx.fillRect(rax,ray,16,16);cx.strokeStyle='#8a7a60';cx.lineWidth=0.5;cx.strokeRect(rax,ray,16,16);
-      tx('▶',rax+8,ray+12,'#4a3a20',9,'center');
+      tx('▶',rax+8,ray+12,'#4a3a20',10,'center');
       // Color swatch or text
       const val=d.look[keys[i]]||0;
       if(i===5){
         // Accessory: show name
-        tx(P.accNames[val%P.accNames.length],lax+18+(rax-lax-18)/2,ry+14,'#2a4a3a',8,'center');
+        tx(P.accNames[val%P.accNames.length],lax+18+(rax-lax-18)/2,ry+14,'#2a4a3a',9,'center');
       } else {
         // Color swatch
         const swatchW=rax-lax-20;
@@ -17301,32 +17301,32 @@ function drawNPCEditor(){
         cx.fillStyle=col;cx.fillRect(lax+20,ry+3,swatchW,14);
         cx.strokeStyle='#8a7a60';cx.lineWidth=0.5;cx.strokeRect(lax+20,ry+3,swatchW,14);
         // Index indicator
-        tx((val+1)+'/'+maxVals[i],lax+20+swatchW/2,ry+14,'#fff',7,'center');
+        tx((val+1)+'/'+maxVals[i],lax+20+swatchW/2,ry+14,'#fff',8,'center');
       }
     }
 
     // ── NAME FIELD ──
     const ny=cy+210;
-    tx('Nombre:',px+20,ny+12,'#4a3a20',8);
+    tx('Nombre:',px+20,ny+12,'#4a3a20',9);
     const nfx=px+80,nfw=140,nfh=18;
     cx.fillStyle=npcEdNameEdit?'#ffffff':'#e8e0cc';cx.fillRect(nfx,ny,nfw,nfh);
     cx.strokeStyle=npcEdNameEdit?'#2a6a4a':'#8a7a60';cx.lineWidth=1;cx.strokeRect(nfx,ny,nfw,nfh);
     const dispName=npcEdNameEdit?npcEdNameBuf+(Math.floor(tt/20)%2===0?'|':''):d.name;
-    tx(dispName,nfx+4,ny+13,'#2a2a2a',8);
+    tx(dispName,nfx+4,ny+13,'#2a2a2a',9);
     npcBtn('npcEdName',nfx,ny,nfw,nfh);
 
   } else if(npcEdTab==='stats'){
     // ── ROLE PICKER ──
     const ry=cy+10;
     const roleNames=['CAJERO/A','REPOSITOR/A','AZAFATA','STORE MGR','DJ'];
-    tx('Rol:',px+20,ry+12,'#4a3a20',8);
+    tx('Rol:',px+20,ry+12,'#4a3a20',9);
     npcBtn('npcRolL',px+70,ry,16,16);
     cx.fillStyle='#d8d0b8';cx.fillRect(px+70,ry,16,16);cx.strokeStyle='#8a7a60';cx.lineWidth=0.5;cx.strokeRect(px+70,ry,16,16);
-    tx('◀',px+78,ry+12,'#4a3a20',9,'center');
+    tx('◀',px+78,ry+12,'#4a3a20',10,'center');
     npcBtn('npcRolR',px+300,ry,16,16);
     cx.fillStyle='#d8d0b8';cx.fillRect(px+300,ry,16,16);cx.strokeStyle='#8a7a60';cx.lineWidth=0.5;cx.strokeRect(px+300,ry,16,16);
-    tx('▶',px+308,ry+12,'#4a3a20',9,'center');
-    tx(roleNames[d.role%5],px+190,ry+13,'#2a6a4a',10,'center');
+    tx('▶',px+308,ry+12,'#4a3a20',10,'center');
+    tx(roleNames[d.role%5],px+190,ry+13,'#2a6a4a',11,'center');
 
     // ── STATS DISPLAY ──
     const statLabels=['Nivel','Energía','Moral'];
@@ -17334,7 +17334,7 @@ function drawNPCEditor(){
     const statMax=[5,100,100];
     for(let i=0;i<3;i++){
       const sy2=cy+50+i*40;
-      tx(statLabels[i]+':',px+20,sy2+14,'#4a3a20',8);
+      tx(statLabels[i]+':',px+20,sy2+14,'#4a3a20',9);
       if(i===0){
         // Level stars
         for(let j=0;j<5;j++){
@@ -17348,7 +17348,7 @@ function drawNPCEditor(){
         cx.fillStyle=pct>0.5?'#44aa44':pct>0.25?'#ccaa00':'#cc3333';
         cx.fillRect(px+90,sy2+2,bw2*pct,bh2);
         cx.strokeStyle='#8a7a60';cx.lineWidth=0.5;cx.strokeRect(px+90,sy2+2,bw2,bh2);
-        tx(Math.round(statVals[i])+'%',px+90+bw2/2,sy2+14,'#fff',8,'center');
+        tx(Math.round(statVals[i])+'%',px+90+bw2/2,sy2+14,'#fff',9,'center');
       }
     }
 
@@ -17356,7 +17356,7 @@ function drawNPCEditor(){
     if(G.staff[npcEdIdx]){
       const M2=getActiveModels()[activeModel] || getActiveModels()[0];
       const sal=M2.SALARY[d.role%M2.SALARY.length];
-      tx('Salario: €'+sal+'/sem',px+20,cy+180,'#4a3a20',9);
+      tx('Salario: €'+sal+'/sem',px+20,cy+180,'#4a3a20',10);
     }
 
     // ── PREVIEW ──
