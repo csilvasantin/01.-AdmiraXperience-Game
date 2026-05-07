@@ -1,0 +1,11 @@
+name = "omnipublicity-api"
+main = "src/index.js"
+compatibility_date = "2025-12-01"
+
+[vars]
+ALLOWED_ORIGINS = "https://csilvasantin.github.io,http://localhost:9124,http://127.0.0.1:9124,http://localhost:8085,http://127.0.0.1:8085,http://localhost:8086,http://127.0.0.1:8086"
+
+# OMNIP_KV: catálogo de gemelos digitales (key 'locations.v1')
+[[kv_namespaces]]
+binding = "OMNIP_KV"
+id = "776e18d727d3486dbe70783bb5052a07"
