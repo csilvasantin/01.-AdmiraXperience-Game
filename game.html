@@ -4654,6 +4654,7 @@ const CLIENTS=[
   {id:'xtanco', available:true, accent:P.neon3, bg:'#0a1a2a', models:XTANCO_MODELS},
   {id:'loterias', available:false, accent:'#44ddaa', bg:'#102018', models:[], quickModels:XTANCO_MODELS},
   {id:'supermercado', available:true, accent:'#7ae35a', bg:'#10220f', models:[], quickModels:XTANCO_MODELS},
+  {id:'shoptalk', available:false, accent:'#76B900', bg:'#0a1c00', models:[], quickModels:XTANCO_MODELS},
 ];
 let activeClient=0;
 let activeModel=0;
@@ -4751,7 +4752,7 @@ const LANGS={
   es:{
     menuEyebrow:'THE XPACE OS',menuTitle:'ADMIRA XP',menuSub:'PLATAFORMA OPERATIVA MULTICLIENTE',
     menuDeck:'Catalogo vivo de experiencias por cliente',
-    langPick:'SELECCIONA IDIOMA',menuStartBtn:'ABRIR CATALOGO XP',menuHint:'Xtanco ya esta en vivo. Loterias y Retail avanzan en la hoja de lanzamiento.',
+    langPick:'SELECCIONA IDIOMA',menuStartBtn:'ABRIR CATALOGO XP',menuHint:'Xtanco ya esta en vivo. Stand XpaceOS prepara su debut en Shoptalk Europe (9-11 jun 2026).',
     menuGuideBtn:'▶ MANUAL XP',menuSettingsBtn:'⚙ XPACE CONFIG',
     startBtn:'ABRIR SIMULADOR',
     langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
@@ -4761,14 +4762,15 @@ const LANGS={
     clientLocked:'PRÓXIMAMENTE',
     clientStateLive:'LIVE',
     clientStatePipeline:'PIPELINE',
-    clientCodes:['XP-01','XP-02','XP-03'],
-    clientTracks:['ESTANCOS','LOTERIAS','SUPERMERCADO'],
-    clientNames:['XTANCO / ESTANCOS','ADMIRA LOTERÍAS','ADMIRA SUPERMERCADO'],
-    clientBadges:['Disponible ahora','En producción','Disponible ahora'],
+    clientCodes:['XP-01','XP-02','XP-03','XP-04'],
+    clientTracks:['ESTANCOS','LOTERIAS','SUPERMERCADO','STAND FERIA'],
+    clientNames:['XTANCO / ESTANCOS','ADMIRA LOTERÍAS','ADMIRA SUPERMERCADO','STAND XPACEOS / SHOPTALK EU'],
+    clientBadges:['Disponible ahora','En producción','Disponible ahora','Live 9–11 jun 2026'],
     clientBlurbs:[
       'Gestión de estancos, staff, stock, signage y operaciones de tienda.\n4 layouts jugables hoy.',
       'Sorteos, campañas, estacionalidad y operativa de terminal.\nPróximo simulador en esta colección.',
       'Pasillos, frescos, congelados y punto de impulso.\nMismo motor XP con layout de supermercado.',
+      'Stand físico controlado por el gemelo. Lenovo + Nvidia.\nDebut en Shoptalk Europe, Fira Barcelona.',
     ],
     tut:[
       {title:'BIENVENIDO A XTANCO',lines:['Gestiona tu estanco durante 5 años.','Alcanza el objetivo de ventas cada año','para avanzar y construir tu negocio.','¡Contrata personal, repón stock y fideliza clientes!']},
@@ -4833,7 +4835,7 @@ const LANGS={
   en:{
     menuEyebrow:'THE XPACE OS',menuTitle:'ADMIRA XP',menuSub:'MULTI-CLIENT OPERATIONS PLATFORM',
     menuDeck:'Living catalog of client-based experiences',
-    langPick:'SELECT LANGUAGE',menuStartBtn:'OPEN XP CATALOG',menuHint:'Xtanco is live. Lottery and Retail are moving through the launch pipeline.',
+    langPick:'SELECT LANGUAGE',menuStartBtn:'OPEN XP CATALOG',menuHint:'Xtanco is live. XpaceOS Booth ramps up for Shoptalk Europe (Jun 9-11, 2026).',
     menuGuideBtn:'▶ XP MANUAL',menuSettingsBtn:'⚙ XPACE CONFIG',
     startBtn:'OPEN SIMULATOR',
     langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
@@ -4843,14 +4845,15 @@ const LANGS={
     clientLocked:'COMING SOON',
     clientStateLive:'LIVE',
     clientStatePipeline:'PIPELINE',
-    clientCodes:['XP-01','XP-02','XP-03'],
-    clientTracks:['TOBACCO','LOTTERY','SUPERMARKET'],
-    clientNames:['XTANCO / TOBACCO','ADMIRA LOTTERY','ADMIRA SUPERMARKET'],
-    clientBadges:['Available now','In production','Available now'],
+    clientCodes:['XP-01','XP-02','XP-03','XP-04'],
+    clientTracks:['TOBACCO','LOTTERY','SUPERMARKET','EVENT BOOTH'],
+    clientNames:['XTANCO / TOBACCO','ADMIRA LOTTERY','ADMIRA SUPERMARKET','XPACEOS BOOTH / SHOPTALK EU'],
+    clientBadges:['Available now','In production','Available now','Live Jun 9-11, 2026'],
     clientBlurbs:[
       'Tobacco shop operations, staff, stock, signage and store gameplay.\n4 playable layouts today.',
       'Draw campaigns, seasonality and terminal operations.\nNext simulator in this collection.',
       'Aisles, frozen products, impulse zones and checkout flow.\nSame XP engine with supermarket layout.',
+      'Live booth controlled by the digital twin. Lenovo + Nvidia.\nDebut at Shoptalk Europe, Fira Barcelona.',
     ],
     tut:[
       {title:'WELCOME TO XTANCO',lines:['Manage your shop for 5 years.','Reach the annual sales target','to progress and grow your business.','Hire staff, restock and keep customers happy!']},
@@ -10399,7 +10402,8 @@ function drawMenu(){
   tx(T().menuHint,W/2,ctaY+58,P.uiT3,8,'center');
   cx.globalAlpha=1;
 
-  const cardW=206,cardH=98,cardGap=14,cardY=ctaY+78,cardX=W/2-((cardW*3)+(cardGap*2))/2;
+  const cardCount=CLIENTS.length;
+  const cardW=cardCount>=4?168:206,cardH=98,cardGap=cardCount>=4?10:14,cardY=ctaY+78,cardX=W/2-((cardW*cardCount)+(cardGap*(cardCount-1)))/2;
   CLIENTS.forEach((client,i)=>{
     const cx2=cardX+i*(cardW+cardGap);
     const selected=i===clientSel;
