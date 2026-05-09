@@ -556,6 +556,7 @@ const PRELOAD_TARGETS={
   xtanco:{id:'xtanco', tape:'XTANCO', label:'Admira Xtanco', media:'video', videoSrc:PRELOAD_VIDEO_SRC, program:'ADMIRA-XTANCO/ZX'},
   loterias:{id:'loterias', tape:'LOTERIAS', label:'Admira Loterias XP', media:'composition', videoSrc:PRELOAD_VIDEO_SRC, program:'ADMIRA-LOTERIAS/ZX'},
   retail:{id:'retail', tape:'RETAIL', label:'Admira Retail', media:'screen', program:'ADMIRA-RETAIL/ZX'},
+  shoptalk:{id:'shoptalk', tape:'SHOPTALK', label:'Stand XpaceOS · Shoptalk EU 2026', media:'screen', program:'XPACEOS-BOOTH/ZX'},
   amiga:{id:'amiga', tape:'AMIGA500', label:'Amiga 500 Preview', media:'video', videoSrc:PRELOAD_AMIGA_VIDEO_SRC, program:'AMIGA500/PREVIO'},
 };
 const APP_META=window.XTANCO_APP||{build:'dev'};
@@ -4650,11 +4651,40 @@ const XTANCO_MODELS=[
     ],
   },
 ];
+// SHOPTALK_MODELS — Stand XpaceOS booth (Shoptalk Europe 2026, Fira Barcelona).
+// Single layout: el stand fisico controlado por el gemelo. Lenovo edge + Nvidia GPU.
+// Reusa el motor de Xtanco con datos rebrandeados — visitantes en lugar de clientes,
+// promotores en lugar de cajeros, demos en lugar de productos.
+const SHOPTALK_MODELS=[
+  { // 0 — SHOPTALK EU 2026 booth
+    id:'shoptalk-eu',neon:'#76B900',accent:'#76B900',
+    START_MONEY:5000,
+    YEAR_TARGETS:[2500,6000,12000,22000,38000],
+    SALE_PROB:0.07,SALE_BASE:4.0,
+    RUSH_CHANCE:0.0035,RUSH_DURATION:140,RUSH_MULT:2.6,
+    INSPECT_CHANCE:0.0004,
+    HIRE_COST:[600,500,550,1400,800],TRAIN_COST:[280,220,250,400,300],SALARY:[150,120,135,230,170],
+    RESTOCK_COST:180,UPGRADE_COST:5500,
+    ADVERT:[{cost:400,fame:10,label:'BÁSICA'},{cost:900,fame:25,label:'MEDIA'},{cost:2000,fame:55,label:'PREMIUM'}],
+    staffInit:[
+      {slot:0,x:165,y:195,hired:true, name:'CARLA', role:0},
+      {slot:1,x:295,y:195,hired:false,name:'IVAN',  role:1},
+      {slot:2,x:425,y:195,hired:false,name:'NORA',  role:2},
+      {slot:3,x:295,y:305,hired:false,name:'BRUNO', role:3},
+      {slot:4,x:425,y:305,hired:false,name:'MAYA',  role:4},
+    ],
+    prodsInit:[
+      {stock:80,max:100,price:8, factor:1.3},{stock:60,max:80, price:12,factor:1.0},
+      {stock:90,max:100,price:3, factor:1.5},{stock:70,max:100,price:2, factor:1.1},
+      {stock:50,max:80, price:1, factor:1.3},{stock:40,max:60, price:5, factor:0.9},
+    ],
+  },
+];
 const CLIENTS=[
   {id:'xtanco', available:true, accent:P.neon3, bg:'#0a1a2a', models:XTANCO_MODELS},
   {id:'loterias', available:false, accent:'#44ddaa', bg:'#102018', models:[], quickModels:XTANCO_MODELS},
   {id:'supermercado', available:true, accent:'#7ae35a', bg:'#10220f', models:[], quickModels:XTANCO_MODELS},
-  {id:'shoptalk', available:false, accent:'#76B900', bg:'#0a1c00', models:[], quickModels:XTANCO_MODELS},
+  {id:'shoptalk', available:true, accent:'#76B900', bg:'#0a1c00', models:SHOPTALK_MODELS},
 ];
 let activeClient=0;
 let activeModel=0;
@@ -5089,6 +5119,7 @@ function parsePreloadTarget(raw){
   if(!suffix||suffix==='XTANCO') return PRELOAD_TARGETS.xtanco;
   if(suffix==='LOTERIAS'||suffix==='LOTERIA'||suffix==='LOTTERY') return PRELOAD_TARGETS.loterias;
   if(suffix==='RETAIL') return PRELOAD_TARGETS.retail;
+  if(suffix==='SHOPTALK'||suffix==='STAND'||suffix==='BOOTH') return PRELOAD_TARGETS.shoptalk;
   return null;
 }
 function resetPreloadState(){
@@ -9712,6 +9743,61 @@ function drawPreloadTargetScreen(target,x,y,w,h){
     });
     return;
   }
+  if(target.id==='shoptalk'){
+    // Stand XpaceOS booth — Shoptalk EU 2026 · Lenovo (rojo) + Nvidia (verde) + AdmiraNext (amarillo).
+    const lenovoR='#E2231A', nvidiaG='#76B900', admiraY='#ffd866';
+    r(x,y,w,h,'#02080d');
+    // Header con dos franjas: Lenovo arriba, Nvidia abajo
+    r(x,y,w,18,lenovoR);
+    r(x,y+18,w,16,nvidiaG);
+    tx('STAND XPACEOS',x+12,y+13,'#ffffff',9);
+    tx('SHOPTALK EU 2026',x+w-12,y+13,'#ffe4e2',8,'right');
+    tx('LENOVO + NVIDIA + ADMIRANEXT · FIRA BARCELONA · 9-11 JUN',x+w/2,y+30,'#0a1c00',7,'center');
+    // Booth floor plan (vista cenital, 2.4m x 4m representativo)
+    const bx=x+18,by=y+44,bw=w-36,bh=98;
+    r(bx,by,bw,bh,'#0a1c00');
+    rx(bx,by,bw,bh,nvidiaG,1);
+    // Alfombra interior
+    r(bx+4,by+4,bw-8,bh-8,'#0d2810');
+    // Pantalla LED 4K central (la grande, controlada por el gemelo)
+    const ledX=bx+bw/2-58,ledY=by+8,ledW=116,ledH=22;
+    r(ledX,ledY,ledW,ledH,'#001a05');
+    rx(ledX,ledY,ledW,ledH,nvidiaG,1);
+    tx('LED 4K · PIXER FEED LIVE',ledX+ledW/2,ledY+14,nvidiaG,7,'center');
+    // 2 demo pods (Pixer.ai izquierda, Admira XP derecha)
+    r(bx+12,by+38,52,40,'#13262e');rx(bx+12,by+38,52,40,'#78f3ff',1);
+    tx('POD 1',bx+38,by+50,'#78f3ff',6,'center');
+    tx('PIXER.AI',bx+38,by+62,'#ffd866',7,'center');
+    tx('demo creacion',bx+38,by+72,'#75aab9',5,'center');
+    r(bx+bw-64,by+38,52,40,'#1a1e0d');rx(bx+bw-64,by+38,52,40,nvidiaG,1);
+    tx('POD 2',bx+bw-38,by+50,nvidiaG,6,'center');
+    tx('ADMIRA XP',bx+bw-38,by+62,'#ffd866',7,'center');
+    tx('gemelo digital',bx+bw-38,by+72,'#75aab9',5,'center');
+    // Recepcion / badge scan
+    r(bx+bw/2-22,by+58,44,22,'#260a0a');rx(bx+bw/2-22,by+58,44,22,lenovoR,1);
+    tx('BADGE',bx+bw/2,by+68,lenovoR,6,'center');
+    tx('SCAN',bx+bw/2,by+76,'#ffe4e2',6,'center');
+    // Lounge / networking icon (cafetera)
+    const lx=bx+8,ly=by+82;
+    r(lx,ly,8,6,'#2a1f10');r(lx+1,ly+6,6,3,'#3a2818');tx('☕',lx-1,ly+5,admiraY,8);
+    // KPI cards bajo el plano
+    const kpis=[
+      {title:'Visitas',val:'1.247',col:'#78f3ff'},
+      {title:'Demos',val:'186',col:nvidiaG},
+      {title:'Leads',val:'42',col:lenovoR},
+      {title:'Buyers',val:'9',col:admiraY},
+    ];
+    const kw=(bw-12)/4;
+    kpis.forEach((card,i)=>{
+      const kx=bx+i*(kw+4),ky=by+bh+8;
+      r(kx,ky,kw,32,'#0a1620');rx(kx,ky,kw,32,'rgba(120,243,255,0.18)',1);
+      tx(card.title,kx+kw/2,ky+11,'#75aab9',6,'center');
+      tx(card.val,kx+kw/2,ky+25,card.col,11,'center');
+    });
+    // Etiqueta inferior con flujo del gemelo
+    tx('Monitor (Lenovo+Nvidia) → Gemelo Digital → Stand fisico (pantallas · audio · luz · aroma)',x+w/2,y+h-8,'#75aab9',7,'center');
+    return;
+  }
   if(target.id==='retail'){
     r(x,y,w,h,'#f5f3ef');
     r(x,y,w,34,'#1f2c3d');
@@ -10076,7 +10162,7 @@ function drawPreload(){
 
   tx('Program: '+preloadTarget.program,44,406,'#5bd8ff',10);
   if(preloadPhase==='prompt'){
-    tx('Type LOAD"", LOAD""LOTERIAS, LOAD""RETAIL or AMIGA 500',44,430,'#ffffff',10);
+    tx('Type LOAD"", LOAD""LOTERIAS, LOAD""RETAIL, LOAD""SHOPTALK or AMIGA 500',44,430,'#ffffff',10);
   }else if(preloadPhase==='loading'){
     tx('Searching  ·  Found: '+preloadTarget.label.toUpperCase(),44,430,'#ffffff',10);
   }else if(preloadPhase==='video'){
@@ -10823,6 +10909,7 @@ function getClientWorldLabel(nodeType){
   if(nodeType==='xtanco') return T().clientNames[0].split(' / ')[0];
   if(nodeType==='loterias') return T().clientNames[1];
   if(nodeType==='retail'||nodeType==='supermercado') return T().clientNames[2];
+  if(nodeType==='shoptalk'||nodeType==='booth') return T().clientNames[3];
   if(lang==='es') return 'Servicios XP';
   return 'XP Services';
 }
@@ -10831,6 +10918,7 @@ function getClientWorldMeta(nodeType){
   if(nodeType==='xtanco') return lang==='es' ? '4 layouts activos' : '4 active layouts';
   if(nodeType==='loterias') return lang==='es' ? 'cola · campañas · terminal' : 'queue · campaigns · terminal';
   if(nodeType==='retail'||nodeType==='supermercado') return lang==='es' ? 'helados · comida · impulso' : 'ice cream · food · impulse';
+  if(nodeType==='shoptalk'||nodeType==='booth') return lang==='es' ? 'pantallas · audio · luz · aroma' : 'screens · audio · light · scent';
   return lang==='es' ? 'motores compartidos' : 'shared systems';
 }
 
@@ -10838,6 +10926,7 @@ function getClientNodeAccent(nodeType){
   if(nodeType==='xtanco') return CLIENTS[0].accent;
   if(nodeType==='loterias') return CLIENTS[1].accent;
   if(nodeType==='retail'||nodeType==='supermercado') return CLIENTS[2].accent;
+  if(nodeType==='shoptalk'||nodeType==='booth') return CLIENTS[3].accent;
   return '#8abf62';
 }
 
@@ -10845,6 +10934,7 @@ function getClientNodeIndex(nodeType){
   if(nodeType==='xtanco') return 0;
   if(nodeType==='loterias') return 1;
   if(nodeType==='retail'||nodeType==='supermercado') return 2;
+  if(nodeType==='shoptalk'||nodeType==='booth') return 3;
   return -1;
 }
 
