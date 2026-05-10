@@ -556,8 +556,17 @@ const PRELOAD_TARGETS={
   xtanco:{id:'xtanco', tape:'XTANCO', label:'Admira Xtanco', media:'video', videoSrc:PRELOAD_VIDEO_SRC, program:'ADMIRA-XTANCO/ZX'},
   loterias:{id:'loterias', tape:'LOTERIAS', label:'Admira Loterias XP', media:'composition', videoSrc:PRELOAD_VIDEO_SRC, program:'ADMIRA-LOTERIAS/ZX'},
   retail:{id:'retail', tape:'RETAIL', label:'Admira Retail', media:'screen', program:'ADMIRA-RETAIL/ZX'},
+  shoptalk:{id:'shoptalk', tape:'SHOPTALK', label:'Stand Shoptalk EU 2026', media:'screen', program:'ADMIRA-SHOPTALK/ZX'},
   amiga:{id:'amiga', tape:'AMIGA500', label:'Amiga 500 Preview', media:'video', videoSrc:PRELOAD_AMIGA_VIDEO_SRC, program:'AMIGA500/PREVIO'},
 };
+// Booth/vertical activo. xtanco por defecto. Lo cambia el banner Shoptalk
+// en la home, el comando LOAD"SHOPTALK", o el query param ?vertical=shoptalk.
+window.XPACE_BOOTH = (() => {
+  try {
+    const v = new URLSearchParams(location.search).get('vertical');
+    return (v && PRELOAD_TARGETS[v]) ? v : 'xtanco';
+  } catch (e) { return 'xtanco'; }
+})();
 const APP_META=window.XTANCO_APP||{build:'dev'};
 const APP_VERSION=APP_META.version||'dev';
 const APP_BUILD=String(APP_META.build||'dev');
@@ -4654,6 +4663,7 @@ const CLIENTS=[
   {id:'xtanco', available:true, accent:P.neon3, bg:'#0a1a2a', models:XTANCO_MODELS},
   {id:'loterias', available:false, accent:'#44ddaa', bg:'#102018', models:[], quickModels:XTANCO_MODELS},
   {id:'supermercado', available:true, accent:'#7ae35a', bg:'#10220f', models:[], quickModels:XTANCO_MODELS},
+  {id:'shoptalk', available:true, accent:'#76B900', bg:'#0a1a08', models:[], quickModels:XTANCO_MODELS, event:true},
 ];
 let activeClient=0;
 let activeModel=0;
@@ -4761,14 +4771,15 @@ const LANGS={
     clientLocked:'PRÓXIMAMENTE',
     clientStateLive:'LIVE',
     clientStatePipeline:'PIPELINE',
-    clientCodes:['XP-01','XP-02','XP-03'],
-    clientTracks:['ESTANCOS','LOTERIAS','SUPERMERCADO'],
-    clientNames:['XTANCO / ESTANCOS','ADMIRA LOTERÍAS','ADMIRA SUPERMERCADO'],
-    clientBadges:['Disponible ahora','En producción','Disponible ahora'],
+    clientCodes:['XP-01','XP-02','XP-03','XP-04'],
+    clientTracks:['ESTANCOS','LOTERIAS','SUPERMERCADO','EVENTOS'],
+    clientNames:['XTANCO / ESTANCOS','ADMIRA LOTERÍAS','ADMIRA SUPERMERCADO','STAND SHOPTALK EU 2026'],
+    clientBadges:['Disponible ahora','En producción','Disponible ahora','9-11 jun · Fira Barcelona'],
     clientBlurbs:[
       'Gestión de estancos, staff, stock, signage y operaciones de tienda.\n4 layouts jugables hoy.',
       'Sorteos, campañas, estacionalidad y operativa de terminal.\nPróximo simulador en esta colección.',
       'Pasillos, frescos, congelados y punto de impulso.\nMismo motor XP con layout de supermercado.',
+      'Stand Lenovo × Nvidia controlado por el Gemelo Digital.\nPantallas, audio multi-zona, Hue, aroma y lead scan QR.',
     ],
     tut:[
       {title:'BIENVENIDO A XTANCO',lines:['Gestiona tu estanco durante 5 años.','Alcanza el objetivo de ventas cada año','para avanzar y construir tu negocio.','¡Contrata personal, repón stock y fideliza clientes!']},
@@ -4843,14 +4854,15 @@ const LANGS={
     clientLocked:'COMING SOON',
     clientStateLive:'LIVE',
     clientStatePipeline:'PIPELINE',
-    clientCodes:['XP-01','XP-02','XP-03'],
-    clientTracks:['TOBACCO','LOTTERY','SUPERMARKET'],
-    clientNames:['XTANCO / TOBACCO','ADMIRA LOTTERY','ADMIRA SUPERMARKET'],
-    clientBadges:['Available now','In production','Available now'],
+    clientCodes:['XP-01','XP-02','XP-03','XP-04'],
+    clientTracks:['TOBACCO','LOTTERY','SUPERMARKET','EVENTS'],
+    clientNames:['XTANCO / TOBACCO','ADMIRA LOTTERY','ADMIRA SUPERMARKET','SHOPTALK EU 2026 BOOTH'],
+    clientBadges:['Available now','In production','Available now','Jun 9-11 · Fira Barcelona'],
     clientBlurbs:[
       'Tobacco shop operations, staff, stock, signage and store gameplay.\n4 playable layouts today.',
       'Draw campaigns, seasonality and terminal operations.\nNext simulator in this collection.',
       'Aisles, frozen products, impulse zones and checkout flow.\nSame XP engine with supermarket layout.',
+      'Lenovo × Nvidia booth fully controlled by the Digital Twin.\nScreens, multi-zone audio, Hue, aroma and lead-scan QR.',
     ],
     tut:[
       {title:'WELCOME TO XTANCO',lines:['Manage your shop for 5 years.','Reach the annual sales target','to progress and grow your business.','Hire staff, restock and keep customers happy!']},
@@ -5086,7 +5098,21 @@ function parsePreloadTarget(raw){
   if(!suffix||suffix==='XTANCO') return PRELOAD_TARGETS.xtanco;
   if(suffix==='LOTERIAS'||suffix==='LOTERIA'||suffix==='LOTTERY') return PRELOAD_TARGETS.loterias;
   if(suffix==='RETAIL') return PRELOAD_TARGETS.retail;
+  if(suffix==='SHOPTALK'||suffix==='BOOTH'||suffix==='FERIA') return PRELOAD_TARGETS.shoptalk;
   return null;
+}
+// Atajo desde la home (banner Shoptalk) — salta directo al catálogo con
+// XP-04 preseleccionado, sin pasar por el preload Spectrum (irrelevante
+// para visitantes de feria que necesitan arranque inmediato en el booth).
+function launchShoptalkBooth(){
+  preloadTarget=PRELOAD_TARGETS.shoptalk;
+  window.XPACE_BOOTH='shoptalk';
+  // localizar el cliente shoptalk en CLIENTS por id
+  const idx=CLIENTS.findIndex(c=>c.id==='shoptalk');
+  if(idx>=0) clientSel=idx;
+  try{ history.replaceState(null,'', location.pathname+'?vertical=shoptalk'+location.hash); }catch(e){}
+  resetPreloadState();
+  startTransition(S.CLIENT_SEL);
 }
 function resetPreloadState(){
   preloadInput='';
@@ -5915,6 +5941,9 @@ function initGame(){
   // layout with localStorage, which may be stale or fail silently.
   activeClient=clientSel;
   activeModel=modelSel;
+  // Sincroniza XPACE_BOOTH con el cliente activo para que el HUD muestre
+  // el badge correcto (Shoptalk, Xtanco, …).
+  try{ window.XPACE_BOOTH=getActiveClient().id; }catch(e){}
   DEFAULT_LAYOUT=JSON.parse(JSON.stringify(FACTORY_LAYOUTS[getActiveClient().id]||FACTORY_LAYOUTS.xtanco));
   loadLayout();
   const models=getActiveModels();
@@ -6633,6 +6662,10 @@ function doAction(id){
   if(id.startsWith('era')){
     const idx=parseInt(id.slice(3),10);
     if(Number.isFinite(idx)) launchEra(idx);
+    return;
+  }
+  if(id==='shoptalkBooth'){
+    launchShoptalkBooth();
     return;
   }
   if(id.startsWith('tab')){activeTab=parseInt(id[3]);return;}
@@ -10089,12 +10122,55 @@ function drawPreload(){
   const prompt='>'+preloadInput+(preloadPhase==='prompt'?cursor:'');
   tx(prompt,44,472,preloadPhase==='prompt'?'#ffffff':'#5bd8ff',12);
 }
+// Banner Shoptalk en la home: tira superior clicable con countdown a feria.
+// Lenovo rojo (E2231A) → Nvidia verde (76B900). Click → launchShoptalkBooth.
+function drawShoptalkHomeBanner(){
+  const bh=28;
+  // Gradient Lenovo → Nvidia
+  const g=cx.createLinearGradient(0,0,W,0);
+  g.addColorStop(0,'#7a0d08');
+  g.addColorStop(0.5,'#1a1a1a');
+  g.addColorStop(1,'#2c4a00');
+  cx.fillStyle=g; cx.fillRect(0,0,W,bh);
+  // Bordes finos arriba y abajo
+  nl(0,0,W,0,'#E2231A',1);
+  nl(0,bh,W,bh,'#76B900',1);
+  // Días que faltan a Shoptalk EU (9 jun 2026, hora local Madrid)
+  let days='—';
+  try{
+    const target=new Date('2026-06-09T09:00:00+02:00').getTime();
+    const d=Math.max(0,Math.ceil((target-Date.now())/(1000*60*60*24)));
+    days=String(d);
+  }catch(e){}
+  const isEs=lang==='es';
+  const left='LENOVO × NVIDIA';
+  const center=(isEs?'STAND SHOPTALK EU 2026 · 9-11 JUN':'SHOPTALK EU 2026 BOOTH · JUN 9-11')+'  ·  D-'+days;
+  const right=(isEs?'ENTRAR →':'ENTER →');
+  // CTA derecha — chip sólido pulsante cuando el evento está cerca (<30 días)
+  const showPulse=days!=='—' && parseInt(days,10)<=30;
+  if(showPulse){
+    const pulse=0.5+0.5*Math.sin((typeof tt==='number'?tt:Date.now()/100)*0.08);
+    cx.globalAlpha=0.55+pulse*0.45;
+    r(W-94,4,90,bh-8,'#76B900');
+    cx.globalAlpha=1;
+    tx(right,W-12,18,'#0a1408',10,'right');
+  }else{
+    tx(right,W-12,18,'#d4ff88',10,'right');
+  }
+  // Resto del texto
+  tx(left,12,18,'#ffd2cf',9);
+  tx(center,W/2,18,'#ffffff',10,'center');
+  // Hitbox a todo el ancho del banner
+  BTNS['shoptalkBooth']={x:0,y:0,w:W,h:bh};
+}
 function drawEraSelect(){
   const isEs=lang==='es';
   if(eraNoticeTimer>0) eraNoticeTimer--;
   drawReadyPlayerRoomBackdrop();
   cx.globalAlpha=1;
-  nl(0,4,W,4,'#5bd8ff',2);
+  // Banner Shoptalk EU 2026 — gradient Lenovo (rojo) → Nvidia (verde),
+  // visible desde la home como atajo al stand de feria.
+  drawShoptalkHomeBanner();
   nl(0,H-4,W,H-4,'#ff9a1f',2);
   r(148,18,504,92,'#05070dcc');
   rx(148,18,504,92,'#5a7398',1);
@@ -10399,7 +10475,13 @@ function drawMenu(){
   tx(T().menuHint,W/2,ctaY+58,P.uiT3,8,'center');
   cx.globalAlpha=1;
 
-  const cardW=206,cardH=98,cardGap=14,cardY=ctaY+78,cardX=W/2-((cardW*3)+(cardGap*2))/2;
+  // Layout escalable: ajusta cardW al número de clients para que la fila
+  // siempre quepa con margen razonable. 3 clients → 206px, 4 → 170px, etc.
+  const _n=CLIENTS.length;
+  const cardGap=_n>=4?10:14;
+  const cardW=Math.min(206,Math.floor((W-40-cardGap*(_n-1))/_n));
+  const cardH=98,cardY=ctaY+78;
+  const cardX=W/2-((cardW*_n)+(cardGap*(_n-1)))/2;
   CLIENTS.forEach((client,i)=>{
     const cx2=cardX+i*(cardW+cardGap);
     const selected=i===clientSel;
@@ -10810,15 +10892,18 @@ const CLIENT_WORLD_NODES=[
   {x:480,y:308,type:'support'},
   {x:584,y:208,type:'retail'},
   {x:688,y:292,type:'support'},
+  {x:436,y:172,type:'shoptalk'},  // Barcelona — Shoptalk EU 2026
 ];
 const CLIENT_WORLD_LINKS=[
-  [0,1],[1,2],[2,3],[2,4],[3,4],[4,5],[5,6]
+  [0,1],[1,2],[2,3],[2,4],[3,4],[4,5],[5,6],
+  [3,7],[7,5]  // Shoptalk conecta loterias ↔ retail (corredor europeo)
 ];
 
 function getClientWorldLabel(nodeType){
   if(nodeType==='xtanco') return T().clientNames[0].split(' / ')[0];
   if(nodeType==='loterias') return T().clientNames[1];
   if(nodeType==='retail'||nodeType==='supermercado') return T().clientNames[2];
+  if(nodeType==='shoptalk') return lang==='es'?'STAND SHOPTALK EU':'SHOPTALK EU BOOTH';
   if(lang==='es') return 'Servicios XP';
   return 'XP Services';
 }
@@ -10827,6 +10912,7 @@ function getClientWorldMeta(nodeType){
   if(nodeType==='xtanco') return lang==='es' ? '4 layouts activos' : '4 active layouts';
   if(nodeType==='loterias') return lang==='es' ? 'cola · campañas · terminal' : 'queue · campaigns · terminal';
   if(nodeType==='retail'||nodeType==='supermercado') return lang==='es' ? 'helados · comida · impulso' : 'ice cream · food · impulse';
+  if(nodeType==='shoptalk') return lang==='es' ? '9-11 jun · Fira Barcelona' : 'Jun 9-11 · Fira Barcelona';
   return lang==='es' ? 'motores compartidos' : 'shared systems';
 }
 
@@ -10834,6 +10920,7 @@ function getClientNodeAccent(nodeType){
   if(nodeType==='xtanco') return CLIENTS[0].accent;
   if(nodeType==='loterias') return CLIENTS[1].accent;
   if(nodeType==='retail'||nodeType==='supermercado') return CLIENTS[2].accent;
+  if(nodeType==='shoptalk') return CLIENTS[3].accent;
   return '#8abf62';
 }
 
@@ -10841,6 +10928,7 @@ function getClientNodeIndex(nodeType){
   if(nodeType==='xtanco') return 0;
   if(nodeType==='loterias') return 1;
   if(nodeType==='retail'||nodeType==='supermercado') return 2;
+  if(nodeType==='shoptalk') return 3;
   return -1;
 }
 
@@ -15797,6 +15885,19 @@ function drawHUD(){
   // Marketplace overlay (sponsor band + physical posters) — drawn last so it
   // sits above the HUD top bar and any iso furniture.
   try{ drawMarketplaceOverlay(); }catch(e){}
+  // Banda inferior del HUD identificando el booth Shoptalk si está activo.
+  if(window.XPACE_BOOTH==='shoptalk') drawShoptalkBoothBadge();
+}
+
+// Banda fina justo debajo del HUD (y=28..34) que confirma "MODO STAND
+// SHOPTALK". Solo aparece si window.XPACE_BOOTH==='shoptalk'.
+function drawShoptalkBoothBadge(){
+  const y=28, bh=10;
+  const g=cx.createLinearGradient(0,y,W,y);
+  g.addColorStop(0,'#E2231A');
+  g.addColorStop(1,'#76B900');
+  cx.fillStyle=g; cx.fillRect(0,y,W,bh);
+  tx('🎪 STAND SHOPTALK EU 2026 · LENOVO × NVIDIA · ADMIRANEXT',W/2,y+8,'#ffffff',7,'center');
 }
 
 // Marketplace overlay: persistent sponsor banner across the top of the canvas
