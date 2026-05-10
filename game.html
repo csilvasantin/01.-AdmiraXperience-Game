@@ -14,6 +14,7 @@
     body{display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-start}
     canvas{image-rendering:pixelated;display:block;flex-shrink:1;filter:drop-shadow(0 26px 40px rgba(0,0,0,.42))}
     #topBar{display:none;width:100%;max-width:100vw;height:36px;background:linear-gradient(90deg,rgba(5,12,18,.98),rgba(12,31,39,.98) 44%,rgba(28,18,10,.98));border-bottom:1px solid rgba(120,243,255,.36);box-shadow:0 10px 28px rgba(0,0,0,.42),inset 0 -1px 0 rgba(247,201,93,.22);flex-shrink:0;align-items:center;padding:0 8px;gap:7px;font-family:monospace;color:var(--xp-ink);font-size:11px;z-index:10;order:-1}
+    body.is-xpace-creator #topBar{display:none !important}
     #topBar.show{display:flex}
     #topBar button{border:none;height:26px;padding:0 10px;border-radius:999px;font-family:monospace;font-size:10px;font-weight:bold;cursor:pointer;display:flex;align-items:center;justify-content:center;align-self:center;letter-spacing:.04em;text-transform:uppercase;box-shadow:inset 0 1px 0 rgba(255,255,255,.14)}
     #topBar .sep{width:1px;height:22px;background:linear-gradient(180deg,transparent,rgba(120,243,255,.38),transparent);flex-shrink:0}
@@ -5128,7 +5129,15 @@ function enterXpaceCreator(){
   modelSel=0;
   window.XPACE_BOOTH='creator';
   try{ initGame(); }catch(e){ console.warn('initGame failed for creator:',e); }
+  // Aplica el grid persistido (cols/rows) — el editor lo respeta.
+  try{ applyXpaceCreatorGrid(); }catch(e){}
+  // Oculta el HUD HTML del juego (ventas/beneficio/competencia) — no
+  // aplica al Xpace Creator. La clase la quita el handler de Salir.
+  try{ document.body.classList.add('is-xpace-creator'); }catch(e){}
   startTransition(S.EDITOR);
+}
+function exitXpaceCreator(){
+  try{ document.body.classList.remove('is-xpace-creator'); }catch(e){}
 }
 function resetPreloadState(){
   preloadInput='';
@@ -5318,6 +5327,61 @@ function isBlankXpace(){
 // Alias semántico legacy — algunos sitios del código siguen usando
 // isShoptalkBooth(); lo dejamos como sinónimo de isBlankXpace().
 function isShoptalkBooth(){ return isBlankXpace(); }
+function isXpaceCreator(){
+  try{ return (CLIENTS[activeClient]&&CLIENTS[activeClient].id==='creator'); }catch(e){ return false; }
+}
+
+// ── Xpace Creator: tamaño del grid + colores de pared/suelo ──
+// Persistido en localStorage. Aplicado al render solo cuando
+// isBlankXpace() devuelve true (creator + booth Shoptalk).
+const XPACE_CREATOR_DEFAULTS={cols:14,rows:8,wallColor:'#e0d4b8',floorColor:'#b8bcc0'};
+const XPACE_WALL_PALETTE=['#e0d4b8','#cfd2cf','#1a1d22','#2a4a55','#5a3a2a','#3a3a1a','#76B900','#E2231A'];
+const XPACE_FLOOR_PALETTE=['#b8bcc0','#7a8590','#2a2f36','#1f3a2a','#3a2a1a','#5a4030','#1f2540','#403030'];
+let xpaceCreatorConfig=(() => {
+  try{
+    const raw=localStorage.getItem('xpace_creator_config');
+    if(raw) return Object.assign({},XPACE_CREATOR_DEFAULTS,JSON.parse(raw));
+  }catch(e){}
+  return Object.assign({},XPACE_CREATOR_DEFAULTS);
+})();
+function saveXpaceCreatorConfig(){
+  try{ localStorage.setItem('xpace_creator_config',JSON.stringify(xpaceCreatorConfig)); }catch(e){}
+}
+function applyXpaceCreatorGrid(){
+  // Mutamos ISO.cols/rows; el render ya recorre dinámicamente.
+  ISO.cols=xpaceCreatorConfig.cols;
+  ISO.rows=xpaceCreatorConfig.rows;
+  try{ buildWalkGrid(); }catch(e){}
+}
+function adjustXpaceCols(delta){
+  const next=Math.max(6,Math.min(20,xpaceCreatorConfig.cols+delta));
+  if(next===xpaceCreatorConfig.cols) return;
+  xpaceCreatorConfig.cols=next;
+  applyXpaceCreatorGrid();
+  saveXpaceCreatorConfig();
+}
+function adjustXpaceRows(delta){
+  const next=Math.max(4,Math.min(14,xpaceCreatorConfig.rows+delta));
+  if(next===xpaceCreatorConfig.rows) return;
+  xpaceCreatorConfig.rows=next;
+  applyXpaceCreatorGrid();
+  saveXpaceCreatorConfig();
+}
+function cycleXpaceWallColor(){
+  const i=Math.max(0,XPACE_WALL_PALETTE.indexOf(xpaceCreatorConfig.wallColor));
+  xpaceCreatorConfig.wallColor=XPACE_WALL_PALETTE[(i+1)%XPACE_WALL_PALETTE.length];
+  saveXpaceCreatorConfig();
+}
+function cycleXpaceFloorColor(){
+  const i=Math.max(0,XPACE_FLOOR_PALETTE.indexOf(xpaceCreatorConfig.floorColor));
+  xpaceCreatorConfig.floorColor=XPACE_FLOOR_PALETTE[(i+1)%XPACE_FLOOR_PALETTE.length];
+  saveXpaceCreatorConfig();
+}
+function resetXpaceCreatorConfig(){
+  xpaceCreatorConfig=Object.assign({},XPACE_CREATOR_DEFAULTS);
+  applyXpaceCreatorGrid();
+  saveXpaceCreatorConfig();
+}
 let DEFAULT_LAYOUT=JSON.parse(JSON.stringify(FACTORY_LAYOUTS.xtanco));
 let shopLayout=JSON.parse(JSON.stringify(DEFAULT_LAYOUT));
 let shopFurnitureVisible=true;
@@ -6706,6 +6770,20 @@ function doAction(id){
   }
   if(id==='shoptalkBooth'){
     launchShoptalkBooth();
+    return;
+  }
+  // Xpace Creator — controles del HUD del editor
+  if(id==='xpaceColsMinus'){ adjustXpaceCols(-1); return; }
+  if(id==='xpaceColsPlus'){ adjustXpaceCols(+1); return; }
+  if(id==='xpaceRowsMinus'){ adjustXpaceRows(-1); return; }
+  if(id==='xpaceRowsPlus'){ adjustXpaceRows(+1); return; }
+  if(id==='xpaceWallCycle'){ cycleXpaceWallColor(); return; }
+  if(id==='xpaceFloorCycle'){ cycleXpaceFloorColor(); return; }
+  if(id==='xpaceCreatorReset'){ resetXpaceCreatorConfig(); return; }
+  if(id==='xpaceCreatorExit'){
+    try{saveLayout();}catch(e){}
+    exitXpaceCreator();
+    startTransition(S.MENU);
     return;
   }
   if(id.startsWith('tab')){activeTab=parseInt(id[3]);return;}
@@ -12170,12 +12248,14 @@ function drawShop(){
   cx.moveTo(floorPoly[0].x,floorPoly[0].y);
   for(let i=1;i<floorPoly.length;i++) cx.lineTo(floorPoly[i].x,floorPoly[i].y);
   cx.closePath();
-  cx.fillStyle='#b8bcc0';
+  // Override del color base si estamos en un Xpacio en blanco (booth/creator).
+  const _baseFloor=isBlankXpace()?xpaceCreatorConfig.floorColor:'#b8bcc0';
+  cx.fillStyle=_baseFloor;
   cx.fill();
   for(let row=-1;row<=ISO.rows;row++){
     for(let col=-1;col<=ISO.cols;col++){
-      let floorCol='#b8bcc0';
-      if(G.rush.active){
+      let floorCol=_baseFloor;
+      if(G.rush.active && !isBlankXpace()){
         const pulse=0.05*Math.sin(tt*.08);
         floorCol=`rgba(182,188,192,${0.9+pulse})`;
       }
@@ -12216,7 +12296,7 @@ function drawShop(){
   for(let i=1;i<wallPts.length;i++) cx.lineTo(wallPts[i].x,wallPts[i].y);
   for(let i=wallPts.length-1;i>=0;i--) cx.lineTo(wallPts[i].x,wallPts[i].y-ISO.wallH);
   cx.closePath();
-  cx.fillStyle=P.wallInner;cx.fill();
+  cx.fillStyle=isBlankXpace()?xpaceCreatorConfig.wallColor:P.wallInner;cx.fill();
   // Wall panel lines (subtle horizontal)
   cx.globalAlpha=0.08;
   for(let h=15;h<ISO.wallH;h+=20){
@@ -15972,6 +16052,72 @@ function drawShoptalkBoothBadge(){
   tx('🎪 STAND SHOPTALK EU 2026 · LENOVO × NVIDIA · ADMIRANEXT',W/2,y+8,'#ffffff',7,'center');
 }
 
+// HUD del Xpace Creator — sustituye al del juego (ventas/beneficio/sat)
+// cuando estamos editando un Xpacio en blanco. Controles: tamaño del
+// grid (cols × rows), color de pared y color de suelo, reset y salir.
+function drawCreatorHUD(){
+  const hh=28;
+  // Fondo dorado-oscuro distintivo
+  const g=cx.createLinearGradient(0,0,W,0);
+  g.addColorStop(0,'#1f1908');
+  g.addColorStop(1,'#1a1308');
+  cx.fillStyle=g; cx.fillRect(0,0,W,hh);
+  cx.strokeStyle='#5a4218';cx.lineWidth=1;
+  cx.beginPath();cx.moveTo(0,hh-0.5);cx.lineTo(W,hh-0.5);cx.stroke();
+
+  // ── 📐 TAMAÑO ──
+  let x=8;
+  tx('📐',x,19,'#ffd866',13); x+=18;
+  tx(lang==='es'?'TAMAÑO':'SIZE',x,19,'#9c8a55',8); x+=46;
+  // Cols: [- 14 +]
+  r(x,5,16,18,'#2a2010'); rx(x,5,16,18,'#7a6230',1);
+  tx('−',x+8,18,'#ffd866',13,'center');
+  BTNS['xpaceColsMinus']={x,y:5,w:16,h:18}; x+=18;
+  r(x,5,32,18,'#0a0a08'); rx(x,5,32,18,'#7a6230',1);
+  tx(String(xpaceCreatorConfig.cols),x+16,18,'#ffe8a0',11,'center');
+  x+=34;
+  r(x,5,16,18,'#2a2010'); rx(x,5,16,18,'#7a6230',1);
+  tx('+',x+8,18,'#ffd866',13,'center');
+  BTNS['xpaceColsPlus']={x,y:5,w:16,h:18}; x+=20;
+  // x
+  tx('×',x,19,'#9c8a55',12); x+=10;
+  // Rows: [- 8 +]
+  r(x,5,16,18,'#2a2010'); rx(x,5,16,18,'#7a6230',1);
+  tx('−',x+8,18,'#ffd866',13,'center');
+  BTNS['xpaceRowsMinus']={x,y:5,w:16,h:18}; x+=18;
+  r(x,5,32,18,'#0a0a08'); rx(x,5,32,18,'#7a6230',1);
+  tx(String(xpaceCreatorConfig.rows),x+16,18,'#ffe8a0',11,'center');
+  x+=34;
+  r(x,5,16,18,'#2a2010'); rx(x,5,16,18,'#7a6230',1);
+  tx('+',x+8,18,'#ffd866',13,'center');
+  BTNS['xpaceRowsPlus']={x,y:5,w:16,h:18}; x+=24;
+
+  // ── 🎨 COLOR PARED ──
+  tx('🎨',x,19,'#ffd866',13); x+=18;
+  tx(lang==='es'?'PARED':'WALL',x,19,'#9c8a55',8); x+=38;
+  r(x,7,40,14,xpaceCreatorConfig.wallColor); rx(x,7,40,14,'#7a6230',1);
+  tx('▶',x+50,19,'#ffd866',8);
+  BTNS['xpaceWallCycle']={x,y:5,w:60,h:18}; x+=68;
+
+  // ── 🟦 COLOR SUELO ──
+  tx(lang==='es'?'SUELO':'FLOOR',x,19,'#9c8a55',8); x+=42;
+  r(x,7,40,14,xpaceCreatorConfig.floorColor); rx(x,7,40,14,'#7a6230',1);
+  tx('▶',x+50,19,'#ffd866',8);
+  BTNS['xpaceFloorCycle']={x,y:5,w:60,h:18}; x+=70;
+
+  // ── RESET ──
+  const rstW=58;
+  r(W-rstW-90-6,4,rstW,20,'#2a2010'); rx(W-rstW-90-6,4,rstW,20,'#7a6230',1);
+  tx(lang==='es'?'RESET':'RESET',W-rstW-90-6+rstW/2,18,'#ffd866',8,'center');
+  BTNS['xpaceCreatorReset']={x:W-rstW-90-6,y:4,w:rstW,h:20};
+
+  // ── SALIR ──
+  const exW=88;
+  r(W-exW-4,4,exW,20,'#3a1a10'); rx(W-exW-4,4,exW,20,'#aa5530',1);
+  tx(lang==='es'?'✕ SALIR':'✕ EXIT',W-exW-4+exW/2,18,'#ffaa88',9,'center');
+  BTNS['xpaceCreatorExit']={x:W-exW-4,y:4,w:exW,h:20};
+}
+
 // Marketplace overlay: persistent sponsor banner across the top of the canvas
 // when there's a takeover ("mancha de marca") active, plus three small
 // branded paper-poster slots stuck to the canvas (cartel A2, flyer mostrador,
@@ -17753,12 +17899,18 @@ function drawEditor(){
     }
   }
 
-  // Top bar
-  r(0,0,W,28,'#1a140d');
-  const topHint=edMode==='staff'
-    ?'POSICIONES TRABAJADORES — Click trabajador para seleccionar, click tile para mover'
-    :'EDITOR DE LAYOUT — Click mueble, click tile mover  |  F=espejo  R=rotar  Flechas=mover';
-  tx(topHint,10,18,'#ffdd66',8);
+  // Top bar — en modo Xpace Creator se sustituye por controles de
+  // Tamaño y Color del Xpacio. Para los demás verticals (Xtanco,
+  // Loterías…) se mantiene la pista clásica del editor.
+  if(isXpaceCreator()){
+    drawCreatorHUD();
+  }else{
+    r(0,0,W,28,'#1a140d');
+    const topHint=edMode==='staff'
+      ?'POSICIONES TRABAJADORES — Click trabajador para seleccionar, click tile para mover'
+      :'EDITOR DE LAYOUT — Click mueble, click tile mover  |  F=espejo  R=rotar  Flechas=mover';
+    tx(topHint,10,18,'#ffdd66',8);
+  }
 
   // ── BOTTOM PANEL ──
   const panH=98;
