@@ -5134,10 +5134,29 @@ function enterXpaceCreator(){
   // Oculta el HUD HTML del juego (ventas/beneficio/competencia) — no
   // aplica al Xpace Creator. La clase la quita el handler de Salir.
   try{ document.body.classList.add('is-xpace-creator'); }catch(e){}
+  // Renombrar tabs del dock inferior: Equipo→Mobiliario, Clientes→Trabajadores.
+  applyCreatorDockLabels(true);
   startTransition(S.EDITOR);
 }
 function exitXpaceCreator(){
   try{ document.body.classList.remove('is-xpace-creator'); }catch(e){}
+  applyCreatorDockLabels(false);
+}
+// Sustituye los textos de los tabs del dock inferior cuando estamos en
+// el Xpace Creator. Guarda el original para restaurar al salir.
+function applyCreatorDockLabels(active){
+  const team=document.getElementById('characterTeamFocusBtn');
+  const cust=document.getElementById('characterClientFocusBtn');
+  if(!team || !cust) return;
+  if(active){
+    if(!team.dataset.origLabel) team.dataset.origLabel=team.textContent||'';
+    if(!cust.dataset.origLabel) cust.dataset.origLabel=cust.textContent||'';
+    team.textContent = (lang==='en') ? 'FURNITURE' : 'MOBILIARIO';
+    cust.textContent = (lang==='en') ? 'STAFF' : 'TRABAJADORES';
+  } else {
+    if(team.dataset.origLabel){ team.textContent=team.dataset.origLabel; delete team.dataset.origLabel; }
+    if(cust.dataset.origLabel){ cust.textContent=cust.dataset.origLabel; delete cust.dataset.origLabel; }
+  }
 }
 function resetPreloadState(){
   preloadInput='';
@@ -16567,8 +16586,12 @@ function syncDockLanguage(){
   if(characterDock) characterDock.setAttribute('aria-label',isEs?'Equipo y clientes':'Team and customers');
   const clientFocusBtn=document.getElementById('characterClientFocusBtn');
   const teamFocusBtn=document.getElementById('characterTeamFocusBtn');
-  if(teamFocusBtn) teamFocusBtn.textContent=isEs?'Equipo':'Team';
-  if(clientFocusBtn) clientFocusBtn.textContent=isEs?'Clientes':'Customers';
+  if(teamFocusBtn) teamFocusBtn.textContent=document.body.classList.contains('is-xpace-creator')
+    ?(isEs?'MOBILIARIO':'FURNITURE')
+    :(isEs?'Equipo':'Team');
+  if(clientFocusBtn) clientFocusBtn.textContent=document.body.classList.contains('is-xpace-creator')
+    ?(isEs?'TRABAJADORES':'STAFF')
+    :(isEs?'Clientes':'Customers');
 
   const tgHeads=document.querySelectorAll('#telegramDock .tg-head > span:first-child');
   if(tgHeads[0]) tgHeads[0].textContent=isEs?'Control de la Store desde Telegram / WhatsApp':'Store control from Telegram / WhatsApp';
@@ -16813,8 +16836,12 @@ function drawCharacterGroupsPanel(){
     // Glow si entra alguien nuevo registrado online (pending fan)
     socioFocusBtn.classList.toggle('is-alert',hasPendingFan&&!hasSocios);
   }
-  if(teamFocusBtn) teamFocusBtn.textContent=isEs?'Equipo':'Team';
-  if(clientFocusBtn) clientFocusBtn.textContent=isEs?'Clientes':'Customers';
+  if(teamFocusBtn) teamFocusBtn.textContent=document.body.classList.contains('is-xpace-creator')
+    ?(isEs?'MOBILIARIO':'FURNITURE')
+    :(isEs?'Equipo':'Team');
+  if(clientFocusBtn) clientFocusBtn.textContent=document.body.classList.contains('is-xpace-creator')
+    ?(isEs?'TRABAJADORES':'STAFF')
+    :(isEs?'Clientes':'Customers');
   const hired=(G.staff||[]).filter(s=>s.hired&&!s.fired);
   const clients=(G.custs||[]).slice().sort((a,b)=>{
     const prDiff=customerPriority(a)-customerPriority(b);
@@ -18123,6 +18150,10 @@ function drawEditor(){
   }
 
   // ── BOTTOM PANEL ──
+  // En modo Xpace Creator ocultamos todo el bottom panel del editor
+  // (tabs Muebles/Trabajadores + paleta de items + Save/Layout/Reset/Salir).
+  // La paleta vivirá en el dock inferior con tabs MOBILIARIO / TRABAJADORES.
+  if(!isXpaceCreator()){
   const panH=98;
   r(0,H-panH,W,panH,'#1e160ae8');
   cx.strokeStyle='#4a3820';cx.lineWidth=1;
@@ -18261,6 +18292,7 @@ function drawEditor(){
       cx.globalAlpha=0.55;tx('Usando posiciones por defecto — selecciona un trabajador y muévelo',W/2,btnY+36,'#88aabb',7,'center');cx.globalAlpha=1;
     }
   }
+  } // end if(!isXpaceCreator()) — bottom panel del editor
 
   // Save notification overlay
   if(edSaveNotify>0){
