@@ -4664,6 +4664,7 @@ const CLIENTS=[
   {id:'loterias', available:false, accent:'#44ddaa', bg:'#102018', models:[], quickModels:XTANCO_MODELS},
   {id:'supermercado', available:true, accent:'#7ae35a', bg:'#10220f', models:[], quickModels:XTANCO_MODELS},
   {id:'shoptalk', available:true, accent:'#76B900', bg:'#0a1a08', models:[], quickModels:XTANCO_MODELS, event:true},
+  {id:'creator', available:true, accent:'#ffd866', bg:'#1f1a0a', models:[], quickModels:XTANCO_MODELS, creator:true},
 ];
 let activeClient=0;
 let activeModel=0;
@@ -4771,15 +4772,16 @@ const LANGS={
     clientLocked:'PRÓXIMAMENTE',
     clientStateLive:'LIVE',
     clientStatePipeline:'PIPELINE',
-    clientCodes:['XP-01','XP-02','XP-03','XP-04'],
-    clientTracks:['ESTANCOS','LOTERIAS','SUPERMERCADO','EVENTOS'],
-    clientNames:['XTANCO / ESTANCOS','ADMIRA LOTERÍAS','ADMIRA SUPERMERCADO','STAND SHOPTALK EU 2026'],
-    clientBadges:['Disponible ahora','En producción','Disponible ahora','9-11 jun · Fira Barcelona'],
+    clientCodes:['XP-01','XP-02','XP-03','XP-04','XP-05'],
+    clientTracks:['ESTANCOS','LOTERIAS','SUPERMERCADO','EVENTOS','CREATOR'],
+    clientNames:['XTANCO / ESTANCOS','ADMIRA LOTERÍAS','ADMIRA SUPERMERCADO','STAND SHOPTALK EU 2026','XPACE CREATOR'],
+    clientBadges:['Disponible ahora','En producción','Disponible ahora','9-11 jun · Fira Barcelona','Define tu Xpacio'],
     clientBlurbs:[
       'Gestión de estancos, staff, stock, signage y operaciones de tienda.\n4 layouts jugables hoy.',
       'Sorteos, campañas, estacionalidad y operativa de terminal.\nPróximo simulador en esta colección.',
       'Pasillos, frescos, congelados y punto de impulso.\nMismo motor XP con layout de supermercado.',
       'Stand Lenovo × Nvidia controlado por el Gemelo Digital.\nPantallas, audio multi-zona, Hue, aroma y lead scan QR.',
+      'Crea un Xpacio nuevo desde cero — booth, oficina, sala…\nLienzo en blanco + editor de surfaces (signage, audio, Hue).',
     ],
     tut:[
       {title:'BIENVENIDO A XTANCO',lines:['Gestiona tu estanco durante 5 años.','Alcanza el objetivo de ventas cada año','para avanzar y construir tu negocio.','¡Contrata personal, repón stock y fideliza clientes!']},
@@ -4854,15 +4856,16 @@ const LANGS={
     clientLocked:'COMING SOON',
     clientStateLive:'LIVE',
     clientStatePipeline:'PIPELINE',
-    clientCodes:['XP-01','XP-02','XP-03','XP-04'],
-    clientTracks:['TOBACCO','LOTTERY','SUPERMARKET','EVENTS'],
-    clientNames:['XTANCO / TOBACCO','ADMIRA LOTTERY','ADMIRA SUPERMARKET','SHOPTALK EU 2026 BOOTH'],
-    clientBadges:['Available now','In production','Available now','Jun 9-11 · Fira Barcelona'],
+    clientCodes:['XP-01','XP-02','XP-03','XP-04','XP-05'],
+    clientTracks:['TOBACCO','LOTTERY','SUPERMARKET','EVENTS','CREATOR'],
+    clientNames:['XTANCO / TOBACCO','ADMIRA LOTTERY','ADMIRA SUPERMARKET','SHOPTALK EU 2026 BOOTH','XPACE CREATOR'],
+    clientBadges:['Available now','In production','Available now','Jun 9-11 · Fira Barcelona','Define your Xpace'],
     clientBlurbs:[
       'Tobacco shop operations, staff, stock, signage and store gameplay.\n4 playable layouts today.',
       'Draw campaigns, seasonality and terminal operations.\nNext simulator in this collection.',
       'Aisles, frozen products, impulse zones and checkout flow.\nSame XP engine with supermarket layout.',
       'Lenovo × Nvidia booth fully controlled by the Digital Twin.\nScreens, multi-zone audio, Hue, aroma and lead-scan QR.',
+      'Build a new Xpace from scratch — booth, office, room…\nBlank canvas + surfaces editor (signage, audio, Hue).',
     ],
     tut:[
       {title:'WELCOME TO XTANCO',lines:['Manage your shop for 5 years.','Reach the annual sales target','to progress and grow your business.','Hire staff, restock and keep customers happy!']},
@@ -5114,6 +5117,19 @@ function launchShoptalkBooth(){
   resetPreloadState();
   startTransition(S.CLIENT_SEL);
 }
+
+// Entrar al Xpace Creator: salta MODEL_SEL y abre directamente el
+// editor con el layout vacío FACTORY_LAYOUTS.creator. Es el modo
+// "lienzo en blanco" donde el usuario define un Xpacio nuevo.
+function enterXpaceCreator(){
+  const idx=CLIENTS.findIndex(c=>c.id==='creator');
+  if(idx<0) return;
+  clientSel=idx;
+  modelSel=0;
+  window.XPACE_BOOTH='creator';
+  try{ initGame(); }catch(e){ console.warn('initGame failed for creator:',e); }
+  startTransition(S.EDITOR);
+}
 function resetPreloadState(){
   preloadInput='';
   preloadPhase='prompt';
@@ -5285,13 +5301,23 @@ const FACTORY_LAYOUTS={
   // el usuario añade surfaces (pantallas, audio, Hue, aroma…) según
   // diseña su booth Shoptalk EU 2026.
   shoptalk:[],
+  // Modo Xpace Creator — lienzo en blanco. El usuario abre directamente
+  // en el editor (S.EDITOR) y va construyendo el Xpacio desde cero.
+  creator:[],
 };
-// Helper: ¿estamos dentro del Xpacio de feria? Lo usamos en drawShop
-// para suprimir puerta, ventanas, calle y passersby que no aplican
-// dentro de un pabellón cerrado.
-function isShoptalkBooth(){
-  try{ return window.XPACE_BOOTH==='shoptalk' || (CLIENTS[activeClient]&&CLIENTS[activeClient].id==='shoptalk'); }catch(e){ return false; }
+// Helper: ¿estamos dentro de un Xpacio en blanco (booth Shoptalk o
+// Xpace Creator)? Suprime puerta, ventanas, calle y decoración fija
+// para que la pantalla muestre el lienzo limpio listo para añadir
+// surfaces desde el editor.
+function isBlankXpace(){
+  try{
+    const id=(CLIENTS[activeClient]&&CLIENTS[activeClient].id)||window.XPACE_BOOTH;
+    return id==='shoptalk' || id==='creator';
+  }catch(e){ return false; }
 }
+// Alias semántico legacy — algunos sitios del código siguen usando
+// isShoptalkBooth(); lo dejamos como sinónimo de isBlankXpace().
+function isShoptalkBooth(){ return isBlankXpace(); }
 let DEFAULT_LAYOUT=JSON.parse(JSON.stringify(FACTORY_LAYOUTS.xtanco));
 let shopLayout=JSON.parse(JSON.stringify(DEFAULT_LAYOUT));
 let shopFurnitureVisible=true;
@@ -6434,7 +6460,10 @@ document.addEventListener('keydown',e=>{
     const count=CLIENTS.length;
     if(e.code==='ArrowLeft'||e.code==='ArrowUp')   clientSel=(clientSel-1+count)%count;
     if(e.code==='ArrowRight'||e.code==='ArrowDown') clientSel=(clientSel+1)%count;
-    if((e.code==='Enter'||e.code==='Space')&&getSelectedClient().available){modelSel=0;startTransition(S.MODEL_SEL);}
+    if((e.code==='Enter'||e.code==='Space')&&getSelectedClient().available){
+      if(getSelectedClient().creator){ enterXpaceCreator(); return; }
+      modelSel=0;startTransition(S.MODEL_SEL);
+    }
     if(e.code==='Escape') startTransition(S.MENU);
     return;
   }
@@ -6947,6 +6976,7 @@ function doAction(id){
     if(!Number.isNaN(ci)&&ci>=0&&ci<CLIENTS.length) clientSel=ci;
     if(state===S.MENU){
       if(getSelectedClient().available){
+        if(getSelectedClient().creator){ enterXpaceCreator(); return; }
         modelSel=0;
         startTransition(S.MODEL_SEL);
       }
@@ -6955,7 +6985,10 @@ function doAction(id){
     return;
   }
   if(id==='clientConfirm'){
-    if(getSelectedClient().available){modelSel=0;startTransition(S.MODEL_SEL);}
+    if(getSelectedClient().available){
+      if(getSelectedClient().creator){ enterXpaceCreator(); return; }
+      modelSel=0;startTransition(S.MODEL_SEL);
+    }
     return;
   }
   if(id==='menuLangEs'){setLanguage('es');return;}
@@ -10904,10 +10937,12 @@ const CLIENT_WORLD_NODES=[
   {x:584,y:208,type:'retail'},
   {x:688,y:292,type:'support'},
   {x:436,y:172,type:'shoptalk'},  // Barcelona — Shoptalk EU 2026
+  {x:148,y:172,type:'creator'},   // Esquina noroeste — punto de creación
 ];
 const CLIENT_WORLD_LINKS=[
   [0,1],[1,2],[2,3],[2,4],[3,4],[4,5],[5,6],
-  [3,7],[7,5]  // Shoptalk conecta loterias ↔ retail (corredor europeo)
+  [3,7],[7,5],  // Shoptalk conecta loterias ↔ retail (corredor europeo)
+  [8,1],[8,7]   // Creator conecta con xtanco y shoptalk
 ];
 
 function getClientWorldLabel(nodeType){
@@ -10915,6 +10950,7 @@ function getClientWorldLabel(nodeType){
   if(nodeType==='loterias') return T().clientNames[1];
   if(nodeType==='retail'||nodeType==='supermercado') return T().clientNames[2];
   if(nodeType==='shoptalk') return lang==='es'?'STAND SHOPTALK EU':'SHOPTALK EU BOOTH';
+  if(nodeType==='creator') return 'XPACE CREATOR';
   if(lang==='es') return 'Servicios XP';
   return 'XP Services';
 }
@@ -10924,6 +10960,7 @@ function getClientWorldMeta(nodeType){
   if(nodeType==='loterias') return lang==='es' ? 'cola · campañas · terminal' : 'queue · campaigns · terminal';
   if(nodeType==='retail'||nodeType==='supermercado') return lang==='es' ? 'helados · comida · impulso' : 'ice cream · food · impulse';
   if(nodeType==='shoptalk') return lang==='es' ? '9-11 jun · Fira Barcelona' : 'Jun 9-11 · Fira Barcelona';
+  if(nodeType==='creator') return lang==='es' ? 'define tu Xpacio' : 'define your Xpace';
   return lang==='es' ? 'motores compartidos' : 'shared systems';
 }
 
@@ -10932,6 +10969,7 @@ function getClientNodeAccent(nodeType){
   if(nodeType==='loterias') return CLIENTS[1].accent;
   if(nodeType==='retail'||nodeType==='supermercado') return CLIENTS[2].accent;
   if(nodeType==='shoptalk') return CLIENTS[3].accent;
+  if(nodeType==='creator') return CLIENTS[4].accent;
   return '#8abf62';
 }
 
@@ -10940,6 +10978,7 @@ function getClientNodeIndex(nodeType){
   if(nodeType==='loterias') return 1;
   if(nodeType==='retail'||nodeType==='supermercado') return 2;
   if(nodeType==='shoptalk') return 3;
+  if(nodeType==='creator') return 4;
   return -1;
 }
 
@@ -11070,7 +11109,9 @@ function drawClientSelect(){
   tx(T().clientCodes[clientSel],panelX+panelW-66,panelY+40,'#88ccff',8,'center');
 
   const buttonColor=selectedClient.available?selectedClient.accent:P.gray;
-  const buttonText=selectedClient.available?(lang==='es'?'ENTRAR EN '+T().clientTracks[clientSel]:'ENTER '+T().clientTracks[clientSel]):T().clientLocked;
+  const buttonText=!selectedClient.available?T().clientLocked
+    :(selectedClient.creator?(lang==='es'?'DEFINIR XPACIO →':'DEFINE XPACE →')
+    :(lang==='es'?'ENTRAR EN '+T().clientTracks[clientSel]:'ENTER '+T().clientTracks[clientSel]));
   const buttonW=240,buttonH=36,buttonX=W-286,buttonY=408;
   r(buttonX,buttonY,buttonW,buttonH,'#08080f');
   if(selectedClient.available){glow(buttonColor,12);}
