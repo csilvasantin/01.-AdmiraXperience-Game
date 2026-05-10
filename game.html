@@ -4760,13 +4760,13 @@ function getCurrentVenueBrand(){
 const LANGS={
   es:{
     menuEyebrow:'THE XPACE OS',menuTitle:'ADMIRA XP',menuSub:'PLATAFORMA OPERATIVA MULTICLIENTE',
-    menuDeck:'Catalogo vivo de experiencias por cliente',
-    langPick:'SELECCIONA IDIOMA',menuStartBtn:'ABRIR CATALOGO XP',menuHint:'Xtanco ya esta en vivo. Loterias y Retail avanzan en la hoja de lanzamiento.',
+    menuDeck:'Crea o elige tu Xpacio',
+    langPick:'SELECCIONA IDIOMA',menuStartBtn:'ABRIR XPACE CREATOR',menuHint:'Stand Shoptalk EU 2026 disponible. Crea tu Xpacio o entra en uno de los verticals.',
     menuGuideBtn:'▶ MANUAL XP',menuSettingsBtn:'⚙ XPACE CONFIG',
     startBtn:'ABRIR SIMULADOR',
     langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
-    clientPick:'CATALOGO XPACE',
-    clientHint:'Selecciona un vertical y entra en su experiencia operativa.',
+    clientPick:'XPACE CREATOR',
+    clientHint:'Crea tu propio Xpacio o entra en uno existente.',
     clientConfirm:'ENTRAR EN LA EXPERIENCIA',
     clientLocked:'PRÓXIMAMENTE',
     clientStateLive:'LIVE',
@@ -4843,13 +4843,13 @@ const LANGS={
   },
   en:{
     menuEyebrow:'THE XPACE OS',menuTitle:'ADMIRA XP',menuSub:'MULTI-CLIENT OPERATIONS PLATFORM',
-    menuDeck:'Living catalog of client-based experiences',
-    langPick:'SELECT LANGUAGE',menuStartBtn:'OPEN XP CATALOG',menuHint:'Xtanco is live. Lottery and Retail are moving through the launch pipeline.',
+    menuDeck:'Create or pick your Xpace',
+    langPick:'SELECT LANGUAGE',menuStartBtn:'OPEN XPACE CREATOR',menuHint:'Shoptalk EU 2026 booth available. Create your Xpace or enter an existing vertical.',
     menuGuideBtn:'▶ XP MANUAL',menuSettingsBtn:'⚙ XPACE CONFIG',
     startBtn:'OPEN SIMULATOR',
     langEs:'🇪🇸  CASTELLANO',langEn:'🇬🇧  ENGLISH',
-    clientPick:'XPACE CATALOG',
-    clientHint:'Pick a vertical and enter its operational experience.',
+    clientPick:'XPACE CREATOR',
+    clientHint:'Create your own Xpace or enter an existing one.',
     clientConfirm:'ENTER EXPERIENCE',
     clientLocked:'COMING SOON',
     clientStateLive:'LIVE',
@@ -5280,7 +5280,18 @@ const FACTORY_LAYOUTS={
   {id:'turnKiosk',type:'turnKiosk',col:12,row:6,sx:1,sy:1,label:'Gestor Turnos'},
   {id:'aroma',type:'aroma',col:13,row:1,sx:1,sy:1,label:'Aroma Fresco'},
   ],
+  // El stand de feria empieza VACIO — sin muebles, sin puerta, sin
+  // ventanas a la calle. Es el lienzo en blanco del Xpace Creator;
+  // el usuario añade surfaces (pantallas, audio, Hue, aroma…) según
+  // diseña su booth Shoptalk EU 2026.
+  shoptalk:[],
 };
+// Helper: ¿estamos dentro del Xpacio de feria? Lo usamos en drawShop
+// para suprimir puerta, ventanas, calle y passersby que no aplican
+// dentro de un pabellón cerrado.
+function isShoptalkBooth(){
+  try{ return window.XPACE_BOOTH==='shoptalk' || (CLIENTS[activeClient]&&CLIENTS[activeClient].id==='shoptalk'); }catch(e){ return false; }
+}
 let DEFAULT_LAYOUT=JSON.parse(JSON.stringify(FACTORY_LAYOUTS.xtanco));
 let shopLayout=JSON.parse(JSON.stringify(DEFAULT_LAYOUT));
 let shopFurnitureVisible=true;
@@ -10551,7 +10562,7 @@ function drawIntro(){
     glow(P.neon3,30*pulse);
     cx.font='bold 52px monospace';cx.textAlign='center';cx.fillStyle=P.neon3;cx.fillText('ADMIRA XP',W/2,H/2-68);nog();
     nt('THE XPACE OS',W/2,H/2-42,P.neon1,16);
-    nt(isEs?'Catalogo vivo de experiencias operativas por cliente':'Living catalog of client operational experiences',W/2,H/2-8,P.neon1,12);
+    nt(isEs?'Crea o elige tu Xpacio':'Create or pick your Xpace',W/2,H/2-8,P.neon1,12);
     nt(isEs?'El idioma ya se decide en la pantalla de era.':'Language is now chosen on the era screen.',W/2,H/2+22,P.uiT3,10);
     nt(isEs?'Xtanco abre la linea inicial de verticales.':'Xtanco opens the first line of vertical experiences.',W/2,H/2+44,P.uiT3,10);
     nt(isEs?'Staff · stock · events · metrics · operational layout':'Staff · stock · events · metrics · operational layout',W/2,H/2+66,P.uiT3,10);
@@ -11179,7 +11190,7 @@ const HELP_PAGES={
     'Si facturas menos del 55% del objetivo,',
     '¡game over!',
   ]},
-  { title:'CATALOGO XPACE', lines:[
+  { title:'XPACE CREATOR', lines:[
     '','Admira XP // The Xpace OS reunirá varios juegos',
     'por vertical de negocio dentro del',
     'mismo motor operativo.','',
@@ -11291,7 +11302,7 @@ const HELP_PAGES={
     'If you bill less than 55% of the target,',
     'game over!',
   ]},
-  { title:'XPACE CATALOG', lines:[
+  { title:'XPACE CREATOR', lines:[
     '','Admira XP // The Xpace OS will host',
     'multiple business vertical games inside',
     'the same operational engine.','',
@@ -11924,6 +11935,17 @@ function drawIsoCityBuilding(b){
 function drawCityBg(){
   const skyTop=SHOP.y;
   const skyH=ISO.wallH+60;
+  // Booth Shoptalk: estamos dentro de un pabellón de feria — sin cielo,
+  // sin sol/luna, sin avioneta, sin city skyline. Solo un fondo neutro
+  // tipo techo de feria (gris cálido, ligero gradient para profundidad).
+  if(isShoptalkBooth()){
+    const ceilGrad=cx.createLinearGradient(0,skyTop,0,skyTop+skyH);
+    ceilGrad.addColorStop(0,'#1a1d22');
+    ceilGrad.addColorStop(1,'#2a2f36');
+    cx.fillStyle=ceilGrad;
+    cx.fillRect(0,skyTop,W,skyH);
+    return;
+  }
   // Sky gradient
   const skyGrad=cx.createLinearGradient(0,skyTop,0,skyTop+skyH);
   const skyCols=G?getSkyColors(G.gameTime):getSkyColors(12);
@@ -12177,7 +12199,9 @@ function drawShop(){
   cx.stroke();
 
   // ── WINDOWS on back wall (half size, centered in wall) ──
-  const winCols=[1.4,10.8]; // 10% closer to Admira TFT (cols 5.0-9.0)
+  // En el booth Shoptalk no hay ventanas a calle: estás dentro de un
+  // pabellón de feria. Skip todo el bloque ventanas + sill + frame.
+  const winCols=isShoptalkBooth() ? [] : [1.4,10.8]; // 10% closer to Admira TFT (cols 5.0-9.0)
   for(const wc of winCols){
     const wp1=toIso(wc,0), wp2=toIso(wc+1.2,0);
     const whei=Math.floor((ISO.wallH-50)*0.55);
@@ -12262,6 +12286,7 @@ function drawShop(){
   }
 
   // ── BIRDS flying past windows (different color each pass) ──
+  // No ventanas → no pájaros (los hace pasar dentro del clip de cada ventana).
   const birdColors=['#2a2a2a','#cc4422','#2266cc','#ddaa00','#22aa44','#aa22aa','#dd6622','#4488aa'];
   const birdCycleLen=700;
   const birdCycleNum=Math.floor(tt/birdCycleLen); // which cycle we're on
@@ -12277,7 +12302,7 @@ function drawShop(){
   const birdColor=birdColors[birdCycleNum%birdColors.length];
   // Belly/highlight color (lighter version)
   const birdBelly=birdCycleNum%2===0?'#ffffff44':'#ffffff22';
-  // Draw bird only through window glass
+  // Draw bird only through window glass (skipped automaticamente cuando winCols está vacío)
   for(const wc of winCols){
     const wp1=toIso(wc,0), wp2=toIso(wc+1.2,0);
     const wwy=wp1.y-ISO.wallH+Math.floor((ISO.wallH-Math.floor((ISO.wallH-50)*0.55))/2);
@@ -12361,21 +12386,26 @@ function drawShop(){
 
   // ── RIGHT WALL door drawn AFTER furniture (see drawGlassDoor below) ──
 
-  // ── CLOCK on left wall ──
-  drawWallClock();
-  // ── LED on LEFT WALL (top edge) ──
-  const ledItem=shopLayout.find(i=>i.id==='led');
-  if(ledItem) drawLED(ledItem.sx||1,ledItem.sy||1);
-  // ── LED on BACK WALL (top edge, continues from left wall) ──
-  drawBackWallLED();
-  // ── AIR CONDITIONING on left wall (drawn AFTER LED so it's visible) ──
-  drawAirConditioning();
-  // ── TURN MANAGER between the back-wall displays/windows ──
-  drawTurnManager();
-  // ── SECURITY CAMERA in the corner, aimed at the entrance ──
-  drawCornerSecurityCamera();
-  // ── TFT ALTADIS (16:9 screen on back wall, above 2nd window) ──
-  drawAltadisTFT();
+  // En el booth Shoptalk arrancamos sin decoración: el usuario decide
+  // qué surfaces colocar (pantallas, audio, Hue, cámara…) desde el
+  // Xpace Creator. Skip de todos los elementos de pared hardcoded.
+  if(!isShoptalkBooth()){
+    // ── CLOCK on left wall ──
+    drawWallClock();
+    // ── LED on LEFT WALL (top edge) ──
+    const ledItem=shopLayout.find(i=>i.id==='led');
+    if(ledItem) drawLED(ledItem.sx||1,ledItem.sy||1);
+    // ── LED on BACK WALL (top edge, continues from left wall) ──
+    drawBackWallLED();
+    // ── AIR CONDITIONING on left wall (drawn AFTER LED so it's visible) ──
+    drawAirConditioning();
+    // ── TURN MANAGER between the back-wall displays/windows ──
+    drawTurnManager();
+    // ── SECURITY CAMERA in the corner, aimed at the entrance ──
+    drawCornerSecurityCamera();
+    // ── TFT ALTADIS (16:9 screen on back wall, above 2nd window) ──
+    drawAltadisTFT();
+  }
 
   // ── FURNITURE & ENTITIES (sorted by screen Y for correct occlusion) ──
   const entities=[];
@@ -12509,11 +12539,12 @@ function drawShop(){
   }
 
   // ── GLASS DOOR — drawn LAST, always on top of furniture/characters ──
-  if(!editorSceneActive) drawGlassDoor();
+  // Skip en el booth Shoptalk: un stand de feria no tiene puerta de calle.
+  if(!editorSceneActive && !isShoptalkBooth()) drawGlassDoor();
   // ── DOOR FOREGROUND PEOPLE — characters physically in front of the door
   // (passersby on the sidewalk + customers entering/leaving) re-painted
   // ON TOP of the glass-door frame so the wood jambs don't crop their bodies.
-  if(!editorSceneActive) drawDoorForegroundPeople();
+  if(!editorSceneActive && !isShoptalkBooth()) drawDoorForegroundPeople();
 
   // ── DAY / NIGHT AMBIENT OVERLAY ──
   if(!editorSceneActive&&G&&G.gameTime){
@@ -16999,7 +17030,7 @@ function drawCodexMapOverlay(){
     {x:90,y:92,w:128,h:44,title:isEs?'ERA':'ERA',sub:isEs?'arranque retro':'retro entry',col:'#5bd8ff'},
     {x:248,y:92,w:128,h:44,title:isEs?'PRELOAD':'PRELOAD',sub:isEs?'cinta / carga':'tape / load',col:'#ffb25b'},
     {x:406,y:92,w:128,h:44,title:isEs?'INTRO':'INTRO',sub:isEs?'contexto del juego':'game context',col:'#b38dff'},
-    {x:564,y:92,w:128,h:44,title:isEs?'CATALOGO':'CATALOG',sub:isEs?'vertical + modelo':'vertical + model',col:'#7af05c'},
+    {x:564,y:92,w:128,h:44,title:isEs?'XPACE CREATOR':'XPACE CREATOR',sub:isEs?'crea o elige Xpacio':'create or pick Xpace',col:'#7af05c'},
     {x:248,y:180,w:128,h:44,title:isEs?'TUTORIAL':'TUTORIAL',sub:isEs?'onboarding':'onboarding',col:'#ffd35b'},
     {x:406,y:180,w:128,h:44,title:isEs?'GAME LOOP':'GAME LOOP',sub:isEs?'update + render':'update + render',col:'#59d4ff'},
     {x:564,y:180,w:128,h:44,title:isEs?'PAUSA / FIN':'PAUSE / END',sub:isEs?'resumen + score':'summary + score',col:'#ff7b7b'},
