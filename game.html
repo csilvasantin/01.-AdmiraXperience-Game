@@ -5335,7 +5335,9 @@ function isXpaceCreator(){
 // Persistido en localStorage. Aplicado al render solo cuando
 // isBlankXpace() devuelve true (creator + booth Shoptalk).
 const XPACE_CREATOR_DEFAULTS={cols:14,rows:8,wallColor:'#e0d4b8',floorColor:'#b8bcc0'};
-const XPACE_WALL_PALETTE=['#e0d4b8','#cfd2cf','#1a1d22','#2a4a55','#5a3a2a','#3a3a1a','#76B900','#E2231A'];
+// 'transparent' como primera opción de pared → la pared no se dibuja
+// (perspectiva abierta, útil para booth de feria sin parte trasera).
+const XPACE_WALL_PALETTE=['transparent','#e0d4b8','#cfd2cf','#1a1d22','#2a4a55','#5a3a2a','#3a3a1a','#76B900','#E2231A'];
 const XPACE_FLOOR_PALETTE=['#b8bcc0','#7a8590','#2a2f36','#1f3a2a','#3a2a1a','#5a4030','#1f2540','#403030'];
 let xpaceCreatorConfig=(() => {
   try{
@@ -5367,16 +5369,26 @@ function adjustXpaceRows(delta){
   applyXpaceCreatorGrid();
   saveXpaceCreatorConfig();
 }
-function cycleXpaceWallColor(){
+function cycleXpaceWallColor(dir){
+  const d=(dir|0)||1;
+  const n=XPACE_WALL_PALETTE.length;
   const i=Math.max(0,XPACE_WALL_PALETTE.indexOf(xpaceCreatorConfig.wallColor));
-  xpaceCreatorConfig.wallColor=XPACE_WALL_PALETTE[(i+1)%XPACE_WALL_PALETTE.length];
+  xpaceCreatorConfig.wallColor=XPACE_WALL_PALETTE[((i+d)%n+n)%n];
   saveXpaceCreatorConfig();
 }
-function cycleXpaceFloorColor(){
+function cycleXpaceFloorColor(dir){
+  const d=(dir|0)||1;
+  const n=XPACE_FLOOR_PALETTE.length;
   const i=Math.max(0,XPACE_FLOOR_PALETTE.indexOf(xpaceCreatorConfig.floorColor));
-  xpaceCreatorConfig.floorColor=XPACE_FLOOR_PALETTE[(i+1)%XPACE_FLOOR_PALETTE.length];
+  xpaceCreatorConfig.floorColor=XPACE_FLOOR_PALETTE[((i+d)%n+n)%n];
   saveXpaceCreatorConfig();
 }
+function setXpaceWallColor(c){ xpaceCreatorConfig.wallColor=c; saveXpaceCreatorConfig(); }
+function setXpaceFloorColor(c){ xpaceCreatorConfig.floorColor=c; saveXpaceCreatorConfig(); }
+// Estado de la paleta abierta: 'wall' | 'floor' | null
+let xpacePalettePicker=null;
+function openXpacePalette(which){ xpacePalettePicker=which; }
+function closeXpacePalette(){ xpacePalettePicker=null; }
 function resetXpaceCreatorConfig(){
   xpaceCreatorConfig=Object.assign({},XPACE_CREATOR_DEFAULTS);
   applyXpaceCreatorGrid();
@@ -6777,8 +6789,23 @@ function doAction(id){
   if(id==='xpaceColsPlus'){ adjustXpaceCols(+1); return; }
   if(id==='xpaceRowsMinus'){ adjustXpaceRows(-1); return; }
   if(id==='xpaceRowsPlus'){ adjustXpaceRows(+1); return; }
-  if(id==='xpaceWallCycle'){ cycleXpaceWallColor(); return; }
-  if(id==='xpaceFloorCycle'){ cycleXpaceFloorColor(); return; }
+  if(id==='xpaceWallPrev'){ cycleXpaceWallColor(-1); return; }
+  if(id==='xpaceWallNext'){ cycleXpaceWallColor(+1); return; }
+  if(id==='xpaceWallChip'){ openXpacePalette('wall'); return; }
+  if(id==='xpaceFloorPrev'){ cycleXpaceFloorColor(-1); return; }
+  if(id==='xpaceFloorNext'){ cycleXpaceFloorColor(+1); return; }
+  if(id==='xpaceFloorChip'){ openXpacePalette('floor'); return; }
+  if(id==='xpacePaletteClose'){ closeXpacePalette(); return; }
+  if(id.startsWith('xpaceSwatch')){
+    const i=parseInt(id.slice(11),10);
+    const palette=(xpacePalettePicker==='wall')?XPACE_WALL_PALETTE:XPACE_FLOOR_PALETTE;
+    if(i>=0 && i<palette.length){
+      if(xpacePalettePicker==='wall') setXpaceWallColor(palette[i]);
+      else setXpaceFloorColor(palette[i]);
+    }
+    closeXpacePalette();
+    return;
+  }
   if(id==='xpaceCreatorReset'){ resetXpaceCreatorConfig(); return; }
   if(id==='xpaceCreatorExit'){
     try{saveLayout();}catch(e){}
@@ -12288,36 +12315,41 @@ function drawShop(){
   cx.restore();
 
   // ── BACK WALL (cream/beige, Kairosoft style) ──
+  // Si el Xpacio es en blanco y la pared está marcada como 'transparent',
+  // el bloque entero (cuerpo + paneles + baseboard + techo) se omite.
+  const _wallTransparent=isBlankXpace()&&xpaceCreatorConfig.wallColor==='transparent';
   const wallPts=[];
   for(let c=0;c<=ISO.cols;c++) wallPts.push(toIso(c,0)); // stop at the real corner; outside stays transparent
-  // Wall body
-  cx.beginPath();
-  cx.moveTo(wallPts[0].x,wallPts[0].y);
-  for(let i=1;i<wallPts.length;i++) cx.lineTo(wallPts[i].x,wallPts[i].y);
-  for(let i=wallPts.length-1;i>=0;i--) cx.lineTo(wallPts[i].x,wallPts[i].y-ISO.wallH);
-  cx.closePath();
-  cx.fillStyle=isBlankXpace()?xpaceCreatorConfig.wallColor:P.wallInner;cx.fill();
-  // Wall panel lines (subtle horizontal)
-  cx.globalAlpha=0.08;
-  for(let h=15;h<ISO.wallH;h+=20){
-    cx.strokeStyle='#a09070';cx.lineWidth=0.5;cx.beginPath();
-    cx.moveTo(wallPts[0].x,wallPts[0].y-h);
-    for(let i=1;i<wallPts.length;i++) cx.lineTo(wallPts[i].x,wallPts[i].y-h);
+  if(!_wallTransparent){
+    // Wall body
+    cx.beginPath();
+    cx.moveTo(wallPts[0].x,wallPts[0].y);
+    for(let i=1;i<wallPts.length;i++) cx.lineTo(wallPts[i].x,wallPts[i].y);
+    for(let i=wallPts.length-1;i>=0;i--) cx.lineTo(wallPts[i].x,wallPts[i].y-ISO.wallH);
+    cx.closePath();
+    cx.fillStyle=isBlankXpace()?xpaceCreatorConfig.wallColor:P.wallInner;cx.fill();
+    // Wall panel lines (subtle horizontal)
+    cx.globalAlpha=0.08;
+    for(let h=15;h<ISO.wallH;h+=20){
+      cx.strokeStyle='#a09070';cx.lineWidth=0.5;cx.beginPath();
+      cx.moveTo(wallPts[0].x,wallPts[0].y-h);
+      for(let i=1;i<wallPts.length;i++) cx.lineTo(wallPts[i].x,wallPts[i].y-h);
+      cx.stroke();
+    }
+    cx.globalAlpha=1;
+    // Baseboard (darker strip at bottom of wall)
+    cx.beginPath();
+    cx.moveTo(wallPts[0].x,wallPts[0].y);
+    for(let i=1;i<wallPts.length;i++) cx.lineTo(wallPts[i].x,wallPts[i].y);
+    for(let i=wallPts.length-1;i>=0;i--) cx.lineTo(wallPts[i].x,wallPts[i].y-8);
+    cx.closePath();
+    cx.fillStyle='#9a8868';cx.fill();
+    // Ceiling line (thin dark border at top)
+    cx.strokeStyle='#b0a080';cx.lineWidth=2;cx.beginPath();
+    cx.moveTo(wallPts[0].x,wallPts[0].y-ISO.wallH);
+    for(let i=1;i<wallPts.length;i++) cx.lineTo(wallPts[i].x,wallPts[i].y-ISO.wallH);
     cx.stroke();
   }
-  cx.globalAlpha=1;
-  // Baseboard (darker strip at bottom of wall)
-  cx.beginPath();
-  cx.moveTo(wallPts[0].x,wallPts[0].y);
-  for(let i=1;i<wallPts.length;i++) cx.lineTo(wallPts[i].x,wallPts[i].y);
-  for(let i=wallPts.length-1;i>=0;i--) cx.lineTo(wallPts[i].x,wallPts[i].y-8);
-  cx.closePath();
-  cx.fillStyle='#9a8868';cx.fill();
-  // Ceiling line (thin dark border at top)
-  cx.strokeStyle='#b0a080';cx.lineWidth=2;cx.beginPath();
-  cx.moveTo(wallPts[0].x,wallPts[0].y-ISO.wallH);
-  for(let i=1;i<wallPts.length;i++) cx.lineTo(wallPts[i].x,wallPts[i].y-ISO.wallH);
-  cx.stroke();
 
   // ── WINDOWS on back wall (half size, centered in wall) ──
   // En el booth Shoptalk no hay ventanas a calle: estás dentro de un
@@ -16092,18 +16124,21 @@ function drawCreatorHUD(){
   tx('+',x+8,18,'#ffd866',13,'center');
   BTNS['xpaceRowsPlus']={x,y:5,w:16,h:18}; x+=24;
 
-  // ── 🎨 COLOR PARED ──
+  // ── 🎨 COLOR PARED ── ◀ [chip] ▶
   tx('🎨',x,19,'#ffd866',13); x+=18;
   tx(lang==='es'?'PARED':'WALL',x,19,'#9c8a55',8); x+=38;
-  r(x,7,40,14,xpaceCreatorConfig.wallColor); rx(x,7,40,14,'#7a6230',1);
-  tx('▶',x+50,19,'#ffd866',8);
-  BTNS['xpaceWallCycle']={x,y:5,w:60,h:18}; x+=68;
+  // ◀ prev
+  tx('◀',x+5,19,'#ffd866',9); BTNS['xpaceWallPrev']={x,y:5,w:14,h:18}; x+=14;
+  // chip — click abre paleta
+  drawXpaceColorChip(x,7,40,14,xpaceCreatorConfig.wallColor); BTNS['xpaceWallChip']={x,y:5,w:40,h:18}; x+=42;
+  // ▶ next
+  tx('▶',x+5,19,'#ffd866',9); BTNS['xpaceWallNext']={x,y:5,w:14,h:18}; x+=18;
 
-  // ── 🟦 COLOR SUELO ──
+  // ── 🟦 COLOR SUELO ── ◀ [chip] ▶
   tx(lang==='es'?'SUELO':'FLOOR',x,19,'#9c8a55',8); x+=42;
-  r(x,7,40,14,xpaceCreatorConfig.floorColor); rx(x,7,40,14,'#7a6230',1);
-  tx('▶',x+50,19,'#ffd866',8);
-  BTNS['xpaceFloorCycle']={x,y:5,w:60,h:18}; x+=70;
+  tx('◀',x+5,19,'#ffd866',9); BTNS['xpaceFloorPrev']={x,y:5,w:14,h:18}; x+=14;
+  drawXpaceColorChip(x,7,40,14,xpaceCreatorConfig.floorColor); BTNS['xpaceFloorChip']={x,y:5,w:40,h:18}; x+=42;
+  tx('▶',x+5,19,'#ffd866',9); BTNS['xpaceFloorNext']={x,y:5,w:14,h:18}; x+=20;
 
   // ── RESET ──
   const rstW=58;
@@ -16116,6 +16151,72 @@ function drawCreatorHUD(){
   r(W-exW-4,4,exW,20,'#3a1a10'); rx(W-exW-4,4,exW,20,'#aa5530',1);
   tx(lang==='es'?'✕ SALIR':'✕ EXIT',W-exW-4+exW/2,18,'#ffaa88',9,'center');
   BTNS['xpaceCreatorExit']={x:W-exW-4,y:4,w:exW,h:20};
+}
+
+// Pinta un chip de color. Si color==='transparent' dibuja un patrón
+// checkerboard para indicar transparencia (estilo Photoshop).
+function drawXpaceColorChip(x,y,w,h,color){
+  if(color==='transparent'){
+    // Checkerboard 4x4
+    const cs=Math.max(2,Math.floor(h/4));
+    for(let cy=0;cy<h;cy+=cs){
+      for(let cx2=0;cx2<w;cx2+=cs){
+        const isLight=((cx2/cs)+(cy/cs))%2===0;
+        cx.fillStyle=isLight?'#cccccc':'#666666';
+        cx.fillRect(x+cx2,y+cy,Math.min(cs,w-cx2),Math.min(cs,h-cy));
+      }
+    }
+    rx(x,y,w,h,'#7a6230',1);
+    return;
+  }
+  r(x,y,w,h,color);
+  rx(x,y,w,h,'#7a6230',1);
+}
+
+// Paleta popup que aparece sobre el editor cuando el usuario clica
+// en el chip de pared o suelo. Click en un color → set + cierra.
+// Click fuera (en la zona oscura) → cierra.
+function drawXpacePalettePicker(){
+  if(!xpacePalettePicker) return;
+  // Fondo dimming
+  cx.fillStyle='rgba(0,0,0,0.55)'; cx.fillRect(0,0,W,H);
+  // Caja central
+  const isWall=xpacePalettePicker==='wall';
+  const palette=isWall?XPACE_WALL_PALETTE:XPACE_FLOOR_PALETTE;
+  const cols=Math.min(4,palette.length);
+  const swSize=72,swGap=10,pad=24;
+  const rows=Math.ceil(palette.length/cols);
+  const boxW=cols*swSize+(cols-1)*swGap+pad*2;
+  const boxH=rows*swSize+(rows-1)*swGap+pad*2+44; // +header
+  const bx=Math.round((W-boxW)/2), by=Math.round((H-boxH)/2);
+  r(bx,by,boxW,boxH,'#1a1308');
+  rx(bx,by,boxW,boxH,'#ffd866',2);
+  glow('#ffd866',8); rx(bx,by,boxW,boxH,'#ffd866',1); nog();
+  // Título
+  const titleEs=isWall?'COLOR DE PARED':'COLOR DE SUELO';
+  const titleEn=isWall?'WALL COLOR':'FLOOR COLOR';
+  tx(lang==='es'?titleEs:titleEn,bx+boxW/2,by+22,'#ffd866',12,'center');
+  // Swatches — REGISTRAMOS PRIMERO (hit-test prioritario sobre close)
+  palette.forEach((color,i)=>{
+    const r2=Math.floor(i/cols), c=i%cols;
+    const sx=bx+pad+c*(swSize+swGap);
+    const sy=by+44+r2*(swSize+swGap);
+    drawXpaceColorChip(sx,sy,swSize,swSize,color);
+    const current=isWall?xpaceCreatorConfig.wallColor:xpaceCreatorConfig.floorColor;
+    if(color===current){
+      glow('#ffd866',6); rx(sx-2,sy-2,swSize+4,swSize+4,'#ffd866',2); nog();
+    }
+    // Etiqueta para transparente
+    if(color==='transparent'){
+      tx(lang==='es'?'TRANSPARENTE':'TRANSPARENT',sx+swSize/2,sy+swSize-6,'#ffffff',7,'center');
+    }
+    BTNS['xpaceSwatch'+i]={x:sx,y:sy,w:swSize,h:swSize};
+  });
+  // Click fuera (full canvas) — registrado AL FINAL para que pierda
+  // contra los swatches en el hit-test (Object.entries respeta orden).
+  BTNS['xpacePaletteClose']={x:0,y:0,w:W,h:H};
+  // Hint inferior
+  tx(lang==='es'?'Click en un color para aplicar · click fuera para cerrar':'Click a color to apply · click outside to close',bx+boxW/2,by+boxH-8,'#9c8a55',7,'center');
 }
 
 // Marketplace overlay: persistent sponsor banner across the top of the canvas
@@ -18065,6 +18166,9 @@ function drawEditor(){
     tx('Se cargará al iniciar cada nueva partida',W/2,ny+30,'#aaddaa',8,'center');
     cx.globalAlpha=1;
   }
+
+  // Paleta popup del Xpace Creator — siempre por encima de todo lo demás
+  if(xpacePalettePicker) drawXpacePalettePicker();
 }
 
 // ── DEMO AUTO-PLAY LOGIC ──────────────────────────────────────
