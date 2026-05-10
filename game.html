@@ -5334,7 +5334,12 @@ function isXpaceCreator(){
 // ── Xpace Creator: tamaño del grid + colores de pared/suelo ──
 // Persistido en localStorage. Aplicado al render solo cuando
 // isBlankXpace() devuelve true (creator + booth Shoptalk).
-const XPACE_CREATOR_DEFAULTS={cols:14,rows:8,wallColor:'#e0d4b8',floorColor:'#b8bcc0'};
+const XPACE_CREATOR_DEFAULTS={
+  cols:14, rows:8,
+  longWallColor:'#e0d4b8',   // BACK WALL — la "pared larga" al fondo (extiende cols)
+  shortWallColor:'#d0c4a8',  // LEFT WALL — la "pared corta" lateral (extiende rows)
+  floorColor:'#b8bcc0',
+};
 // 'transparent' como primera opción de pared → la pared no se dibuja
 // (perspectiva abierta, útil para booth de feria sin parte trasera).
 const XPACE_WALL_PALETTE=['transparent','#e0d4b8','#cfd2cf','#1a1d22','#2a4a55','#5a3a2a','#3a3a1a','#76B900','#E2231A'];
@@ -5342,10 +5347,108 @@ const XPACE_FLOOR_PALETTE=['#b8bcc0','#7a8590','#2a2f36','#1f3a2a','#3a2a1a','#5
 let xpaceCreatorConfig=(() => {
   try{
     const raw=localStorage.getItem('xpace_creator_config');
-    if(raw) return Object.assign({},XPACE_CREATOR_DEFAULTS,JSON.parse(raw));
+    if(raw){
+      const merged=Object.assign({},XPACE_CREATOR_DEFAULTS,JSON.parse(raw));
+      // Migración legacy: campo wallColor antiguo → longWallColor.
+      if(!merged.longWallColor && merged.wallColor) merged.longWallColor=merged.wallColor;
+      delete merged.wallColor;
+      return merged;
+    }
   }catch(e){}
   return Object.assign({},XPACE_CREATOR_DEFAULTS);
 })();
+// Entidad seleccionada para edición. Default: suelo.
+// 'floor' | 'longWall' | 'shortWall'
+let xpaceSelectedEntity='floor';
+function getXpaceEntityColor(entity){
+  if(entity==='longWall') return xpaceCreatorConfig.longWallColor;
+  if(entity==='shortWall') return xpaceCreatorConfig.shortWallColor;
+  return xpaceCreatorConfig.floorColor;
+}
+function setXpaceEntityColor(entity,color){
+  if(entity==='longWall') xpaceCreatorConfig.longWallColor=color;
+  else if(entity==='shortWall') xpaceCreatorConfig.shortWallColor=color;
+  else xpaceCreatorConfig.floorColor=color;
+  saveXpaceCreatorConfig();
+}
+function getXpaceEntityPalette(entity){
+  return entity==='floor' ? XPACE_FLOOR_PALETTE : XPACE_WALL_PALETTE;
+}
+function getXpaceEntityLabel(entity){
+  if(lang==='en'){
+    if(entity==='longWall') return 'LONG WALL';
+    if(entity==='shortWall') return 'SHORT WALL';
+    return 'FLOOR';
+  }
+  if(entity==='longWall') return 'PARED LARGA';
+  if(entity==='shortWall') return 'PARED CORTA';
+  return 'SUELO';
+}
+function selectXpaceEntity(entity){ xpaceSelectedEntity=entity; }
+
+// Polígonos en pixel-space de cada entidad del Xpacio (suelo, pared larga,
+// pared corta). Útiles para hit-test del click y para dibujar el highlight.
+function getXpaceEntityPolys(){
+  const t00=toIso(0,0);
+  const tC0=toIso(ISO.cols,0);
+  const tCR=toIso(ISO.cols,ISO.rows);
+  const t0R=toIso(0,ISO.rows);
+  const wH=ISO.wallH;
+  return {
+    floor:[t00,tC0,tCR,t0R],
+    longWall:[                 // BACK WALL
+      {x:t00.x,y:t00.y},
+      {x:tC0.x,y:tC0.y},
+      {x:tC0.x,y:tC0.y-wH},
+      {x:t00.x,y:t00.y-wH},
+    ],
+    shortWall:[                // LEFT WALL
+      {x:t00.x,y:t00.y},
+      {x:t0R.x,y:t0R.y},
+      {x:t0R.x,y:t0R.y-wH},
+      {x:t00.x,y:t00.y-wH},
+    ],
+  };
+}
+function pointInPoly(x,y,poly){
+  let inside=false;
+  for(let i=0,j=poly.length-1;i<poly.length;j=i++){
+    const xi=poly[i].x, yi=poly[i].y, xj=poly[j].x, yj=poly[j].y;
+    const intersect=((yi>y)!==(yj>y)) && (x<(xj-xi)*(y-yi)/(yj-yi)+xi);
+    if(intersect) inside=!inside;
+  }
+  return inside;
+}
+function hitTestXpaceEntity(mx,my){
+  // Skip si el click está sobre el HUD (y<28) o el dock inferior.
+  if(my<28) return null;
+  const polys=getXpaceEntityPolys();
+  // Las paredes están arriba del suelo en pixel-space — probarlas primero
+  // por seguridad, aunque no se solapan visualmente.
+  if(pointInPoly(mx,my,polys.longWall)) return 'longWall';
+  if(pointInPoly(mx,my,polys.shortWall)) return 'shortWall';
+  if(pointInPoly(mx,my,polys.floor)) return 'floor';
+  return null;
+}
+// Dibuja un highlight dorado alrededor de la entidad seleccionada.
+function drawXpaceEntityHighlight(){
+  if(!isXpaceCreator() || !xpaceSelectedEntity) return;
+  const poly=getXpaceEntityPolys()[xpaceSelectedEntity];
+  if(!poly) return;
+  cx.save();
+  glow('#ffd866',8);
+  cx.strokeStyle='#ffd866';
+  cx.lineWidth=2;
+  cx.setLineDash([6,4]);
+  cx.beginPath();
+  cx.moveTo(poly[0].x,poly[0].y);
+  for(let i=1;i<poly.length;i++) cx.lineTo(poly[i].x,poly[i].y);
+  cx.closePath();
+  cx.stroke();
+  cx.setLineDash([]);
+  nog();
+  cx.restore();
+}
 function saveXpaceCreatorConfig(){
   try{ localStorage.setItem('xpace_creator_config',JSON.stringify(xpaceCreatorConfig)); }catch(e){}
 }
@@ -5369,25 +5472,19 @@ function adjustXpaceRows(delta){
   applyXpaceCreatorGrid();
   saveXpaceCreatorConfig();
 }
-function cycleXpaceWallColor(dir){
+// Cicla el color de la entidad activa por su paleta (wall o floor).
+function cycleXpaceEntityColor(dir){
   const d=(dir|0)||1;
-  const n=XPACE_WALL_PALETTE.length;
-  const i=Math.max(0,XPACE_WALL_PALETTE.indexOf(xpaceCreatorConfig.wallColor));
-  xpaceCreatorConfig.wallColor=XPACE_WALL_PALETTE[((i+d)%n+n)%n];
-  saveXpaceCreatorConfig();
+  const palette=getXpaceEntityPalette(xpaceSelectedEntity);
+  const n=palette.length;
+  const cur=getXpaceEntityColor(xpaceSelectedEntity);
+  const i=Math.max(0,palette.indexOf(cur));
+  setXpaceEntityColor(xpaceSelectedEntity, palette[((i+d)%n+n)%n]);
 }
-function cycleXpaceFloorColor(dir){
-  const d=(dir|0)||1;
-  const n=XPACE_FLOOR_PALETTE.length;
-  const i=Math.max(0,XPACE_FLOOR_PALETTE.indexOf(xpaceCreatorConfig.floorColor));
-  xpaceCreatorConfig.floorColor=XPACE_FLOOR_PALETTE[((i+d)%n+n)%n];
-  saveXpaceCreatorConfig();
-}
-function setXpaceWallColor(c){ xpaceCreatorConfig.wallColor=c; saveXpaceCreatorConfig(); }
-function setXpaceFloorColor(c){ xpaceCreatorConfig.floorColor=c; saveXpaceCreatorConfig(); }
-// Estado de la paleta abierta: 'wall' | 'floor' | null
+// Estado de la paleta abierta: 'entity' | null. Cuando se abre, edita la
+// entidad seleccionada (xpaceSelectedEntity).
 let xpacePalettePicker=null;
-function openXpacePalette(which){ xpacePalettePicker=which; }
+function openXpacePalette(){ xpacePalettePicker='entity'; }
 function closeXpacePalette(){ xpacePalettePicker=null; }
 function resetXpaceCreatorConfig(){
   xpaceCreatorConfig=Object.assign({},XPACE_CREATOR_DEFAULTS);
@@ -6685,6 +6782,13 @@ cv.addEventListener('click',e=>{
   }
   const r2=cv.getBoundingClientRect();
   const mx=(e.clientX-r2.left)*(W/r2.width)|0, my=(e.clientY-r2.top)*(H/r2.height)|0;
+  // Xpace Creator: hit-test sobre suelo / pared larga / pared corta
+  // ANTES de BTNS para que el click sobre el lienzo seleccione la
+  // entidad. Solo activo en el editor del creator y sin paleta abierta.
+  if(state===S.EDITOR && isXpaceCreator() && !xpacePalettePicker){
+    const hit=hitTestXpaceEntity(mx,my);
+    if(hit){ selectXpaceEntity(hit); return; }
+  }
   // Check buttons first
   for(const[id,b] of Object.entries(BTNS)){if(mx>=b.x&&mx<b.x+b.w&&my>=b.y&&my<b.y+b.h){doAction(id);return;}}
   if(state===S.GAME&&npcEdOpen&&npcEdKind==='staff'&&npcEdIdx>=0&&G&&G.staff&&G.staff[npcEdIdx]){
@@ -6789,23 +6893,23 @@ function doAction(id){
   if(id==='xpaceColsPlus'){ adjustXpaceCols(+1); return; }
   if(id==='xpaceRowsMinus'){ adjustXpaceRows(-1); return; }
   if(id==='xpaceRowsPlus'){ adjustXpaceRows(+1); return; }
-  if(id==='xpaceWallPrev'){ cycleXpaceWallColor(-1); return; }
-  if(id==='xpaceWallNext'){ cycleXpaceWallColor(+1); return; }
-  if(id==='xpaceWallChip'){ openXpacePalette('wall'); return; }
-  if(id==='xpaceFloorPrev'){ cycleXpaceFloorColor(-1); return; }
-  if(id==='xpaceFloorNext'){ cycleXpaceFloorColor(+1); return; }
-  if(id==='xpaceFloorChip'){ openXpacePalette('floor'); return; }
+  if(id==='xpaceColorPrev'){ cycleXpaceEntityColor(-1); return; }
+  if(id==='xpaceColorNext'){ cycleXpaceEntityColor(+1); return; }
+  if(id==='xpaceColorChip'){ openXpacePalette(); return; }
   if(id==='xpacePaletteClose'){ closeXpacePalette(); return; }
   if(id.startsWith('xpaceSwatch')){
     const i=parseInt(id.slice(11),10);
-    const palette=(xpacePalettePicker==='wall')?XPACE_WALL_PALETTE:XPACE_FLOOR_PALETTE;
+    const palette=getXpaceEntityPalette(xpaceSelectedEntity);
     if(i>=0 && i<palette.length){
-      if(xpacePalettePicker==='wall') setXpaceWallColor(palette[i]);
-      else setXpaceFloorColor(palette[i]);
+      setXpaceEntityColor(xpaceSelectedEntity, palette[i]);
     }
     closeXpacePalette();
     return;
   }
+  // Click directo sobre suelo / pared larga / pared corta en el canvas
+  if(id==='xpacePickFloor'){ selectXpaceEntity('floor'); return; }
+  if(id==='xpacePickLongWall'){ selectXpaceEntity('longWall'); return; }
+  if(id==='xpacePickShortWall'){ selectXpaceEntity('shortWall'); return; }
   if(id==='xpaceCreatorReset'){ resetXpaceCreatorConfig(); return; }
   if(id==='xpaceCreatorExit'){
     try{saveLayout();}catch(e){}
@@ -12276,7 +12380,11 @@ function drawShop(){
   for(let i=1;i<floorPoly.length;i++) cx.lineTo(floorPoly[i].x,floorPoly[i].y);
   cx.closePath();
   // Override del color base si estamos en un Xpacio en blanco (booth/creator).
-  const _baseFloor=isBlankXpace()?xpaceCreatorConfig.floorColor:'#b8bcc0';
+  // Floor: si está marcado 'transparent' lo respetamos pero el suelo
+  // siempre se rellena con un color base oscuro para mantener silueta.
+  const _baseFloor=isBlankXpace()
+    ? (xpaceCreatorConfig.floorColor==='transparent'?'#0a0a0e':xpaceCreatorConfig.floorColor)
+    : '#b8bcc0';
   cx.fillStyle=_baseFloor;
   cx.fill();
   for(let row=-1;row<=ISO.rows;row++){
@@ -12315,9 +12423,9 @@ function drawShop(){
   cx.restore();
 
   // ── BACK WALL (cream/beige, Kairosoft style) ──
-  // Si el Xpacio es en blanco y la pared está marcada como 'transparent',
-  // el bloque entero (cuerpo + paneles + baseboard + techo) se omite.
-  const _wallTransparent=isBlankXpace()&&xpaceCreatorConfig.wallColor==='transparent';
+  // Si el Xpacio es en blanco y la pared LARGA está marcada como
+  // 'transparent', el bloque entero se omite.
+  const _wallTransparent=isBlankXpace()&&xpaceCreatorConfig.longWallColor==='transparent';
   const wallPts=[];
   for(let c=0;c<=ISO.cols;c++) wallPts.push(toIso(c,0)); // stop at the real corner; outside stays transparent
   if(!_wallTransparent){
@@ -12327,7 +12435,7 @@ function drawShop(){
     for(let i=1;i<wallPts.length;i++) cx.lineTo(wallPts[i].x,wallPts[i].y);
     for(let i=wallPts.length-1;i>=0;i--) cx.lineTo(wallPts[i].x,wallPts[i].y-ISO.wallH);
     cx.closePath();
-    cx.fillStyle=isBlankXpace()?xpaceCreatorConfig.wallColor:P.wallInner;cx.fill();
+    cx.fillStyle=isBlankXpace()?xpaceCreatorConfig.longWallColor:P.wallInner;cx.fill();
     // Wall panel lines (subtle horizontal)
     cx.globalAlpha=0.08;
     for(let h=15;h<ISO.wallH;h+=20){
@@ -12495,31 +12603,35 @@ function drawShop(){
   }
 
   // ── LEFT WALL (slightly darker, Kairosoft style) ──
-  // Extend beyond ISO.rows and fill up to top of canvas to cover all sky
-  const lwPts=[];
-  for(let rr=0;rr<=ISO.rows+4;rr++) lwPts.push(toIso(0,rr));
-  cx.beginPath();
-  cx.moveTo(lwPts[0].x,lwPts[0].y);
-  for(let i=1;i<lwPts.length;i++) cx.lineTo(lwPts[i].x,lwPts[i].y);
-  // from last floor point, go straight up to top of canvas, then across
-  cx.lineTo(lwPts[lwPts.length-1].x, 0);
-  cx.lineTo(lwPts[0].x, 0);
-  cx.closePath();
-  cx.fillStyle='#d0c4a8';cx.fill();
-  // Left wall baseboard (only visible rows 0-8)
-  const lwVisible=[];
-  for(let rr=0;rr<=ISO.rows;rr++) lwVisible.push(toIso(0,rr));
-  cx.beginPath();
-  cx.moveTo(lwVisible[0].x,lwVisible[0].y);
-  for(let i=1;i<lwVisible.length;i++) cx.lineTo(lwVisible[i].x,lwVisible[i].y);
-  for(let i=lwVisible.length-1;i>=0;i--) cx.lineTo(lwVisible[i].x,lwVisible[i].y-8);
-  cx.closePath();
-  cx.fillStyle='#8a7858';cx.fill();
-  // Ceiling line left (only visible rows)
-  cx.strokeStyle='#a09070';cx.lineWidth=1.5;cx.beginPath();
-  cx.moveTo(lwVisible[0].x,lwVisible[0].y-ISO.wallH);
-  for(let i=1;i<lwVisible.length;i++) cx.lineTo(lwVisible[i].x,lwVisible[i].y-ISO.wallH);
-  cx.stroke();
+  // Skip si la pared CORTA está marcada como 'transparent' en blank xpace.
+  const _shortWallTransparent=isBlankXpace()&&xpaceCreatorConfig.shortWallColor==='transparent';
+  if(!_shortWallTransparent){
+    // Extend beyond ISO.rows and fill up to top of canvas to cover all sky
+    const lwPts=[];
+    for(let rr=0;rr<=ISO.rows+4;rr++) lwPts.push(toIso(0,rr));
+    cx.beginPath();
+    cx.moveTo(lwPts[0].x,lwPts[0].y);
+    for(let i=1;i<lwPts.length;i++) cx.lineTo(lwPts[i].x,lwPts[i].y);
+    // from last floor point, go straight up to top of canvas, then across
+    cx.lineTo(lwPts[lwPts.length-1].x, 0);
+    cx.lineTo(lwPts[0].x, 0);
+    cx.closePath();
+    cx.fillStyle=isBlankXpace()?xpaceCreatorConfig.shortWallColor:'#d0c4a8';cx.fill();
+    // Left wall baseboard (only visible rows 0-8)
+    const lwVisible=[];
+    for(let rr=0;rr<=ISO.rows;rr++) lwVisible.push(toIso(0,rr));
+    cx.beginPath();
+    cx.moveTo(lwVisible[0].x,lwVisible[0].y);
+    for(let i=1;i<lwVisible.length;i++) cx.lineTo(lwVisible[i].x,lwVisible[i].y);
+    for(let i=lwVisible.length-1;i>=0;i--) cx.lineTo(lwVisible[i].x,lwVisible[i].y-8);
+    cx.closePath();
+    cx.fillStyle='#8a7858';cx.fill();
+    // Ceiling line left (only visible rows)
+    cx.strokeStyle='#a09070';cx.lineWidth=1.5;cx.beginPath();
+    cx.moveTo(lwVisible[0].x,lwVisible[0].y-ISO.wallH);
+    for(let i=1;i<lwVisible.length;i++) cx.lineTo(lwVisible[i].x,lwVisible[i].y-ISO.wallH);
+    cx.stroke();
+  }
 
   // ── CORNER FILL (covers sky gap where left wall meets back wall) ──
   {
@@ -16124,21 +16236,20 @@ function drawCreatorHUD(){
   tx('+',x+8,18,'#ffd866',13,'center');
   BTNS['xpaceRowsPlus']={x,y:5,w:16,h:18}; x+=24;
 
-  // ── 🎨 COLOR PARED ── ◀ [chip] ▶
+  // ── 🎨 COLOR de la entidad seleccionada (suelo / pared larga / pared corta) ──
+  // El usuario escoge la entidad clicando sobre ella en el canvas; el HUD
+  // muestra una sola fila ◀ [chip] ▶ con el nombre de la activa.
   tx('🎨',x,19,'#ffd866',13); x+=18;
-  tx(lang==='es'?'PARED':'WALL',x,19,'#9c8a55',8); x+=38;
-  // ◀ prev
-  tx('◀',x+5,19,'#ffd866',9); BTNS['xpaceWallPrev']={x,y:5,w:14,h:18}; x+=14;
-  // chip — click abre paleta
-  drawXpaceColorChip(x,7,40,14,xpaceCreatorConfig.wallColor); BTNS['xpaceWallChip']={x,y:5,w:40,h:18}; x+=42;
-  // ▶ next
-  tx('▶',x+5,19,'#ffd866',9); BTNS['xpaceWallNext']={x,y:5,w:14,h:18}; x+=18;
-
-  // ── 🟦 COLOR SUELO ── ◀ [chip] ▶
-  tx(lang==='es'?'SUELO':'FLOOR',x,19,'#9c8a55',8); x+=42;
-  tx('◀',x+5,19,'#ffd866',9); BTNS['xpaceFloorPrev']={x,y:5,w:14,h:18}; x+=14;
-  drawXpaceColorChip(x,7,40,14,xpaceCreatorConfig.floorColor); BTNS['xpaceFloorChip']={x,y:5,w:40,h:18}; x+=42;
-  tx('▶',x+5,19,'#ffd866',9); BTNS['xpaceFloorNext']={x,y:5,w:14,h:18}; x+=20;
+  const _entityLabel=getXpaceEntityLabel(xpaceSelectedEntity);
+  tx(_entityLabel,x,19,'#ffe8a0',9); x+=Math.max(64,_entityLabel.length*6+10);
+  tx('◀',x+5,19,'#ffd866',9); BTNS['xpaceColorPrev']={x,y:5,w:14,h:18}; x+=14;
+  drawXpaceColorChip(x,7,40,14,getXpaceEntityColor(xpaceSelectedEntity));
+  BTNS['xpaceColorChip']={x,y:5,w:40,h:18}; x+=42;
+  tx('▶',x+5,19,'#ffd866',9); BTNS['xpaceColorNext']={x,y:5,w:14,h:18}; x+=22;
+  // Hint sobre el click sobre entidades
+  cx.globalAlpha=0.6;
+  tx(lang==='es'?'· click sobre suelo o pared para seleccionar':'· click on floor/wall to select',x,19,'#9c8a55',7);
+  cx.globalAlpha=1;
 
   // ── RESET ──
   const rstW=58;
@@ -16180,9 +16291,9 @@ function drawXpacePalettePicker(){
   if(!xpacePalettePicker) return;
   // Fondo dimming
   cx.fillStyle='rgba(0,0,0,0.55)'; cx.fillRect(0,0,W,H);
-  // Caja central
-  const isWall=xpacePalettePicker==='wall';
-  const palette=isWall?XPACE_WALL_PALETTE:XPACE_FLOOR_PALETTE;
+  // La paleta opera sobre la entidad seleccionada
+  const palette=getXpaceEntityPalette(xpaceSelectedEntity);
+  const current=getXpaceEntityColor(xpaceSelectedEntity);
   const cols=Math.min(4,palette.length);
   const swSize=72,swGap=10,pad=24;
   const rows=Math.ceil(palette.length/cols);
@@ -16192,17 +16303,15 @@ function drawXpacePalettePicker(){
   r(bx,by,boxW,boxH,'#1a1308');
   rx(bx,by,boxW,boxH,'#ffd866',2);
   glow('#ffd866',8); rx(bx,by,boxW,boxH,'#ffd866',1); nog();
-  // Título
-  const titleEs=isWall?'COLOR DE PARED':'COLOR DE SUELO';
-  const titleEn=isWall?'WALL COLOR':'FLOOR COLOR';
-  tx(lang==='es'?titleEs:titleEn,bx+boxW/2,by+22,'#ffd866',12,'center');
+  // Título dinámico con la entidad activa
+  const title=(lang==='es'?'COLOR · ':'COLOR · ')+getXpaceEntityLabel(xpaceSelectedEntity);
+  tx(title,bx+boxW/2,by+22,'#ffd866',12,'center');
   // Swatches — REGISTRAMOS PRIMERO (hit-test prioritario sobre close)
   palette.forEach((color,i)=>{
     const r2=Math.floor(i/cols), c=i%cols;
     const sx=bx+pad+c*(swSize+swGap);
     const sy=by+44+r2*(swSize+swGap);
     drawXpaceColorChip(sx,sy,swSize,swSize,color);
-    const current=isWall?xpaceCreatorConfig.wallColor:xpaceCreatorConfig.floorColor;
     if(color===current){
       glow('#ffd866',6); rx(sx-2,sy-2,swSize+4,swSize+4,'#ffd866',2); nog();
     }
@@ -18167,6 +18276,8 @@ function drawEditor(){
     cx.globalAlpha=1;
   }
 
+  // Highlight dorado de la entidad activa del Xpace Creator
+  drawXpaceEntityHighlight();
   // Paleta popup del Xpace Creator — siempre por encima de todo lo demás
   if(xpacePalettePicker) drawXpacePalettePicker();
 }
