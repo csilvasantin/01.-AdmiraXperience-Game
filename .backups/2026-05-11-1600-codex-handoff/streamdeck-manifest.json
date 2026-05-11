@@ -1,0 +1,29 @@
+{
+  "version": "1.0.0",
+  "generatedAt": "2026-05-11T15:30:00.000Z",
+  "comment": "Estatico, generado a mano. La fuente in-game es assets/js/streamdeck.js — si cambia, regenerar este archivo.",
+  "pages": [
+    {
+      "id": "admira-events",
+      "name": "Admira Events",
+      "nameEn": "Admira Events",
+      "accent": "#ffd866",
+      "description": "Eventos rápidos del Xtanco: NPCs, tienda, ambiente y feeds.",
+      "descriptionEn": "Quick Xtanco events: NPCs, store, ambient and feeds.",
+      "buttons": [
+        { "index": 0,  "id": "thief",   "label_es": "LADRÓN",          "label_en": "THIEF",          "icon": "🚨", "color": "#ff5544", "cmd": "/ladron" },
+        { "index": 1,  "id": "gc",      "label_es": "GUARDIA CIVIL",   "label_en": "GUARDIA CIVIL",  "icon": "🚓", "color": "#4488ff", "cmd": "/gc" },
+        { "index": 2,  "id": "opinion", "label_es": "OPINADOR",        "label_en": "REVIEWER",       "icon": "💬", "color": "#ffcc44", "cmd": "/opinador" },
+        { "index": 3,  "id": "devol",   "label_es": "DEVOLUCIÓN",      "label_en": "RETURN",         "icon": "⚠️", "color": "#ff8844", "cmd": "/devolucion" },
+        { "index": 4,  "id": "pedido",  "label_es": "PEDIDO ESPECIAL", "label_en": "SPECIAL ORDER",  "icon": "🎩", "color": "#cc99ff", "cmd": "/pedido" },
+        { "index": 5,  "id": "turno",   "label_es": "LLAMAR TURNO",    "label_en": "NEXT TICKET",    "icon": "🎟️", "color": "#44ddff", "cmd": "/turno" },
+        { "index": 6,  "id": "dj",      "label_es": "DJ NOVAH",        "label_en": "DJ NOVAH",       "icon": "🎵", "color": "#ff66cc", "cmd": "/dj on" },
+        { "index": 7,  "id": "robot",   "label_es": "UNITREE BOT",     "label_en": "UNITREE BOT",    "icon": "🤖", "color": "#88ee44", "cmd": "/robot on" },
+        { "index": 8,  "id": "heat",    "label_es": "HEATMAP",         "label_en": "HEATMAP",        "icon": "🗺️", "color": "#aa66ff", "cmd": "/heatmap" },
+        { "index": 9,  "id": "amb",     "label_es": "AMBIENTE",        "label_en": "AMBIENT",        "icon": "🔊", "color": "#999999", "cmd": "/ambiente" },
+        { "index": 10, "id": "pixer",   "label_es": "PIXER FEED",      "label_en": "PIXER FEED",     "icon": "📺", "color": "#ee44cc", "cmd": "/pixeria on" },
+        { "index": 11, "id": "status",  "label_es": "ESTADO",          "label_en": "STATUS",         "icon": "📊", "color": "#dddddd", "cmd": "/status" }
+      ]
+    }
+  ]
+}
