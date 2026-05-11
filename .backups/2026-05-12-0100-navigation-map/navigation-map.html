@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Admira XP · Mapa de navegación</title>
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:#070a10;color:#dff8ff;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;line-height:1.5}
+  body{padding:24px 28px 80px;max-width:1280px;margin:0 auto}
+  h1{font-size:20px;letter-spacing:.05em;color:#ffd866;margin:0 0 4px;text-transform:uppercase}
+  .sub{color:#86aeba;font-size:11px;margin:0 0 26px}
+  h2{font-size:14px;color:#78f3ff;text-transform:uppercase;letter-spacing:.08em;margin:30px 0 10px;padding:6px 0;border-top:1px solid #1a3540;display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+  h2 .tag{font-size:9px;color:#5a8898;font-weight:normal;letter-spacing:.04em;text-transform:uppercase}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px}
+  .card{display:flex;flex-direction:column;gap:6px;padding:12px;border:1px solid #2a4858;border-radius:8px;background:linear-gradient(180deg,#0c1418,#080d11);text-decoration:none;color:inherit;transition:border-color .15s,transform .15s,box-shadow .15s}
+  .card:hover{border-color:var(--ac,#78f3ff);transform:translateY(-1px);box-shadow:0 0 18px color-mix(in srgb,var(--ac,#78f3ff) 22%,transparent)}
+  .card .h{display:flex;align-items:center;gap:8px}
+  .card .ic{font-size:20px;line-height:1}
+  .card .ttl{font-weight:bold;font-size:12px;color:var(--ac,#dff8ff);letter-spacing:.04em;text-transform:uppercase}
+  .card .id{margin-left:auto;font-size:9px;color:#5a8898}
+  .card .ds{color:#aac5cf;font-size:11px}
+  .card .meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:auto;font-size:9px;color:#7a98a4}
+  .card .meta b{color:var(--ac,#aac5cf);font-weight:normal;letter-spacing:.03em}
+  .card.unavailable{opacity:.55}
+  .card.no-link{cursor:default}
+  .legend{display:flex;flex-wrap:wrap;gap:8px;font-size:10px;color:#86aeba;margin:10px 0 0}
+  .pill{padding:2px 8px;border:1px solid currentColor;border-radius:999px;color:#78f3ff}
+  .pill.alt{color:#ffd866}
+  .pill.bad{color:#ff9090}
+  .pill.ok{color:#88ee88}
+  .flow{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;align-items:stretch;margin:8px 0 0;font-size:10px}
+  .flow .step{padding:8px;border:1px solid #2a4858;border-radius:6px;background:#0a1218;text-align:center;display:flex;flex-direction:column;justify-content:center}
+  .flow .step .n{font-size:9px;color:#5a8898;letter-spacing:.04em}
+  .flow .step .l{color:#78f3ff;font-weight:bold;letter-spacing:.04em;text-transform:uppercase;margin-top:3px}
+  .url{font-size:9px;color:#5a8898;word-break:break-all}
+  code{background:#10202a;color:#ffd866;padding:1px 5px;border-radius:3px;font-size:11px}
+  details{margin-top:6px}
+  summary{cursor:pointer;font-size:10px;color:#78f3ff;letter-spacing:.04em;text-transform:uppercase}
+  summary:hover{color:#dff8ff}
+  .note{padding:10px 12px;background:#0a1a22;border-left:3px solid #78f3ff;font-size:11px;color:#aac5cf;margin:10px 0}
+</style>
+</head>
+<body>
+
+<h1>🗺️ Admira XP · Mapa de navegación</h1>
+<p class="sub">
+  Mapa completo de las páginas / estados / verticales del juego. Cada tarjeta se puede clicar para entrar (cuando aplica).
+  · Repo: <a href="https://github.com/csilvasantin/01.-AdmiraXperience-Game" style="color:#ffd866">GitHub</a>
+  · Site live: <a href="https://csilvasantin.github.io/01.-AdmiraXperience-Game/" style="color:#ffd866">csilvasantin.github.io/01.-AdmiraXperience-Game</a>
+</p>
+
+<div class="legend">
+  <span class="pill ok">DISPONIBLE</span>
+  <span class="pill alt">EN CREATOR / EVENTO</span>
+  <span class="pill bad">PENDING</span>
+  <span>· click en tarjeta = ir</span>
+</div>
+
+<!-- ── FLUJO PRINCIPAL ───────────────────────────── -->
+<h2>1. Flujo principal del jugador <span class="tag">arranque · 7 pasos</span></h2>
+<div class="flow">
+  <div class="step"><div class="n">1</div><div class="l">Era Sel</div></div>
+  <div class="step"><div class="n">2</div><div class="l">Preload</div></div>
+  <div class="step"><div class="n">3</div><div class="l">Menu (lang)</div></div>
+  <div class="step"><div class="n">4</div><div class="l">Client Sel<br>(Xpace Creator)</div></div>
+  <div class="step"><div class="n">5</div><div class="l">Model Sel</div></div>
+  <div class="step"><div class="n">6</div><div class="l">Intro / Tut</div></div>
+  <div class="step"><div class="n">7</div><div class="l">GAME</div></div>
+</div>
+
+<h2>2. Estados del juego <span class="tag">enum S · 14 estados</span></h2>
+<div class="grid">
+
+  <a class="card" href="../game.html" style="--ac:#78f3ff">
+    <div class="h"><span class="ic">🎮</span><span class="ttl">Era Sel</span><span class="id">eraSel</span></div>
+    <div class="ds">Selección de era (Spectrum 8-bits · Amiga 16-bits · PC DX 486 32-bits) y arranque del storytelling.</div>
+    <div class="meta"><b>vía:</b> default al cargar game.html · <b>navega a:</b> Preload o Menu</div>
+  </a>
+
+  <div class="card no-link" style="--ac:#aab5c0">
+    <div class="h"><span class="ic">📼</span><span class="ttl">Preload</span><span class="id">preload</span></div>
+    <div class="ds">Pantalla del terminal ZX cargando el cassette/disquette. <code>LOAD""</code>, <code>LOAD""SHOPTALK</code>, <code>LOAD""BOOTH</code>… acepta el sufijo del vertical.</div>
+    <div class="meta"><b>vía:</b> Enter en Era Sel</div>
+  </div>
+
+  <div class="card no-link" style="--ac:#aab5c0">
+    <div class="h"><span class="ic">🌐</span><span class="ttl">Menu</span><span class="id">menu</span></div>
+    <div class="ds">Idioma del juego: <code>CASTELLANO</code> / <code>ENGLISH</code>. Tras seleccionar, abre el catálogo de clientes.</div>
+    <div class="meta"><b>vía:</b> Continue del Preload · <b>botones:</b> JUEGO · DEMO</div>
+  </div>
+
+  <a class="card" href="../game.html?vertical=creator" style="--ac:#ffd866">
+    <div class="h"><span class="ic">🧩</span><span class="ttl">Xpace Creator</span><span class="id">clientSel</span></div>
+    <div class="ds">Catálogo XP — 5 nodos en mapa mundial. Cliente activo = vertical del Xpacio que vas a jugar / construir.</div>
+    <div class="meta"><b>URL:</b> <code>?vertical=&lt;id&gt;</code></div>
+  </a>
+
+  <div class="card no-link" style="--ac:#aab5c0">
+    <div class="h"><span class="ic">📦</span><span class="ttl">Model Sel</span><span class="id">modelSel</span></div>
+    <div class="ds">Selección de modelo dentro del cliente (típicamente 4 dificultades: Generic / Good / Better / Best). Inicia la partida.</div>
+    <div class="meta"><b>vía:</b> Confirmar en Client Sel</div>
+  </div>
+
+  <div class="card no-link" style="--ac:#aab5c0">
+    <div class="h"><span class="ic">🎬</span><span class="ttl">Intro</span><span class="id">intro</span></div>
+    <div class="ds">8 slides de storytelling con duración fija (~4.3s c/u). Skip permitido en cualquier momento.</div>
+  </div>
+
+  <div class="card no-link" style="--ac:#aab5c0">
+    <div class="h"><span class="ic">📖</span><span class="ttl">Tutorial</span><span class="id">tutorial</span></div>
+    <div class="ds">3 páginas explicando el bucle de Xtanco (clientes / stock / personal). Salta a GAME al final.</div>
+  </div>
+
+  <div class="card no-link" style="--ac:#88ee88">
+    <div class="h"><span class="ic">🛒</span><span class="ttl">GAME</span><span class="id">game</span></div>
+    <div class="ds">Bucle principal del juego — render isométrico Kairosoft, NPCs, eventos, dispatcher de Telegram (<code>/help</code> lista todo).</div>
+    <div class="meta"><b>shortcuts:</b> QAOP=mover · 1-4=tabs · E=Editor · L=lampara · Esc=Pause</div>
+  </div>
+
+  <div class="card no-link" style="--ac:#aab5c0">
+    <div class="h"><span class="ic">⏸️</span><span class="ttl">Pause</span><span class="id">pause</span></div>
+    <div class="ds">Overlay con resumen semanal. Esc / click cierra.</div>
+  </div>
+
+  <a class="card" href="../game.html?vertical=creator" style="--ac:#ffd866">
+    <div class="h"><span class="ic">🏗️</span><span class="ttl">Editor / Xpace Creator</span><span class="id">editor</span></div>
+    <div class="ds">Layout editor. En verticals normales: mueve los muebles existentes. En <code>creator</code>: lienzo en blanco, paleta MOBILIARIO/TRABAJADORES (CONECTADOS / NO CONECTADOS), 5 entidades de pintura (Suelo/Pared-L/Pared-C/Exterior/Fondo) + celdas de pared.</div>
+    <div class="meta"><b>tecla:</b> E in-game · <b>vía:</b> Xpace Creator vertical</div>
+  </a>
+
+  <div class="card no-link" style="--ac:#aab5c0">
+    <div class="h"><span class="ic">🏁</span><span class="ttl">Year End</span><span class="id">yearEnd</span></div>
+    <div class="ds">Resumen anual con rating S/A/B/C/D + bonus o penalización.</div>
+  </div>
+
+  <div class="card no-link" style="--ac:#aab5c0">
+    <div class="h"><span class="ic">🏆</span><span class="ttl">Game End</span><span class="id">gameEnd</span></div>
+    <div class="ds">Final de los 5 años · ranking: Kiosco de Barrio → Estanco Conocido → Popular → Referente → Xtanco Legendario.</div>
+  </div>
+
+  <a class="card" href="../help.html" style="--ac:#78f3ff">
+    <div class="h"><span class="ic">❓</span><span class="ttl">Help</span><span class="id">help</span></div>
+    <div class="ds">Ayuda numerada con todos los comandos. Tecla <code>?</code> in-game o <code>?ayuda=1</code>.</div>
+  </a>
+
+  <div class="card no-link" style="--ac:#aab5c0">
+    <div class="h"><span class="ic">⚙️</span><span class="ttl">Settings</span><span class="id">settings</span></div>
+    <div class="ds">Ajustes: audio, idioma, render mode (16bit vs 8bit), Telegram bridge, Stream Deck.</div>
+  </div>
+
+</div>
+
+<!-- ── VERTICALES / CLIENTES ───────────────────────────── -->
+<h2>3. Verticales (Catálogo XP) <span class="tag">CLIENTS array · 5 entradas</span></h2>
+<div class="grid">
+
+  <a class="card" href="../game.html?vertical=xtanco" style="--ac:#f7c95d">
+    <div class="h"><span class="ic">🚬</span><span class="ttl">XP-01 · Xtanco</span><span class="id">xtanco</span></div>
+    <div class="ds">Estanco genérico — el vertical madre. 5 años de gestión, 8 semanas/año, 4 modelos de dificultad. NPCs especiales: ladrón, GC, opinador, devolución, etc.</div>
+    <div class="meta"><b>preload:</b> <code>LOAD""</code> · <b>tape:</b> XTANCO</div>
+  </a>
+
+  <div class="card unavailable no-link" style="--ac:#44ddaa">
+    <div class="h"><span class="ic">🍀</span><span class="ttl">XP-02 · Loterías</span><span class="id">loterias</span></div>
+    <div class="ds">Loterías Naturales (pipeline). Modelos pendientes — comparte motor con Xtanco temporalmente vía <code>quickModels</code>.</div>
+    <div class="meta"><b>estado:</b> available: false</div>
+  </div>
+
+  <a class="card" href="../game.html?vertical=supermercado" style="--ac:#7ae35a">
+    <div class="h"><span class="ic">🛒</span><span class="ttl">XP-03 · Supermercado</span><span class="id">supermercado</span></div>
+    <div class="ds">Supermercado de barrio — variante del motor Xtanco con secciones rebrandeadas (Frescos, Panadería, Helados, Oficina). 4 plantillas.</div>
+    <div class="meta"><b>preload:</b> <code>LOAD""SUPERMERCADO</code></div>
+  </a>
+
+  <a class="card" href="../game.html?vertical=shoptalk" style="--ac:#76B900">
+    <div class="h"><span class="ic">🎪</span><span class="ttl">XP-04 · Shoptalk EU 2026</span><span class="id">shoptalk</span></div>
+    <div class="ds">Stand XpaceOS · Fira Barcelona 9-11 jun · Lenovo×Nvidia. Lienzo en blanco para construir el booth (sin puerta, sin ventanas, sin city). Banner countdown D-NN.</div>
+    <div class="meta"><b>preload:</b> <code>LOAD""SHOPTALK</code> · <b>evento:</b> 9-11 jun 2026</div>
+  </a>
+
+  <a class="card" href="../game.html?vertical=creator" style="--ac:#ffd866">
+    <div class="h"><span class="ic">🎨</span><span class="ttl">XP-05 · Xpace Creator</span><span class="id">creator</span></div>
+    <div class="ds">El usuario define el Xpacio desde cero. Salta MODEL_SEL, arranca directo en EDITOR. Paleta de mobiliario CONECTADOS/NO CONECTADOS + 5 colores de entidad + celdas de pared para anclar pantallas.</div>
+    <div class="meta"><b>flag:</b> <code>creator:true</code> · <b>render:</b> isBlankXpace</div>
+  </a>
+
+</div>
+
+<!-- ── UI PANELS ───────────────────────────── -->
+<h2>4. Paneles UI durante GAME <span class="tag">overlay panel · 4 tabs + sub-paneles</span></h2>
+<div class="grid">
+  <div class="card no-link" style="--ac:#78f3ff">
+    <div class="h"><span class="ic">📊</span><span class="ttl">Ventas</span><span class="id">tabSales</span></div>
+    <div class="ds">Ingresos/gastos/neto semanal, objetivo anual, 4 stat bars.</div>
+  </div>
+  <div class="card no-link" style="--ac:#78f3ff">
+    <div class="h"><span class="ic">👷</span><span class="ttl">Personal</span><span class="id">tabStaff</span></div>
+    <div class="ds">Cards de empleados con chibi, stats, hire/train. Atajo CLI: <code>/staff</code> / <code>/personal</code>.</div>
+  </div>
+  <div class="card no-link" style="--ac:#78f3ff">
+    <div class="h"><span class="ic">📦</span><span class="ttl">Stock</span><span class="id">tabStock</span></div>
+    <div class="ds">Productos con stock bars + reposición. Atajo: <code>/stock</code>.</div>
+  </div>
+  <div class="card no-link" style="--ac:#78f3ff">
+    <div class="h"><span class="ic">🏪</span><span class="ttl">Tienda</span><span class="id">tabStore</span></div>
+    <div class="ds">3 tiers de Visita (Comercial/Técnico/Delegación/GC), upgrade del local, salaries, minimapa.</div>
+  </div>
+</div>
+
+<!-- ── OVERLAYS HTML ───────────────────────────── -->
+<h2>5. Paneles HTML (Docks) <span class="tag">fixed-position DIVs</span></h2>
+<div class="grid">
+  <div class="card no-link" style="--ac:#78f3ff">
+    <div class="h"><span class="ic">💬</span><span class="ttl">Telegram Dock</span><span class="id">#telegramDock</span></div>
+    <div class="ds">Composer + conversación con <code>@AdmiraXPBot</code>. Bottom-left durante GAME.</div>
+  </div>
+  <div class="card no-link" style="--ac:#78f3ff">
+    <div class="h"><span class="ic">🪪</span><span class="ttl">Character Dock</span><span class="id">#characterDock</span></div>
+    <div class="ds">Tabs Team / Customers / Socios — listado de personas en la tienda. <b>En Creator:</b> se reconvierte en paleta MOBILIARIO / TRABAJADORES.</div>
+  </div>
+  <div class="card no-link" style="--ac:#78f3ff">
+    <div class="h"><span class="ic">🤖</span><span class="ttl">Metahuman AI</span><span class="id">#metahumanPanel</span></div>
+    <div class="ds">Chat con el asistente IA Metahuman. Mupi posicionada en la pared.</div>
+  </div>
+  <div class="card no-link" style="--ac:#78f3ff">
+    <div class="h"><span class="ic">🐶</span><span class="ttl">Unitree Bot</span><span class="id">#robotGrokPanel</span></div>
+    <div class="ds">Consultas Grok al Unitree Bot que pasea por la tienda. <code>/robot on</code>.</div>
+  </div>
+  <div class="card no-link" style="--ac:#78f3ff">
+    <div class="h"><span class="ic">📺</span><span class="ttl">Signage Panel</span><span class="id">#telegramSignagePanel</span></div>
+    <div class="ds">Playlist de Digital Signage — drag & drop, reorder, delete.</div>
+  </div>
+  <div class="card no-link" style="--ac:#78f3ff">
+    <div class="h"><span class="ic">🖼</span><span class="ttl">DS Import Drop</span><span class="id">#dsImportDrop</span></div>
+    <div class="ds">Drag-drop de imágenes/videos para ingestarlos al DS (160×90 auto-adapt).</div>
+  </div>
+</div>
+
+<!-- ── MODOS ESPECIALES ───────────────────────────── -->
+<h2>6. Modos especiales / URL params <span class="tag">flags activables por URL</span></h2>
+<div class="grid">
+
+  <a class="card" href="../game.html?streamdeck=preview" style="--ac:#ffd866">
+    <div class="h"><span class="ic">🎛️</span><span class="ttl">Stream Deck Preview</span><span class="id">?streamdeck=preview</span></div>
+    <div class="ds">Overlay de las 12 acciones del Galleon 100 SD pintado dentro del canvas (modo dev — para verificar a ojo lo que pintarías en el teclado).</div>
+  </a>
+
+  <a class="card" href="../game.html?streamdeck=mirror" style="--ac:#ffd866">
+    <div class="h"><span class="ic">🪞</span><span class="ttl">Stream Deck Mirror</span><span class="id">?streamdeck=mirror</span></div>
+    <div class="ds">Canvas a viewport completo, sin chrome — captura por desktop-grab para el LCD principal del Galleon.</div>
+  </a>
+
+  <a class="card" href="../game.html?fresh=1" style="--ac:#88ee88">
+    <div class="h"><span class="ic">♻️</span><span class="ttl">Fresh reload</span><span class="id">?fresh=1</span></div>
+    <div class="ds">Limpia caches + service worker. Forzar versión nueva tras deploy.</div>
+  </a>
+
+  <div class="card no-link" style="--ac:#aab5c0">
+    <div class="h"><span class="ic">🎬</span><span class="ttl">Demo</span><span class="id">demoMode</span></div>
+    <div class="ds">Modo demo automático — sin intervención humana. Botón DEMO en menú.</div>
+  </div>
+
+</div>
+
+<!-- ── SUB-APLICACIONES ───────────────────────────── -->
+<h2>7. Sub-aplicaciones <span class="tag">páginas HTML independientes</span></h2>
+<div class="grid">
+  <a class="card" href="../index.html" style="--ac:#78f3ff">
+    <div class="h"><span class="ic">🚪</span><span class="ttl">index.html</span><span class="id">/</span></div>
+    <div class="ds">Landing / launcher del Xpacio. Selector de era + ENTRAR.</div>
+  </a>
+  <a class="card" href="../game.html" style="--ac:#88ee88">
+    <div class="h"><span class="ic">🎮</span><span class="ttl">game.html</span><span class="id">/game.html</span></div>
+    <div class="ds">Aplicación principal (single-file canvas).</div>
+  </a>
+  <a class="card" href="../help.html" style="--ac:#78f3ff">
+    <div class="h"><span class="ic">📖</span><span class="ttl">help.html</span><span class="id">/help.html</span></div>
+    <div class="ds">Ayuda imprimible / standalone — todos los comandos numerados por subgrupos.</div>
+  </a>
+  <a class="card" href="../loyalty-app/" style="--ac:#ee44cc">
+    <div class="h"><span class="ic">🪪</span><span class="ttl">Loyalty App</span><span class="id">/loyalty-app/</span></div>
+    <div class="ds">PWA para registro de socios del Xtanco Club desde QR. Genera <code>fanCustomerId</code> y entra a la cola del LoyaltyBridge.</div>
+  </a>
+  <a class="card" href="../marketplace/" style="--ac:#ee44cc">
+    <div class="h"><span class="ic">🛍</span><span class="ttl">Marketplace</span><span class="id">/marketplace/</span></div>
+    <div class="ds">Catálogo programático del Xpace OS. Items expuestos por <code>/marketplace</code> CLI.</div>
+  </a>
+  <a class="card" href="../marketing/" style="--ac:#76B900">
+    <div class="h"><span class="ic">📣</span><span class="ttl">Marketing site</span><span class="id">/marketing/</span></div>
+    <div class="ds">Landing marketing (Elgato Stream Deck + AdmiraTube + GitHub Pages stack).</div>
+  </a>
+  <a class="card" href="../studio/" style="--ac:#76B900">
+    <div class="h"><span class="ic">🎨</span><span class="ttl">Studio</span><span class="id">/studio/</span></div>
+    <div class="ds">Pixer.ai content studio. Generadores de assets / videos para el DS.</div>
+  </a>
+  <a class="card" href="./streamdeck-bridge.md" style="--ac:#ffd866">
+    <div class="h"><span class="ic">📨</span><span class="ttl">Spec Stream Deck Bridge</span><span class="id">docs/</span></div>
+    <div class="ds">Spec completa del bridge Galleon 100 SD ↔ Admira XP (handoff para Codex).</div>
+  </a>
+  <a class="card" href="../streamdeck-manifest.json" style="--ac:#ffd866">
+    <div class="h"><span class="ic">📋</span><span class="ttl">Stream Deck Manifest JSON</span><span class="id">/streamdeck-manifest.json</span></div>
+    <div class="ds">Manifest estático con las 12 acciones del Galleon (icono / label es-en / color / cmd).</div>
+  </a>
+</div>
+
+<!-- ── WORKERS ───────────────────────────── -->
+<h2>8. Workers (Cloudflare) <span class="tag">backend serverless</span></h2>
+<div class="grid">
+  <div class="card no-link" style="--ac:#76B900">
+    <div class="h"><span class="ic">📨</span><span class="ttl">admira-telegram-bridge</span><span class="id">workers/admira-telegram-bridge</span></div>
+    <div class="ds">Webhook receiver para Telegram. <code>/telegram/send</code>, <code>/telegram/commands</code>, <code>/telegram/reply</code>. Fallback local en elgato-proxy del Mac Mini.</div>
+  </div>
+  <div class="card no-link" style="--ac:#76B900">
+    <div class="h"><span class="ic">🪪</span><span class="ttl">admira-loyalty</span><span class="id">workers/admira-loyalty</span></div>
+    <div class="ds">KV con socios del Xtanco Club. Endpoints /register, /list, /export.</div>
+  </div>
+  <div class="card no-link" style="--ac:#76B900">
+    <div class="h"><span class="ic">🛍</span><span class="ttl">admira-marketplace</span><span class="id">workers/admira-marketplace</span></div>
+    <div class="ds">Persistencia del catálogo programático.</div>
+  </div>
+  <div class="card no-link" style="--ac:#76B900">
+    <div class="h"><span class="ic">🤖</span><span class="ttl">admira-grok-proxy</span><span class="id">workers/admira-grok-proxy</span></div>
+    <div class="ds">Proxy a Grok API para Unitree Bot + Metahuman.</div>
+  </div>
+  <div class="card no-link" style="--ac:#76B900">
+    <div class="h"><span class="ic">🎯</span><span class="ttl">omnipublicity-api</span><span class="id">workers/omnipublicity-api</span></div>
+    <div class="ds">Persistencia compartida del catálogo / audiencia capturada.</div>
+  </div>
+</div>
+
+<!-- ── PROXY LOCAL ───────────────────────────── -->
+<h2>9. Proxy local (Mac Mini · Tailscale Funnel) <span class="tag">Node :9126</span></h2>
+<div class="grid">
+  <div class="card no-link" style="--ac:#78f3ff">
+    <div class="h"><span class="ic">🟣</span><span class="ttl">Elgato / Hue</span><span class="id">/elgato/* · /hue/*</span></div>
+    <div class="ds">Toggle de luces Elgato Key Light + Philips Hue.</div>
+  </div>
+  <div class="card no-link" style="--ac:#78f3ff">
+    <div class="h"><span class="ic">📺</span><span class="ttl">AdmiraTube</span><span class="id">/tube/* (Funnel /admira)</span></div>
+    <div class="ds">yt-dlp para descargar videos de YouTube y fijarlos como DS source. <code>/importTube &lt;url&gt;</code>.</div>
+  </div>
+  <div class="card no-link" style="--ac:#78f3ff">
+    <div class="h"><span class="ic">💬</span><span class="ttl">Telegram fallback</span><span class="id">/telegram/send</span></div>
+    <div class="ds">Bridge local cuando el worker Cloudflare cae (1027). Misma API.</div>
+  </div>
+  <div class="card no-link" style="--ac:#78f3ff">
+    <div class="h"><span class="ic">📐</span><span class="ttl">Layout save</span><span class="id">/layout/save</span></div>
+    <div class="ds">Persiste layouts custom del Creator en disco local.</div>
+  </div>
+</div>
+
+<div class="note">
+  <b>Cómo se relacionan los estados:</b>
+  Era Sel → Preload → Menu → Client Sel → Model Sel (skip si <code>creator:true</code>) → Intro / Tut → GAME.
+  Desde GAME: <kbd>E</kbd> abre EDITOR · <kbd>Esc</kbd> abre PAUSE · <kbd>?</kbd> abre HELP · final de año = YEAR_END · target &lt; 55% = GAME_END.
+  El Xpace Creator (XP-05) salta MODEL_SEL y entra directo a EDITOR con layout vacío.
+</div>
+
+<details>
+  <summary>Versión actual</summary>
+  <p class="url">Live: <a href="https://csilvasantin.github.io/01.-AdmiraXperience-Game/" style="color:#ffd866">csilvasantin.github.io/01.-AdmiraXperience-Game</a></p>
+  <p class="url">Site version: <span id="ver">cargando…</span></p>
+</details>
+
+<script>
+  fetch('../xtanco-version.js?cb='+Date.now())
+    .then(r=>r.text())
+    .then(t=>{
+      const m=t.match(/AdmiraNext v[\d.]+/);
+      document.getElementById('ver').textContent=m?m[0]:'sin parse';
+    })
+    .catch(()=>{document.getElementById('ver').textContent='offline'});
+</script>
+
+</body>
+</html>
