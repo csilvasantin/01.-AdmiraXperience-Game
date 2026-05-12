@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Xpace Creator · Admira XP</title>
+<meta name="description" content="Diseña tu propio Xpacio desde cero — paredes, suelo, mobiliario y trabajadores. The Xpace OS.">
+<!-- Open Graph para previews en Telegram / WhatsApp -->
+<meta property="og:title" content="Xpace Creator · Admira XP">
+<meta property="og:description" content="Diseña tu propio Xpacio desde cero. Mobiliario, screens, audio, IoT y trabajadores.">
+<meta property="og:url" content="https://csilvasantin.github.io/01.-AdmiraXperience-Game/creator.html">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#ffd866">
+<!-- Redirect via meta refresh para casos sin JS (fallback) -->
+<meta http-equiv="refresh" content="0; url=./game.html?play=creator&fresh=1">
+<style>
+  html,body{margin:0;padding:0;background:radial-gradient(circle at 50% 30%,#2a2010,#070a10 60%,#020305);color:#ffd866;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;height:100%;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:20px;text-align:center;padding:40px}
+  .icon{font-size:80px;line-height:1;filter:drop-shadow(0 6px 24px rgba(255,216,102,.45));animation:bob 2s ease-in-out infinite}
+  @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+  h1{font-size:24px;letter-spacing:.18em;color:#ffe8a0;margin:0;text-transform:uppercase}
+  .sub{color:#c4b88a;font-size:13px;max-width:480px;line-height:1.5}
+  .spinner{width:28px;height:28px;border:2px solid rgba(255,216,102,.3);border-top-color:#ffd866;border-radius:50%;animation:spin 1s linear infinite;margin-top:8px}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .foot{font-size:10px;color:#9a8866;margin-top:24px;letter-spacing:.06em;text-transform:uppercase;opacity:.7}
+  a{color:#ffd866}
+</style>
+</head>
+<body>
+  <div class="icon">🎨</div>
+  <h1>Xpace Creator</h1>
+  <div class="sub">Diseña tu propio Xpacio desde cero — paredes, suelo, mobiliario y trabajadores. Cargando el editor…</div>
+  <div class="spinner" aria-hidden="true"></div>
+  <div class="foot">Admira XP // The Xpace OS</div>
+  <noscript>
+    <p style="margin-top:18px;font-size:12px">Si no hay JS, <a href="./game.html?play=creator&fresh=1">clica aquí</a> para entrar.</p>
+  </noscript>
+<script>
+  // Redirect inmediato — el meta refresh es fallback. Preservamos hash si lo hay.
+  const target='./game.html?play=creator&fresh=1'+(location.hash||'');
+  location.replace(target);
+</script>
+</body>
+</html>
