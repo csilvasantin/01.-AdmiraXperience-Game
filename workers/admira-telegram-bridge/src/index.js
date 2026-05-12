@@ -1,5 +1,9 @@
 const DEFAULT_ALLOWED_ORIGINS = [
   'https://csilvasantin.github.io',
+  'https://www.xpaceos.com',
+  'https://xpaceos.com',
+  'http://localhost:4175',
+  'http://127.0.0.1:4175',
   'http://localhost:9124',
   'http://127.0.0.1:9124',
 ];
@@ -173,6 +177,82 @@ async function sendDocument(request, env) {
   }
 }
 
+function cleanLine(value, fallback = '') {
+  return String(value || fallback)
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 220);
+}
+
+function clientIp(request) {
+  return request.headers.get('CF-Connecting-IP')
+    || request.headers.get('X-Forwarded-For')
+    || '';
+}
+
+async function notifyXpaceVisit(request, env) {
+  if (!configured(env)) {
+    return jsonResponse(request, env, 503, { ok: false, error: 'telegram_not_configured' });
+  }
+
+  const body = await readJson(request);
+  const chatId = defaultChatId(env);
+  if (!chatId) {
+    return jsonResponse(request, env, 400, { ok: false, error: 'missing_default_chat' });
+  }
+  if (!isAllowedChat(env, chatId)) {
+    return jsonResponse(request, env, 403, { ok: false, error: 'chat_not_allowed' });
+  }
+
+  const origin = request.headers.get('Origin') || '';
+  const country = request.cf && request.cf.country ? request.cf.country : 'n/a';
+  const city = request.cf && request.cf.city ? request.cf.city : '';
+  const colo = request.cf && request.cf.colo ? request.cf.colo : '';
+  const page = cleanLine(body.page || 'https://www.xpaceos.com/');
+  const title = cleanLine(body.title || 'XpaceOS');
+  const referrer = cleanLine(body.referrer || 'direct');
+  const lang = cleanLine(body.lang || 'n/a');
+  const tz = cleanLine(body.tz || 'n/a');
+  const ua = cleanLine(request.headers.get('User-Agent') || body.ua || 'n/a');
+  const ip = cleanLine(clientIp(request) || 'n/a');
+  const now = new Date().toISOString();
+
+  const locationBits = [country, city, colo].filter(Boolean).join(' · ');
+  const text = [
+    '🚀 Nueva visita en XpaceOS',
+    `• Página: ${page}`,
+    `• Título: ${title}`,
+    `• Referrer: ${referrer}`,
+    `• Idioma: ${lang}`,
+    `• Zona horaria: ${tz}`,
+    `• Origen: ${origin || 'n/a'}`,
+    `• Ubicación CF: ${locationBits || 'n/a'}`,
+    `• IP: ${ip}`,
+    `• User-Agent: ${ua}`,
+    `• Hora: ${now}`,
+  ].join('\n');
+
+  try {
+    const result = await telegramApi(env, 'sendMessage', {
+      chat_id: chatId,
+      text,
+      disable_web_page_preview: true,
+    });
+    return jsonResponse(request, env, 200, {
+      ok: true,
+      messageId: result.message_id,
+      chatId: String(result.chat.id),
+    });
+  } catch (error) {
+    return jsonResponse(request, env, 502, {
+      ok: false,
+      error: 'xpace_visit_notify_failed',
+      message: error.message,
+    });
+  }
+}
+
 async function handleWebhook(request, env, secret) {
   if (!configured(env)) {
     return jsonResponse(request, env, 503, { ok: false, error: 'telegram_not_configured' });
@@ -308,6 +388,10 @@ export default {
 
     if (url.pathname === '/telegram/send' && request.method === 'POST') {
       return sendMessage(request, env, false);
+    }
+
+    if (url.pathname === '/visits/xpaceos' && request.method === 'POST') {
+      return notifyXpaceVisit(request, env);
     }
 
     if (url.pathname === '/telegram/reply' && request.method === 'POST') {

@@ -3,7 +3,7 @@ main = "src/index.js"
 compatibility_date = "2025-12-01"
 
 [vars]
-ALLOWED_ORIGINS = "https://csilvasantin.github.io,http://localhost:9124,http://127.0.0.1:9124"
+ALLOWED_ORIGINS = "https://csilvasantin.github.io,https://www.xpaceos.com,https://xpaceos.com,http://localhost:4175,http://127.0.0.1:4175,http://localhost:9124,http://127.0.0.1:9124"
 
 [[durable_objects.bindings]]
 name = "COMMAND_STORE"
