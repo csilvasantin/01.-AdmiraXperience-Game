@@ -1,0 +1,7 @@
+{
+  "enabled": false,
+  "title": "EN MANTENIMIENTO",
+  "message": "Estamos preparando una nueva versión del Xpace OS. Vuelve en unos minutos.",
+  "since": "2026-05-12T00:00:00Z",
+  "comment": "Para matar el juego: cambia enabled a true y commit+push. Para reabrir: enabled false. Los clientes refrescan cada 30s — las pestañas activas se cortan también."
+}

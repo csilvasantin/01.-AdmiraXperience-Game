@@ -339,6 +339,18 @@
     #dsImportStatus.is-done .ds-status-bar-fill{background:#78ffa0;width:100%!important}
     @keyframes dsImportSpin{to{transform:rotate(360deg)}}
 
+    /* === Kill-switch overlay (modo mantenimiento) === */
+    #killSwitchOverlay{display:none;position:fixed;inset:0;z-index:9999;background:radial-gradient(circle at 50% 35%,#1a1208,#000);color:#ffd866;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;align-items:center;justify-content:center;flex-direction:column;gap:18px;padding:40px;text-align:center}
+    body.ks-locked{overflow:hidden}
+    body.ks-locked #killSwitchOverlay{display:flex}
+    body.ks-locked > :not(#killSwitchOverlay){filter:blur(2px) brightness(.35);pointer-events:none;user-select:none}
+    #killSwitchOverlay .ks-icon{font-size:64px;line-height:1;filter:drop-shadow(0 4px 16px rgba(255,216,102,.35))}
+    #killSwitchOverlay .ks-title{font-size:22px;font-weight:bold;letter-spacing:.18em;color:#ffe8a0}
+    #killSwitchOverlay .ks-msg{font-size:13px;color:#c4b88a;max-width:520px;line-height:1.5}
+    #killSwitchOverlay .ks-foot{font-size:9px;color:#9a8866;margin-top:24px;letter-spacing:.06em;text-transform:uppercase;opacity:.7}
+    #killSwitchOverlay .ks-spinner{width:24px;height:24px;border:2px solid rgba(255,216,102,.3);border-top-color:#ffd866;border-radius:50%;animation:ksSpin 1s linear infinite}
+    @keyframes ksSpin{to{transform:rotate(360deg)}}
+
     /* === Stream Deck overlay (Corsair Galleon 100 SD) === */
     #sdOverlay{display:none;position:fixed;left:0;right:0;bottom:0;z-index:90;pointer-events:none;font-family:monospace}
     body.is-streamdeck-preview #sdOverlay{display:block;pointer-events:auto}
@@ -450,6 +462,13 @@
 </div>
 <video id="bootVideo" preload="auto" playsinline webkit-playsinline style="display:none"></video>
 <video id="liveCamVideo" autoplay muted playsinline webkit-playsinline style="display:none"></video>
+<div id="killSwitchOverlay" role="dialog" aria-label="Modo mantenimiento" aria-hidden="true">
+  <div class="ks-icon">🛠️</div>
+  <div class="ks-title" id="ksTitle">EN MANTENIMIENTO</div>
+  <div class="ks-msg" id="ksMsg">Estamos preparando una nueva versión del Xpace OS. Vuelve en unos minutos.</div>
+  <div class="ks-spinner" aria-hidden="true"></div>
+  <div class="ks-foot">Admira XP // The Xpace OS</div>
+</div>
 <canvas id="c" width="800" height="500"></canvas>
 <div id="speechOverlay" aria-hidden="true"></div>
 <div id="metahumanPanel" aria-label="Metahuman AI Assistant" aria-hidden="true">
@@ -573,6 +592,57 @@
   <canvas id="dsCanvas2" width="160" height="90" style="display:block;width:100%;height:100%"></canvas>
   <iframe id="admiraTube2" title="AdmiraTube 2" allow="autoplay; encrypted-media; picture-in-picture" referrerpolicy="strict-origin-when-cross-origin" style="display:none;position:absolute;inset:0;width:100%;height:100%;border:0"></iframe>
 </div>
+<script>
+// ── Kill-switch ────────────────────────────────────────────────
+// Comprueba kill-switch.json y, si enabled:true, bloquea el juego
+// con un overlay "EN MANTENIMIENTO". Poll cada 30s para que pestañas
+// abiertas también se corten cuando se publica el flip. Para activarlo:
+// edita kill-switch.json → enabled:true → commit + push.
+(function(){
+  if(typeof window==='undefined') return;
+  function applyKillSwitch(data){
+    const body=document.body; if(!body) return;
+    const overlay=document.getElementById('killSwitchOverlay');
+    if(!data || !data.enabled){
+      body.classList.remove('ks-locked');
+      if(overlay) overlay.setAttribute('aria-hidden','true');
+      return;
+    }
+    if(overlay){
+      const t=document.getElementById('ksTitle');
+      const m=document.getElementById('ksMsg');
+      if(t && data.title) t.textContent=String(data.title).slice(0,60);
+      if(m && data.message) m.textContent=String(data.message).slice(0,240);
+      overlay.setAttribute('aria-hidden','false');
+    }
+    body.classList.add('ks-locked');
+    // Cuando esta activo, intenta detener audio en marcha sin esperar a
+    // que el resto del codigo del juego lo gestione.
+    try {
+      document.querySelectorAll('audio,video').forEach(el=>{ try{el.pause();}catch(_){}; });
+    } catch(_){}
+  }
+  async function fetchKillSwitch(){
+    try {
+      const r=await fetch('./kill-switch.json?cb='+Date.now(),{cache:'no-store'});
+      if(!r.ok) return null;
+      return await r.json();
+    } catch(e){ return null; }
+  }
+  async function check(){
+    const data=await fetchKillSwitch();
+    if(data) applyKillSwitch(data);
+  }
+  // Primer check antes de pintar el juego — si el DOM aún no esta listo
+  // (script en <head>), espera a DOMContentLoaded.
+  if(document.body){ check(); }
+  else document.addEventListener('DOMContentLoaded',check,{once:true});
+  // Poll cada 30s para que pestañas abiertas también se corten.
+  setInterval(check, 30000);
+  // Expose para debugging / Telegram command futuro
+  window.AdmiraXP_KillSwitch={check, apply:applyKillSwitch};
+})();
+</script>
 <script src="xtanco-version.js"></script>
 <script src="xtanco-runtime-config.js"></script>
 <script src="qrcode.min.js"></script>
