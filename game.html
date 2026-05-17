@@ -24459,12 +24459,16 @@ window.xtAPI = (function(){
       }
     }catch{}
   }
-  // Arranque: heartbeat inmediato + poll feed; despues feed a 5s y heartbeat a 60s.
+  // Arranque: heartbeat inmediato + poll feed; despues feed a 5s y heartbeat a 5min.
+  // Heartbeat a 5min (no 60s) para no agotar el límite KV diario de Workers Free
+  // (1000 writes/día). 5min × 24h = 288 writes/día/pantalla, deja margen para
+  // varias pantallas + resto de tráfico que también escribe a KV (signage push,
+  // ack, etc.). Si pasamos a Workers Paid se puede bajar.
   setTimeout(()=>{
     sendHeartbeat(true);
     pollFeed();
     setInterval(pollFeed,5000);
-    setInterval(()=>sendHeartbeat(false),60000);
+    setInterval(()=>sendHeartbeat(false),300000);
   },3000);
 })();
 </script>
