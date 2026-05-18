@@ -461,9 +461,35 @@
       .xpace-tpl-head{padding:12px 14px 6px}
       .xpace-tpl-head h2{font-size:15px}
     }
+
+    /* ── Botón Navigator overlay (solo visible en S.MENU) ── */
+    #navigatorBtn{
+      position:fixed;top:20px;right:20px;
+      display:none;
+      padding:9px 16px;
+      background:linear-gradient(180deg,#2a2010 0%,#070a10 100%);
+      border:1px solid #5a4a30;border-radius:6px;
+      color:#ffd866;text-decoration:none;
+      font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+      font-size:11px;letter-spacing:.14em;font-weight:700;text-transform:uppercase;
+      box-shadow:0 4px 16px rgba(0,0,0,.5),0 0 0 1px rgba(255,216,102,.1) inset;
+      cursor:pointer;z-index:9998;
+      transition:transform .12s,border-color .12s,box-shadow .12s,color .12s;
+    }
+    body[data-state="menu"] #navigatorBtn{display:inline-block}
+    #navigatorBtn:hover{
+      transform:translateY(-1px);
+      color:#ffe8a0;border-color:#ffd866;
+      box-shadow:0 8px 24px rgba(255,216,102,.25),0 0 0 1px rgba(255,216,102,.2) inset;
+    }
+    @media (max-width:540px){
+      #navigatorBtn{top:10px;right:10px;padding:7px 12px;font-size:10px}
+    }
   </style>
 </head>
 <body>
+<!-- Botón Navigator (visible solo en S.MENU vía body[data-state="menu"]) -->
+<a id="navigatorBtn" href="docs/navigator/" target="_blank" rel="noopener" title="Navigator · diagrama de flujo del DigitalTwin">🗺 NAVIGATOR</a>
 <div id="topBar">
   <span id="bbClock" style="color:#ffdd66;font-size:12px;font-weight:bold">09:00</span>
   <span id="bbDate" style="color:#b0a888;font-size:9px">22/03/2026</span>
@@ -5202,6 +5228,15 @@ let codexMapOpen=false;
 let tt=0;
 let tran={active:false,from:null,to:null,timer:0,dur:30};
 function startTransition(toState){if(tran.active)return;try{if(window.AdmiraXP_SessionLog)window.AdmiraXP_SessionLog.logState(toState);}catch(_){};tran={active:true,from:state,to:toState,timer:0,dur:30};}
+// Refleja el state actual en body[data-state] para que CSS pueda mostrar/
+// ocultar overlays (ej. botón Navigator solo en el menú). Poll de 300ms es
+// suficiente para una UI no crítica.
+setInterval(() => {
+  try {
+    const cur = document.body.dataset.state || '';
+    if (cur !== state) document.body.dataset.state = state;
+  } catch(_){}
+}, 300);
 function updateTransition(){
   if(!tran.active)return;
   tran.timer++;

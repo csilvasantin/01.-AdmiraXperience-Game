@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DigitalTwin · Diagrama de flujo (v.2026.05.18.r1)</title>
+<style>
+  :root{
+    --bg:#070a10; --bg2:#0f1018; --bg3:#141826;
+    --fg:#ffd866; --fg-bright:#ffe8a0; --muted:#7a6c52;
+    --line:#3a3020; --line-bright:#5a4a30;
+    --accent:#aa88ff; --accent-bg:#2a1a44;
+    --ok:#88ee88; --ok-bg:#1a3a1a;
+    --warn:#ffaa55; --warn-bg:#3a2a10;
+    --danger:#ff7777; --danger-bg:#3a1a1a;
+    --new:#aa88ff; --new-bg:rgba(170,136,255,.15);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:radial-gradient(circle at 50% 0%,#2a2010 0%,var(--bg) 60%);color:var(--fg);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;min-height:100vh}
+  body{padding:30px 40px}
+
+  h1{margin:0 0 8px;font-size:24px;letter-spacing:.14em;color:var(--fg-bright);text-transform:uppercase}
+  .sub{color:var(--muted);font-size:12px;letter-spacing:.06em;margin-bottom:30px}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;margin-bottom:24px;font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+  .legend-item{display:flex;align-items:center;gap:6px}
+  .legend-dot{width:12px;height:12px;border-radius:2px;border:1px solid currentColor}
+  .legend-dot.normal{background:var(--bg2);border-color:var(--line-bright);color:var(--fg)}
+  .legend-dot.new{background:var(--new-bg);border-color:var(--new);color:var(--new)}
+  .legend-dot.exit{background:var(--bg2);border-color:var(--danger);color:var(--danger);border-style:dashed}
+  .legend-dot.terminal{background:var(--ok-bg);border-color:var(--ok);color:var(--ok)}
+
+  .diagram{display:grid;grid-template-columns:1fr 1fr;gap:40px 60px}
+  @media (max-width:1300px){ .diagram{grid-template-columns:1fr} }
+
+  .lane{display:flex;flex-direction:column;gap:18px;padding:18px 16px;border:1px solid var(--line);border-radius:10px;background:linear-gradient(180deg,rgba(15,16,24,.6) 0%,rgba(7,10,16,.4) 100%)}
+  .lane-title{margin:0 0 4px;font-size:13px;letter-spacing:.18em;text-transform:uppercase;color:var(--fg-bright);font-weight:600}
+  .lane.creator{ border-color:var(--new);box-shadow:0 0 0 1px rgba(170,136,255,.2),0 12px 32px rgba(170,136,255,.08) }
+  .lane.creator .lane-title{color:var(--new)}
+
+  .screen{position:relative;border:1px solid var(--line-bright);background:linear-gradient(180deg,var(--bg2) 0%,var(--bg) 100%);border-radius:8px;padding:14px 16px;transition:transform .12s,border-color .12s,box-shadow .12s}
+  .screen:hover{ transform:translateY(-1px); border-color:var(--fg); box-shadow:0 6px 20px rgba(255,216,102,.1) }
+  .screen.new{ border-color:var(--new); background:linear-gradient(180deg,var(--new-bg) 0%,var(--bg) 100%) }
+  .screen.terminal{ border-color:var(--ok); background:linear-gradient(180deg,var(--ok-bg) 0%,var(--bg) 100%) }
+  .screen.exit{ border-style:dashed; border-color:var(--danger); color:var(--danger) }
+
+  .screen-id{position:absolute;top:6px;right:8px;font-size:9px;color:var(--muted);letter-spacing:.06em;background:rgba(0,0,0,.4);padding:2px 6px;border-radius:3px}
+  .screen-icon{font-size:22px;line-height:1;margin-bottom:6px}
+  .screen-title{font-size:14px;font-weight:700;color:var(--fg-bright);letter-spacing:.04em;margin-bottom:4px}
+  .screen.new .screen-title{color:var(--new)}
+  .screen-desc{font-size:11px;color:var(--muted);line-height:1.5}
+  .screen-actions{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,216,102,.1)}
+  .screen-action{font-size:9px;padding:2px 7px;border:1px solid var(--line-bright);border-radius:3px;background:rgba(0,0,0,.3);color:var(--fg);letter-spacing:.04em;text-transform:uppercase}
+  .screen-action.primary{border-color:var(--ok);color:var(--ok);background:var(--ok-bg)}
+  .screen-action.new{border-color:var(--new);color:var(--new);background:var(--new-bg)}
+  .screen-action.exit{border-color:var(--danger);color:var(--danger);border-style:dashed}
+
+  /* Screenshot thumbnail */
+  .screen-shot{
+    margin-top:10px;
+    border:1px solid var(--line);
+    border-radius:6px;
+    overflow:hidden;
+    background:#000;
+    cursor:zoom-in;
+    transition:border-color .12s,box-shadow .12s;
+  }
+  .screen-shot:hover{ border-color:var(--fg); box-shadow:0 6px 20px rgba(255,216,102,.15) }
+  .screen.new .screen-shot:hover{ border-color:var(--new); box-shadow:0 6px 20px rgba(170,136,255,.2) }
+  .screen-shot img{display:block;width:100%;height:auto;max-height:200px;object-fit:cover;object-position:top}
+
+  .arrow{display:flex;align-items:center;gap:8px;padding-left:12px;color:var(--muted);font-size:10px;letter-spacing:.06em;text-transform:uppercase;height:18px}
+  .arrow::before{content:"↓";font-size:18px;color:var(--fg)}
+  .arrow.alt::before{content:"⇣";color:var(--new)}
+  .arrow.exit::before{content:"↩";color:var(--danger)}
+
+  .notes{margin-top:40px;padding:20px;border:1px dashed var(--line-bright);border-radius:8px;color:var(--muted);font-size:12px;line-height:1.6}
+  .notes strong{color:var(--fg)}
+  .notes code{background:#1a1a1a;padding:1px 6px;border-radius:3px;color:var(--accent);font-size:11px}
+  .footer{margin-top:20px;color:var(--muted);font-size:11px;letter-spacing:.06em}
+  .footer a{color:var(--fg)}
+
+  /* Lightbox para zoom de imágenes */
+  .lightbox{position:fixed;inset:0;background:rgba(0,0,0,.92);display:none;align-items:center;justify-content:center;z-index:9999;padding:20px;cursor:zoom-out}
+  .lightbox.open{display:flex}
+  .lightbox img{max-width:95vw;max-height:92vh;object-fit:contain;border:1px solid var(--fg);box-shadow:0 0 60px rgba(255,216,102,.2)}
+  .lightbox-caption{position:fixed;top:20px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.7);padding:6px 16px;border-radius:20px;color:var(--fg);font-size:12px;letter-spacing:.06em}
+</style>
+</head>
+<body>
+
+<h1>🎨 DigitalTwin · Diagrama de flujo</h1>
+<div class="sub">Flujo principal del juego + rama Xpace Creator (NUEVO r1, highlighted en violeta) · v.2026.05.18.r1 · Click en un screenshot para ver grande</div>
+
+<div class="legend">
+  <span class="legend-item"><span class="legend-dot normal"></span>Pantalla existente</span>
+  <span class="legend-item"><span class="legend-dot new"></span>Pantalla nueva (r1 — Xpace Creator)</span>
+  <span class="legend-item"><span class="legend-dot exit"></span>Salida / volver al menú</span>
+  <span class="legend-item"><span class="legend-dot terminal"></span>Estado terminal</span>
+</div>
+
+<div class="diagram">
+
+  <!-- ── LANE 1: Flow principal del juego ────────────────────── -->
+  <div class="lane">
+    <div class="lane-title">▶ Flujo principal del juego</div>
+
+    <div class="screen">
+      <span class="screen-id">S.PRELOAD</span>
+      <div class="screen-icon">📼</div>
+      <div class="screen-title">Boot · LOAD&quot;&quot;</div>
+      <div class="screen-desc">Vídeo C64/Amiga retro + prompt simulado <code>LOAD""</code>. Animación de carga 2-3s antes del menú.</div>
+    </div>
+    <div class="arrow">auto · 3s</div>
+
+    <div class="screen">
+      <span class="screen-id">S.MENU</span>
+      <div class="screen-icon">🎮</div>
+      <div class="screen-title">Menú principal</div>
+      <div class="screen-desc">Selector de idioma + acceso a Xpace Creator + tarjetas de clientes (Xtanco / Estancos, Admira Loterías, Admira Supermercado, Stand Shoptalk EU 2026, Xpace Creator).</div>
+      <div class="screen-actions">
+        <span class="screen-action primary">▶ Abrir Xpace Creator</span>
+        <span class="screen-action">tarjeta cliente</span>
+      </div>
+      <div class="screen-shot" data-src="img/digitaltwin-04-menu.png" data-caption="S.MENU — Menú principal del juego">
+        <img src="img/digitaltwin-04-menu.png" alt="Menú principal" loading="lazy">
+      </div>
+    </div>
+    <div class="arrow">cliente seleccionado</div>
+
+    <div class="screen">
+      <span class="screen-id">S.MODEL_SEL</span>
+      <div class="screen-icon">🏷️</div>
+      <div class="screen-title">Selección de modelo</div>
+      <div class="screen-desc">Dentro del cliente, elige variante (Generic / Good / Better / Best). Cada uno con dificultad ★, empleados y productos. Lleva sus FACTORY_LAYOUTS específicos.</div>
+      <div class="screen-actions">
+        <span class="screen-action">▶ Juego</span>
+        <span class="screen-action">Demo</span>
+      </div>
+      <div class="screen-shot" data-src="img/digitaltwin-05-model-sel.png" data-caption="S.MODEL_SEL — Selección de modelo (XTANCO GENERIC/GOOD/BETTER/BEST)">
+        <img src="img/digitaltwin-05-model-sel.png" alt="Selección de modelo" loading="lazy">
+      </div>
+    </div>
+    <div class="arrow"></div>
+
+    <div class="screen">
+      <span class="screen-id">S.TUT</span>
+      <div class="screen-icon">📖</div>
+      <div class="screen-title">Tutorial</div>
+      <div class="screen-desc">Mini-tutorial 3 pasos: "Gestiona tu estanco durante 5 años. Alcanza el objetivo de ventas cada año... Contrata personal, repón stock y fideliza clientes". Skipeable.</div>
+      <div class="screen-actions">
+        <span class="screen-action primary">SIGUIENTE →</span>
+        <span class="screen-action exit">SKIP</span>
+      </div>
+      <div class="screen-shot" data-src="img/digitaltwin-06-tutorial.png" data-caption="S.TUT — Tutorial de bienvenida">
+        <img src="img/digitaltwin-06-tutorial.png" alt="Tutorial" loading="lazy">
+      </div>
+    </div>
+    <div class="arrow">Empezar partida</div>
+
+    <div class="screen">
+      <span class="screen-id">S.GAME</span>
+      <div class="screen-icon">📊</div>
+      <div class="screen-title">Game (gameplay)</div>
+      <div class="screen-desc">Pantalla principal del sim. HUD top con clock + fecha + ventas/beneficio/satisfacción + cliente. Render isométrico de la tienda. Dock inferior: CONTROL TELEGRAM/WHATSAPP + EQUIPO/CLIENTES + Signage/AdmiraLive/LiveCam/Pixer.ai/Edit/Menu/Telegram.</div>
+      <div class="screen-actions">
+        <span class="screen-action">💾 Save</span>
+        <span class="screen-action">⏸ Pause</span>
+        <span class="screen-action exit">⏻ Quit</span>
+      </div>
+      <div class="screen-shot" data-src="img/digitaltwin-07-game.png" data-caption="S.GAME — Pantalla principal del simulador (HUD + tienda iso + dock)">
+        <img src="img/digitaltwin-07-game.png" alt="Game gameplay" loading="lazy">
+      </div>
+    </div>
+    <div class="arrow">fin de año</div>
+
+    <div class="screen">
+      <span class="screen-id">S.YEAR_END</span>
+      <div class="screen-icon">📅</div>
+      <div class="screen-title">Fin de año</div>
+      <div class="screen-desc">Balance anual: ingresos del año + barra de progreso vs objetivo. Avance a siguiente año o game over si no llega al mínimo.</div>
+      <div class="screen-shot" data-src="img/digitaltwin-08-year-end.png" data-caption="S.YEAR_END — Balance fin de año (capturado sin datos reales)">
+        <img src="img/digitaltwin-08-year-end.png" alt="Year end" loading="lazy">
+      </div>
+    </div>
+    <div class="arrow">si game over</div>
+
+    <div class="screen terminal">
+      <span class="screen-id">S.GAME_END</span>
+      <div class="screen-icon">🏆</div>
+      <div class="screen-title">Game End</div>
+      <div class="screen-desc">"XTANCO CERRADO · RESULTADO FINAL" — pantalla terminal de quiebra o tras N años. Sobre fondo verde, modal rojo con score final. SFX gameOver.</div>
+      <div class="screen-actions">
+        <span class="screen-action exit">↩ Menú</span>
+      </div>
+      <div class="screen-shot" data-src="img/digitaltwin-09-game-end.png" data-caption="S.GAME_END — Pantalla final (XTANCO CERRADO)">
+        <img src="img/digitaltwin-09-game-end.png" alt="Game end" loading="lazy">
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── LANE 2: Rama Xpace Creator ───────────────────────────── -->
+  <div class="lane creator">
+    <div class="lane-title">🎨 Rama Xpace Creator</div>
+
+    <div class="screen">
+      <span class="screen-id">URL</span>
+      <div class="screen-icon">🔗</div>
+      <div class="screen-title">Entrada</div>
+      <div class="screen-desc">Desde el botón <strong>ABRIR XPACE CREATOR</strong> del menú, o vía <code>creator.html</code> que hace redirect a <code>?play=creator</code>. También bookmark directo.</div>
+    </div>
+    <div class="arrow alt">enterXpaceCreator()</div>
+
+    <div class="screen new">
+      <span class="screen-id">MODAL · NEW r1</span>
+      <div class="screen-icon">🎨</div>
+      <div class="screen-title">Selector de plantillas</div>
+      <div class="screen-desc">Modal de bienvenida con: <strong>↩️ Continuar</strong> mi Xpacio (si hay layout), <strong>⬜ Lienzo en blanco</strong>, plantillas <strong>custom</strong> con 🗑 borrar, <strong>4 built-in</strong>: 🚬 Tabaquería urbana · 🏛️ Estanco premium · 📰 Kiosco prensa · 🎪 Pop-up store.</div>
+      <div class="screen-actions">
+        <span class="screen-action">Blank</span>
+        <span class="screen-action new">🚬 Tabaquería</span>
+        <span class="screen-action new">🏛️ Estanco</span>
+        <span class="screen-action new">📰 Kiosco</span>
+        <span class="screen-action new">🎪 Pop-up</span>
+      </div>
+      <div class="screen-shot" data-src="img/digitaltwin-01-modal-templates.png" data-caption="MODAL · Selector de plantillas (NUEVO r1)">
+        <img src="img/digitaltwin-01-modal-templates.png" alt="Modal selector plantillas" loading="lazy">
+      </div>
+    </div>
+    <div class="arrow alt">applyXpaceTemplate()</div>
+
+    <div class="screen">
+      <span class="screen-id">S.EDITOR · creator</span>
+      <div class="screen-icon">🛠</div>
+      <div class="screen-title">Editor del Xpacio</div>
+      <div class="screen-desc">Canvas isométrico adaptativo. Grid configurable (cols/rows/wallH). Body con clase <code>is-xpace-creator</code>. Drag-drop muebles, ↑/↓ vertical pared, colores de wall/floor.</div>
+      <div class="screen-shot" data-src="img/digitaltwin-02-editor-blank.png" data-caption="S.EDITOR — Editor del Xpacio (lienzo)">
+        <img src="img/digitaltwin-02-editor-blank.png" alt="Editor del Xpacio" loading="lazy">
+      </div>
+    </div>
+    <div class="arrow">dock inferior · Mobiliario</div>
+
+    <div class="screen new">
+      <span class="screen-id">PALETTE DOCK</span>
+      <div class="screen-icon">📦</div>
+      <div class="screen-title">Paleta + acciones · NEW r1</div>
+      <div class="screen-desc">Dos tabs: <strong>MOBILIARIO</strong> (Conectados/No conectados, 18 tipos) y <strong>TRABAJADORES</strong> (5 roles). 4 acciones globales abajo: <strong>💾 Guardar · ⭐ Plantilla (NUEVO) · ↺ Reset · ✕ Salir</strong>.</div>
+      <div class="screen-actions">
+        <span class="screen-action primary">💾 Guardar</span>
+        <span class="screen-action new">⭐ Plantilla</span>
+        <span class="screen-action">↺ Reset</span>
+        <span class="screen-action exit">✕ Salir</span>
+      </div>
+      <div class="screen-shot" data-src="img/digitaltwin-03-editor-dock-actions.png" data-caption="PALETTE DOCK — Paleta de mobiliario + acciones globales (con ⭐ Plantilla NUEVO)">
+        <img src="img/digitaltwin-03-editor-dock-actions.png" alt="Dock con paleta y acciones" loading="lazy">
+      </div>
+    </div>
+    <div class="arrow alt">⭐ Plantilla → prompt()</div>
+
+    <div class="screen new">
+      <span class="screen-id">PROMPT · NEW r1</span>
+      <div class="screen-icon">⭐</div>
+      <div class="screen-title">Guardar como plantilla</div>
+      <div class="screen-desc">Prompt nativo del navegador pide nombre. Captura layout + config + staffPos actuales y los guarda en <code>localStorage[xpace_user_templates]</code> (LIFO, cap 50). Aparecerá en futuras sesiones en el modal.</div>
+      <div class="screen-actions">
+        <span class="screen-action new">Guardar</span>
+        <span class="screen-action exit">Cancelar</span>
+      </div>
+    </div>
+    <div class="arrow alt">aparece en próx. modal</div>
+
+    <div class="screen exit">
+      <span class="screen-id">EXIT</span>
+      <div class="screen-icon">↩</div>
+      <div class="screen-title">Salir → Menú</div>
+      <div class="screen-desc">exitXpaceCreator() quita la clase, restaura HUD y canvas estándar. startTransition(S.MENU).</div>
+    </div>
+
+  </div>
+
+</div>
+
+<div class="notes">
+  <strong>// Notas del flow actual</strong><br>
+  · <code>?play=creator</code> es la entrada canónica (bookmark-friendly).<br>
+  · <strong>NUEVO r1</strong>: modal con 4 built-in templates + custom user-saved (localStorage). Antes el Creator entraba directo al editor vacío sin alternativa.<br>
+  · Plantillas tienen <code>config</code> (grid+5 colores), <code>layout</code> (mobiliario) y opcional <code>staffPos</code>. <code>applyXpaceTemplate()</code> sobreescribe FACTORY_LAYOUTS.creator + slot.current de localStorage antes de que <code>initGame() → loadLayout()</code> corra.<br>
+  · El single <code>xpace_creator_template</code> legacy sigue como fallback de Shoptalk u otros Xpacios en blanco.<br>
+  · <strong>BUG detectado</strong> durante la captura: al hacer click en una tarjeta built-in (ej. 🚬 Tabaquería), el modal se cierra y el editor abre, pero <code>shopLayout</code> queda en 0 items en lugar de cargar la plantilla. <code>applyXpaceTemplate</code> escribe en <code>FACTORY_LAYOUTS.creator</code> y persiste en localStorage, pero algo del flow <code>enterXpaceCreator → proceed → initGame → loadLayout</code> termina ignorándolo. <strong>Pendiente fix en r2</strong>.<br>
+  <br>
+  <strong>// Ideas para r2 y siguientes</strong><br>
+  · <strong>Fix del bug applyXpaceTemplate</strong> arriba.<br>
+  · <strong>Preview miniatura</strong> en cada tarjeta del modal (canvas SVG/mini-render del layout en vez de solo icon).<br>
+  · <strong>Compartir plantilla</strong>: subir al worker (R2 + endpoint <code>/creator/template</code>) → URL pública.<br>
+  · <strong>Edit plantilla</strong>: load + edit + save reemplazando la original (ahora siempre crea nueva).<br>
+  · <strong>AI assist</strong>: brief textual → LLM genera <code>{config, layout}</code> automáticamente.<br>
+  · <strong>Multi-planta / multi-piso</strong>: ahora 1 nivel.<br>
+</div>
+
+<div class="footer">
+  // DigitalTwin <a href="https://csilvasantin.github.io/01.-AdmiraXperience-Game/?play=creator">v.2026.05.18.r1</a> · Diagrama generado con screenshots reales · capturas en <code>/tmp/digitaltwin-screenshots/</code>
+</div>
+
+<div class="lightbox" id="lightbox">
+  <div class="lightbox-caption" id="lightboxCaption"></div>
+  <img id="lightboxImg" src="" alt="">
+</div>
+
+<script>
+(function(){
+  const lb = document.getElementById('lightbox');
+  const lbImg = document.getElementById('lightboxImg');
+  const lbCap = document.getElementById('lightboxCaption');
+  document.querySelectorAll('.screen-shot[data-src]').forEach(el => {
+    el.addEventListener('click', () => {
+      lbImg.src = el.dataset.src;
+      lbCap.textContent = el.dataset.caption || '';
+      lb.classList.add('open');
+    });
+  });
+  lb.addEventListener('click', () => { lb.classList.remove('open'); lbImg.src=''; });
+  document.addEventListener('keydown', e => { if(e.key==='Escape') lb.classList.remove('open'); });
+})();
+</script>
+
+</body>
+</html>
