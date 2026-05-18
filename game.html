@@ -493,6 +493,9 @@
     .splash-cta-demo{background:linear-gradient(135deg,rgba(255,170,68,.95) 0%,rgba(255,216,102,.95) 100%);border-color:rgba(255,255,255,.85);color:#1a0f00;box-shadow:0 0 0 1px rgba(0,0,0,.3) inset,0 0 24px rgba(255,170,68,.55),0 0 56px rgba(255,216,102,.35),0 12px 32px rgba(0,0,0,.6)}
     .splash-cta-demo:hover{box-shadow:0 0 0 1px rgba(0,0,0,.3) inset,0 0 36px rgba(255,170,68,.85),0 0 72px rgba(255,216,102,.55),0 16px 40px rgba(0,0,0,.7)}
     .splash-hint{color:#aaa;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;opacity:.7;text-shadow:0 1px 2px rgba(0,0,0,.8);animation:splashHintFade 2.4s ease-in-out infinite}
+    /* Splash oculto por defecto; solo visible cuando body.splash-visible */
+    body:not(.splash-visible) .splash-intro{opacity:0;pointer-events:none}
+    body.splash-visible .splash-intro{opacity:1;pointer-events:auto}
     body.splash-hiding .splash-intro{opacity:0;pointer-events:none;transition:opacity .55s ease-out}
     @keyframes splashKenBurns{from{transform:scale(1.02) translate(-1%,-1%)}to{transform:scale(1.08) translate(1%,1%)}}
     @keyframes splashPulse{0%,100%{transform:scale(1);filter:drop-shadow(0 0 18px rgba(255,80,200,.55)) drop-shadow(0 0 36px rgba(80,200,255,.45))}50%{transform:scale(1.025);filter:drop-shadow(0 0 26px rgba(255,80,200,.75)) drop-shadow(0 0 52px rgba(80,200,255,.6))}}
@@ -517,7 +520,10 @@
       cursor:pointer;z-index:9998;
       transition:transform .12s,border-color .12s,box-shadow .12s,color .12s;
     }
-    body[data-state="menu"] #navigatorBtn{display:inline-block}
+    body[data-state="menu"] #navigatorBtn,
+    body.splash-visible #navigatorBtn{display:inline-block}
+    /* En la splash, el botón Navigator necesita estar por encima del overlay */
+    body.splash-visible #navigatorBtn{z-index:99999;background:linear-gradient(180deg,rgba(42,32,16,.85) 0%,rgba(7,10,16,.85) 100%);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
     #navigatorBtn:hover{
       transform:translateY(-1px);
       color:#ffe8a0;border-color:#ffd866;
@@ -5564,6 +5570,10 @@ function goToHomeMenu(preferredClient){
   else if(Number.isInteger(activeClient)&&CLIENTS[activeClient]) clientSel=activeClient;
   menuSel=lang==='en'?1:0;
   startTransition(S.MENU);
+  // Tras Quit volvemos a la página 0 (splash) para que el usuario elija
+  // de nuevo entre JUGAR y DEMO. El menú queda debajo listo para mostrarse
+  // cuando el usuario haga click en JUGAR.
+  try{ if(typeof window.showSplash==='function') window.showSplash(); }catch(_){}
 }
 function beginPreloadPlayback(){
   preloadPhase='loading';
@@ -25231,43 +25241,49 @@ window.xtAPI = (function(){
 })();
 
 // ── Splash de bienvenida: JUGAR (normal) o DEMO (autoplay) ─────────
+// El splash NO se remueve del DOM: solo se oculta vía clase body para
+// poder reaparecerlo cuando el usuario pulsa "⏻ Quit" del juego.
 (function(){
   const splash=document.getElementById('splashIntro');
   if(!splash) return;
   const jugarBtn=document.getElementById('splashJugarBtn');
   const demoBtn=document.getElementById('splashDemoBtn');
-  let hidden=false;
+  // Estado inicial: splash visible → body marcado
+  document.body.classList.add('splash-visible');
   function hideSplash(){
-    if(hidden) return;
-    hidden=true;
+    document.body.classList.remove('splash-visible');
     document.body.classList.add('splash-hiding');
-    setTimeout(()=>{ try{ splash.remove(); }catch(_){} }, 600);
+    // No removemos el elemento; se queda oculto vía CSS para poder volver
+    // a mostrarlo desde Quit. setTimeout solo limpia la clase de transición.
+    setTimeout(()=>{ document.body.classList.remove('splash-hiding'); }, 600);
   }
-  function chooseJugar(){
-    hideSplash();
-  }
+  function chooseJugar(){ hideSplash(); }
   function chooseDemo(){
     hideSplash();
-    // Esperar a que el game subyacente termine de cargar + el fade del splash
-    // antes de arrancar la demo (startDemoMode requiere state/S/quickStartLoteriasGame).
     setTimeout(()=>{
       try{ if(typeof startDemoMode==='function') startDemoMode(); }catch(e){ console.warn('startDemoMode failed:',e); }
     }, 700);
   }
+  // Exponer API para que goToHomeMenu pueda volver a la página 0.
+  window.showSplash=function(){
+    document.body.classList.remove('splash-hiding');
+    document.body.classList.add('splash-visible');
+  };
+  window.hideSplash=hideSplash;
+
   if(jugarBtn) jugarBtn.addEventListener('click', (e)=>{ e.stopPropagation(); chooseJugar(); });
   if(demoBtn)  demoBtn.addEventListener('click',  (e)=>{ e.stopPropagation(); chooseDemo();  });
-  // Click en el fondo (no en los botones) → JUGAR por defecto
   splash.addEventListener('click', (e)=>{
     if(e.target===jugarBtn||e.target===demoBtn) return;
     if(jugarBtn && jugarBtn.contains(e.target)) return;
     if(demoBtn && demoBtn.contains(e.target)) return;
     chooseJugar();
   });
-  // ENTER → JUGAR · SPACE → DEMO (atajos teclado)
-  document.addEventListener('keydown', function onKey(e){
-    if(hidden) return;
-    if(e.key==='Enter'){ chooseJugar(); document.removeEventListener('keydown', onKey); }
-    else if(e.key===' ' || e.code==='Space'){ e.preventDefault(); chooseDemo(); document.removeEventListener('keydown', onKey); }
+  // ENTER → JUGAR · SPACE → DEMO (solo cuando splash visible)
+  document.addEventListener('keydown', function(e){
+    if(!document.body.classList.contains('splash-visible')) return;
+    if(e.key==='Enter'){ chooseJugar(); }
+    else if(e.key===' ' || e.code==='Space'){ e.preventDefault(); chooseDemo(); }
   });
 })();
 </script>
