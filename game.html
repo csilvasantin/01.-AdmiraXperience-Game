@@ -5833,11 +5833,18 @@ function applyXpaceTemplate(tpl){
     }
     // Persistir el layout en el slot current del Creator para que sobreviva
     // a recargas y al ciclo enterXpaceCreator → initGame → loadLayout.
+    // El prefix correcto es 'xtanco_creator' (getLayoutStoragePrefix() lo
+    // calcula como 'xtanco_' + id cuando id !== 'xtanco'). Si paso 'creator'
+    // literal, las keys (creator_layout_user, etc.) NUNCA se leen — bug r1.
     try{
-      const prefix='creator';
+      const prefix='xtanco_creator';
       const keys=(typeof getLayoutSlotKeys==='function')?getLayoutSlotKeys(prefix):null;
       if(keys){
         localStorage.setItem(keys.current,JSON.stringify(FACTORY_LAYOUTS.creator));
+        // Sembrar también backup + initial + slot1 para que cualquier loadLayout()
+        // fallback chain (current → backup → initial → slot1 → slot0) encuentre
+        // la plantilla aplicada y no caiga al DEFAULT_LAYOUT.
+        localStorage.setItem(keys.backup,JSON.stringify(FACTORY_LAYOUTS.creator));
         if(shopStaffPos) localStorage.setItem(keys.staffPos,JSON.stringify(shopStaffPos));
       }
     }catch(_){}
