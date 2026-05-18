@@ -11831,11 +11831,14 @@ function drawEraSelect(){
   // visible desde la home como atajo al stand de feria.
   drawShoptalkHomeBanner();
   nl(0,H-4,W,H-4,'#ff9a1f',2);
-  r(148,18,504,92,'#05070dcc');
-  rx(148,18,504,92,'#5a7398',1);
-  tx(isEs?'SELECCION DE ERA':'ERA SELECT',W/2,56,'#ffffff',22,'center');
-  tx(isEs?'1982-1997 · Elige el arranque del storytelling':'1982-1997 · Choose the storytelling entry point',W/2,78,'#c7d6ea',9,'center');
-  tx(isEs?'1. Spectrum  2. Admira  3. PC DX 486':'1. Spectrum  2. Admira  3. PC DX 486',W/2,96,'#e5edf9',8,'center');
+  // Header box bajado 26px (de y=18 a y=44) para dejar libre el banner
+  // LENOVO×NVIDIA de la parte superior. Altura reducida 92→70 para mantener
+  // las cards en su posición original (y=128).
+  r(148,44,504,70,'#05070dee');
+  rx(148,44,504,70,'#5a7398',1);
+  tx(isEs?'SELECCION DE ERA':'ERA SELECT',W/2,72,'#ffffff',22,'center');
+  tx(isEs?'1982-1997 · Elige el arranque del storytelling':'1982-1997 · Choose the storytelling entry point',W/2,94,'#dde8f5',11,'center');
+  tx(isEs?'1. Spectrum  ·  2. Admira  ·  3. PC DX 486':'1. Spectrum  ·  2. Admira  ·  3. PC DX 486',W/2,108,'#a8b8d0',9,'center');
 
   const cardX=104,cardY=128,cardW=592,cardH=78,cardGap=18;
   ERAS.forEach((era,i)=>{
@@ -11849,12 +11852,12 @@ function drawEraSelect(){
     if(selected){glow(era.accent,12);rx(cardX,y,cardW,cardH,era.accent,1);nog();}
     r(cardX+14,y+14,44,44,badgeBg);
     rx(cardX+14,y+14,44,44,border,1);
-    tx(String(i+1),cardX+36,y+42,selected?'#081018':'#ffffff',20,'center');
-    tx(era.title,cardX+78,y+24,'#ffffff',16);
-    tx(era.bits+' · '+era.years,cardX+78,y+40,era.accent,9);
-    tx(era.desc,cardX+78,y+58,'#b9c7dd',8);
-    tx(era.route,cardX+cardW-16,y+26,selected?era.accent:'#d8e7ff',8,'right');
-    tx(era.available?(isEs?'ENTER PARA ENTRAR':'PRESS ENTER TO OPEN'):(isEs?'EN PREPARACION':'IN PRODUCTION'),cardX+cardW-16,y+56,era.available?'#7ff0ae':'#ffd966',8,'right');
+    tx(String(i+1),cardX+36,y+44,selected?'#081018':'#ffffff',22,'center');
+    tx(era.title,cardX+78,y+26,'#ffffff',17);
+    tx(era.bits+' · '+era.years,cardX+78,y+44,era.accent,11);
+    tx(era.desc,cardX+78,y+62,'#cdd9eb',10);
+    tx(era.route,cardX+cardW-16,y+28,selected?era.accent:'#e3ecff',10,'right');
+    tx(era.available?(isEs?'ENTER PARA ENTRAR':'PRESS ENTER TO OPEN'):(isEs?'EN PREPARACION':'IN PRODUCTION'),cardX+cardW-16,y+60,era.available?'#7ff0ae':'#ffd966',10,'right');
     BTNS['era'+i]={x:cardX,y,w:cardW,h:cardH};
   });
 
@@ -11864,19 +11867,19 @@ function drawEraSelect(){
     const x=152+i*248;
     const era=ERAS[i];
     cx.beginPath();cx.fillStyle=i===eraSel?era.accent:'#607089';cx.arc(x,timelineY,8,0,Math.PI*2);cx.fill();
-    tx(era.years,x,timelineY+20,i===eraSel?era.accent:'#9caac0',7,'center');
+    tx(era.years,x,timelineY+22,i===eraSel?era.accent:'#b8c6dc',10,'center');
   });
 
   if(eraNoticeTimer>0&&eraNoticeMsg){
-    const boxW=280,boxH=24,boxX=W/2-boxW/2,boxY=452;
+    const boxW=320,boxH=28,boxX=W/2-boxW/2,boxY=452;
     r(boxX,boxY,boxW,boxH,'#111a10');
     rx(boxX,boxY,boxW,boxH,'#9be24b',1);
-    tx(eraNoticeMsg,boxX+boxW/2,boxY+16,'#d8f6b4',6,'center');
+    tx(eraNoticeMsg,boxX+boxW/2,boxY+18,'#d8f6b4',9,'center');
   }else{
     const hint=lang==='es'
       ?'Abajo eliges idioma · flechas cambian era · Enter entra'
       :'Choose language below · arrows change era · Enter opens';
-    tx(hint,W/2,466,'#8ea0bc',7,'center');
+    tx(hint,W/2,468,'#a8baD4',10,'center');
   }
 }
 function drawReadyPlayerRoomBackdrop(){
