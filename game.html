@@ -467,6 +467,27 @@
       .xpace-tpl-head h2{font-size:15px}
     }
 
+    /* ── Splash de bienvenida (página 0) ── */
+    .splash-intro{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:#000;cursor:pointer;overflow:hidden;opacity:1}
+    .splash-bg{position:absolute;inset:0;background-size:cover;background-position:center;background-repeat:no-repeat;animation:splashKenBurns 24s ease-in-out infinite alternate}
+    .splash-shade{position:absolute;inset:0;background:radial-gradient(circle at 50% 50%,rgba(0,0,0,.0) 0%,rgba(0,0,0,.55) 70%,rgba(0,0,0,.85) 100%);pointer-events:none}
+    .splash-overlay{position:relative;z-index:2;text-align:center;padding:24px;display:flex;flex-direction:column;align-items:center;gap:22px;max-width:92vw}
+    .splash-banner{max-width:min(720px,90vw);height:auto;filter:drop-shadow(0 0 18px rgba(255,80,200,.55)) drop-shadow(0 0 36px rgba(80,200,255,.45));animation:splashPulse 3.6s ease-in-out infinite}
+    .splash-tagline{color:#fff;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;letter-spacing:.22em;text-transform:uppercase;text-shadow:0 0 12px rgba(170,136,255,.6),0 2px 4px rgba(0,0,0,.8);opacity:.9}
+    .splash-cta{appearance:none;background:linear-gradient(135deg,rgba(255,80,200,.95) 0%,rgba(170,80,255,.95) 50%,rgba(80,200,255,.95) 100%);border:2px solid rgba(255,255,255,.85);color:#000;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:18px;font-weight:900;letter-spacing:.22em;text-transform:uppercase;padding:16px 48px;border-radius:0;cursor:pointer;box-shadow:0 0 0 1px rgba(0,0,0,.3) inset,0 0 24px rgba(255,80,200,.55),0 0 56px rgba(80,200,255,.4),0 12px 32px rgba(0,0,0,.6);text-shadow:0 1px 0 rgba(255,255,255,.4);transition:transform .15s,box-shadow .15s,filter .15s}
+    .splash-cta:hover{transform:translateY(-2px) scale(1.03);box-shadow:0 0 0 1px rgba(0,0,0,.3) inset,0 0 36px rgba(255,80,200,.85),0 0 72px rgba(80,200,255,.55),0 16px 40px rgba(0,0,0,.7);filter:brightness(1.08)}
+    .splash-cta:active{transform:translateY(0) scale(.98)}
+    .splash-hint{color:#aaa;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;opacity:.7;text-shadow:0 1px 2px rgba(0,0,0,.8);animation:splashHintFade 2.4s ease-in-out infinite}
+    body.splash-hiding .splash-intro{opacity:0;pointer-events:none;transition:opacity .55s ease-out}
+    @keyframes splashKenBurns{from{transform:scale(1.02) translate(-1%,-1%)}to{transform:scale(1.08) translate(1%,1%)}}
+    @keyframes splashPulse{0%,100%{transform:scale(1);filter:drop-shadow(0 0 18px rgba(255,80,200,.55)) drop-shadow(0 0 36px rgba(80,200,255,.45))}50%{transform:scale(1.025);filter:drop-shadow(0 0 26px rgba(255,80,200,.75)) drop-shadow(0 0 52px rgba(80,200,255,.6))}}
+    @keyframes splashHintFade{0%,100%{opacity:.4}50%{opacity:.85}}
+    @media (max-width:540px){
+      .splash-cta{font-size:15px;padding:12px 32px;letter-spacing:.18em}
+      .splash-tagline{font-size:11px;letter-spacing:.14em}
+      .splash-overlay{gap:16px}
+    }
+
     /* ── Botón Navigator overlay (solo visible en S.MENU) ── */
     #navigatorBtn{
       position:fixed;top:20px;right:20px;
@@ -493,6 +514,22 @@
   </style>
 </head>
 <body>
+<!-- ── Splash de bienvenida (página 0) ───────────────────────────
+     Overlay que se muestra al cargar la página, con la imagen del Xpace
+     dual (cyan wireframe ↔ magenta físico) + banner DIGITAL TWIN +
+     CTA EMPEZAR. Al click se desvanece y se ve el game subyacente
+     (PRELOAD/ERA_SEL ya cargados en paralelo). -->
+<div id="splashIntro" class="splash-intro" role="dialog" aria-label="Bienvenido a Digital Twin">
+  <div class="splash-bg" style="background-image:url('assets/images/intro-xpace.jpg')"></div>
+  <div class="splash-shade"></div>
+  <div class="splash-overlay">
+    <img src="assets/images/digital-twin-banner.png" alt="DIGITAL TWIN" class="splash-banner">
+    <div class="splash-tagline">Pixer.ia × Admira.xp · The Xpace OS</div>
+    <button type="button" class="splash-cta" id="splashStartBtn">▶ EMPEZAR</button>
+    <div class="splash-hint">Click en cualquier lado para entrar a tu Xpacio</div>
+  </div>
+</div>
+
 <!-- Botón Navigator (visible solo en S.MENU vía body[data-state="menu"]) -->
 <a id="navigatorBtn" href="docs/navigator/" target="_blank" rel="noopener" title="Navigator · diagrama de flujo del DigitalTwin">🗺 NAVIGATOR</a>
 <div id="topBar">
@@ -24978,6 +25015,29 @@ window.xtAPI = (function(){
   // Expone API global para que enterXpaceCreator pueda llamar al modal.
   window.openXpaceTemplateModal=openModal;
   window.closeXpaceTemplateModal=closeModal;
+})();
+
+// ── Splash de bienvenida: click → desvanece y revela el game ───────
+(function(){
+  const splash=document.getElementById('splashIntro');
+  if(!splash) return;
+  let hidden=false;
+  function hideSplash(){
+    if(hidden) return;
+    hidden=true;
+    document.body.classList.add('splash-hiding');
+    setTimeout(()=>{ try{ splash.remove(); }catch(_){} }, 600);
+  }
+  // El overlay completo es clickable, además del botón explícito.
+  splash.addEventListener('click', hideSplash);
+  // ENTER/SPACE también disparan (accesibilidad).
+  document.addEventListener('keydown', function onKey(e){
+    if(hidden) return;
+    if(e.key==='Enter' || e.key===' ' || e.code==='Space'){
+      hideSplash();
+      document.removeEventListener('keydown', onKey);
+    }
+  });
 })();
 </script>
 
