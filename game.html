@@ -5423,12 +5423,24 @@ function enterXpaceCreator(){
     clientSel=idx;
     modelSel=0;
     window.XPACE_BOOTH='creator';
+    // BUG r1: tras cerrar el modal aparecía el selector de idioma (S.ERA_SEL)
+    // en vez del editor. Causa: durante el boot del juego ya hay una
+    // tran.active=true que bloquea nuestra siguiente startTransition (retorna
+    // early). Reseteamos el estado de transición antes de despachar la nuestra.
+    try{ tran.active=false; tran.to=null; tran.from=null; tran.timer=0; }catch(_){}
     try{ initGame(); }catch(e){ console.warn('initGame failed for creator:',e); }
     try{ applyXpaceCreatorGrid(); }catch(e){}
     try{ applyAdaptiveCreatorCanvas(); }catch(e){}
     try{ document.body.classList.add('is-xpace-creator'); }catch(e){}
     applyCreatorDockLabels(true);
+    // Fuerza state directo además de la transition por si la transition es
+    // cancelada por otro chequeo del frame loop.
+    try{ state=S.EDITOR; }catch(_){}
     startTransition(S.EDITOR);
+    // Ocultar overlay HTML #eraVerticalDock (selector idioma+cliente). Está
+    // bound a state===S.ERA_SEL; tras saltarnos esa fase con autoEnter, el
+    // overlay queda pegado abajo encima del editor.
+    try{ updateEraVerticalDock(); }catch(_){}
   };
   if(typeof window.openXpaceTemplateModal==='function'){
     try{ window.openXpaceTemplateModal(()=>{ proceed(); }); return; }
