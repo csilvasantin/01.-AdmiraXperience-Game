@@ -467,6 +467,16 @@
       .xpace-tpl-head h2{font-size:15px}
     }
 
+    /* ── Menú contextual Xpace Creator ── */
+    .creator-ctx-menu{position:fixed;z-index:99998;min-width:180px;background:linear-gradient(180deg,#1a1f28 0%,#0c0f16 100%);border:1px solid #5a4a30;border-radius:8px;box-shadow:0 18px 48px rgba(0,0,0,.7),0 0 0 1px rgba(255,216,102,.1) inset;color:#ffd866;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;padding:6px;animation:ctxFadeIn .12s ease-out}
+    .creator-ctx-menu[hidden]{display:none}
+    .creator-ctx-title{padding:6px 10px 4px;font-size:10px;color:#9a8866;letter-spacing:.14em;text-transform:uppercase;border-bottom:1px solid #2a2010;margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .creator-ctx-item{display:block;width:100%;text-align:left;appearance:none;background:transparent;border:none;color:#ffe8a0;padding:8px 12px;font-family:inherit;font-size:12px;letter-spacing:.04em;cursor:pointer;border-radius:4px}
+    .creator-ctx-item:hover{background:rgba(255,216,102,.12);color:#fff}
+    .creator-ctx-danger{color:#ff9090}
+    .creator-ctx-danger:hover{background:rgba(255,80,80,.18);color:#ff5050}
+    @keyframes ctxFadeIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+
     /* ── Splash de bienvenida (página 0) ── */
     .splash-intro{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:#000;cursor:pointer;overflow:hidden;opacity:1}
     .splash-bg{position:absolute;inset:0;background-size:cover;background-position:center;background-repeat:no-repeat;animation:splashKenBurns 24s ease-in-out infinite alternate}
@@ -514,6 +524,14 @@
   </style>
 </head>
 <body>
+<!-- ── Menú contextual del Xpace Creator (click derecho sobre item) ── -->
+<div id="creatorContextMenu" class="creator-ctx-menu" role="menu" hidden>
+  <div class="creator-ctx-title" id="creatorCtxTitle">Item</div>
+  <button type="button" class="creator-ctx-item" data-ctx-act="rename">✏ Renombrar</button>
+  <button type="button" class="creator-ctx-item" data-ctx-act="duplicate">📋 Duplicar</button>
+  <button type="button" class="creator-ctx-item creator-ctx-danger" data-ctx-act="delete">🗑 Eliminar</button>
+</div>
+
 <!-- ── Splash de bienvenida (página 0) ───────────────────────────
      Overlay que se muestra al cargar la página, con la imagen del Xpace
      dual (cyan wireframe ↔ magenta físico) + banner DIGITAL TWIN +
@@ -8042,6 +8060,10 @@ document.addEventListener('keydown',e=>{
 });
 document.addEventListener('keyup',e=>{keys[e.code]=false;});
 cv.addEventListener('click',e=>{
+  // Si acabamos de completar un drag (drag-and-drop), suprimimos el click
+  // generado por el mouseup para que no se procese como "click puro" sobre
+  // el tile destino. suppressClick se resetea ~50ms después en mouseup.
+  if(edDrag.suppressClick){ edDrag.suppressClick=false; return; }
   if(state===S.PRELOAD){
     if(preloadCanContinue) exitPreloadToMenu();
     return;
@@ -8189,9 +8211,117 @@ cv.addEventListener('click',e=>{
 });
 cv.addEventListener('contextmenu',e=>{
   const displayHit=getDigitalSignageHitIndex(e.clientX,e.clientY);
-  if(displayHit===-1) return;
-  e.preventDefault();
-  selectDigitalSignageAudio(displayHit);
+  if(displayHit!==-1){
+    e.preventDefault();
+    selectDigitalSignageAudio(displayHit);
+    return;
+  }
+  // En el Xpace Creator: clic derecho sobre item del shopLayout → menu contextual.
+  if(state===S.EDITOR && isXpaceCreator()){
+    const r2=cv.getBoundingClientRect();
+    const mx=(e.clientX-r2.left)*(W/r2.width)|0;
+    const my=(e.clientY-r2.top)*(H/r2.height)|0;
+    const idx=hitTestShopLayoutItem(mx,my);
+    if(idx>=0){
+      e.preventDefault();
+      edSelIdx=idx; edStaffSelIdx=-1;
+      showCreatorContextMenu(e.clientX,e.clientY,idx);
+    }
+  }
+});
+
+// ── Drag & drop en el Xpace Creator ───────────────────────────────
+// mousedown sobre un item del shopLayout → arrastra siguiendo el cursor
+// hasta mouseup (con snap al grid o a las celdas de pared). Reemplaza el
+// flujo modal antiguo (click selecciona, segundo click mueve) por drag
+// directo y natural.
+let edDrag={active:false,idx:-1,startX:0,startY:0,moved:false,suppressClick:false};
+
+// Hit test: devuelve el index del item bajo el cursor en shopLayout, o -1.
+// Distingue wall-mounted (test contra la pared larga) vs suelo (test contra
+// tile bajo el cursor).
+function hitTestShopLayoutItem(mx,my){
+  try{
+    if(typeof isBlankXpace==='function' && isBlankXpace()){
+      const polys=(typeof getXpaceEntityPolys==='function')?getXpaceEntityPolys():null;
+      if(polys && polys.longWall && pointInPoly(mx,my,polys.longWall)){
+        const ci=hitTestXpaceWallCell('longWall',mx,my);
+        if(ci>=0){
+          for(let i=0;i<shopLayout.length;i++){
+            const it=shopLayout[i];
+            if(it && isWallMountedType(it.type) && it.col===ci) return i;
+          }
+        }
+      }
+    }
+  }catch(_){}
+  const tile=screenToIso(mx,my);
+  if(tile.col<0||tile.col>=ISO.cols||tile.row<0||tile.row>=ISO.rows) return -1;
+  for(let i=0;i<shopLayout.length;i++){
+    const it=shopLayout[i];
+    if(!it) continue;
+    if(isWallMountedType(it.type)) continue;
+    if(it.col===tile.col && it.row===tile.row) return i;
+  }
+  return -1;
+}
+
+cv.addEventListener('mousedown',e=>{
+  if(e.button!==0) return;
+  if(state!==S.EDITOR || !isXpaceCreator()) return;
+  const r2=cv.getBoundingClientRect();
+  const mx=(e.clientX-r2.left)*(W/r2.width)|0;
+  const my=(e.clientY-r2.top)*(H/r2.height)|0;
+  const idx=hitTestShopLayoutItem(mx,my);
+  if(idx<0) return;
+  edDrag.active=true; edDrag.idx=idx; edDrag.startX=e.clientX; edDrag.startY=e.clientY; edDrag.moved=false; edDrag.suppressClick=false;
+  edSelIdx=idx; edStaffSelIdx=-1;
+});
+
+cv.addEventListener('mousemove',e=>{
+  if(!edDrag.active) return;
+  const dx=e.clientX-edDrag.startX, dy=e.clientY-edDrag.startY;
+  if(!edDrag.moved && (Math.abs(dx)+Math.abs(dy))<6) return; // umbral 6px para considerar drag
+  edDrag.moved=true; edDrag.suppressClick=true; cv.style.cursor='grabbing';
+  const r2=cv.getBoundingClientRect();
+  const mx=(e.clientX-r2.left)*(W/r2.width)|0;
+  const my=(e.clientY-r2.top)*(H/r2.height)|0;
+  const it=shopLayout[edDrag.idx]; if(!it) return;
+  if(isWallMountedType(it.type)){
+    const polys=getXpaceEntityPolys();
+    if(polys && polys.longWall && pointInPoly(mx,my,polys.longWall)){
+      const ci=hitTestXpaceWallCell('longWall',mx,my);
+      if(ci>=0){
+        it.col=ci; it.row=0;
+        try{
+          const wallTopAtCol=toIso(ci+0.5,0).y-ISO.wallH;
+          const itemH=getWallItemHeightPx(it.type);
+          const rawY=my-wallTopAtCol-itemH/2;
+          it.wallY=Math.max(0,Math.min(ISO.wallH-itemH,Math.round(rawY)));
+        }catch(_){}
+      }
+    }
+  } else {
+    const tile=screenToIso(mx,my);
+    if(tile.col>=0 && tile.col<ISO.cols && tile.row>=0 && tile.row<ISO.rows){
+      it.col=tile.col; it.row=tile.row;
+    }
+  }
+});
+
+cv.addEventListener('mouseup',e=>{
+  if(!edDrag.active) return;
+  cv.style.cursor='';
+  const wasMoved=edDrag.moved;
+  edDrag.active=false;
+  if(wasMoved){
+    try{saveLayout();}catch(_){}
+    // Mantenemos suppressClick=true hasta el siguiente tick para que el
+    // click handler no procese este mismo gesto como un click normal.
+    setTimeout(()=>{edDrag.suppressClick=false;},50);
+  } else {
+    edDrag.suppressClick=false;
+  }
 });
 // Mouse move for editor hover
 cv.addEventListener('mousemove',e=>{
@@ -25018,6 +25148,78 @@ window.xtAPI = (function(){
   // Expone API global para que enterXpaceCreator pueda llamar al modal.
   window.openXpaceTemplateModal=openModal;
   window.closeXpaceTemplateModal=closeModal;
+})();
+
+// ── Menú contextual del Creator: rename / duplicate / delete ───────
+(function(){
+  const menu=document.getElementById('creatorContextMenu');
+  const title=document.getElementById('creatorCtxTitle');
+  if(!menu||!title) return;
+  let ctxIdx=-1;
+
+  function close(){ menu.hidden=true; ctxIdx=-1; }
+
+  window.showCreatorContextMenu=function(clientX,clientY,idx){
+    if(typeof shopLayout==='undefined') return;
+    const it=shopLayout[idx]; if(!it) return;
+    ctxIdx=idx;
+    title.textContent=(it.label || it.type || 'Item');
+    // Posicionar menu ajustando si se sale por bordes
+    menu.style.left='0px'; menu.style.top='0px'; menu.hidden=false;
+    const rect=menu.getBoundingClientRect();
+    const vw=window.innerWidth, vh=window.innerHeight;
+    let x=clientX+2, y=clientY+2;
+    if(x+rect.width>vw-4) x=vw-rect.width-4;
+    if(y+rect.height>vh-4) y=vh-rect.height-4;
+    menu.style.left=x+'px'; menu.style.top=y+'px';
+  };
+
+  menu.addEventListener('click',(ev)=>{
+    const btn=ev.target.closest('[data-ctx-act]'); if(!btn) return;
+    const act=btn.dataset.ctxAct;
+    const idx=ctxIdx; close();
+    if(typeof shopLayout==='undefined' || idx<0 || idx>=shopLayout.length) return;
+    const it=shopLayout[idx]; if(!it) return;
+    const isEs=(window.lang!=='en');
+    if(act==='delete'){
+      if(confirm(isEs?('¿Eliminar "'+(it.label||it.type)+'"?'):('Delete "'+(it.label||it.type)+'"?'))){
+        shopLayout.splice(idx,1);
+        if(typeof edSelIdx!=='undefined' && edSelIdx===idx) edSelIdx=-1;
+        try{ saveLayout(); }catch(_){}
+        try{ if(typeof _creatorPalettePanelHash!=='undefined') _creatorPalettePanelHash=''; }catch(_){}
+      }
+    } else if(act==='duplicate'){
+      const clone=JSON.parse(JSON.stringify(it));
+      clone.id=(it.type||'item')+'_'+Date.now().toString(36).slice(-5);
+      // Desplazar 1 col / 1 row para no apilar (clamp a grid)
+      if(typeof isWallMountedType==='function' && isWallMountedType(it.type)){
+        clone.col=Math.min((ISO.cols||14)-1, (it.col||0)+1);
+      } else {
+        clone.col=Math.min((ISO.cols||14)-1, (it.col||0)+1);
+        clone.row=Math.min((ISO.rows||8)-1, (it.row||0)+1);
+      }
+      shopLayout.push(clone);
+      if(typeof edSelIdx!=='undefined') edSelIdx=shopLayout.length-1;
+      try{ saveLayout(); }catch(_){}
+      try{ if(typeof _creatorPalettePanelHash!=='undefined') _creatorPalettePanelHash=''; }catch(_){}
+    } else if(act==='rename'){
+      const cur=it.label||'';
+      const next=prompt(isEs?'Nuevo nombre:':'New name:', cur);
+      if(next!==null && next.trim()!==''){
+        it.label=next.trim().slice(0,40);
+        try{ saveLayout(); }catch(_){}
+        try{ if(typeof _creatorPalettePanelHash!=='undefined') _creatorPalettePanelHash=''; }catch(_){}
+      }
+    }
+  });
+
+  // Click fuera del menú → cerrar
+  document.addEventListener('mousedown',(e)=>{
+    if(menu.hidden) return;
+    if(menu.contains(e.target)) return;
+    close();
+  });
+  document.addEventListener('keydown',(e)=>{ if(!menu.hidden && e.key==='Escape') close(); });
 })();
 
 // ── Splash de bienvenida: click → desvanece y revela el game ───────
