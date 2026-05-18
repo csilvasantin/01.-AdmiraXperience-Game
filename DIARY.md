@@ -2,6 +2,79 @@
 
 ---
 
+## [DigitalTwin-v.2026.05.18.r1 → r10] — 2026-05-18
+
+### Sesión maratón: Xpace Creator + Splash + Drag + Navigator (10 releases)
+
+**r1 · Selector de plantillas + 4 presets built-in**
+
+- Modal de bienvenida al entrar al Creator con 4 plantillas hard-coded: 🚬 Tabaquería urbana (12×7), 🏛️ Estanco premium (16×10), 📰 Kiosco de prensa (10×6), 🎪 Pop-up store (12×8). Cada una con `config` (grid + 5 colores) y `layout` pre-colocado.
+- Tarjetas adicionales: ↩️ Continuar, ⬜ Lienzo en blanco, custom (localStorage `xpace_user_templates`, cap 50, con 🗑 borrar).
+- Botón ⭐ Plantilla en el dock del Creator: prompt() para nombre → guarda como user template.
+
+**r2 · Navigator (docs/navigator/) + fix prefix applyXpaceTemplate**
+
+- Página `docs/navigator/index.html`: HTML standalone con 2 lanes (flujo principal + rama Creator) + 9 screenshots reales (Chrome MCP + html2canvas + monitor derecho mitad superior). Lightbox al click.
+- Botón overlay 🗺 NAVIGATOR esquina superior derecha (visible en `body[data-state="menu"]`).
+- Fix bug: `getLayoutStoragePrefix()` devuelve `'xtanco_creator'`, no `'creator'`. Ahora persiste en la key correcta.
+
+**r3 · Fix selector idioma intermedio + ocultar eraVerticalDock**
+
+- Tras click en built-in el modal cerraba pero seguía en ERA_SEL. Doble causa: `tran.active=true` heredado del boot bloqueaba startTransition, y overlay HTML `#eraVerticalDock` no se actualizaba.
+- Fix: reset defensivo de tran + `state=S.EDITOR` directo + llamada a `updateEraVerticalDock()` post-init.
+
+**r4 · Mini-preview cenital en cada tarjeta de plantilla**
+
+- Canvas 220×92 dentro de cada tarjeta del modal con vista cenital: fondo, suelo, paredes (top/left), items como rectángulos coloreados por tipo (`TPL_PREVIEW_TYPE_COLOR` mapea 18 tipos).
+- Cell size adaptativo: cualquier grid 10×6→16×10 cabe.
+- UX x10 — el usuario ve el theme + disposición sin entrar al editor.
+
+**r5 · Página 0 (splash) con imagen Xpace dual + banner DIGITAL TWIN**
+
+- Nuevo overlay `#splashIntro`: imagen `assets/images/intro-xpace.jpg` (1168×784, tienda dual cyan wireframe ↔ magenta físico) + Ken Burns + vignette.
+- Banner DIGITAL TWIN retrowave (`assets/images/digital-twin-banner.png`) con glow magenta+cyan pulsante.
+- Tagline "Pixer.ia × Admira.xp · The Xpace OS" + CTA ▶ EMPEZAR.
+
+**r6 · Layout era_sel mejorado + textos +30% más legibles**
+
+- Caja "SELECCION DE ERA" bajada de y=18 a y=44 → banner LENOVO×NVIDIA queda libre (antes superponían 10px).
+- Tipografías subidas (7-9px → 10-11px): subtítulos, lista numerada, bits+años, desc, route, "ENTER PARA ENTRAR".
+
+**r7 · Drag & drop + menú contextual click derecho**
+
+- DRAG REAL: mousedown sobre item → seguir cursor (snap al grid o a celdas de pared X+Y) → mouseup guarda.
+- MENÚ CONTEXTUAL: click derecho → overlay con ✏ Renombrar / 📋 Duplicar / 🗑 Eliminar.
+- Helper `hitTestShopLayoutItem(mx,my)` distingue wall vs suelo.
+
+**r8 · Splash con 2 botones: JUGAR + DEMO**
+
+- ▶ JUGAR (magenta→violeta→cyan) → menú normal. ▶ DEMO (ámbar) → `startDemoMode()` tras 700ms.
+- Atajos: ENTER=JUGAR, SPACE=DEMO.
+
+**r9 · ⏻ Quit vuelve a la página 0 + Navigator visible en splash**
+
+- Splash NO se remueve del DOM: alterna `body.splash-visible` vía clase.
+- `window.showSplash() / hideSplash()` globales.
+- `goToHomeMenu()` llama `showSplash()` — ⏻ Quit vuelve a la página 0 para reelegir JUGAR/DEMO.
+- Navigator también visible en splash (con backdrop-filter blur).
+
+**r10 · "DigitalTwin" del header del Navigator es link a página 0**
+
+- `<a href="../../game.html">` con borde dashed amarillo en hover. Cierra el loop Navigator ↔ Juego.
+
+### Infraestructura asociada (pixer-worker)
+
+- Endpoint `/notify` añadido al worker pixer-eleven (auth secret `NOTIFY_KEY`). Cada release del día disparó notificación Telegram clickable a `@AdmiraXPBot` vía rutina `/actualizacion` guardada en memoria persistente.
+- Formato: línea completa `<a>...</a>` pulsable apuntando a `/game.html` directo (no al root, que tiene redirect JS que el webview embedded de Telegram no ejecuta).
+
+### Memoria/setup actualizado
+
+- Rutina **"actualización"** persistida: cuando Carlos lo dice → commit + push + tag `YYYY.MM.DD.rN` + Telegram clickable. Regla extra: cierre de sesión natural dispara la rutina automáticamente.
+- Rutina **"actualiza navigator"** persistida: regenera capturas + HTML del diagrama y publica en `docs/navigator/`.
+- Setup MacMini 3 monitores cacheado: yo trabajo SIEMPRE en monitor derecho mitad superior `{2560,-535,4000,745}` (1440×1280), Chrome Profile 1 (csilva@admira.com).
+
+---
+
 ## [v26.26.04.15] — 2026-04-26
 
 ### Trafico exterior en puerta
