@@ -421,9 +421,46 @@
     .xpc-actions{display:flex;gap:5px;padding-top:6px;border-top:1px solid rgba(120,243,255,.16)}
     .xpc-actions button{flex:1;appearance:none;border:1px solid;border-radius:5px;font-family:monospace;font-size:9px;font-weight:bold;letter-spacing:.06em;text-transform:uppercase;padding:5px 6px;cursor:pointer}
     .xpc-actions .xpc-save{border-color:#44aa44;background:#1a3a1a;color:#88ee88}
+    .xpc-actions .xpc-tpl{border-color:#aa88ff;background:#2a1a44;color:#d8c8ff}
+    .xpc-actions .xpc-tpl:hover{background:#3a2a5a;color:#fff}
     .xpc-actions .xpc-reset{border-color:#aa4444;background:#3a1a1a;color:#ff9090}
     .xpc-actions .xpc-exit{border-color:#aaaa44;background:#3a2a10;color:#ffeeaa}
     .xpc-empty{padding:10px;text-align:center;color:#6a8898;font-size:9px;font-style:italic}
+
+    /* ── Xpace Creator: selector de plantillas (modal) ── */
+    .xpace-tpl-modal{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;padding:24px}
+    .xpace-tpl-backdrop{position:absolute;inset:0;background:radial-gradient(circle at 50% 30%,rgba(42,32,16,.85),rgba(7,10,16,.95));backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+    .xpace-tpl-dialog{position:relative;background:linear-gradient(180deg,#0f1018 0%,#070a10 100%);border:1px solid #3a3020;border-radius:12px;box-shadow:0 24px 64px rgba(0,0,0,.6),0 0 0 1px rgba(255,216,102,.1) inset;color:#ffd866;max-width:920px;width:100%;max-height:90vh;overflow:hidden;display:flex;flex-direction:column;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+    .xpace-tpl-head{display:flex;align-items:center;justify-content:space-between;padding:18px 22px 8px;border-bottom:1px solid rgba(255,216,102,.18)}
+    .xpace-tpl-head h2{margin:0;font-size:18px;letter-spacing:.12em;color:#ffe8a0;font-weight:600}
+    .xpace-tpl-close{appearance:none;background:transparent;border:1px solid #3a3020;color:#c4b88a;width:32px;height:32px;border-radius:6px;font-size:16px;cursor:pointer;font-family:inherit}
+    .xpace-tpl-close:hover{background:#2a2010;color:#ffd866;border-color:#5a4a30}
+    .xpace-tpl-sub{margin:10px 22px 6px;font-size:12px;color:#9a8866;line-height:1.5}
+    .xpace-tpl-grid{padding:14px 22px 18px;display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;overflow-y:auto;flex:1}
+    .xpace-tpl-card{position:relative;appearance:none;background:linear-gradient(180deg,#1a1f28 0%,#0c0f16 100%);border:1px solid #3a3020;border-radius:10px;padding:14px 12px;color:#ffd866;cursor:pointer;text-align:left;font-family:inherit;transition:transform .12s,border-color .12s,box-shadow .12s,background .12s;display:flex;flex-direction:column;gap:6px;min-height:140px}
+    .xpace-tpl-card:hover{transform:translateY(-2px);border-color:#ffd866;box-shadow:0 8px 24px rgba(255,216,102,.18);background:linear-gradient(180deg,#252013 0%,#0c0f16 100%)}
+    .xpace-tpl-card:focus{outline:2px solid #ffd866;outline-offset:2px}
+    .xpace-tpl-card-continue{border-color:#5a8a44;background:linear-gradient(180deg,#1a2a14 0%,#0c0f16 100%)}
+    .xpace-tpl-card-continue:hover{border-color:#88ee88;box-shadow:0 8px 24px rgba(136,238,136,.18)}
+    .xpace-tpl-card-blank{border-style:dashed;border-color:#5a4a30;background:transparent}
+    .xpace-tpl-card-blank:hover{background:rgba(255,216,102,.06)}
+    .xpace-tpl-card-custom{border-color:#5a4a8a;background:linear-gradient(180deg,#1a1428 0%,#0c0f16 100%)}
+    .xpace-tpl-card-custom:hover{border-color:#aa88ff;box-shadow:0 8px 24px rgba(170,136,255,.18)}
+    .xpace-tpl-icon{font-size:32px;line-height:1;filter:drop-shadow(0 2px 6px rgba(0,0,0,.5))}
+    .xpace-tpl-name{font-size:14px;font-weight:700;color:#ffe8a0;letter-spacing:.04em}
+    .xpace-tpl-name em{color:#aa88ff;font-style:normal;font-size:10px;letter-spacing:.06em;text-transform:uppercase}
+    .xpace-tpl-desc{font-size:11px;color:#c4b88a;line-height:1.45;flex:1}
+    .xpace-tpl-meta{font-size:10px;color:#7a6c52;letter-spacing:.04em;padding-top:6px;border-top:1px solid rgba(255,216,102,.1)}
+    .xpace-tpl-del{position:absolute;top:6px;right:8px;color:#aa6666;font-size:14px;cursor:pointer;padding:2px 4px;border-radius:4px;line-height:1}
+    .xpace-tpl-del:hover{background:#3a1a1a;color:#ff9090}
+    .xpace-tpl-foot{padding:10px 22px 14px;border-top:1px solid rgba(255,216,102,.1);background:rgba(0,0,0,.3)}
+    .xpace-tpl-foot-note{font-size:10px;color:#7a6c52;letter-spacing:.04em;text-transform:uppercase}
+    @media (max-width:540px){
+      .xpace-tpl-dialog{max-height:96vh}
+      .xpace-tpl-grid{grid-template-columns:1fr;padding:10px 14px}
+      .xpace-tpl-head{padding:12px 14px 6px}
+      .xpace-tpl-head h2{font-size:15px}
+    }
   </style>
 </head>
 <body>
@@ -5343,21 +5380,26 @@ function launchShoptalkBooth(){
 function enterXpaceCreator(){
   const idx=CLIENTS.findIndex(c=>c.id==='creator');
   if(idx<0) return;
-  clientSel=idx;
-  modelSel=0;
-  window.XPACE_BOOTH='creator';
-  try{ initGame(); }catch(e){ console.warn('initGame failed for creator:',e); }
-  // Aplica el grid persistido (cols/rows) — el editor lo respeta.
-  try{ applyXpaceCreatorGrid(); }catch(e){}
-  // Canvas adaptativo: ocupa todo el viewport (vw x (vh-dock)) sin
-  // bandas negras. Re-centra iso al tamano resultante.
-  try{ applyAdaptiveCreatorCanvas(); }catch(e){}
-  // Oculta el HUD HTML del juego (ventas/beneficio/competencia) — no
-  // aplica al Xpace Creator. La clase la quita el handler de Salir.
-  try{ document.body.classList.add('is-xpace-creator'); }catch(e){}
-  // Renombrar tabs del dock inferior: Equipo→Mobiliario, Clientes→Trabajadores.
-  applyCreatorDockLabels(true);
-  startTransition(S.EDITOR);
+  // Antes de entrar, mostramos el selector de plantillas si está disponible.
+  // El usuario elige: continuar su Xpacio guardado, lienzo en blanco, una
+  // built-in o una propia. applyXpaceTemplate() ya ha modificado FACTORY_LAYOUTS
+  // .creator + slot current antes de que initGame() llame a loadLayout().
+  const proceed=()=>{
+    clientSel=idx;
+    modelSel=0;
+    window.XPACE_BOOTH='creator';
+    try{ initGame(); }catch(e){ console.warn('initGame failed for creator:',e); }
+    try{ applyXpaceCreatorGrid(); }catch(e){}
+    try{ applyAdaptiveCreatorCanvas(); }catch(e){}
+    try{ document.body.classList.add('is-xpace-creator'); }catch(e){}
+    applyCreatorDockLabels(true);
+    startTransition(S.EDITOR);
+  };
+  if(typeof window.openXpaceTemplateModal==='function'){
+    try{ window.openXpaceTemplateModal(()=>{ proceed(); }); return; }
+    catch(e){ console.warn('[XpaceCreator] modal failed, entering directly:',e); }
+  }
+  proceed();
 }
 function exitXpaceCreator(){
   try{ document.body.classList.remove('is-xpace-creator'); }catch(e){}
@@ -5596,6 +5638,183 @@ const XPACE_WALL_PALETTE=['transparent','#e0d4b8','#cfd2cf','#1a1d22','#2a4a55',
 const XPACE_FLOOR_PALETTE=['transparent','#b8bcc0','#7a8590','#2a2f36','#1f3a2a','#3a2a1a','#5a4030','#1f2540','#403030'];
 const XPACE_EXTERIOR_PALETTE=['transparent','#0d1014','#1f242c','#3a3d44','#2a3a2a','#3a2a1a','#1f2540','#5a3a2a','#76B900'];
 const XPACE_BACKGROUND_PALETTE=['transparent','#1a1d22','#0a121a','#2a2f36','#2a4a55','#3a2a4a','#5a3a2a','#76B900','#E2231A'];
+
+// ── Plantillas builtin del Xpace Creator ──
+// Cada plantilla viene completa: grid (cols/rows/wallH), tema (5 colores) y
+// layout (mobiliario pre-colocado). Se aplican via applyXpaceTemplate() al
+// entrar al Creator desde el selector modal. Los tipos usados en `layout`
+// deben existir en XPACE_CREATOR_FURNITURE_CATALOG (más abajo).
+const XPACE_BUILTIN_TEMPLATES=[
+  {
+    id:'tabaqueria-urbana',
+    name_es:'Tabaquería urbana', name_en:'Urban tobacconist',
+    icon:'🚬',
+    description_es:'Compacta de barrio: mostrador, vitrinas, lotería y LED de marca.',
+    description_en:'Compact neighborhood shop: counter, displays, lottery and brand LED.',
+    config:{ cols:12, rows:7, wallHeightTiles:6,
+             longWallColor:'#d4c4a4', shortWallColor:'#c4b494',
+             floorColor:'#a89a8a', exteriorFloorColor:'#0d1014', backgroundColor:'#1a1d22' },
+    layout:[
+      {id:'counter',  type:'counter',  col:2,  row:3, sx:1, sy:1, label:'Mostrador'},
+      {id:'shelves',  type:'shelves',  col:5,  row:1, sx:1, sy:1, label:'Cigarrillos'},
+      {id:'lottery',  type:'lottery',  col:8,  row:2, sx:1, sy:1, label:'Lotería'},
+      {id:'magazines',type:'magazines',col:2,  row:5, sx:1, sy:1, label:'Revistas'},
+      {id:'plant1',   type:'plant',    col:10, row:5, sx:1, sy:1, label:'Planta'},
+      {id:'led',      type:'led',      col:0,  row:0, sx:1, sy:1, label:'LED Marca'},
+      {id:'tablet',   type:'tablet',   col:11, row:5, sx:1, sy:1, label:'Tablet Satisfacción'},
+      {id:'door',     type:'door',     col:0,  row:6, sx:1, sy:1, label:'Puerta'},
+    ],
+  },
+  {
+    id:'estanco-premium',
+    name_es:'Estanco premium', name_en:'Premium tobacconist',
+    icon:'🏛️',
+    description_es:'Local grande: vitrinas múltiples, cigarros, alfombra VIP, aroma y metahuman.',
+    description_en:'Large store: multiple displays, cigars, VIP rug, aroma and metahuman.',
+    config:{ cols:16, rows:10, wallHeightTiles:7,
+             longWallColor:'#3a2a1a', shortWallColor:'#2a1f10',
+             floorColor:'#5a4030', exteriorFloorColor:'#0d1014', backgroundColor:'#1a1d22' },
+    layout:[
+      {id:'counter1', type:'counter',  col:3,  row:4, sx:1, sy:1, label:'Mostrador Premium'},
+      {id:'shelves1', type:'shelves',  col:6,  row:1, sx:1, sy:1, label:'Cigarrillos'},
+      {id:'shelves2', type:'shelves',  col:8,  row:1, sx:1, sy:1, label:'Cigarros'},
+      {id:'wineRack', type:'wineRack', col:11, row:1, sx:1, sy:1, label:'Bebidas Premium'},
+      {id:'lottery',  type:'lottery',  col:13, row:2, sx:1, sy:1, label:'Lotería'},
+      {id:'magazines',type:'magazines',col:3,  row:7, sx:1, sy:1, label:'Revistas'},
+      {id:'manager',  type:'manager',  col:14, row:8, sx:1, sy:1, label:'Oficina'},
+      {id:'plant1',   type:'plant',    col:0,  row:1, sx:1, sy:1, label:'Planta'},
+      {id:'plant2',   type:'plant',    col:0,  row:8, sx:1, sy:1, label:'Planta'},
+      {id:'floorLamp',type:'floorLamp',col:12, row:6, sx:1, sy:1, label:'Lámpara'},
+      {id:'rug',      type:'rug',      col:6,  row:5, sx:1.4, sy:1.4, label:'Alfombra VIP'},
+      {id:'led',      type:'led',      col:0,  row:0, sx:1, sy:1, label:'LED Marca'},
+      {id:'tft',      type:'tft',      col:9,  row:0, sx:1, sy:1, label:'TFT Promociones'},
+      {id:'metahuman',type:'metahuman',col:14, row:0, sx:1, sy:1, label:'Metahuman AI'},
+      {id:'aroma',    type:'aroma',    col:1,  row:0, sx:1, sy:1, label:'Aroma Premium'},
+      {id:'tablet',   type:'tablet',   col:15, row:6, sx:1, sy:1, label:'Tablet Satisfacción'},
+      {id:'door',     type:'door',     col:0,  row:9, sx:1, sy:1, label:'Puerta'},
+    ],
+  },
+  {
+    id:'kiosco-prensa',
+    name_es:'Kiosco de prensa', name_en:'Newsstand',
+    icon:'📰',
+    description_es:'Pasillos de revistas y periódicos, vending de bebidas, lotería.',
+    description_en:'Magazine and newspaper aisles, drink vending, lottery.',
+    config:{ cols:10, rows:6, wallHeightTiles:5,
+             longWallColor:'#a89878', shortWallColor:'#988a6c',
+             floorColor:'#8a8278', exteriorFloorColor:'#0d1014', backgroundColor:'#1a1d22' },
+    layout:[
+      {id:'counter',   type:'counter',  col:1, row:2, sx:1, sy:1, label:'Mostrador'},
+      {id:'magazines1',type:'magazines',col:3, row:1, sx:1, sy:1, label:'Revistas A'},
+      {id:'magazines2',type:'magazines',col:5, row:1, sx:1, sy:1, label:'Revistas B'},
+      {id:'magazines3',type:'magazines',col:7, row:1, sx:1, sy:1, label:'Periódicos'},
+      {id:'vending',   type:'vending',  col:8, row:4, sx:1, sy:1, label:'Vending Bebidas'},
+      {id:'lottery',   type:'lottery',  col:1, row:4, sx:1, sy:1, label:'Lotería'},
+      {id:'plant',     type:'plant',    col:9, row:1, sx:1, sy:1, label:'Planta'},
+      {id:'led',       type:'led',      col:0, row:0, sx:1, sy:1, label:'LED Titulares'},
+      {id:'door',      type:'door',     col:0, row:5, sx:1, sy:1, label:'Puerta'},
+    ],
+  },
+  {
+    id:'popup-store',
+    name_es:'Pop-up store', name_en:'Pop-up store',
+    icon:'🎪',
+    description_es:'Activación de marca: LED grande, mesa DJ, metahuman, alfombra brand.',
+    description_en:'Brand activation: large LED, DJ booth, metahuman, brand rug.',
+    config:{ cols:12, rows:8, wallHeightTiles:7,
+             longWallColor:'transparent', shortWallColor:'#2a1f10',
+             floorColor:'#1f3a2a', exteriorFloorColor:'#0d1014', backgroundColor:'#0a121a' },
+    layout:[
+      {id:'led',      type:'led',      col:2,  row:0, sx:1.6, sy:1, label:'LED principal'},
+      {id:'tft1',     type:'tft',      col:6,  row:0, sx:1, sy:1, label:'TFT producto'},
+      {id:'tft2',     type:'tft',      col:9,  row:0, sx:1, sy:1, label:'TFT brand'},
+      {id:'djBooth',  type:'djBooth',  col:3,  row:3, sx:1, sy:1, label:'DJ · Audio'},
+      {id:'metahuman',type:'metahuman',col:10, row:0, sx:1, sy:1, label:'Metahuman host'},
+      {id:'rug',      type:'rug',      col:4,  row:4, sx:2, sy:2, label:'Alfombra brand'},
+      {id:'plant1',   type:'plant',    col:0,  row:5, sx:1, sy:1, label:'Planta'},
+      {id:'plant2',   type:'plant',    col:11, row:5, sx:1, sy:1, label:'Planta'},
+      {id:'floorLamp',type:'floorLamp',col:1,  row:1, sx:1, sy:1, label:'Lámpara'},
+      {id:'aroma',    type:'aroma',    col:5,  row:0, sx:1, sy:1, label:'Aroma brand'},
+      {id:'tablet',   type:'tablet',   col:8,  row:5, sx:1, sy:1, label:'Encuesta'},
+    ],
+  },
+];
+
+// User-saved templates (localStorage). Array de objetos con la misma forma
+// que XPACE_BUILTIN_TEMPLATES, plus `custom:true` y `savedAt`. Cap defensivo
+// de 50 para no inflar localStorage.
+const XPACE_USER_TEMPLATES_KEY='xpace_user_templates';
+const XPACE_USER_TEMPLATES_MAX=50;
+function loadXpaceUserTemplates(){
+  try{
+    const raw=localStorage.getItem(XPACE_USER_TEMPLATES_KEY);
+    const arr=raw?JSON.parse(raw):[];
+    return Array.isArray(arr)?arr:[];
+  }catch(e){ return []; }
+}
+function saveXpaceUserTemplates(list){
+  try{
+    const capped=Array.isArray(list)?list.slice(0,XPACE_USER_TEMPLATES_MAX):[];
+    localStorage.setItem(XPACE_USER_TEMPLATES_KEY,JSON.stringify(capped));
+  }catch(e){ console.warn('[XpaceTemplates] save error:',e); }
+}
+function addXpaceUserTemplate(tpl){
+  if(!tpl || !Array.isArray(tpl.layout)) return null;
+  const list=loadXpaceUserTemplates();
+  const stamped={
+    ...tpl,
+    id:'user-'+Date.now().toString(36),
+    custom:true,
+    savedAt:new Date().toISOString(),
+  };
+  list.unshift(stamped); // LIFO
+  saveXpaceUserTemplates(list);
+  return stamped;
+}
+function removeXpaceUserTemplate(id){
+  const list=loadXpaceUserTemplates().filter(t=>t.id!==id);
+  saveXpaceUserTemplates(list);
+}
+
+// Aplica una plantilla al estado del Creator. Sobreescribe xpaceCreatorConfig
+// con tpl.config, FACTORY_LAYOUTS.creator (y shopLayout vivo si ya está)
+// con tpl.layout, y staff si viene. Devuelve true si aplicó algo.
+function applyXpaceTemplate(tpl){
+  if(!tpl) return false;
+  try{
+    if(tpl.config && typeof xpaceCreatorConfig==='object'){
+      Object.assign(xpaceCreatorConfig,tpl.config);
+      try{ saveXpaceCreatorConfig(); }catch(_){}
+    }
+    if(Array.isArray(tpl.layout)){
+      // Sustituye el "blueprint" del Creator y el array vivo en memoria.
+      FACTORY_LAYOUTS.creator=JSON.parse(JSON.stringify(tpl.layout));
+      if(typeof shopLayout!=='undefined'){
+        shopLayout=JSON.parse(JSON.stringify(tpl.layout));
+      }
+    }
+    if(Array.isArray(tpl.staffPos) && typeof shopStaffPos!=='undefined'){
+      shopStaffPos=JSON.parse(JSON.stringify(tpl.staffPos));
+    }
+    // Persistir el layout en el slot current del Creator para que sobreviva
+    // a recargas y al ciclo enterXpaceCreator → initGame → loadLayout.
+    try{
+      const prefix='creator';
+      const keys=(typeof getLayoutSlotKeys==='function')?getLayoutSlotKeys(prefix):null;
+      if(keys){
+        localStorage.setItem(keys.current,JSON.stringify(FACTORY_LAYOUTS.creator));
+        if(shopStaffPos) localStorage.setItem(keys.staffPos,JSON.stringify(shopStaffPos));
+      }
+    }catch(_){}
+    return true;
+  }catch(e){ console.warn('[XpaceTemplates] apply error:',e); return false; }
+}
+
+// Combina builtin + user templates. Devuelve siempre un array; user va antes
+// (más recientes primero) para que el usuario vea sus creaciones arriba.
+function getXpaceAllTemplates(){
+  return [...loadXpaceUserTemplates(), ...XPACE_BUILTIN_TEMPLATES];
+}
 
 // ── Catalogo de muebles para el Xpace Creator ──
 // Dos categorias: CONECTADOS (surfaces digitales, IoT) y NO CONECTADOS
@@ -6157,6 +6376,7 @@ function renderCreatorPalettePanel(){
   // ── Acciones globales ──
   parts.push('<div class="xpc-actions">');
   parts.push('<button type="button" class="xpc-save" data-xpc-action="save">💾 '+(isEs?'Guardar':'Save')+'</button>');
+  parts.push('<button type="button" class="xpc-tpl" data-xpc-action="save-as-template" title="'+(isEs?'Guardar este Xpacio como plantilla reutilizable':'Save this Xpacio as a reusable template')+'">⭐ '+(isEs?'Plantilla':'Template')+'</button>');
   parts.push('<button type="button" class="xpc-reset" data-xpc-action="reset">↺ '+(isEs?'Reset':'Reset')+'</button>');
   parts.push('<button type="button" class="xpc-exit" data-xpc-action="exit">✕ '+(isEs?'Salir':'Exit')+'</button>');
   parts.push('</div>');
@@ -6207,6 +6427,28 @@ function _wireCreatorPalettePanelClicks(){
     if(t.dataset.xpcAction){
       const a=t.dataset.xpcAction;
       if(a==='save'){ try{saveLayout();}catch(e){} edSaveNotify=90; try{playSaveBeep();}catch(e){} return; }
+      if(a==='save-as-template'){
+        // MVP: prompt() para el nombre. Icon por defecto ⭐. Captura layout +
+        // config + staffPos actuales y los persiste en localStorage como
+        // user template (aparecerá en el modal del Creator).
+        try{
+          const isEsL=(window.lang!=='en');
+          const name=window.prompt(isEsL?'Nombre de la plantilla:':'Template name:','Mi Xpacio');
+          if(!name || !name.trim()) return;
+          const tpl={
+            name_es:name.trim(), name_en:name.trim(),
+            icon:'⭐',
+            description_es:(isEsL?'Plantilla propia · ':'Custom · ')+(shopLayout?shopLayout.length:0)+' items',
+            description_en:'Custom · '+(shopLayout?shopLayout.length:0)+' items',
+            config:JSON.parse(JSON.stringify(xpaceCreatorConfig||{})),
+            layout:JSON.parse(JSON.stringify(shopLayout||[])),
+            staffPos:shopStaffPos?JSON.parse(JSON.stringify(shopStaffPos)):null,
+          };
+          const saved=addXpaceUserTemplate(tpl);
+          if(saved){ edSaveNotify=120; try{playSaveBeep();}catch(_){} }
+        }catch(e){ console.warn('[XpaceTemplates] save-as-template error:',e); }
+        return;
+      }
       if(a==='reset'){
         shopLayout.length=0;
         shopStaffPos=null;
@@ -24470,6 +24712,139 @@ window.xtAPI = (function(){
     setInterval(pollFeed,5000);
     setInterval(()=>sendHeartbeat(false),300000);
   },3000);
+})();
+</script>
+
+<!-- ── Xpace Creator: selector de plantillas (modal) ─────────────── -->
+<!-- Se muestra al entrar al Creator (?play=creator). El usuario elige una
+     plantilla built-in, una propia (custom localStorage), continúa con su
+     Xpacio guardado, o empieza en lienzo en blanco. -->
+<div id="xpaceTemplateModal" class="xpace-tpl-modal" aria-hidden="true" style="display:none">
+  <div class="xpace-tpl-backdrop"></div>
+  <div class="xpace-tpl-dialog" role="dialog" aria-modal="true" aria-labelledby="xpaceTplTitle">
+    <header class="xpace-tpl-head">
+      <h2 id="xpaceTplTitle">🎨 Empezar nuevo Xpacio</h2>
+      <button type="button" class="xpace-tpl-close" id="xpaceTplCloseBtn" title="Cerrar (sigue con tu Xpacio actual)">✕</button>
+    </header>
+    <p class="xpace-tpl-sub">Elige una plantilla para empezar, o continúa con tu Xpacio guardado. Puedes guardar tu propia plantilla con el botón ⭐ del editor.</p>
+    <div class="xpace-tpl-grid" id="xpaceTplGrid"></div>
+    <footer class="xpace-tpl-foot">
+      <span class="xpace-tpl-foot-note">// Las plantillas built-in son base; el editor las hace tuyas.</span>
+    </footer>
+  </div>
+</div>
+
+<script>
+// ── Xpace Creator: lógica del selector de plantillas ───────────────
+(function(){
+  const modal=document.getElementById('xpaceTemplateModal');
+  const grid=document.getElementById('xpaceTplGrid');
+  const closeBtn=document.getElementById('xpaceTplCloseBtn');
+  if(!modal||!grid) return;
+
+  let onChooseCb=null;
+
+  function renderCards(){
+    if(typeof getXpaceAllTemplates!=='function'){ grid.innerHTML=''; return; }
+    const lang=(window.lang||'es');
+    const cards=[];
+
+    // 1) Continuar con tu Xpacio actual (si hay algo guardado en slot current).
+    try{
+      const prefix='creator';
+      const keys=(typeof getLayoutSlotKeys==='function')?getLayoutSlotKeys(prefix):null;
+      if(keys){
+        const cur=localStorage.getItem(keys.current);
+        if(cur){
+          const arr=JSON.parse(cur);
+          if(Array.isArray(arr)&&arr.length>0){
+            cards.push(`<button type="button" class="xpace-tpl-card xpace-tpl-card-continue" data-action="continue">
+              <div class="xpace-tpl-icon">↩️</div>
+              <div class="xpace-tpl-name">${lang==='en'?'Continue my Xpacio':'Continuar mi Xpacio'}</div>
+              <div class="xpace-tpl-desc">${lang==='en'?arr.length+' items saved':arr.length+' elementos guardados'}</div>
+            </button>`);
+          }
+        }
+      }
+    }catch(_){}
+
+    // 2) Lienzo en blanco — siempre disponible.
+    cards.push(`<button type="button" class="xpace-tpl-card xpace-tpl-card-blank" data-action="blank">
+      <div class="xpace-tpl-icon">⬜</div>
+      <div class="xpace-tpl-name">${lang==='en'?'Blank canvas':'Lienzo en blanco'}</div>
+      <div class="xpace-tpl-desc">${lang==='en'?'Start from scratch.':'Empezar desde cero.'}</div>
+    </button>`);
+
+    // 3) Templates (user + builtin).
+    const all=getXpaceAllTemplates();
+    all.forEach((tpl,i)=>{
+      const name=(lang==='en'?tpl.name_en:tpl.name_es)||tpl.name_es||tpl.id;
+      const desc=(lang==='en'?tpl.description_en:tpl.description_es)||tpl.description_es||'';
+      const customCls=tpl.custom?' xpace-tpl-card-custom':'';
+      const delBtn=tpl.custom?`<span class="xpace-tpl-del" data-del-id="${tpl.id}" title="Borrar plantilla">🗑</span>`:'';
+      cards.push(`<button type="button" class="xpace-tpl-card${customCls}" data-tpl-idx="${i}">
+        ${delBtn}
+        <div class="xpace-tpl-icon">${tpl.icon||'📐'}</div>
+        <div class="xpace-tpl-name">${name}${tpl.custom?' <em>(tuya)</em>':''}</div>
+        <div class="xpace-tpl-desc">${desc}</div>
+        <div class="xpace-tpl-meta">${(tpl.config&&tpl.config.cols)||'?'}×${(tpl.config&&tpl.config.rows)||'?'} · ${(tpl.layout||[]).length} items</div>
+      </button>`);
+    });
+
+    grid.innerHTML=cards.join('');
+
+    // Wire clicks
+    grid.querySelectorAll('.xpace-tpl-card').forEach(card=>{
+      card.addEventListener('click',(ev)=>{
+        // Permitir click en delete sin disparar el card
+        if(ev.target.classList.contains('xpace-tpl-del')){
+          const id=ev.target.dataset.delId;
+          if(id && confirm('¿Borrar esta plantilla?')){
+            try{ removeXpaceUserTemplate(id); renderCards(); }catch(_){}
+          }
+          return;
+        }
+        const action=card.dataset.action;
+        if(action==='continue'){ closeModal(null); return; }
+        if(action==='blank'){
+          // Aplica un layout vacío + config default (no toca custom config previa)
+          try{
+            FACTORY_LAYOUTS.creator=[];
+            if(typeof shopLayout!=='undefined') shopLayout=[];
+            const prefix='creator';
+            const keys=(typeof getLayoutSlotKeys==='function')?getLayoutSlotKeys(prefix):null;
+            if(keys) localStorage.setItem(keys.current,'[]');
+          }catch(_){}
+          closeModal({blank:true});
+          return;
+        }
+        const idx=parseInt(card.dataset.tplIdx,10);
+        if(isNaN(idx)) return;
+        const tpl=getXpaceAllTemplates()[idx];
+        if(!tpl) return;
+        try{ applyXpaceTemplate(tpl); }catch(_){}
+        closeModal(tpl);
+      });
+    });
+  }
+
+  function openModal(cb){
+    onChooseCb=cb||null;
+    renderCards();
+    modal.style.display='flex';
+    modal.setAttribute('aria-hidden','false');
+  }
+  function closeModal(tpl){
+    modal.style.display='none';
+    modal.setAttribute('aria-hidden','true');
+    if(onChooseCb){ try{ onChooseCb(tpl); }catch(_){} onChooseCb=null; }
+  }
+  closeBtn.addEventListener('click',()=>closeModal(null));
+  modal.querySelector('.xpace-tpl-backdrop').addEventListener('click',()=>closeModal(null));
+
+  // Expone API global para que enterXpaceCreator pueda llamar al modal.
+  window.openXpaceTemplateModal=openModal;
+  window.closeXpaceTemplateModal=closeModal;
 })();
 </script>
 
