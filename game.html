@@ -438,6 +438,11 @@
     .xpace-tpl-sub{margin:10px 22px 6px;font-size:12px;color:#9a8866;line-height:1.5}
     .xpace-tpl-grid{padding:14px 22px 18px;display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;overflow-y:auto;flex:1}
     .xpace-tpl-card{position:relative;appearance:none;background:linear-gradient(180deg,#1a1f28 0%,#0c0f16 100%);border:1px solid #3a3020;border-radius:10px;padding:14px 12px;color:#ffd866;cursor:pointer;text-align:left;font-family:inherit;transition:transform .12s,border-color .12s,box-shadow .12s,background .12s;display:flex;flex-direction:column;gap:6px;min-height:140px}
+    .xpace-tpl-card .xpace-tpl-head{display:flex;align-items:center;gap:10px}
+    .xpace-tpl-card .xpace-tpl-head .xpace-tpl-icon{font-size:24px;line-height:1;filter:drop-shadow(0 2px 4px rgba(0,0,0,.4))}
+    .xpace-tpl-card .xpace-tpl-head .xpace-tpl-name{flex:1;font-size:13px;margin:0}
+    .xpace-tpl-preview{display:block;width:100%;height:auto;border-radius:4px;border:1px solid #2a2010;background:#0a0c12;image-rendering:pixelated}
+    .xpace-tpl-card:hover .xpace-tpl-preview{border-color:rgba(255,216,102,.5)}
     .xpace-tpl-card:hover{transform:translateY(-2px);border-color:#ffd866;box-shadow:0 8px 24px rgba(255,216,102,.18);background:linear-gradient(180deg,#252013 0%,#0c0f16 100%)}
     .xpace-tpl-card:focus{outline:2px solid #ffd866;outline-offset:2px}
     .xpace-tpl-card-continue{border-color:#5a8a44;background:linear-gradient(180deg,#1a2a14 0%,#0c0f16 100%)}
@@ -24798,6 +24803,70 @@ window.xtAPI = (function(){
 
   let onChooseCb=null;
 
+  // Mini-preview cenital de una plantilla en un canvas pequeño. Pinta fondo,
+  // suelo, paredes (top y left edge) y los items como rectángulos coloreados
+  // por tipo. Suficiente para reconocer visualmente la plantilla antes de
+  // entrar al editor — vista 2D cenital, no isométrica.
+  const TPL_PREVIEW_TYPE_COLOR = {
+    counter:'#d4a05a', shelves:'#a07a3a', wineRack:'#702030',
+    lottery:'#e0c060', vending:'#3a7aa0', magazines:'#c08040',
+    manager:'#5a4030', plant:'#3a8a3a', floorLamp:'#d8c068',
+    rug:'#8a4030', door:'#3a3020',
+    led:'#76b900', tft:'#5fb3ff', metahuman:'#aa88ff',
+    tablet:'#4fd1c5', aroma:'#ff8acc', djBooth:'#88ccff', turnKiosk:'#ffaa55',
+  };
+  function renderTemplatePreview(cv, tpl){
+    if(!cv || !tpl || !tpl.config || !Array.isArray(tpl.layout)) return;
+    const ctx = cv.getContext('2d');
+    const W = cv.width, H = cv.height;
+    const cfg = tpl.config;
+    const cols = cfg.cols || 14;
+    const rows = cfg.rows || 8;
+    const padX = 4, padY = 4;
+    const availW = W - padX*2;
+    const availH = H - padY*2;
+    const cell = Math.min(availW/cols, availH/rows);
+    const gridW = cell*cols;
+    const gridH = cell*rows;
+    const ox = (W - gridW)/2;
+    const oy = (H - gridH)/2;
+    // Fondo del canvas (zona exterior)
+    ctx.fillStyle = (cfg.backgroundColor && cfg.backgroundColor !== 'transparent') ? cfg.backgroundColor : '#0a0c12';
+    ctx.fillRect(0, 0, W, H);
+    // Suelo
+    ctx.fillStyle = (cfg.floorColor && cfg.floorColor !== 'transparent') ? cfg.floorColor : '#1a1d22';
+    ctx.fillRect(ox, oy, gridW, gridH);
+    // Paredes (back = top edge, short = left edge) si no transparent
+    const wallThick = Math.max(2, cell*0.35);
+    if(cfg.longWallColor && cfg.longWallColor !== 'transparent'){
+      ctx.fillStyle = cfg.longWallColor;
+      ctx.fillRect(ox, oy, gridW, wallThick);
+    }
+    if(cfg.shortWallColor && cfg.shortWallColor !== 'transparent'){
+      ctx.fillStyle = cfg.shortWallColor;
+      ctx.fillRect(ox, oy, wallThick, gridH);
+    }
+    // Items
+    tpl.layout.forEach(item => {
+      if(!item || typeof item.col!=='number' || typeof item.row!=='number') return;
+      const sx = Math.max(0.5, item.sx || 1);
+      const sy = Math.max(0.5, item.sy || 1);
+      const w = sx * cell * 0.82;
+      const h = sy * cell * 0.82;
+      const x = ox + item.col*cell + (cell - w)/2;
+      const y = oy + item.row*cell + (cell - h)/2;
+      ctx.fillStyle = TPL_PREVIEW_TYPE_COLOR[item.type] || '#7a6c52';
+      ctx.fillRect(x, y, w, h);
+      ctx.strokeStyle = 'rgba(0,0,0,.4)';
+      ctx.lineWidth = 0.5;
+      ctx.strokeRect(x+0.25, y+0.25, w-0.5, h-0.5);
+    });
+    // Borde general
+    ctx.strokeStyle = 'rgba(255,216,102,.25)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(0.5, 0.5, W-1, H-1);
+  }
+
   function renderCards(){
     if(typeof getXpaceAllTemplates!=='function'){ grid.innerHTML=''; return; }
     const lang=(window.lang||'es');
@@ -24838,14 +24907,24 @@ window.xtAPI = (function(){
       const delBtn=tpl.custom?`<span class="xpace-tpl-del" data-del-id="${tpl.id}" title="Borrar plantilla">🗑</span>`:'';
       cards.push(`<button type="button" class="xpace-tpl-card${customCls}" data-tpl-idx="${i}">
         ${delBtn}
-        <div class="xpace-tpl-icon">${tpl.icon||'📐'}</div>
-        <div class="xpace-tpl-name">${name}${tpl.custom?' <em>(tuya)</em>':''}</div>
+        <div class="xpace-tpl-head">
+          <div class="xpace-tpl-icon">${tpl.icon||'📐'}</div>
+          <div class="xpace-tpl-name">${name}${tpl.custom?' <em>(tuya)</em>':''}</div>
+        </div>
+        <canvas class="xpace-tpl-preview" data-preview-idx="${i}" width="220" height="92" aria-hidden="true"></canvas>
         <div class="xpace-tpl-desc">${desc}</div>
         <div class="xpace-tpl-meta">${(tpl.config&&tpl.config.cols)||'?'}×${(tpl.config&&tpl.config.rows)||'?'} · ${(tpl.layout||[]).length} items</div>
       </button>`);
     });
 
     grid.innerHTML=cards.join('');
+
+    // Renderizar los previews cenitales en cada canvas
+    grid.querySelectorAll('canvas.xpace-tpl-preview').forEach(cv => {
+      const idx = parseInt(cv.dataset.previewIdx, 10);
+      const tpl = all[idx];
+      if (tpl) renderTemplatePreview(cv, tpl);
+    });
 
     // Wire clicks
     grid.querySelectorAll('.xpace-tpl-card').forEach(card=>{
