@@ -978,8 +978,9 @@ const server = http.createServer((req, res) => {
       const isTwitter  = host === 'twitter.com' || host === 'x.com' || host === 'mobile.twitter.com' || host === 't.co';
       const isTikTok   = host === 'tiktok.com' || host.endsWith('.tiktok.com') || host === 'vm.tiktok.com';
       const isInstagram= host === 'instagram.com' || host.endsWith('.instagram.com');
-      if (!(isYouTube || isVimeo || isTwitter || isTikTok || isInstagram)) {
-        sendJson(res, 400, { ok: false, error: 'Host not allowed', host, allowed: ['youtube','vimeo','twitter/x','tiktok','instagram'] });
+      const isLinkedIn = host === 'linkedin.com' || host.endsWith('.linkedin.com') || host === 'lnkd.in';
+      if (!(isYouTube || isVimeo || isTwitter || isTikTok || isInstagram || isLinkedIn)) {
+        sendJson(res, 400, { ok: false, error: 'Host not allowed', host, allowed: ['youtube','vimeo','twitter/x','tiktok','instagram','linkedin'] });
         return;
       }
       const id = crypto.randomBytes(8).toString('hex');
