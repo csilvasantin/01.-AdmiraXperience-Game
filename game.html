@@ -467,6 +467,33 @@
       .xpace-tpl-head h2{font-size:15px}
     }
 
+    /* ── Modal "Guardar como Plantilla" ── */
+    .save-tpl-modal{position:fixed;inset:0;z-index:99997;display:flex;align-items:center;justify-content:center;padding:20px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+    .save-tpl-modal[hidden]{display:none}
+    .save-tpl-backdrop{position:absolute;inset:0;background:rgba(7,10,16,.85);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+    .save-tpl-dialog{position:relative;background:linear-gradient(180deg,#1a1f28 0%,#0c0f16 100%);border:1px solid #aa88ff;border-radius:10px;box-shadow:0 24px 64px rgba(0,0,0,.7),0 0 0 1px rgba(170,136,255,.15) inset;color:#ffd866;max-width:460px;width:100%;max-height:92vh;overflow:auto;display:flex;flex-direction:column}
+    .save-tpl-head{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid rgba(170,136,255,.2)}
+    .save-tpl-head h2{margin:0;font-size:15px;letter-spacing:.1em;color:#d8c8ff;font-weight:600}
+    .save-tpl-close{appearance:none;background:transparent;border:1px solid #3a3020;color:#9a8866;width:28px;height:28px;border-radius:5px;cursor:pointer;font-family:inherit}
+    .save-tpl-close:hover{background:#2a1a44;color:#ffd866;border-color:#aa88ff}
+    .save-tpl-body{padding:16px 18px;display:flex;flex-direction:column;gap:14px}
+    .save-tpl-row{display:flex;flex-direction:column;gap:6px}
+    .save-tpl-row label{font-size:10px;color:#9a8866;letter-spacing:.14em;text-transform:uppercase}
+    .save-tpl-row input[type="text"]{background:#070a10;border:1px solid #3a3020;color:#ffe8a0;padding:10px 12px;font-family:inherit;font-size:13px;border-radius:6px}
+    .save-tpl-row input[type="text"]:focus{outline:none;border-color:#aa88ff;box-shadow:0 0 0 2px rgba(170,136,255,.15)}
+    .save-tpl-icons{display:grid;grid-template-columns:repeat(8,1fr);gap:6px}
+    .save-tpl-icons button{appearance:none;background:#070a10;border:1px solid #3a3020;color:#ffe8a0;font-size:18px;padding:8px 0;border-radius:6px;cursor:pointer;transition:transform .1s,border-color .1s,background .1s;font-family:inherit}
+    .save-tpl-icons button:hover{transform:scale(1.08);border-color:#aa88ff}
+    .save-tpl-icons button.selected{background:#2a1a44;border-color:#aa88ff;box-shadow:0 0 0 2px rgba(170,136,255,.3)}
+    .save-tpl-preview{display:block;width:100%;height:auto;border:1px solid #3a3020;border-radius:6px;background:#0a0c12;image-rendering:pixelated}
+    .save-tpl-foot{padding:12px 18px;border-top:1px solid rgba(170,136,255,.2);display:flex;gap:10px;justify-content:flex-end}
+    .save-tpl-btn{appearance:none;border:1px solid;border-radius:6px;padding:9px 18px;font-family:inherit;font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;transition:transform .1s,box-shadow .1s,filter .1s}
+    .save-tpl-btn:hover{transform:translateY(-1px);filter:brightness(1.08)}
+    .save-tpl-cancel{background:transparent;border-color:#3a3020;color:#9a8866}
+    .save-tpl-cancel:hover{background:#1a1f28;color:#ffd866}
+    .save-tpl-save{background:linear-gradient(135deg,#aa88ff,#7755cc);border-color:#aa88ff;color:#fff;box-shadow:0 0 16px rgba(170,136,255,.4)}
+    .save-tpl-save:hover{box-shadow:0 4px 24px rgba(170,136,255,.6)}
+
     /* ── Menú contextual Xpace Creator ── */
     .creator-ctx-menu{position:fixed;z-index:99998;min-width:180px;background:linear-gradient(180deg,#1a1f28 0%,#0c0f16 100%);border:1px solid #5a4a30;border-radius:8px;box-shadow:0 18px 48px rgba(0,0,0,.7),0 0 0 1px rgba(255,216,102,.1) inset;color:#ffd866;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;padding:6px;animation:ctxFadeIn .12s ease-out}
     .creator-ctx-menu[hidden]{display:none}
@@ -535,6 +562,35 @@
   </style>
 </head>
 <body>
+<!-- ── Modal Guardar como Plantilla (sustituye prompt() nativo) ── -->
+<div id="saveTplModal" class="save-tpl-modal" role="dialog" aria-modal="true" hidden>
+  <div class="save-tpl-backdrop"></div>
+  <div class="save-tpl-dialog">
+    <header class="save-tpl-head">
+      <h2>⭐ Guardar como plantilla</h2>
+      <button type="button" class="save-tpl-close" id="saveTplCloseBtn" title="Cancelar">✕</button>
+    </header>
+    <div class="save-tpl-body">
+      <div class="save-tpl-row">
+        <label for="saveTplName">Nombre</label>
+        <input type="text" id="saveTplName" maxlength="40" placeholder="Mi Xpacio personalizado">
+      </div>
+      <div class="save-tpl-row">
+        <label>Icono</label>
+        <div class="save-tpl-icons" id="saveTplIcons"></div>
+      </div>
+      <div class="save-tpl-row">
+        <label>Vista previa</label>
+        <canvas id="saveTplPreview" width="320" height="140" class="save-tpl-preview"></canvas>
+      </div>
+    </div>
+    <footer class="save-tpl-foot">
+      <button type="button" class="save-tpl-btn save-tpl-cancel" id="saveTplCancelBtn">Cancelar</button>
+      <button type="button" class="save-tpl-btn save-tpl-save" id="saveTplSaveBtn">⭐ Guardar plantilla</button>
+    </footer>
+  </div>
+</div>
+
 <!-- ── Menú contextual del Xpace Creator (click derecho sobre item) ── -->
 <div id="creatorContextMenu" class="creator-ctx-menu" role="menu" hidden>
   <div class="creator-ctx-title" id="creatorCtxTitle">Item</div>
@@ -6560,25 +6616,14 @@ function _wireCreatorPalettePanelClicks(){
       const a=t.dataset.xpcAction;
       if(a==='save'){ try{saveLayout();}catch(e){} edSaveNotify=90; try{playSaveBeep();}catch(e){} return; }
       if(a==='save-as-template'){
-        // MVP: prompt() para el nombre. Icon por defecto ⭐. Captura layout +
-        // config + staffPos actuales y los persiste en localStorage como
-        // user template (aparecerá en el modal del Creator).
+        // Abre el modal HTML "Guardar como plantilla" (nombre + icon picker
+        // + preview cenital del layout actual). Reemplaza el prompt() nativo
+        // del MVP por una UI más ergonómica.
         try{
-          const isEsL=(window.lang!=='en');
-          const name=window.prompt(isEsL?'Nombre de la plantilla:':'Template name:','Mi Xpacio');
-          if(!name || !name.trim()) return;
-          const tpl={
-            name_es:name.trim(), name_en:name.trim(),
-            icon:'⭐',
-            description_es:(isEsL?'Plantilla propia · ':'Custom · ')+(shopLayout?shopLayout.length:0)+' items',
-            description_en:'Custom · '+(shopLayout?shopLayout.length:0)+' items',
-            config:JSON.parse(JSON.stringify(xpaceCreatorConfig||{})),
-            layout:JSON.parse(JSON.stringify(shopLayout||[])),
-            staffPos:shopStaffPos?JSON.parse(JSON.stringify(shopStaffPos)):null,
-          };
-          const saved=addXpaceUserTemplate(tpl);
-          if(saved){ edSaveNotify=120; try{playSaveBeep();}catch(_){} }
-        }catch(e){ console.warn('[XpaceTemplates] save-as-template error:',e); }
+          if(typeof window.openSaveTemplateModal==='function'){
+            window.openSaveTemplateModal();
+          }
+        }catch(e){ console.warn('[XpaceTemplates] open modal failed:',e); }
         return;
       }
       if(a==='reset'){
@@ -8253,7 +8298,57 @@ cv.addEventListener('contextmenu',e=>{
 // hasta mouseup (con snap al grid o a las celdas de pared). Reemplaza el
 // flujo modal antiguo (click selecciona, segundo click mueve) por drag
 // directo y natural.
-let edDrag={active:false,idx:-1,startX:0,startY:0,moved:false,suppressClick:false};
+let edDrag={active:false,idx:-1,startX:0,startY:0,moved:false,suppressClick:false,fromCol:0,fromRow:0,fromWallY:undefined};
+
+// ── Undo stack (Cmd+Z) — 20 acciones reversibles del Creator ───────
+const UNDO_MAX=20;
+const undoStack=[];
+function pushUndo(action){
+  if(!action) return;
+  undoStack.push(action);
+  if(undoStack.length>UNDO_MAX) undoStack.shift();
+}
+function doUndo(){
+  if(state!==S.EDITOR || !isXpaceCreator()) return false;
+  const action=undoStack.pop();
+  if(!action){
+    try{ if(typeof showEv==='function') showEv('Nada que deshacer','#888'); }catch(_){}
+    return false;
+  }
+  try{
+    if(action.type==='delete'){
+      // Restaurar en la posición original (idx puede haber cambiado, append seguro)
+      shopLayout.push(action.item);
+      edSelIdx=shopLayout.length-1;
+    } else if(action.type==='duplicate'){
+      // Eliminar el clon (último elemento añadido por duplicate)
+      const i=shopLayout.findIndex(it=>it.id===action.cloneId);
+      if(i>=0){ shopLayout.splice(i,1); if(edSelIdx===i) edSelIdx=-1; }
+    } else if(action.type==='move'){
+      const it=shopLayout.find(x=>x.id===action.itemId);
+      if(it){
+        it.col=action.from.col; it.row=action.from.row;
+        if(action.from.wallY!==undefined) it.wallY=action.from.wallY;
+      }
+    } else if(action.type==='rename'){
+      const it=shopLayout.find(x=>x.id===action.itemId);
+      if(it) it.label=action.oldLabel;
+    }
+    saveLayout();
+    try{ if(typeof showEv==='function') showEv('↶ Deshecho · '+action.type,'#aa88ff'); }catch(_){}
+  }catch(e){ console.warn('undo error:',e); }
+  try{ if(typeof _creatorPalettePanelHash!=='undefined') _creatorPalettePanelHash=''; }catch(_){}
+  return true;
+}
+// Cmd+Z / Ctrl+Z deshace la última acción del Creator
+document.addEventListener('keydown',(e)=>{
+  if((e.metaKey||e.ctrlKey) && (e.key==='z'||e.key==='Z') && !e.shiftKey){
+    if(state===S.EDITOR && isXpaceCreator()){
+      e.preventDefault();
+      doUndo();
+    }
+  }
+});
 
 // Hit test: devuelve el index del item bajo el cursor en shopLayout, o -1.
 // Distingue wall-mounted (test contra la pared larga) vs suelo (test contra
@@ -8292,7 +8387,13 @@ cv.addEventListener('mousedown',e=>{
   const my=(e.clientY-r2.top)*(H/r2.height)|0;
   const idx=hitTestShopLayoutItem(mx,my);
   if(idx<0) return;
-  edDrag.active=true; edDrag.idx=idx; edDrag.startX=e.clientX; edDrag.startY=e.clientY; edDrag.moved=false; edDrag.suppressClick=false;
+  const it=shopLayout[idx];
+  edDrag.active=true; edDrag.idx=idx; edDrag.startX=e.clientX; edDrag.startY=e.clientY;
+  edDrag.moved=false; edDrag.suppressClick=false;
+  // Guardar posición original para poder hacer undo del drag
+  edDrag.fromCol=it.col; edDrag.fromRow=it.row;
+  edDrag.fromWallY=(it.wallY!==undefined)?it.wallY:undefined;
+  edDrag.itemId=it.id;
   edSelIdx=idx; edStaffSelIdx=-1;
 });
 
@@ -8301,6 +8402,7 @@ cv.addEventListener('mousemove',e=>{
   const dx=e.clientX-edDrag.startX, dy=e.clientY-edDrag.startY;
   if(!edDrag.moved && (Math.abs(dx)+Math.abs(dy))<6) return; // umbral 6px para considerar drag
   edDrag.moved=true; edDrag.suppressClick=true; cv.style.cursor='grabbing';
+  try{ document.body.classList.add('dragging-item'); }catch(_){}
   const r2=cv.getBoundingClientRect();
   const mx=(e.clientX-r2.left)*(W/r2.width)|0;
   const my=(e.clientY-r2.top)*(H/r2.height)|0;
@@ -8330,12 +8432,16 @@ cv.addEventListener('mousemove',e=>{
 cv.addEventListener('mouseup',e=>{
   if(!edDrag.active) return;
   cv.style.cursor='';
+  try{ document.body.classList.remove('dragging-item'); }catch(_){}
   const wasMoved=edDrag.moved;
   edDrag.active=false;
   if(wasMoved){
+    // Push undo si la posición cambió
+    const it=shopLayout[edDrag.idx];
+    if(it && (it.col!==edDrag.fromCol || it.row!==edDrag.fromRow || (edDrag.fromWallY!==undefined && it.wallY!==edDrag.fromWallY))){
+      pushUndo({type:'move', itemId:edDrag.itemId, from:{col:edDrag.fromCol,row:edDrag.fromRow,wallY:edDrag.fromWallY}});
+    }
     try{saveLayout();}catch(_){}
-    // Mantenemos suppressClick=true hasta el siguiente tick para que el
-    // click handler no procese este mismo gesto como un click normal.
     setTimeout(()=>{edDrag.suppressClick=false;},50);
   } else {
     edDrag.suppressClick=false;
@@ -20075,14 +20181,28 @@ function drawEditor(){
   cx.globalAlpha=0.32;
   for(let row=0;row<ISO.rows;row++) for(let col=0;col<ISO.cols;col++) drawIsoTileOutline(col,row,'#f6f2dc',0.8);
   cx.globalAlpha=1;
-  // Hover highlight
+  // Hover highlight — más prominente cuando hay drag activo (feedback drop)
   if(edHoverTile&&edHoverTile.col>=0&&edHoverTile.col<ISO.cols&&edHoverTile.row>=0&&edHoverTile.row<ISO.rows){
-    cx.globalAlpha=0.42;
-    drawIsoTile(edHoverTile.col,edHoverTile.row,edMode==='staff'?'#44ccff':'#44ff44',null);
-    cx.globalAlpha=1;
-    const hp=toIso(edHoverTile.col,edHoverTile.row);
-    r(hp.x-18,hp.y+ISO.tileH/2-7,36,12,'#0f141bcc');
-    tx(edHoverTile.col+','+edHoverTile.row,hp.x,hp.y+ISO.tileH/2+2,'#fff6d8',7,'center');
+    const isDragging=(typeof edDrag!=='undefined' && edDrag.active && edDrag.moved);
+    if(isDragging){
+      // Drop zone pulsante magenta para diferenciarlo del hover normal
+      const pulse=0.55+0.25*Math.sin((typeof tt==='number'?tt:Date.now()/50)*0.15);
+      cx.globalAlpha=pulse;
+      drawIsoTile(edHoverTile.col,edHoverTile.row,'#ff44aa',null);
+      cx.globalAlpha=Math.min(1,pulse+0.25);
+      drawIsoTile(edHoverTile.col,edHoverTile.row,null,'#ffaaff');
+      cx.globalAlpha=1;
+      const hp=toIso(edHoverTile.col,edHoverTile.row);
+      r(hp.x-22,hp.y+ISO.tileH/2-7,44,12,'#1a0813dd');
+      tx('▶ '+edHoverTile.col+','+edHoverTile.row,hp.x,hp.y+ISO.tileH/2+2,'#ffd8f0',7,'center');
+    } else {
+      cx.globalAlpha=0.42;
+      drawIsoTile(edHoverTile.col,edHoverTile.row,edMode==='staff'?'#44ccff':'#44ff44',null);
+      cx.globalAlpha=1;
+      const hp=toIso(edHoverTile.col,edHoverTile.row);
+      r(hp.x-18,hp.y+ISO.tileH/2-7,36,12,'#0f141bcc');
+      tx(edHoverTile.col+','+edHoverTile.row,hp.x,hp.y+ISO.tileH/2+2,'#fff6d8',7,'center');
+    }
   }
 
   // ── STAFF MODE overlays ──
@@ -25168,6 +25288,76 @@ window.xtAPI = (function(){
   window.closeXpaceTemplateModal=closeModal;
 })();
 
+// ── Modal "Guardar como plantilla" ─────────────────────────────────
+(function(){
+  const modal=document.getElementById('saveTplModal');
+  if(!modal) return;
+  const closeBtn=document.getElementById('saveTplCloseBtn');
+  const cancelBtn=document.getElementById('saveTplCancelBtn');
+  const saveBtn=document.getElementById('saveTplSaveBtn');
+  const nameInput=document.getElementById('saveTplName');
+  const iconsHost=document.getElementById('saveTplIcons');
+  const previewCv=document.getElementById('saveTplPreview');
+  const ICON_OPTIONS=['⭐','🚬','🏛️','📰','🎪','☕','🛒','🏬','🎯','🎮','🎨','🪴','🍷','📚','🎧','💡'];
+  let selectedIcon='⭐';
+
+  function buildIcons(){
+    iconsHost.innerHTML=ICON_OPTIONS.map(ic=>`<button type="button" data-ic="${ic}" class="${ic===selectedIcon?'selected':''}">${ic}</button>`).join('');
+    iconsHost.querySelectorAll('button').forEach(b=>{
+      b.addEventListener('click',()=>{
+        selectedIcon=b.dataset.ic;
+        iconsHost.querySelectorAll('button').forEach(x=>x.classList.toggle('selected',x.dataset.ic===selectedIcon));
+      });
+    });
+  }
+
+  function renderPreview(){
+    if(typeof renderTemplatePreview!=='function') return;
+    const tplLike={
+      config: (typeof xpaceCreatorConfig==='object')?xpaceCreatorConfig:{cols:14,rows:8},
+      layout: (typeof shopLayout!=='undefined')?shopLayout:[],
+    };
+    renderTemplatePreview(previewCv, tplLike);
+  }
+
+  function close(){ modal.hidden=true; }
+  function open(){
+    selectedIcon='⭐';
+    nameInput.value='Mi Xpacio '+new Date().toISOString().slice(5,16).replace('T',' ');
+    buildIcons();
+    renderPreview();
+    modal.hidden=false;
+    setTimeout(()=>{ nameInput.focus(); nameInput.select(); }, 50);
+  }
+  function doSave(){
+    const name=nameInput.value.trim();
+    if(!name){ nameInput.focus(); return; }
+    if(typeof addXpaceUserTemplate!=='function') return;
+    const tpl={
+      name_es:name, name_en:name,
+      icon:selectedIcon,
+      description_es:'Plantilla propia · '+(shopLayout?shopLayout.length:0)+' items',
+      description_en:'Custom · '+(shopLayout?shopLayout.length:0)+' items',
+      config:JSON.parse(JSON.stringify(xpaceCreatorConfig||{})),
+      layout:JSON.parse(JSON.stringify(shopLayout||[])),
+      staffPos:shopStaffPos?JSON.parse(JSON.stringify(shopStaffPos)):null,
+    };
+    addXpaceUserTemplate(tpl);
+    try{ if(typeof edSaveNotify!=='undefined') edSaveNotify=120; }catch(_){}
+    try{ if(typeof playSaveBeep==='function') playSaveBeep(); }catch(_){}
+    close();
+  }
+
+  closeBtn.addEventListener('click', close);
+  cancelBtn.addEventListener('click', close);
+  saveBtn.addEventListener('click', doSave);
+  modal.querySelector('.save-tpl-backdrop').addEventListener('click', close);
+  nameInput.addEventListener('keydown',(e)=>{ if(e.key==='Enter') doSave(); if(e.key==='Escape') close(); });
+
+  // API global para que el dock action 'save-as-template' lo use
+  window.openSaveTemplateModal=open;
+})();
+
 // ── Menú contextual del Creator: rename / duplicate / delete ───────
 (function(){
   const menu=document.getElementById('creatorContextMenu');
@@ -25201,6 +25391,8 @@ window.xtAPI = (function(){
     const isEs=(window.lang!=='en');
     if(act==='delete'){
       if(confirm(isEs?('¿Eliminar "'+(it.label||it.type)+'"?'):('Delete "'+(it.label||it.type)+'"?'))){
+        // Push undo ANTES de splice (item completo para restaurar)
+        if(typeof pushUndo==='function') pushUndo({type:'delete', item:JSON.parse(JSON.stringify(it))});
         shopLayout.splice(idx,1);
         if(typeof edSelIdx!=='undefined' && edSelIdx===idx) edSelIdx=-1;
         try{ saveLayout(); }catch(_){}
@@ -25209,7 +25401,6 @@ window.xtAPI = (function(){
     } else if(act==='duplicate'){
       const clone=JSON.parse(JSON.stringify(it));
       clone.id=(it.type||'item')+'_'+Date.now().toString(36).slice(-5);
-      // Desplazar 1 col / 1 row para no apilar (clamp a grid)
       if(typeof isWallMountedType==='function' && isWallMountedType(it.type)){
         clone.col=Math.min((ISO.cols||14)-1, (it.col||0)+1);
       } else {
@@ -25217,6 +25408,7 @@ window.xtAPI = (function(){
         clone.row=Math.min((ISO.rows||8)-1, (it.row||0)+1);
       }
       shopLayout.push(clone);
+      if(typeof pushUndo==='function') pushUndo({type:'duplicate', cloneId:clone.id});
       if(typeof edSelIdx!=='undefined') edSelIdx=shopLayout.length-1;
       try{ saveLayout(); }catch(_){}
       try{ if(typeof _creatorPalettePanelHash!=='undefined') _creatorPalettePanelHash=''; }catch(_){}
@@ -25224,6 +25416,7 @@ window.xtAPI = (function(){
       const cur=it.label||'';
       const next=prompt(isEs?'Nuevo nombre:':'New name:', cur);
       if(next!==null && next.trim()!==''){
+        if(typeof pushUndo==='function') pushUndo({type:'rename', itemId:it.id, oldLabel:cur});
         it.label=next.trim().slice(0,40);
         try{ saveLayout(); }catch(_){}
         try{ if(typeof _creatorPalettePanelHash!=='undefined') _creatorPalettePanelHash=''; }catch(_){}
