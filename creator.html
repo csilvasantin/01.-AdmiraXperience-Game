@@ -12,7 +12,9 @@
 <meta property="og:type" content="website">
 <meta name="theme-color" content="#ffd866">
 <!-- Redirect via meta refresh para casos sin JS (fallback) -->
-<meta http-equiv="refresh" content="0; url=./game.html?play=creator">
+<!-- Redirige a game.html SIN ?play=creator: pasa por la pantalla 0 (splash
+     con JUGAR/DEMO/Navigator). El usuario elige desde ahí. -->
+<meta http-equiv="refresh" content="0; url=./game.html">
 <style>
   html,body{margin:0;padding:0;background:radial-gradient(circle at 50% 30%,#2a2010,#070a10 60%,#020305);color:#ffd866;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;height:100%;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:20px;text-align:center;padding:40px}
   .icon{font-size:80px;line-height:1;filter:drop-shadow(0 6px 24px rgba(255,216,102,.45));animation:bob 2s ease-in-out infinite}
@@ -32,11 +34,12 @@
   <div class="spinner" aria-hidden="true"></div>
   <div class="foot">Admira XP // The Xpace OS</div>
   <noscript>
-    <p style="margin-top:18px;font-size:12px">Si no hay JS, <a href="./game.html?play=creator">clica aquí</a> para entrar.</p>
+    <p style="margin-top:18px;font-size:12px">Si no hay JS, <a href="./game.html">clica aquí</a> para entrar.</p>
   </noscript>
 <script>
-  // Redirect inmediato — el meta refresh es fallback. Preservamos hash si lo hay.
-  const target='./game.html?play=creator'+(location.hash||'');
+  // Redirect inmediato (meta refresh es fallback). Preservamos hash si lo hay.
+  // Sin ?play=creator → entra por la pantalla 0 (splash con JUGAR/DEMO).
+  const target='./game.html'+(location.hash||'');
   location.replace(target);
 </script>
 </body>
