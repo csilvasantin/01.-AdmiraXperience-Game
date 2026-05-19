@@ -511,6 +511,8 @@
     .splash-overlay{position:relative;z-index:2;text-align:center;padding:24px;display:flex;flex-direction:column;align-items:center;gap:22px;max-width:92vw}
     .splash-banner{max-width:min(720px,90vw);height:auto;filter:drop-shadow(0 0 18px rgba(255,80,200,.55)) drop-shadow(0 0 36px rgba(80,200,255,.45));animation:splashPulse 3.6s ease-in-out infinite}
     .splash-tagline{color:#fff;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;letter-spacing:.22em;text-transform:uppercase;text-shadow:0 0 12px rgba(170,136,255,.6),0 2px 4px rgba(0,0,0,.8);opacity:.9}
+    .splash-link{color:#ffd866;text-decoration:none;border-bottom:1px dashed rgba(255,216,102,.45);padding-bottom:1px;transition:color .15s,border-color .15s,text-shadow .15s;pointer-events:auto}
+    .splash-link:hover{color:#fff;border-bottom-color:#fff;text-shadow:0 0 14px rgba(255,216,102,.85),0 0 24px rgba(170,136,255,.5)}
     .splash-cta-row{display:flex;gap:18px;align-items:center;justify-content:center;flex-wrap:wrap}
     .splash-cta{appearance:none;border:2px solid rgba(255,255,255,.85);color:#000;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:18px;font-weight:900;letter-spacing:.22em;text-transform:uppercase;padding:16px 40px;border-radius:0;cursor:pointer;text-shadow:0 1px 0 rgba(255,255,255,.4);transition:transform .15s,box-shadow .15s,filter .15s;min-width:160px}
     .splash-cta:hover{transform:translateY(-2px) scale(1.03);filter:brightness(1.08)}
@@ -609,7 +611,7 @@
   <div class="splash-shade"></div>
   <div class="splash-overlay">
     <img src="assets/images/digital-twin-banner.png" alt="DIGITAL TWIN" class="splash-banner">
-    <div class="splash-tagline">Pixer.ia × Admira.xp · The Xpace OS</div>
+    <div class="splash-tagline"><a href="https://www.admira.studio" target="_blank" rel="noopener" class="splash-link">Pixer.ia</a> × Admira.xp · The <a href="https://www.xpaceos.com" target="_blank" rel="noopener" class="splash-link">XpaceOS</a></div>
     <div class="splash-cta-row">
       <button type="button" class="splash-cta splash-cta-jugar" id="splashJugarBtn">▶ JUGAR</button>
       <button type="button" class="splash-cta splash-cta-demo" id="splashDemoBtn">▶ DEMO</button>
@@ -25470,6 +25472,9 @@ window.xtAPI = (function(){
     if(e.target===jugarBtn||e.target===demoBtn) return;
     if(jugarBtn && jugarBtn.contains(e.target)) return;
     if(demoBtn && demoBtn.contains(e.target)) return;
+    // No cerrar splash si el click fue en un enlace de la tagline
+    // (Pixer.ia / XpaceOS abren en pestaña nueva y el splash debe seguir).
+    if(e.target.closest && e.target.closest('.splash-link')) return;
     chooseJugar();
   });
   // ENTER → JUGAR · SPACE → DEMO (solo cuando splash visible)
