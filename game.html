@@ -511,6 +511,14 @@
     .splash-overlay{position:relative;z-index:2;text-align:center;padding:24px;display:flex;flex-direction:column;align-items:center;gap:22px;max-width:92vw}
     .splash-banner{max-width:min(720px,90vw);height:auto;filter:drop-shadow(0 0 18px rgba(255,80,200,.55)) drop-shadow(0 0 36px rgba(80,200,255,.45));animation:splashPulse 3.6s ease-in-out infinite}
     .splash-tagline{color:#fff;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:14px;letter-spacing:.18em;text-shadow:0 0 12px rgba(170,136,255,.6),0 2px 4px rgba(0,0,0,.8);opacity:.9}
+    /* Grupo Admira · pill unificado para Pixer.IA · XpaceOS · Xbusiness */
+    .splash-group{display:inline-flex;flex-direction:column;align-items:center;gap:8px;padding:14px 32px 12px;border:1px solid rgba(170,136,255,.32);border-radius:14px;background:linear-gradient(180deg,rgba(170,136,255,.12) 0%,rgba(80,200,255,.06) 100%);box-shadow:0 0 24px rgba(170,136,255,.15),inset 0 0 18px rgba(170,136,255,.06);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);max-width:92vw}
+    .splash-group-kicker{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:9px;letter-spacing:.42em;color:rgba(216,200,255,.8);text-transform:uppercase;text-shadow:0 0 12px rgba(170,136,255,.6);position:relative;padding:0 14px}
+    .splash-group-kicker::before,.splash-group-kicker::after{content:"";position:absolute;top:50%;width:18px;height:1px;background:rgba(170,136,255,.5)}
+    .splash-group-kicker::before{right:100%;margin-right:4px}
+    .splash-group-kicker::after{left:100%;margin-left:4px}
+    .splash-group-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:center;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:14px;letter-spacing:.14em;text-shadow:0 0 12px rgba(170,136,255,.6),0 2px 4px rgba(0,0,0,.8)}
+    .splash-group-sep{color:rgba(170,136,255,.55);font-weight:bold}
     .splash-link{color:#ffd866;text-decoration:none;border-bottom:1px dashed rgba(255,216,102,.45);padding-bottom:1px;transition:color .15s,border-color .15s,text-shadow .15s;pointer-events:auto}
     .splash-link:hover{color:#fff;border-bottom-color:#fff;text-shadow:0 0 14px rgba(255,216,102,.85),0 0 24px rgba(170,136,255,.5)}
     .splash-cta-row{display:flex;gap:18px;align-items:center;justify-content:center;flex-wrap:wrap}
@@ -611,7 +619,16 @@
   <div class="splash-shade"></div>
   <div class="splash-overlay">
     <img src="assets/images/digital-twin-banner.png" alt="DIGITAL TWIN" class="splash-banner">
-    <div class="splash-tagline"><a href="https://www.admira.studio" target="_blank" rel="noopener" class="splash-link">Pixer.IA</a> · <a href="https://www.xpaceos.com" target="_blank" rel="noopener" class="splash-link">XpaceOS</a> · <a href="https://www.admira.live" target="_blank" rel="noopener" class="splash-link">Xbusiness</a></div>
+    <div class="splash-group">
+      <div class="splash-group-kicker">Admira · Group</div>
+      <div class="splash-group-row">
+        <a href="https://www.admira.studio" target="_blank" rel="noopener" class="splash-link">Pixer.IA</a>
+        <span class="splash-group-sep">·</span>
+        <a href="https://www.xpaceos.com" target="_blank" rel="noopener" class="splash-link">XpaceOS</a>
+        <span class="splash-group-sep">·</span>
+        <a href="https://www.admira.app" target="_blank" rel="noopener" class="splash-link">Xbusiness</a>
+      </div>
+    </div>
     <div class="splash-cta-row">
       <button type="button" class="splash-cta splash-cta-jugar" id="splashJugarBtn">▶ JUGAR</button>
       <button type="button" class="splash-cta splash-cta-demo" id="splashDemoBtn">▶ DEMO</button>
