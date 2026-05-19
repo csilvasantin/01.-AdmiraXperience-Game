@@ -543,31 +543,41 @@
       .splash-overlay{gap:16px}
     }
 
-    /* ── Botón Navigator overlay (solo visible en S.MENU) ── */
-    #navigatorBtn{
-      position:fixed;top:20px;right:20px;
+    /* ── Navegación top (Contacto + Navigator) — estilo admira.app ── */
+    #splashNav{
+      position:fixed;top:0;left:0;right:0;
       display:none;
-      padding:9px 16px;
-      background:linear-gradient(180deg,#2a2010 0%,#070a10 100%);
-      border:1px solid #5a4a30;border-radius:6px;
-      color:#ffd866;text-decoration:none;
-      font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-      font-size:11px;letter-spacing:.14em;font-weight:700;text-transform:uppercase;
-      box-shadow:0 4px 16px rgba(0,0,0,.5),0 0 0 1px rgba(255,216,102,.1) inset;
-      cursor:pointer;z-index:9998;
-      transition:transform .12s,border-color .12s,box-shadow .12s,color .12s;
+      align-items:center;justify-content:space-between;
+      padding:14px 24px;
+      z-index:99999;
+      background:linear-gradient(180deg,rgba(7,10,16,.85) 0%,rgba(7,10,16,0) 100%);
+      backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+      pointer-events:none;
     }
-    body[data-state="menu"] #navigatorBtn,
-    body.splash-visible #navigatorBtn{display:inline-block}
-    /* En la splash, el botón Navigator necesita estar por encima del overlay */
-    body.splash-visible #navigatorBtn{z-index:99999;background:linear-gradient(180deg,rgba(42,32,16,.85) 0%,rgba(7,10,16,.85) 100%);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
-    #navigatorBtn:hover{
+    body[data-state="menu"] #splashNav,
+    body.splash-visible #splashNav{display:flex}
+    .splash-nav-link{
+      pointer-events:auto;
+      color:rgba(255,255,255,.75);
+      text-decoration:none;
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+      font-size:13px;font-weight:500;letter-spacing:.02em;
+      padding:8px 16px;
+      border-radius:6px;
+      border:1px solid transparent;
+      background:rgba(255,255,255,.04);
+      transition:color .15s,background .15s,border-color .15s,transform .12s;
+      white-space:nowrap;
+    }
+    .splash-nav-link:hover{
+      color:#fff;
+      background:rgba(255,255,255,.10);
+      border-color:rgba(255,255,255,.20);
       transform:translateY(-1px);
-      color:#ffe8a0;border-color:#ffd866;
-      box-shadow:0 8px 24px rgba(255,216,102,.25),0 0 0 1px rgba(255,216,102,.2) inset;
     }
     @media (max-width:540px){
-      #navigatorBtn{top:10px;right:10px;padding:7px 12px;font-size:10px}
+      #splashNav{padding:10px 14px}
+      .splash-nav-link{font-size:11px;padding:6px 10px}
     }
   </style>
 </head>
@@ -620,7 +630,7 @@
   <div class="splash-overlay">
     <img src="assets/images/digital-twin-banner.png" alt="DIGITAL TWIN" class="splash-banner">
     <div class="splash-group">
-      <div class="splash-group-kicker">Admira · Group</div>
+      <div class="splash-group-kicker">Admira · Xperience</div>
       <div class="splash-group-row">
         <a href="https://www.admira.studio" target="_blank" rel="noopener" class="splash-link">Pixer.IA</a>
         <span class="splash-group-sep">·</span>
@@ -637,8 +647,13 @@
   </div>
 </div>
 
-<!-- Botón Navigator (visible solo en S.MENU vía body[data-state="menu"]) -->
-<a id="navigatorBtn" href="docs/navigator/" target="_blank" rel="noopener" title="Navigator · diagrama de flujo del DigitalTwin">🗺 NAVIGATOR</a>
+<!-- Navegación top — visible en splash y en menú principal.
+     Estilo alineado con el menú de admira.app: sans-serif minimalista,
+     fondo translúcido oscuro, "↗" como prefijo en enlaces externos. -->
+<nav id="splashNav" class="splash-nav" aria-label="Navegación principal">
+  <a class="splash-nav-link" href="mailto:csilva@admira.com" title="Contacto · csilva@admira.com">Contacto</a>
+  <a class="splash-nav-link" id="navigatorBtn" href="docs/navigator/" target="_blank" rel="noopener" title="Navigator · diagrama de flujo del DigitalTwin">↗ Navigator</a>
+</nav>
 <div id="topBar">
   <span id="bbClock" style="color:#ffdd66;font-size:12px;font-weight:bold">09:00</span>
   <span id="bbDate" style="color:#b0a888;font-size:9px">22/03/2026</span>
