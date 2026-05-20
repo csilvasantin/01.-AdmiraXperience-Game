@@ -12261,14 +12261,58 @@ function siRow(bmp,y,px,count,spacing){
   for(var k=0;k<count;k++) siDrawInvader(bmp,sx+k*spacing-w/2,y,px);
 }
 // Fondo espacial (cielo + estrellas + planeta). Sin invasores/búnkeres (esos son dinámicos).
+// ── Paisaje espacial procedural que EVOLUCIONA con el progreso ──
+// El "tier" se deriva de nivel + puntuación; al cambiar, se regenera (cachea)
+// el cosmos pesado (nebulosas + planetas). La galaxia y las estrellas se
+// animan vivas cada frame. Espectacular y en contraste con el pixel clásico.
+function _rng(seed){var s=seed>>>0;return function(){s=(s*1664525+1013904223)>>>0;return s/4294967296;};}
+function cosmosPalette(tier){
+  var b=(tier*47)%360;
+  return {neb:[(280+b)%360,(195+b)%360,(330+b)%360,(40+b)%360],gal:(48+b)%360,pA:(22+b)%360,pB:(205+b)%360,
+    sky1:'hsl('+((222+b)%360)+',60%,7%)',sky2:'hsl('+((255+b)%360)+',52%,12%)'};
+}
+let _cosmos={tier:-99999,cv:null};
+function renderCosmos(tier){
+  var oc=_cosmos.cv;if(!oc){oc=document.createElement('canvas');oc.width=W;oc.height=H;}
+  var g=oc.getContext('2d');g.globalCompositeOperation='source-over';g.clearRect(0,0,W,H);
+  var P=cosmosPalette(tier),rnd=_rng(9173+tier*131);
+  var bg=g.createLinearGradient(0,0,0,H);bg.addColorStop(0,P.sky1);bg.addColorStop(0.62,P.sky2);bg.addColorStop(1,'#04060f');
+  g.fillStyle=bg;g.fillRect(0,0,W,H);
+  g.globalCompositeOperation='lighter';
+  var blobs=10+Math.min(12,tier*2);
+  for(var i=0;i<blobs;i++){
+    var x=rnd()*W,y=rnd()*H*0.82,r=70+rnd()*190,h=P.neb[i%P.neb.length],al=0.09+rnd()*0.12;
+    var rg=g.createRadialGradient(x,y,0,x,y,r);
+    rg.addColorStop(0,'hsla('+h+',88%,64%,'+al+')');
+    rg.addColorStop(0.5,'hsla('+h+',82%,52%,'+(al*0.45)+')');
+    rg.addColorStop(1,'hsla('+h+',82%,52%,0)');
+    g.fillStyle=rg;g.beginPath();g.arc(x,y,r,0,6.2832);g.fill();
+  }
+  g.globalCompositeOperation='source-over';
+  var planets=1+(tier%3);
+  for(var p=0;p<planets;p++){
+    var px=70+rnd()*(W-140),py=50+rnd()*210,pr=20+rnd()*48,hue=(p%2?P.pB:P.pA);
+    var pg2=g.createRadialGradient(px-pr*0.32,py-pr*0.32,pr*0.1,px,py,pr);
+    pg2.addColorStop(0,'hsl('+hue+',72%,70%)');pg2.addColorStop(0.6,'hsl('+hue+',66%,44%)');pg2.addColorStop(1,'hsl('+((hue+24)%360)+',62%,15%)');
+    g.fillStyle=pg2;g.beginPath();g.arc(px,py,pr,0,6.2832);g.fill();
+    if(rnd()<0.55){g.save();g.strokeStyle='hsla('+((hue+40)%360)+',75%,72%,0.5)';g.lineWidth=2+rnd()*2.5;g.beginPath();g.ellipse(px,py,pr*1.9,pr*0.5,(-0.5+rnd()),0,6.2832);g.stroke();g.restore();}
+  }
+  _cosmos.cv=oc;_cosmos.tier=tier;
+}
 function drawSpaceBackdrop(){
-  var g=cx.createLinearGradient(0,0,0,H);
-  g.addColorStop(0,'#0a1736');g.addColorStop(0.55,'#143464');g.addColorStop(1,'#1c5090');
-  cx.fillStyle=g;cx.fillRect(0,0,W,H);
-  cx.fillStyle='rgba(255,255,255,0.7)';
-  for(var i=0;i<SI_STARS.length;i++){var s=SI_STARS[i];cx.fillRect(s.x,s.y,s.r,s.r);}
-  cx.save();var pg=cx.createLinearGradient(0,H-46,0,H);pg.addColorStop(0,'#c4571d');pg.addColorStop(1,'#7e3410');
-  cx.fillStyle=pg;cx.beginPath();cx.arc(W/2,H+420,448,0,Math.PI*2);cx.fill();cx.restore();
+  var lvl=(typeof XI==='object'&&XI&&typeof XI.level==='number')?XI.level:0;
+  var scr=(typeof XI==='object'&&XI&&XI.score)?XI.score:0;
+  var tier=lvl*5+Math.floor(scr/300);
+  if(_cosmos.tier!==tier||!_cosmos.cv)renderCosmos(tier);
+  cx.drawImage(_cosmos.cv,0,0);
+  var T=(typeof tt==='number')?tt:performance.now()*0.06;
+  var P=cosmosPalette(tier),gx=W*0.74,gy=H*0.25,rot=T*0.0022+tier*0.5;
+  cx.save();cx.globalCompositeOperation='lighter';
+  for(var a=0;a<2;a++){for(var t=2;t<150;t++){var ang=rot+a*Math.PI+t*0.17,rad=t*0.95;var x=gx+Math.cos(ang)*rad,y=gy+Math.sin(ang)*rad*0.46,al=Math.max(0,0.55-t/220);cx.fillStyle='hsla('+P.gal+',92%,'+(58+(t%26))+'%,'+al+')';cx.fillRect(x,y,1.7,1.7);}}
+  var cg=cx.createRadialGradient(gx,gy,0,gx,gy,46);cg.addColorStop(0,'rgba(255,252,236,0.85)');cg.addColorStop(1,'rgba(255,252,236,0)');cx.fillStyle=cg;cx.beginPath();cx.arc(gx,gy,46,0,6.2832);cx.fill();
+  cx.restore();
+  for(var i=0;i<SI_STARS.length;i++){var s=SI_STARS[i];var tw=0.4+0.6*Math.abs(Math.sin((T*0.05)+i));cx.fillStyle='rgba(255,255,255,'+tw+')';cx.fillRect(s.x,s.y,s.r,s.r);}
+  cx.save();var pg=cx.createLinearGradient(0,H-46,0,H);pg.addColorStop(0,'#3a1e0c');pg.addColorStop(1,'#160b04');cx.fillStyle=pg;cx.beginPath();cx.arc(W/2,H+420,448,0,6.2832);cx.fill();cx.restore();
 }
 // Título "XPACE INVADERS": chunky + extrusión 3D + cromado azul/blanco
 function siTitle(text,y,size){
