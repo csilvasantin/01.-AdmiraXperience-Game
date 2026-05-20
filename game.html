@@ -7753,7 +7753,7 @@ function tickDemoMode(){
   // Auto-arrancar SOLO si cfg.autoStart=true. Por defecto desactivado: la
   // demo solo arranca si el usuario pulsa el boton DEMO.
   if(cfg.autoStart && !demoMode && typeof state!=='undefined' && typeof S!=='undefined'){
-    const inIntro=[S.ERA_SEL,S.PRELOAD,S.MENU,S.CLIENT_SEL,S.MODEL_SEL,S.INTRO].includes(state);
+    const inIntro=[S.PRELOAD,S.MENU,S.CLIENT_SEL,S.MODEL_SEL,S.INTRO].includes(state); // ERA_SEL = XPACE INVADERS jugable, sin auto-demo
     if(inIntro && Date.now()-lastInput >= cfg.idleMs){
       startDemoMode();
       return;
@@ -7960,9 +7960,11 @@ document.addEventListener('keydown',e=>{
     return;
   }
   if(state===S.ERA_SEL){
-    e.preventDefault();
-    // Pantalla de HIGH SCORES (atract): Enter/Space "inserta token" y continúa.
-    if(e.code==='Enter'||e.code==='Space'){launchEra(0);return;}
+    if(e.code==='ArrowLeft'||e.code==='ArrowRight'||e.code==='Space'||e.code==='Enter')e.preventDefault();
+    if(typeof XI==='undefined'||!XI)xiInit();
+    if(XI.phase==='title'){ if(e.code==='Space'||e.code==='Enter')xiStartGame(); }
+    else if(XI.phase==='over'){ if(e.code==='Space'||e.code==='Enter')XI.phase='title'; }
+    else if(XI.phase==='play'){ if(e.code==='Space')xiFire(); }
     return;
   }
   if(state===S.PRELOAD){
@@ -12150,32 +12152,19 @@ function siRow(bmp,y,px,count,spacing){
   var w=bmp[0].length*px,sx=W/2-((count-1)*spacing)/2;
   for(var k=0;k<count;k++) siDrawInvader(bmp,sx+k*spacing-w/2,y,px);
 }
-function drawSpaceInvadersBackdrop(){
-  // Cielo espacial
+// Fondo espacial (cielo + estrellas + planeta). Sin invasores/búnkeres (esos son dinámicos).
+function drawSpaceBackdrop(){
   var g=cx.createLinearGradient(0,0,0,H);
   g.addColorStop(0,'#0a1736');g.addColorStop(0.55,'#143464');g.addColorStop(1,'#1c5090');
   cx.fillStyle=g;cx.fillRect(0,0,W,H);
-  // Estrellas
   cx.fillStyle='rgba(255,255,255,0.7)';
   for(var i=0;i<SI_STARS.length;i++){var s=SI_STARS[i];cx.fillRect(s.x,s.y,s.r,s.r);}
-  // Planeta marciano inferior
-  cx.save();var pg=cx.createLinearGradient(0,H-80,0,H);pg.addColorStop(0,'#c4571d');pg.addColorStop(1,'#7e3410');
-  cx.fillStyle=pg;cx.beginPath();cx.arc(W/2,H+356,392,0,Math.PI*2);cx.fill();cx.restore();
-  // Búnkeres sobre el borde del planeta
-  cx.fillStyle='#d9c24a';
-  for(var bx=0;bx<4;bx++){var X=160+bx*168;cx.fillRect(X,H-22,40,14);cx.fillRect(X+14,H-29,12,7);}
-  // Los 4 tipos de invasores, atenuados, de fondo
-  cx.save();cx.globalAlpha=0.20;cx.fillStyle='#e6f2ff';
-  siDrawInvader(SI_UFO,W/2-13,30,1.6);
-  siRow(SI_SQUID,52,2.6,11,58);
-  siRow(SI_CRAB,82,2.6,11,58);
-  siRow(SI_OCTO,116,2.6,11,58);
-  cx.restore();
+  cx.save();var pg=cx.createLinearGradient(0,H-46,0,H);pg.addColorStop(0,'#c4571d');pg.addColorStop(1,'#7e3410');
+  cx.fillStyle=pg;cx.beginPath();cx.arc(W/2,H+420,448,0,Math.PI*2);cx.fill();cx.restore();
 }
-// Título "XPACE INVADERS" estilo Space Invaders: chunky + extrusión 3D + cromado azul/blanco
+// Título "XPACE INVADERS": chunky + extrusión 3D + cromado azul/blanco
 function siTitle(text,y,size){
-  cx.save();
-  cx.textAlign='center';cx.textBaseline='alphabetic';
+  cx.save();cx.textAlign='center';cx.textBaseline='alphabetic';
   cx.font='900 '+size+'px Impact, "Arial Black", system-ui, sans-serif';
   for(var d=8;d>=1;d--){cx.fillStyle=(d>3?'#0a1838':'#163a78');cx.fillText(text,W/2+d,y+d);}
   var gr=cx.createLinearGradient(0,y-size*0.85,0,y+size*0.18);
@@ -12184,31 +12173,111 @@ function siTitle(text,y,size){
   cx.lineWidth=1.4;cx.strokeStyle='#0a1838';cx.strokeText(text,W/2,y);
   cx.restore();
 }
+// ===== XPACE INVADERS — mini-juego jugable =====
+let XI=null;
+const XI_SHAPE=['001111100','011111110','111111111','111111111','111000111','110000011'];
+function xiBunkers(){
+  var list=[];
+  for(var b=0;b<4;b++){
+    var cells=XI_SHAPE.map(function(r){return r.split('').map(function(c){return c==='1';});});
+    list.push({x:118+b*156,y:392,cs:5,cols:9,rows:6,cells:cells});
+  }
+  return list;
+}
+function xiWave(level){
+  var rows=5,cols=9,inv=[];
+  for(var rI=0;rI<rows;rI++)for(var c=0;c<cols;c++){inv.push({c:c,r:rI,alive:true,t:(rI===0?2:(rI<3?1:0))});}
+  XI.inv=inv;XI.dx=46;XI.dy=30;XI.gx=110;XI.gy=64;XI.dir=1;XI.stepT=0;XI.stepInt=Math.max(8,28-level*3);XI.bombs=[];XI.bullets=[];
+}
+function xiInit(){XI={phase:'title',ship:{x:W/2,w:32},bullets:[],bombs:[],inv:[],bunkers:xiBunkers(),score:0,hi:9990,lives:3,level:0,dx:46,dy:30,gx:110,gy:64,dir:1,stepT:0,stepInt:28,blink:0,flash:0};}
+function xiStartGame(){XI.score=0;XI.lives=3;XI.level=0;XI.ship.x=W/2;XI.bunkers=xiBunkers();xiWave(0);XI.phase='play';}
+function xiPos(o){return {x:XI.gx+o.c*XI.dx,y:XI.gy+o.r*XI.dy};} // celda 30x22
+function xiDrawInv(o){var p=xiPos(o);var bmp=o.t===2?SI_SQUID:(o.t===1?SI_CRAB:SI_OCTO);var px=2.3;var w=bmp[0].length*px;cx.fillStyle=o.t===2?'#9be0ff':(o.t===1?'#bfa6ff':'#ff9ad0');siDrawInvader(bmp,p.x+(30-w)/2,p.y,px);}
+function xiBunkerHit(px,py){
+  for(var b=0;b<XI.bunkers.length;b++){var bu=XI.bunkers[b];
+    if(px>=bu.x&&px<=bu.x+bu.cols*bu.cs&&py>=bu.y&&py<=bu.y+bu.rows*bu.cs){
+      var cc=Math.floor((px-bu.x)/bu.cs),cr=Math.floor((py-bu.y)/bu.cs),hit=false;
+      for(var dr=-1;dr<=1;dr++)for(var dc=-1;dc<=1;dc++){var r2=cr+dr,c2=cc+dc;if(r2>=0&&r2<bu.rows&&c2>=0&&c2<bu.cols&&bu.cells[r2][c2]){bu.cells[r2][c2]=false;hit=true;}}
+      if(hit)return true;
+    }
+  }
+  return false;
+}
+function xiFire(){if(XI&&XI.phase==='play'&&XI.bullets.length===0)XI.bullets.push({x:XI.ship.x,y:H-60});}
+function xiUpdate(){
+  if(!XI)xiInit();
+  if(XI.phase!=='play'){XI.blink=(XI.blink+1)%70;return;}
+  var sh=XI.ship;
+  if(keys['ArrowLeft'])sh.x-=5;
+  if(keys['ArrowRight'])sh.x+=5;
+  sh.x=Math.max(28,Math.min(W-28,sh.x));
+  // balas del jugador
+  for(var i=XI.bullets.length-1;i>=0;i--){var bl=XI.bullets[i];bl.y-=8;
+    if(bl.y<28){XI.bullets.splice(i,1);continue;}
+    if(xiBunkerHit(bl.x,bl.y)){XI.bullets.splice(i,1);continue;}
+    var hit=false;
+    for(var j=0;j<XI.inv.length;j++){var o=XI.inv[j];if(!o.alive)continue;var p=xiPos(o);if(bl.x>=p.x&&bl.x<=p.x+30&&bl.y>=p.y&&bl.y<=p.y+22){o.alive=false;XI.score+=(o.t===2?30:o.t===1?20:10);hit=true;break;}}
+    if(hit)XI.bullets.splice(i,1);
+  }
+  // marcha de invasores (acelera al quedar menos)
+  var alive=XI.inv.filter(function(o){return o.alive;}).length;
+  XI.stepT++;
+  var interval=Math.max(5,XI.stepInt-Math.floor((45-alive)/4));
+  if(XI.stepT>=interval&&alive>0){
+    XI.stepT=0;
+    var minX=1e9,maxX=-1e9,maxY=-1e9;
+    for(var k=0;k<XI.inv.length;k++){var o2=XI.inv[k];if(!o2.alive)continue;var q=xiPos(o2);if(q.x<minX)minX=q.x;if(q.x+30>maxX)maxX=q.x+30;if(q.y+22>maxY)maxY=q.y+22;}
+    if((XI.dir>0&&maxX>=W-22)||(XI.dir<0&&minX<=22)){XI.gy+=16;XI.dir*=-1;}
+    else XI.gx+=XI.dir*12;
+    if(maxY+16>=H-64){XI.lives=0;XI.phase='over';}
+  }
+  // invasores bombardean
+  if(alive>0&&Math.random()<0.035){var sh2=XI.inv.filter(function(o){return o.alive;});var s=sh2[Math.floor(Math.random()*sh2.length)];var ps=xiPos(s);XI.bombs.push({x:ps.x+15,y:ps.y+22});}
+  for(var b=XI.bombs.length-1;b>=0;b--){var bo=XI.bombs[b];bo.y+=4;
+    if(bo.y>H-18){XI.bombs.splice(b,1);continue;}
+    if(xiBunkerHit(bo.x,bo.y)){XI.bombs.splice(b,1);continue;}
+    if(bo.y>=H-56&&Math.abs(bo.x-sh.x)<=sh.w/2+2){XI.bombs.splice(b,1);XI.lives--;XI.flash=14;if(XI.lives<=0)XI.phase='over';continue;}
+  }
+  if(alive===0){XI.level++;if(XI.score>XI.hi)XI.hi=XI.score;xiWave(XI.level);}
+  if(XI.flash>0)XI.flash--;
+}
+function xiHud(){
+  tx('SCORE '+String(XI.score).padStart(6,'0'),18,24,'#e6f2ff',13,'left');
+  tx('HI-SCORE '+String(Math.max(XI.hi,XI.score)).padStart(6,'0'),W/2-70,24,'#e6f2ff',13,'left');
+  for(var l=0;l<XI.lives;l++){cx.fillStyle='#7fe0ff';cx.fillRect(W-32-l*30,18,20,7);cx.fillRect(W-24-l*30,12,4,7);}
+}
+function xiDrawGame(){
+  xiHud();
+  for(var i=0;i<XI.inv.length;i++)if(XI.inv[i].alive)xiDrawInv(XI.inv[i]);
+  cx.fillStyle='#46e06a';
+  for(var b=0;b<XI.bunkers.length;b++){var bu=XI.bunkers[b];for(var r=0;r<bu.rows;r++)for(var c=0;c<bu.cols;c++)if(bu.cells[r][c])cx.fillRect(bu.x+c*bu.cs,bu.y+r*bu.cs,bu.cs,bu.cs);}
+  var sh=XI.ship;cx.fillStyle=(XI.flash>0&&XI.flash%4<2)?'#ff5a5a':'#9be8ff';cx.fillRect(sh.x-sh.w/2,H-50,sh.w,8);cx.fillRect(sh.x-3,H-58,6,8);
+  cx.fillStyle='#ffffff';for(var i2=0;i2<XI.bullets.length;i2++)cx.fillRect(XI.bullets[i2].x-1,XI.bullets[i2].y,2,9);
+  cx.fillStyle='#ff8a3f';for(var b2=0;b2<XI.bombs.length;b2++)cx.fillRect(XI.bombs[b2].x-1,XI.bombs[b2].y,2,7);
+  tx('←/→ MOVER · ESPACIO DISPARAR · JUEGO → simulador',W/2,H-6,'#73a0d6',9,'center');
+}
+function xiDrawTitle(){
+  glow('#bcdcff',6);tx('0 CREDITS',W/2,30,'#e6f0ff',14,'center');nog();
+  siTitle('XPACE',92,46);siTitle('INVADERS',144,46);
+  glow('#bfeaff',6);tx('HIGH SCORES',W/2,184,'#dbeeff',16,'center');nog();
+  var startY=208,rowH=21;
+  HIGH_SCORES.forEach(function(s,i){var y=startY+i*rowH;var hue=(150+i*36)%360;var col='hsl('+hue+',88%,66%)';glow(col,4);tx(s[0],190,y,col,15,'right');tx(s[1],214,y,col,15,'left');tx(s[2],648,y,col,15,'right');nog();});
+  if(XI.blink<45){glow('#7fe0ff',12);tx('PULSA ESPACIO PARA JUGAR',W/2,H-58,'#7fe0ff',18,'center');nog();}
+  tx('INSERT TOKENS · NEW HIGH SCORE',W/2,H-32,'#9fd0ff',13,'center');
+}
+function xiDrawOver(){
+  xiDrawGame();
+  cx.save();cx.fillStyle='rgba(2,6,16,0.62)';cx.fillRect(0,0,W,H);cx.restore();
+  glow('#ff5a5a',16);tx('GAME OVER',W/2,H/2-14,'#ff6b6b',40,'center');nog();
+  tx('SCORE '+String(XI.score).padStart(6,'0'),W/2,H/2+24,'#e6f2ff',18,'center');
+  if(XI.blink<45)tx('PULSA ESPACIO PARA REINICIAR',W/2,H/2+58,'#7fe0ff',14,'center');
+}
 function drawEraSelect(){
-  drawSpaceInvadersBackdrop();
-  glow('#bcdcff',6);
-  tx('0 CREDITS',W/2,30,'#e6f0ff',14,'center');
-  nog();
-  siTitle('XPACE',92,46);
-  siTitle('INVADERS',144,46);
-  glow('#bfeaff',6);
-  tx('HIGH SCORES',W/2,186,'#dbeeff',16,'center');
-  nog();
-  const startY=210,rowH=22;
-  HIGH_SCORES.forEach((s,i)=>{
-    const y=startY+i*rowH;
-    const hue=(150+i*36)%360;                        // degradado arcoíris vertical (como el original)
-    const col='hsl('+hue+',88%,66%)';
-    glow(col,4);
-    tx(s[0],190,y,col,15,'right');
-    tx(s[1],214,y,col,15,'left');
-    tx(s[2],648,y,col,15,'right');
-    nog();
-  });
-  glow('#7fe0ff',12);
-  tx('INSERT TOKENS',W/2,H-70,'#7fe0ff',20,'center');
-  tx('NEW HIGH SCORE',W/2,H-48,'#7fe0ff',16,'center');
-  nog();
+  xiUpdate();
+  drawSpaceBackdrop();
+  if(XI.phase==='play')xiDrawGame();
+  else if(XI.phase==='over')xiDrawOver();
+  else xiDrawTitle();
 }
 function drawReadyPlayerRoomBackdrop(){
   const wallGrad=cx.createLinearGradient(0,0,0,H);
