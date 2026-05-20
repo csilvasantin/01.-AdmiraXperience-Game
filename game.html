@@ -1054,7 +1054,7 @@ const APP_VERSION_LABEL=APP_VERSION;
 const APP_FORMULA_LABEL='build '+APP_BUILD;
 // Versión publicada del XpaceOS (se muestra en el splash · página 0).
 // IMPORTANTE: bumpear en cada release junto al tag DigitalTwin-v.YYYY.MM.DD.rN
-const XPACE_OS_VERSION='v.2026.05.20.r20';
+const XPACE_OS_VERSION='v.2026.05.20.r21';
 try{var _sv=document.getElementById('splashVersion');if(_sv)_sv.textContent='XpaceOS '+XPACE_OS_VERSION;}catch(e){}
 const AMIGA_PAGE0_TODO=['BUY SHIP','FIND BIGWHOOP','DEFEAT LECHUCK','MARRY ELAINE!'];
 let amigaPage0Todo=AMIGA_PAGE0_TODO.slice();
@@ -7840,12 +7840,9 @@ function stopDemoMode(){
   demoMode=false;
   demoStartedAt=0;
   document.body.classList.remove('demo-on');
-  // Volver a la pantalla 0 (intro)
-  try{
-    if(typeof state!=='undefined' && typeof S!=='undefined' && typeof startTransition==='function'){
-      startTransition(S.ERA_SEL);
-    }
-  }catch(e){}
+  // Salir de la demo → PÁGINA 0 (splash DIGITAL TWIN), nunca a la pantalla de clientes
+  try{ if(typeof state!=='undefined' && typeof S!=='undefined') state=S.ERA_SEL; }catch(e){}
+  try{ if(typeof window.showSplash==='function') window.showSplash(); }catch(e){}
   lastInput=Date.now();
 }
 function tickDemoMode(){
@@ -9174,7 +9171,7 @@ function doAction(id){
   if(id==='menu'){uiOpen=!uiOpen;return;}
   if(id==='closeUI'){uiOpen=false;return;}
   if(id==='save'){saveGame();showEv('💾 Saved!','#88aa55');SFX.cashRegister();return;}
-  if(id==='quit'){saveGame();stopLiveCam({keepError:true});powerDownEnvironment({reason:'quit'});stopAllMedia();goToHomeMenu();return;}
+  if(id==='quit'){saveGame();stopLiveCam({keepError:true});powerDownEnvironment({reason:'quit'});stopAllMedia();if(demoMode){stopDemoMode();}else{goToHomeMenu();}return;}
   if(id==='editor'){state=S.EDITOR;edSelIdx=-1;edStaffSelIdx=-1;edMode='furniture';return;}
   // ── Editor actions ──
   if(id==='edSave'){saveLayout();edSaveNotify=90;playSaveBeep();return;}
