@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
@@ -582,7 +582,15 @@
     /* El panel de Contacto del grupo (admira-design, z 1000/1010) debe quedar por encima del splash (z 99999) */
     .admira-contact-backdrop{z-index:100000 !important;}
     .admira-contact-panel{z-index:100001 !important;}
+    /* Selector de idioma + Contacto agrupados a la derecha del splash nav */
+    .splash-nav-right{display:flex;align-items:center;gap:10px;pointer-events:auto}
+    .splash-lang{display:inline-flex;border:1px solid rgba(255,255,255,.18);border-radius:6px;overflow:hidden;background:rgba(255,255,255,.04)}
+    .splash-lang-btn{pointer-events:auto;background:transparent;border:0;color:rgba(255,255,255,.6);font:600 12px/1 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;letter-spacing:.04em;padding:7px 10px;cursor:pointer;transition:color .15s,background .15s}
+    .splash-lang-btn:hover{color:#fff;background:rgba(255,255,255,.08)}
+    .splash-lang-btn.is-active{color:#0a0a0a;background:#ffd86a}
   </style>
+  <!-- Idioma por defecto inglés; respeta la elección guardada antes de cargar el panel de contacto -->
+  <script>try{document.documentElement.lang=localStorage.getItem('xtanco_lang')==='es'?'es':'en';}catch(e){document.documentElement.lang='en';}</script>
   <!-- Contacto del grupo Admira: mismo componente y datos que admira.app / admiranext.com / admira.studio -->
   <link rel="stylesheet" href="https://csilvasantin.github.io/admira-design/tokens.css">
   <link rel="stylesheet" href="https://csilvasantin.github.io/admira-design/contact-panel.css">
@@ -659,7 +667,13 @@
      fondo translúcido oscuro, "↗" como prefijo en enlaces externos. -->
 <nav id="splashNav" class="splash-nav" aria-label="Navegación principal">
   <a class="splash-nav-link" id="navigatorBtn" href="docs/navigator/" target="_blank" rel="noopener" title="Navigator · diagrama de flujo del DigitalTwin">↗ Navigator</a>
-  <a class="splash-nav-link" href="#contact" data-admira-contact title="Contacto Admira">Contacto</a>
+  <div class="splash-nav-right">
+    <div class="splash-lang" id="splashLang" role="group" aria-label="Idioma / Language">
+      <button type="button" class="splash-lang-btn" data-lang="en">EN</button>
+      <button type="button" class="splash-lang-btn" data-lang="es">ES</button>
+    </div>
+    <a class="splash-nav-link" id="splashContactBtn" href="#contact" data-admira-contact title="Contacto · Contact">Contacto</a>
+  </div>
 </nav>
 <div id="topBar">
   <span id="bbClock" style="color:#ffdd66;font-size:12px;font-weight:bold">09:00</span>
@@ -5381,12 +5395,15 @@ const LANGS={
     modelStart:['€3,500','€2,800','€4,500','€6,000'],
   },
 };
-let lang='es';
+let lang=(function(){try{return localStorage.getItem('xtanco_lang')==='es'?'es':'en';}catch(e){return 'en';}})();
 const T=()=>LANGS[lang];
 function setLanguage(nextLang){
   lang=nextLang==='en'?'en':'es';
   menuSel=lang==='en'?1:0;
   document.documentElement.lang=lang;
+  try{localStorage.setItem('xtanco_lang',lang);}catch(e){}
+  try{if(typeof applyHtmlLang==='function')applyHtmlLang(lang);}catch(e){}
+  try{document.querySelectorAll('#splashLang .splash-lang-btn').forEach(function(b){b.classList.toggle('is-active',b.dataset.lang===lang);});}catch(e){}
 }
 
 // ── STATE ─────────────────────────────────────────────────────
@@ -25525,5 +25542,67 @@ window.xtAPI = (function(){
 })();
 </script>
 
+<script>
+/* i18n del HTML estático (el canvas ya es bilingüe vía la variable lang).
+   setLanguage() llama a applyHtmlLang(); el selector del splash llama a setLanguage(). */
+(function(){
+  var I18N = [
+    {sel:'#splashJugarBtn', en:'▶ PLAY', es:'▶ JUGAR'},
+    {sel:'#splashDemoBtn', en:'▶ DEMO', es:'▶ DEMO'},
+    {sel:'.splash-hint', en:'PLAY · enter your Xpace · DEMO · hands-free autoplay', es:'JUGAR · entra a tu Xpacio · DEMO · autoplay sin manos'},
+    {sel:'#splashContactBtn', en:'Contact', es:'Contacto'},
+    {sel:'.stat-label', idx:0, en:'Sales', es:'Ventas'},
+    {sel:'.stat-label', idx:1, en:'Profit', es:'Beneficio'},
+    {sel:'.stat-label', idx:2, en:'Sat', es:'Sat'},
+    {sel:'#btnQuit', attr:'title', en:'Close audio and video, back to main menu', es:'Cerrar audios y videos, volver al menú principal'},
+    {sel:'#ksTitle', en:'UNDER MAINTENANCE', es:'EN MANTENIMIENTO'},
+    {sel:'#ksMsg', en:'We are preparing a new version of the Xpace OS. Come back in a few minutes.', es:'Estamos preparando una nueva versión del Xpace OS. Vuelve en unos minutos.'},
+    {sel:'#dsImportTitle', en:'Drop here to import DS content', es:'Suelta para importar contenido DS'},
+    {sel:'#dsImportStatusText', en:'Importing…', es:'Importando…'},
+    {sel:'#mhStatus', en:'ready', es:'listo'},
+    {sel:'#mhPrompt', attr:'placeholder', en:'Ask your Metahuman agent... (Ctrl/⌘+Enter sends)', es:'Pregunta a tu agente Metahuman... (Ctrl/⌘+Enter envía)'},
+    {sel:'#mhAskBtn', en:'Ask', es:'Preguntar'},
+    {sel:'#mhAnswer', en:'Tap the totem to start. The agent thinks with Grok while the voice wave animates.', es:'Toca el tótem para empezar. El agente piensa con Grok mientras anima la onda de voz.'},
+    {sel:'#mhClubToggle', en:'Show QR', es:'Ver QR'},
+    {sel:'#robotGrokStatus', en:'Grok ready', es:'Grok listo'},
+    {sel:'#robotGrokPrompt', attr:'placeholder', en:'Ask the Unitree Bot about stock, customers, layout or the store...', es:'Pregunta al Unitree Bot sobre stock, clientes, layout o la tienda...'},
+    {sel:'#robotGrokAskBtn', en:'Ask Grok', es:'Preguntar a Grok'},
+    {sel:'#robotGrokVoiceBtn', en:'Voice', es:'Voz'},
+    {sel:'#robotGrokSpeakBtn', en:'Audio', es:'Audio'},
+    {sel:'#robotGrokAnswer', en:'Tap the robot and ask any operational question.', es:'Pulsa el robot y consulta cualquier duda operativa.'},
+    {sel:'#evdHelpBtn', en:'? HELP', es:'? AYUDA'},
+    {sel:'#mobileSkipBtn', en:'GAME', es:'JUEGO'},
+    {sel:'#demoBtn', en:'DEMO', es:'DEMO'},
+    {sel:'#demoOverlay', en:'▶ DEMO MODE · no human intervention', es:'▶ MODO DEMO · sin intervención humana'}
+  ];
+  window.applyHtmlLang = function(l){
+    l = (l==='es') ? 'es' : 'en';
+    I18N.forEach(function(it){
+      try{
+        var nodes = document.querySelectorAll(it.sel);
+        var el = (typeof it.idx==='number') ? nodes[it.idx] : nodes[0];
+        if(!el) return;
+        var val = it[l]; if(val==null) return;
+        if(it.attr) el.setAttribute(it.attr, val); else el.textContent = val;
+      }catch(e){}
+    });
+  };
+  function curLang(){ try{ return localStorage.getItem('xtanco_lang')==='es'?'es':'en'; }catch(e){ return 'en'; } }
+  function wire(){
+    var box = document.getElementById('splashLang');
+    if(box) box.querySelectorAll('.splash-lang-btn').forEach(function(b){
+      b.addEventListener('click', function(){
+        if(typeof setLanguage==='function') setLanguage(b.dataset.lang);
+        else { try{localStorage.setItem('xtanco_lang',b.dataset.lang);}catch(e){} window.applyHtmlLang(b.dataset.lang); }
+        document.querySelectorAll('#splashLang .splash-lang-btn').forEach(function(x){ x.classList.toggle('is-active', x.dataset.lang===b.dataset.lang); });
+      });
+    });
+    var cur = curLang();
+    window.applyHtmlLang(cur);
+    document.querySelectorAll('#splashLang .splash-lang-btn').forEach(function(b){ b.classList.toggle('is-active', b.dataset.lang===cur); });
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', wire); else wire();
+})();
+</script>
 </body>
 </html>
