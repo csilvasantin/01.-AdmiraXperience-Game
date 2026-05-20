@@ -532,6 +532,7 @@
     .splash-cta-demo{background:linear-gradient(135deg,rgba(255,170,68,.95) 0%,rgba(255,216,102,.95) 100%);border-color:rgba(255,255,255,.85);color:#1a0f00;box-shadow:0 0 0 1px rgba(0,0,0,.3) inset,0 0 24px rgba(255,170,68,.55),0 0 56px rgba(255,216,102,.35),0 12px 32px rgba(0,0,0,.6)}
     .splash-cta-demo:hover{box-shadow:0 0 0 1px rgba(0,0,0,.3) inset,0 0 36px rgba(255,170,68,.85),0 0 72px rgba(255,216,102,.55),0 16px 40px rgba(0,0,0,.7)}
     .splash-hint{color:#aaa;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;opacity:.7;text-shadow:0 1px 2px rgba(0,0,0,.8);animation:splashHintFade 2.4s ease-in-out infinite}
+    .splash-version{margin-top:6px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;letter-spacing:.10em;color:rgba(150,190,215,.55);text-shadow:0 1px 2px rgba(0,0,0,.8)}
     /* Splash oculto por defecto; solo visible cuando body.splash-visible */
     body:not(.splash-visible) .splash-intro{opacity:0;pointer-events:none}
     body.splash-visible .splash-intro{opacity:1;pointer-events:auto}
@@ -665,6 +666,7 @@
       <button type="button" class="splash-cta splash-cta-demo" id="splashDemoBtn">▶ DEMO</button>
     </div>
     <div class="splash-hint">JUGAR · entra a tu Xpacio · DEMO · autoplay sin manos</div>
+    <div class="splash-version" id="splashVersion"></div>
   </div>
 </div>
 
@@ -1033,6 +1035,10 @@ const APP_BUILD_DATE=(()=>{
 })();
 const APP_VERSION_LABEL=APP_VERSION;
 const APP_FORMULA_LABEL='build '+APP_BUILD;
+// Versión publicada del XpaceOS (se muestra en el splash · página 0).
+// IMPORTANTE: bumpear en cada release junto al tag DigitalTwin-v.YYYY.MM.DD.rN
+const XPACE_OS_VERSION='v.2026.05.20.r17';
+try{var _sv=document.getElementById('splashVersion');if(_sv)_sv.textContent='XpaceOS '+XPACE_OS_VERSION;}catch(e){}
 const AMIGA_PAGE0_TODO=['BUY SHIP','FIND BIGWHOOP','DEFEAT LECHUCK','MARRY ELAINE!'];
 let amigaPage0Todo=AMIGA_PAGE0_TODO.slice();
 let amigaPage0TodoLoaded=false;
