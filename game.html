@@ -267,8 +267,8 @@
     .tg-line.out{border-left-color:#5bc9ff;color:#dff6ff}
     .tg-line.bot{border-left-color:#f0cc5b;color:#fff3c4}
     .tg-line.err{border-left-color:#f05b5b;color:#ffd0d0}
-    #mobileSkipBtn{display:none;position:fixed;right:calc(50% + 8px);bottom:12px;z-index:40;border:1px solid #77ffe1;border-radius:14px;background:linear-gradient(180deg,#0d2f2a,#06110f);color:#d9fff5;font-family:monospace;padding:9px 16px 8px;box-shadow:0 0 22px rgba(85,255,204,.36);cursor:pointer;touch-action:manipulation}
-    #demoBtn{display:none;position:fixed;left:calc(50% + 8px);bottom:12px;z-index:40;border:1px solid #ffaa44;border-radius:14px;background:linear-gradient(180deg,#3a2a0d,#1a1206);color:#ffe1a3;font-family:monospace;padding:9px 16px 8px;box-shadow:0 0 22px rgba(255,170,68,.36);cursor:pointer;touch-action:manipulation}
+    #mobileSkipBtn{display:none;position:fixed;right:calc(50% + 8px);bottom:64px;z-index:40;width:190px;height:64px;box-sizing:border-box;border:1px solid #77ffe1;border-radius:14px;background:linear-gradient(180deg,#0d2f2a,#06110f);color:#d9fff5;font-family:monospace;padding:6px 16px;box-shadow:0 0 22px rgba(85,255,204,.36);cursor:pointer;touch-action:manipulation}
+    #demoBtn{display:none;position:fixed;left:calc(50% + 8px);bottom:64px;z-index:40;width:190px;height:64px;box-sizing:border-box;border:1px solid #ffaa44;border-radius:14px;background:linear-gradient(180deg,#3a2a0d,#1a1206);color:#ffe1a3;font-family:monospace;padding:6px 16px;box-shadow:0 0 22px rgba(255,170,68,.36);cursor:pointer;touch-action:manipulation}
     .arcade-btn .btn-ps{font-family:'Press Start 2P','Courier New',monospace;font-size:10px;line-height:1.1;letter-spacing:.5px;display:block;margin-top:2px}
     .arcade-btn .inv-row{display:flex;align-items:flex-end;justify-content:center;gap:6px}
     .arcade-btn svg{display:block;image-rendering:pixelated}
@@ -277,10 +277,10 @@
     #demoOverlay{display:none;position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:38;background:linear-gradient(90deg,rgba(255,170,68,.22),rgba(255,216,107,.10),rgba(255,170,68,.22));border:1px solid #ffaa44;border-radius:999px;padding:6px 18px;color:#ffe1a3;font-family:monospace;font-size:11px;font-weight:bold;letter-spacing:.18em;text-transform:uppercase;pointer-events:none;animation:demoPulse 1.6s ease-in-out infinite}
     body.demo-on #demoOverlay{display:block}
     @keyframes demoPulse{0%,100%{box-shadow:0 0 8px rgba(255,170,68,.3)}50%{box-shadow:0 0 22px rgba(255,170,68,.7)}}
-    #mobileSkipBtn.show{display:flex;flex-direction:column;align-items:center;gap:5px}
-    #demoBtn.show{display:flex;flex-direction:column;align-items:center;gap:5px}
+    #mobileSkipBtn.show{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px}
+    #demoBtn.show{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px}
     #eraVerticalDock{display:none;position:fixed;left:50%;bottom:78px;transform:translateX(-50%);z-index:39;width:min(860px,calc(100vw - 28px));padding:14px 16px;border:1px solid rgba(120,243,255,.42);border-radius:18px;background:radial-gradient(circle at 12% 0,rgba(120,243,255,.16),transparent 36%),linear-gradient(135deg,rgba(4,10,16,.96),rgba(12,28,34,.96));box-shadow:0 0 0 1px rgba(247,201,93,0.12),0 18px 48px rgba(0,0,0,0.48),inset 0 1px 0 rgba(255,255,255,.10);backdrop-filter:blur(8px)}
-    #eraVerticalDock.show{display:block}
+    #eraVerticalDock.show{display:none} /* barra ADMIRANEXT XP eliminada (Carlos 2026-05-20); mute ahora con la tecla M */
     .evd-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;color:#dce8f6;font-size:11px}
     .evd-head-left{display:flex;flex-direction:column;gap:2px;min-width:0}
     .evd-head-right{display:flex;align-items:center;gap:8px}
@@ -312,7 +312,7 @@
       .evd-btn strong{font-size:11px}
       .evd-btn span{font-size:8px}
       #telegramLog{font-size:9px}
-      #mobileSkipBtn,#demoBtn{bottom:10px;font-size:12px;padding:9px 16px}
+      #mobileSkipBtn,#demoBtn{bottom:54px;width:44vw;max-width:190px;padding:8px 10px}
     }
     #dsImportDrop{position:fixed;inset:0;z-index:9999;display:none;align-items:center;justify-content:center;background:rgba(2,8,14,.55);backdrop-filter:blur(2px);pointer-events:none}
     #dsImportDrop.is-active{display:flex}
@@ -1048,7 +1048,7 @@ const APP_VERSION_LABEL=APP_VERSION;
 const APP_FORMULA_LABEL='build '+APP_BUILD;
 // Versión publicada del XpaceOS (se muestra en el splash · página 0).
 // IMPORTANTE: bumpear en cada release junto al tag DigitalTwin-v.YYYY.MM.DD.rN
-const XPACE_OS_VERSION='v.2026.05.20.r18';
+const XPACE_OS_VERSION='v.2026.05.20.r19';
 try{var _sv=document.getElementById('splashVersion');if(_sv)_sv.textContent='XpaceOS '+XPACE_OS_VERSION;}catch(e){}
 const AMIGA_PAGE0_TODO=['BUY SHIP','FIND BIGWHOOP','DEFEAT LECHUCK','MARRY ELAINE!'];
 let amigaPage0Todo=AMIGA_PAGE0_TODO.slice();
@@ -8054,6 +8054,7 @@ document.addEventListener('keydown',e=>{
     return;
   }
   if(state===S.ERA_SEL){
+    if(e.code==='KeyM'){ e.preventDefault(); try{setAudioMaster(homeMusicMuted);}catch(_){ } return; }
     if(e.code==='ArrowLeft'||e.code==='ArrowRight'||e.code==='Space'||e.code==='Enter')e.preventDefault();
     if(typeof XI==='undefined'||!XI)xiInit();
     if(XI.phase==='title'){ if(e.code==='Space'||e.code==='Enter')xiStartGame(); }
