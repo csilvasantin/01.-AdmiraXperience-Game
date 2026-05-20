@@ -583,8 +583,8 @@
     .admira-contact-backdrop{z-index:100000 !important;}
     .admira-contact-panel{z-index:100001 !important;}
     /* Selector de idioma + Contacto agrupados a la derecha del splash nav */
-    .splash-nav-right{display:flex;align-items:center;gap:10px;pointer-events:auto}
-    .splash-lang{display:inline-flex;border:1px solid rgba(255,255,255,.18);border-radius:6px;overflow:hidden;background:rgba(255,255,255,.04)}
+    /* Selector de idioma centrado sobre la división wireframe ↔ tradicional del splash */
+    .splash-lang{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:inline-flex;border:1px solid rgba(255,255,255,.18);border-radius:6px;overflow:hidden;background:rgba(255,255,255,.04);pointer-events:auto}
     .splash-lang-btn{pointer-events:auto;background:transparent;border:0;color:rgba(255,255,255,.6);font:600 12px/1 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;letter-spacing:.04em;padding:7px 10px;cursor:pointer;transition:color .15s,background .15s}
     .splash-lang-btn:hover{color:#fff;background:rgba(255,255,255,.08)}
     .splash-lang-btn.is-active{color:#0a0a0a;background:#ffd86a}
@@ -667,13 +667,11 @@
      fondo translúcido oscuro, "↗" como prefijo en enlaces externos. -->
 <nav id="splashNav" class="splash-nav" aria-label="Navegación principal">
   <a class="splash-nav-link" id="navigatorBtn" href="docs/navigator/" target="_blank" rel="noopener" title="Navigator · diagrama de flujo del DigitalTwin">↗ Navigator</a>
-  <div class="splash-nav-right">
-    <div class="splash-lang" id="splashLang" role="group" aria-label="Idioma / Language">
-      <button type="button" class="splash-lang-btn" data-lang="en">EN</button>
-      <button type="button" class="splash-lang-btn" data-lang="es">ES</button>
-    </div>
-    <a class="splash-nav-link" id="splashContactBtn" href="#contact" data-admira-contact title="Contacto · Contact">Contacto</a>
+  <div class="splash-lang" id="splashLang" role="group" aria-label="Idioma / Language">
+    <button type="button" class="splash-lang-btn" data-lang="en">EN</button>
+    <button type="button" class="splash-lang-btn" data-lang="es">ES</button>
   </div>
+  <a class="splash-nav-link" id="splashContactBtn" href="#contact" data-admira-contact title="Contacto · Contact">Contacto</a>
 </nav>
 <div id="topBar">
   <span id="bbClock" style="color:#ffdd66;font-size:12px;font-weight:bold">09:00</span>
