@@ -7961,12 +7961,8 @@ document.addEventListener('keydown',e=>{
   }
   if(state===S.ERA_SEL){
     e.preventDefault();
-    if(e.code==='ArrowUp'||e.code==='ArrowLeft'){eraSel=(eraSel+ERAS.length-1)%ERAS.length;return;}
-    if(e.code==='ArrowDown'||e.code==='ArrowRight'){eraSel=(eraSel+1)%ERAS.length;return;}
-    if(e.code==='Digit1'||e.code==='Numpad1'){launchEra(0);return;}
-    if(e.code==='Digit2'||e.code==='Numpad2'){launchEra(1);return;}
-    if(e.code==='Digit3'||e.code==='Numpad3'){launchEra(2);return;}
-    if(e.code==='Enter'||e.code==='Space'){launchEra(eraSel);return;}
+    // Pantalla de HIGH SCORES (atract): Enter/Space "inserta token" y continúa.
+    if(e.code==='Enter'||e.code==='Space'){launchEra(0);return;}
     return;
   }
   if(state===S.PRELOAD){
@@ -12126,65 +12122,41 @@ function drawShoptalkHomeBanner(){
   // Hitbox a todo el ancho del banner
   BTNS['shoptalkBooth']={x:0,y:0,w:W,h:bh};
 }
+// Pantalla de HIGH SCORES estilo arcade (sustituye a la antigua selección de era).
+// Ranking de ejemplo, decorativo. Enter/Space/JUEGO continúan (insertar token).
+const HIGH_SCORES=[
+  ['1.','AAA','999999','#ffd23f'],
+  ['2.','BBB','990000','#ffd23f'],
+  ['3.','HANISROT','970000','#5fe3ff'],
+  ['4.','CLL','960000','#ffd23f'],
+  ['5.','KARMUSE','955000','#5fe3ff'],
+  ['6.','TELIONK','950000','#ff4fa3'],
+  ['7.','CASIKL','945000','#5fe3ff'],
+  ['8.','TENISY','940000','#7ff0ae'],
+  ['9.','PAYIUVA','930000','#ffd23f'],
+  ['10.','PARIVAK','920000','#a98bff'],
+  ['11.','NEVIK','910000','#ff9a3f']
+];
 function drawEraSelect(){
-  const isEs=lang==='es';
-  if(eraNoticeTimer>0) eraNoticeTimer--;
-  drawReadyPlayerRoomBackdrop();
-  cx.globalAlpha=1;
-  // Banner Shoptalk EU 2026 — gradient Lenovo (rojo) → Nvidia (verde),
-  // visible desde la home como atajo al stand de feria.
+  r(0,0,W,H,'#000000');
+  // Banner Shoptalk EU 2026 arriba (atajo al stand) — se mantiene.
   drawShoptalkHomeBanner();
-  nl(0,H-4,W,H-4,'#ff9a1f',2);
-  // Header box bajado 26px (de y=18 a y=44) para dejar libre el banner
-  // LENOVO×NVIDIA de la parte superior. Altura reducida 92→70 para mantener
-  // las cards en su posición original (y=128).
-  r(148,44,504,70,'#05070dee');
-  rx(148,44,504,70,'#5a7398',1);
-  tx(isEs?'SELECCION DE ERA':'ERA SELECT',W/2,72,'#ffffff',22,'center');
-  tx(isEs?'1982-1997 · Elige el arranque del storytelling':'1982-1997 · Choose the storytelling entry point',W/2,94,'#dde8f5',11,'center');
-  tx(isEs?'1. Spectrum  ·  2. Admira  ·  3. PC DX 486':'1. Spectrum  ·  2. Admira  ·  3. PC DX 486',W/2,108,'#a8b8d0',9,'center');
-
-  const cardX=104,cardY=128,cardW=592,cardH=78,cardGap=18;
-  ERAS.forEach((era,i)=>{
-    const y=cardY+i*(cardH+cardGap);
-    const selected=i===eraSel;
-    const border=selected?era.accent:'#445269';
-    const fill=selected?'#111720dd':'#071018cc';
-    const badgeBg=selected?era.accent:'#171e2a';
-    r(cardX,y,cardW,cardH,fill);
-    rx(cardX,y,cardW,cardH,border,selected?2:1);
-    if(selected){glow(era.accent,12);rx(cardX,y,cardW,cardH,era.accent,1);nog();}
-    r(cardX+14,y+14,44,44,badgeBg);
-    rx(cardX+14,y+14,44,44,border,1);
-    tx(String(i+1),cardX+36,y+44,selected?'#081018':'#ffffff',22,'center');
-    tx(era.title,cardX+78,y+26,'#ffffff',17);
-    tx(era.bits+' · '+era.years,cardX+78,y+44,era.accent,11);
-    tx(era.desc,cardX+78,y+62,'#cdd9eb',10);
-    tx(era.route,cardX+cardW-16,y+28,selected?era.accent:'#e3ecff',10,'right');
-    tx(era.available?(isEs?'ENTER PARA ENTRAR':'PRESS ENTER TO OPEN'):(isEs?'EN PREPARACION':'IN PRODUCTION'),cardX+cardW-16,y+60,era.available?'#7ff0ae':'#ffd966',10,'right');
-    BTNS['era'+i]={x:cardX,y,w:cardW,h:cardH};
+  glow('#5fe3ff',22);
+  tx('HIGH SCORES',W/2,76,'#5fe3ff',30,'center');
+  nog();
+  const startY=112,rowH=29;
+  HIGH_SCORES.forEach((s,i)=>{
+    const y=startY+i*rowH,col=s[3];
+    glow(col,5);
+    tx(s[0],150,y,col,18,'right');
+    tx(s[1],176,y,col,18,'left');
+    tx(s[2],662,y,col,18,'right');
+    nog();
   });
-
-  const timelineY=420;
-  nl(152,timelineY,648,timelineY,'#32415f',2);
-  [0,1,2].forEach(i=>{
-    const x=152+i*248;
-    const era=ERAS[i];
-    cx.beginPath();cx.fillStyle=i===eraSel?era.accent:'#607089';cx.arc(x,timelineY,8,0,Math.PI*2);cx.fill();
-    tx(era.years,x,timelineY+22,i===eraSel?era.accent:'#b8c6dc',10,'center');
-  });
-
-  if(eraNoticeTimer>0&&eraNoticeMsg){
-    const boxW=320,boxH=28,boxX=W/2-boxW/2,boxY=452;
-    r(boxX,boxY,boxW,boxH,'#111a10');
-    rx(boxX,boxY,boxW,boxH,'#9be24b',1);
-    tx(eraNoticeMsg,boxX+boxW/2,boxY+18,'#d8f6b4',9,'center');
-  }else{
-    const hint=lang==='es'
-      ?'Flechas cambian era · Enter entra'
-      :'Arrows change era · Enter opens';
-    tx(hint,W/2,468,'#a8baD4',10,'center');
-  }
+  glow('#5fe3ff',12);
+  tx('INSERT TOKENS',W/2,H-42,'#5fe3ff',22,'center');
+  tx('NEW HIGH SCORE',W/2,H-16,'#5fe3ff',17,'center');
+  nog();
 }
 function drawReadyPlayerRoomBackdrop(){
   const wallGrad=cx.createLinearGradient(0,0,0,H);
