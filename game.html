@@ -8267,6 +8267,15 @@ cv.addEventListener('click',e=>{
   }
   const r2=cv.getBoundingClientRect();
   const mx=(e.clientX-r2.left)*(W/r2.width)|0, my=(e.clientY-r2.top)*(H/r2.height)|0;
+  // XPACE INVADERS: pulsar la nave del jugador sale al High Score (anota el récord)
+  if(state===S.ERA_SEL && typeof XI!=='undefined' && XI && XI.phase==='play'){
+    var _sh=XI.ship;
+    if(mx>=_sh.x-22 && mx<=_sh.x+22 && my>=H-66 && my<=H-36){
+      if(XI.score>XI.hi)XI.hi=XI.score;
+      XI.phase='title';
+      return;
+    }
+  }
   // Xpace Creator: hit-test sobre suelo / pared larga / pared corta
   // ANTES de BTNS para que el click sobre el lienzo seleccione la
   // entidad. Solo activo en el editor del creator y sin paleta abierta.
@@ -12374,7 +12383,7 @@ function xiDrawGame(){
   var sh=XI.ship;cx.fillStyle=(XI.flash>0&&XI.flash%4<2)?'#ff5a5a':'#9be8ff';cx.fillRect(sh.x-sh.w/2,H-50,sh.w,8);cx.fillRect(sh.x-3,H-58,6,8);
   cx.fillStyle='#ffffff';for(var i2=0;i2<XI.bullets.length;i2++)cx.fillRect(XI.bullets[i2].x-1,XI.bullets[i2].y,2,9);
   cx.fillStyle='#ff8a3f';for(var b2=0;b2<XI.bombs.length;b2++)cx.fillRect(XI.bombs[b2].x-1,XI.bombs[b2].y,2,7);
-  tx(xiL('←/→ MOVE · SPACE FIRE · GAME → simulator','←/→ MOVER · ESPACIO DISPARAR · JUEGO → simulador'),W/2,H-6,'#73a0d6',9,'center');
+  tx(xiL('←/→ MOVE · SPACE FIRE · PRESS START → simulator · SHIP → High Score','←/→ MOVER · ESPACIO DISPARAR · PRESS START → simulador · NAVE → High Score'),W/2,H-6,'#73a0d6',9,'center');
 }
 function xiDrawTitle(){
   glow('#bcdcff',6);tx(xiL('0 CREDITS','0 CRÉDITOS'),W/2,30,'#e6f0ff',14,'center');nog();
