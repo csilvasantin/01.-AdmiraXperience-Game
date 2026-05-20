@@ -541,6 +541,12 @@
     body:not(.splash-visible) .splash-intro{opacity:0;pointer-events:none}
     body.splash-visible .splash-intro{opacity:1;pointer-events:auto}
     body.splash-hiding .splash-intro{opacity:0;pointer-events:none;transition:opacity .55s ease-out}
+    /* Splash oculto: sus enlaces/botones del centro (Pixer.IA/XpaceOS/Xbusiness, JUGAR/DEMO)
+       NO deben capturar clicks ni mostrar cursor de enlace — eran "enlaces sueltos" invisibles
+       sobre el canvas transparente de la página 1 (Carlos 2026-05-20). */
+    body:not(.splash-visible) #splashIntro a,
+    body:not(.splash-visible) #splashIntro button{pointer-events:none!important}
+    body:not(.splash-visible):not(.splash-hiding) #splashIntro{visibility:hidden}
     @keyframes splashKenBurns{from{transform:scale(1.02) translate(-1%,-1%)}to{transform:scale(1.08) translate(1%,1%)}}
     @keyframes splashPulse{0%,100%{transform:scale(1);filter:drop-shadow(0 0 18px rgba(255,80,200,.55)) drop-shadow(0 0 36px rgba(80,200,255,.45))}50%{transform:scale(1.025);filter:drop-shadow(0 0 26px rgba(255,80,200,.75)) drop-shadow(0 0 52px rgba(80,200,255,.6))}}
     @keyframes splashHintFade{0%,100%{opacity:.4}50%{opacity:.85}}
@@ -1048,7 +1054,7 @@ const APP_VERSION_LABEL=APP_VERSION;
 const APP_FORMULA_LABEL='build '+APP_BUILD;
 // Versión publicada del XpaceOS (se muestra en el splash · página 0).
 // IMPORTANTE: bumpear en cada release junto al tag DigitalTwin-v.YYYY.MM.DD.rN
-const XPACE_OS_VERSION='v.2026.05.20.r19';
+const XPACE_OS_VERSION='v.2026.05.20.r20';
 try{var _sv=document.getElementById('splashVersion');if(_sv)_sv.textContent='XpaceOS '+XPACE_OS_VERSION;}catch(e){}
 const AMIGA_PAGE0_TODO=['BUY SHIP','FIND BIGWHOOP','DEFEAT LECHUCK','MARRY ELAINE!'];
 let amigaPage0Todo=AMIGA_PAGE0_TODO.slice();
