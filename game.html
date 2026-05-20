@@ -12125,37 +12125,48 @@ function drawShoptalkHomeBanner(){
 // Pantalla de HIGH SCORES estilo arcade (sustituye a la antigua selección de era).
 // Ranking de ejemplo, decorativo. Enter/Space/JUEGO continúan (insertar token).
 const HIGH_SCORES=[
-  ['1.','AAA','999999','#ffd23f'],
-  ['2.','BBB','990000','#ffd23f'],
-  ['3.','HANISROT','970000','#5fe3ff'],
-  ['4.','CLL','960000','#ffd23f'],
-  ['5.','KARMUSE','955000','#5fe3ff'],
-  ['6.','TELIONK','950000','#ff4fa3'],
-  ['7.','CASIKL','945000','#5fe3ff'],
-  ['8.','TENISY','940000','#7ff0ae'],
-  ['9.','PAYIUVA','930000','#ffd23f'],
-  ['10.','PARIVAK','920000','#a98bff'],
-  ['11.','NEVIK','910000','#ff9a3f']
+  ['1ST','XPACE','999990'],
+  ['2ND','ADMIRA','970500'],
+  ['3RD','NEON','940000'],
+  ['4TH','HANISROT','910000'],
+  ['5TH','KARMUSE','880000'],
+  ['6TH','TELIONK','850000'],
+  ['7TH','CASIKL','820000'],
+  ['8TH','PARIVAK','790000'],
+  ['9TH','PAYIUVA','760000'],
+  ['10TH','NEVIK','730000']
 ];
 function drawEraSelect(){
-  r(0,0,W,H,'#000000');
+  r(0,0,W,H,'#000010');
   // Banner Shoptalk EU 2026 arriba (atajo al stand) — se mantiene.
   drawShoptalkHomeBanner();
-  glow('#5fe3ff',22);
-  tx('HIGH SCORES',W/2,76,'#5fe3ff',30,'center');
-  nog();
-  const startY=112,rowH=29;
+  // Créditos arriba (estilo arcade)
+  tx('0 CREDITS',W/2,48,'#e0eaff',14,'center');
+  // Título XPACE INVADERS con efecto de 3 capas (sombra / profundidad / frente)
+  function layered(text,y,size){
+    tx(text,W/2+3,y+3,'#0a1230',size,'center');   // capa sombra (atrás)
+    tx(text,W/2+1,y+1,'#2f6dff',size,'center');    // capa media (azul)
+    glow('#bcdcff',14);
+    tx(text,W/2,y,'#eef5ff',size,'center');         // capa frontal (clara)
+    nog();
+  }
+  layered('XPACE',98,42);
+  layered('INVADERS',146,42);
+  tx('HIGH SCORES',W/2,178,'#bfeaff',15,'center');
+  const startY=202,rowH=24;
   HIGH_SCORES.forEach((s,i)=>{
-    const y=startY+i*rowH,col=s[3];
-    glow(col,5);
-    tx(s[0],150,y,col,18,'right');
-    tx(s[1],176,y,col,18,'left');
-    tx(s[2],662,y,col,18,'right');
+    const y=startY+i*rowH;
+    const hue=(150+i*36)%360;                        // degradado arcoíris vertical
+    const col='hsl('+hue+',85%,64%)';
+    glow(col,4);
+    tx(s[0],190,y,col,15,'right');
+    tx(s[1],214,y,col,15,'left');
+    tx(s[2],648,y,col,15,'right');
     nog();
   });
-  glow('#5fe3ff',12);
-  tx('INSERT TOKENS',W/2,H-42,'#5fe3ff',22,'center');
-  tx('NEW HIGH SCORE',W/2,H-16,'#5fe3ff',17,'center');
+  glow('#7fe0ff',12);
+  tx('INSERT TOKENS',W/2,H-42,'#7fe0ff',20,'center');
+  tx('NEW HIGH SCORE',W/2,H-16,'#7fe0ff',16,'center');
   nog();
 }
 function drawReadyPlayerRoomBackdrop(){
