@@ -579,7 +579,14 @@
       #splashNav{padding:10px 14px}
       .splash-nav-link{font-size:11px;padding:6px 10px}
     }
+    /* El panel de Contacto del grupo (admira-design, z 1000/1010) debe quedar por encima del splash (z 99999) */
+    .admira-contact-backdrop{z-index:100000 !important;}
+    .admira-contact-panel{z-index:100001 !important;}
   </style>
+  <!-- Contacto del grupo Admira: mismo componente y datos que admira.app / admiranext.com / admira.studio -->
+  <link rel="stylesheet" href="https://csilvasantin.github.io/admira-design/tokens.css">
+  <link rel="stylesheet" href="https://csilvasantin.github.io/admira-design/contact-panel.css">
+  <script defer src="https://csilvasantin.github.io/admira-design/contact-panel.js"></script>
 </head>
 <body>
 <!-- ── Modal Guardar como Plantilla (sustituye prompt() nativo) ── -->
@@ -651,8 +658,8 @@
      Estilo alineado con el menú de admira.app: sans-serif minimalista,
      fondo translúcido oscuro, "↗" como prefijo en enlaces externos. -->
 <nav id="splashNav" class="splash-nav" aria-label="Navegación principal">
-  <a class="splash-nav-link" href="mailto:csilva@admira.com" title="Contacto · csilva@admira.com">Contacto</a>
   <a class="splash-nav-link" id="navigatorBtn" href="docs/navigator/" target="_blank" rel="noopener" title="Navigator · diagrama de flujo del DigitalTwin">↗ Navigator</a>
+  <a class="splash-nav-link" href="#contact" data-admira-contact title="Contacto Admira">Contacto</a>
 </nav>
 <div id="topBar">
   <span id="bbClock" style="color:#ffdd66;font-size:12px;font-weight:bold">09:00</span>
