@@ -12338,10 +12338,14 @@ function xiUpdate(){
   if(alive===0){XI.level++;if(XI.score>XI.hi)XI.hi=XI.score;xiWave(XI.level);}
   if(XI.flash>0)XI.flash--;
 }
+// Idioma del juego: sigue al de la plataforma Digital Twin (lang 'en'/'es')
+function xiL(en,es){return (typeof lang!=='undefined'&&lang==='es')?es:en;}
 function xiHud(){
-  tx('SCORE '+String(XI.score).padStart(6,'0'),18,24,'#e6f2ff',13,'left');
-  tx('HI-SCORE '+String(Math.max(XI.hi,XI.score)).padStart(6,'0'),W/2-70,24,'#e6f2ff',13,'left');
-  for(var l=0;l<XI.lives;l++){cx.fillStyle='#7fe0ff';cx.fillRect(W-32-l*30,18,20,7);cx.fillRect(W-24-l*30,12,4,7);}
+  var c='rgba(150,180,205,0.5)'; // HUD atenuado para no chocar con la página 0
+  tx(xiL('SCORE','PUNTOS')+' '+String(XI.score).padStart(6,'0'),18,21,c,11,'left');
+  tx(xiL('HI-SCORE','RÉCORD')+' '+String(Math.max(XI.hi,XI.score)).padStart(6,'0'),W/2-64,21,c,11,'left');
+  cx.fillStyle='rgba(150,180,205,0.42)';
+  for(var l=0;l<XI.lives;l++){cx.fillRect(W-28-l*24,16,15,5);cx.fillRect(W-21-l*24,11,3,6);}
 }
 function xiDrawGame(){
   xiHud();
@@ -12353,23 +12357,23 @@ function xiDrawGame(){
   var sh=XI.ship;cx.fillStyle=(XI.flash>0&&XI.flash%4<2)?'#ff5a5a':'#9be8ff';cx.fillRect(sh.x-sh.w/2,H-50,sh.w,8);cx.fillRect(sh.x-3,H-58,6,8);
   cx.fillStyle='#ffffff';for(var i2=0;i2<XI.bullets.length;i2++)cx.fillRect(XI.bullets[i2].x-1,XI.bullets[i2].y,2,9);
   cx.fillStyle='#ff8a3f';for(var b2=0;b2<XI.bombs.length;b2++)cx.fillRect(XI.bombs[b2].x-1,XI.bombs[b2].y,2,7);
-  tx('←/→ MOVER · ESPACIO DISPARAR · JUEGO → simulador',W/2,H-6,'#73a0d6',9,'center');
+  tx(xiL('←/→ MOVE · SPACE FIRE · GAME → simulator','←/→ MOVER · ESPACIO DISPARAR · JUEGO → simulador'),W/2,H-6,'#73a0d6',9,'center');
 }
 function xiDrawTitle(){
-  glow('#bcdcff',6);tx('0 CREDITS',W/2,30,'#e6f0ff',14,'center');nog();
+  glow('#bcdcff',6);tx(xiL('0 CREDITS','0 CRÉDITOS'),W/2,30,'#e6f0ff',14,'center');nog();
   siTitle('XPACE',92,46);siTitle('INVADERS',144,46);
-  glow('#bfeaff',6);tx('HIGH SCORES',W/2,184,'#dbeeff',16,'center');nog();
+  glow('#bfeaff',6);tx(xiL('HIGH SCORES','PUNTUACIONES'),W/2,184,'#dbeeff',16,'center');nog();
   var startY=208,rowH=21;
   HIGH_SCORES.forEach(function(s,i){var y=startY+i*rowH;var hue=(150+i*36)%360;var col='hsl('+hue+',88%,66%)';glow(col,4);tx(s[0],190,y,col,15,'right');tx(s[1],214,y,col,15,'left');tx(s[2],648,y,col,15,'right');nog();});
-  if(XI.blink<45){glow('#7fe0ff',12);tx('PULSA ESPACIO PARA JUGAR',W/2,H-58,'#7fe0ff',18,'center');nog();}
-  tx('INSERT TOKENS · NEW HIGH SCORE',W/2,H-32,'#9fd0ff',13,'center');
+  if(XI.blink<45){glow('#7fe0ff',12);tx(xiL('PRESS SPACE TO PLAY','PULSA ESPACIO PARA JUGAR'),W/2,H-58,'#7fe0ff',18,'center');nog();}
+  tx(xiL('INSERT TOKENS · NEW HIGH SCORE','INSERTA FICHAS · NUEVO RÉCORD'),W/2,H-32,'#9fd0ff',13,'center');
 }
 function xiDrawOver(){
   xiDrawGame();
   cx.save();cx.fillStyle='rgba(2,6,16,0.62)';cx.fillRect(0,0,W,H);cx.restore();
-  glow('#ff5a5a',16);tx('GAME OVER',W/2,H/2-14,'#ff6b6b',40,'center');nog();
-  tx('SCORE '+String(XI.score).padStart(6,'0'),W/2,H/2+24,'#e6f2ff',18,'center');
-  if(XI.blink<45)tx('PULSA ESPACIO PARA REINICIAR',W/2,H/2+58,'#7fe0ff',14,'center');
+  glow('#ff5a5a',16);tx(xiL('GAME OVER','FIN DEL JUEGO'),W/2,H/2-14,'#ff6b6b',40,'center');nog();
+  tx(xiL('SCORE','PUNTOS')+' '+String(XI.score).padStart(6,'0'),W/2,H/2+24,'#e6f2ff',18,'center');
+  if(XI.blink<45)tx(xiL('PRESS SPACE TO RESTART','PULSA ESPACIO PARA REINICIAR'),W/2,H/2+58,'#7fe0ff',14,'center');
 }
 function drawEraSelect(){
   xiUpdate();
