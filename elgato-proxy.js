@@ -994,6 +994,50 @@ function tubeStartJob(url, fmt) {
   return id;
 }
 
+// ─── Import vía Telegram: descarga un job y lo publica en el Stock de admira.studio ──
+// Lo usa el webhook del worker (POST /tube/import-to-stock). El worker ya notifica al
+// chat cuando /stock/publish recibe el asset, así que aquí solo descargamos y subimos.
+const STOCK_PUBLISH_URL = process.env.STOCK_PUBLISH_URL || 'https://pixer-eleven.csilvasantin.workers.dev/stock/publish';
+function tubeYtThumb(u) {
+  const m = String(u).match(/(?:youtube\.com\/.*[?&]v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/)([A-Za-z0-9_-]{11})/);
+  return m ? `https://img.youtube.com/vi/${m[1]}/hqdefault.jpg` : null;
+}
+async function tubePublishToStockWhenReady(jobId, url, fmt, comment) {
+  const MAX_MS = 8 * 60 * 1000;
+  const t0 = Date.now();
+  try {
+    while (true) {
+      await new Promise(r => setTimeout(r, 1500));
+      const job = TUBE_JOBS.get(jobId);
+      if (!job) throw new Error('job desaparecido');
+      if (job.status === 'done') break;
+      if (job.status === 'error') throw new Error(job.error || 'descarga fallida');
+      if (Date.now() - t0 > MAX_MS) throw new Error('timeout descarga (>8min)');
+    }
+    const job = TUBE_JOBS.get(jobId);
+    if (!job || !job.file || !fs.existsSync(job.file)) throw new Error('fichero no disponible');
+    const buf = fs.readFileSync(job.file);
+    const payload = {
+      type: fmt === 'audio' ? 'audio' : 'video',
+      motor: 'yt-dlp',
+      prompt: url,
+      title: job.title || null,
+      comment: comment || null,
+      costEst: `gratis · ${(buf.length / 1024 / 1024).toFixed(2)}MB · Telegram`,
+      thumbnail: tubeYtThumb(url),
+      mime: fmt === 'audio' ? 'audio/mpeg' : 'video/mp4',
+      base64: buf.toString('base64'),
+    };
+    const r = await fetch(STOCK_PUBLISH_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    const txt = await r.text().catch(() => '');
+    console.log(`[import-to-stock] ${jobId} → publish ${r.status} ${txt.slice(0, 160)}`);
+  } catch (e) {
+    console.error(`[import-to-stock] ${jobId} ERROR: ${e && e.message || e}`);
+  } finally {
+    try { tubeDisposeJob(jobId); } catch (e) {}
+  }
+}
+
 const server = http.createServer((req, res) => {
   const requestUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   const requestPath = requestUrl.pathname;
@@ -1245,6 +1289,25 @@ const server = http.createServer((req, res) => {
     rs.pipe(res);
     rs.on('end', () => tubeDisposeJob(id));
     rs.on('error', () => { job.expiry = setTimeout(() => tubeDisposeJob(id), 60 * 1000); });
+    return;
+  }
+
+  // ─── /tube/import-to-stock ─ descarga + publica en Stock (bot de Telegram) ──
+  if (requestPath === '/tube/import-to-stock' && req.method === 'OPTIONS') { setCors(res); res.writeHead(204); res.end(); return; }
+  if (requestPath === '/tube/import-to-stock' && req.method === 'POST') {
+    setCors(res);
+    collectJsonBody(req, (err, body) => {
+      if (err || !body || typeof body.url !== 'string' || !body.url.trim()) { sendJson(res, 400, { ok: false, error: 'Missing url' }); return; }
+      const url = body.url.trim();
+      const fmt = (body.format === 'audio') ? 'audio' : 'video';
+      const comment = (typeof body.comment === 'string' && body.comment.trim()) ? body.comment.trim().slice(0, 500) : null;
+      let host;
+      try { host = new URL(url).hostname.toLowerCase(); } catch (e) { sendJson(res, 400, { ok: false, error: 'Invalid URL' }); return; }
+      if (!tubeHostAllowed(host)) { sendJson(res, 400, { ok: false, error: 'Host not allowed', host }); return; }
+      const jobId = tubeStartJob(url, fmt);
+      sendJson(res, 202, { ok: true, jobId, state: 'running' }); // responde ya; descarga+publica en segundo plano
+      tubePublishToStockWhenReady(jobId, url, fmt, comment);
+    });
     return;
   }
 
