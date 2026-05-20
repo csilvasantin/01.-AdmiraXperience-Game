@@ -12136,28 +12136,69 @@ const HIGH_SCORES=[
   ['9TH','PAYIUVA','760000'],
   ['10TH','NEVIK','730000']
 ];
+// Sprites pixelados de los 4 tipos de invasores (1 = píxel encendido)
+const SI_SQUID=['00111100','01111110','11011011','11111111','01100110','10100101','01000010','00100100'];
+const SI_CRAB=['00100000100','00010001000','00111111100','01101110110','11111111111','10111111101','10100000101','00011011000'];
+const SI_OCTO=['000011110000','011111111110','111111111111','111001100111','111111111111','000110011000','001101101100','110000000011'];
+const SI_UFO=['0000011111100000','0001111111111000','0011111111111100','0110110110110110','1111111111111111','0011100110011100','0001000000001000'];
+// Estrellas fijas (determinista, no parpadean entre frames)
+const SI_STARS=(function(){var a=[];for(var i=0;i<90;i++)a.push({x:(i*101)%800,y:(i*61)%500,r:(i%5===0)?2:1});return a;})();
+function siDrawInvader(bmp,x,y,px){
+  for(var ri=0;ri<bmp.length;ri++){var row=bmp[ri];for(var c=0;c<row.length;c++){if(row[c]==='1')cx.fillRect(x+c*px,y+ri*px,px,px);}}
+}
+function siRow(bmp,y,px,count,spacing){
+  var w=bmp[0].length*px,sx=W/2-((count-1)*spacing)/2;
+  for(var k=0;k<count;k++) siDrawInvader(bmp,sx+k*spacing-w/2,y,px);
+}
+function drawSpaceInvadersBackdrop(){
+  // Cielo espacial
+  var g=cx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#0a1736');g.addColorStop(0.55,'#143464');g.addColorStop(1,'#1c5090');
+  cx.fillStyle=g;cx.fillRect(0,0,W,H);
+  // Estrellas
+  cx.fillStyle='rgba(255,255,255,0.7)';
+  for(var i=0;i<SI_STARS.length;i++){var s=SI_STARS[i];cx.fillRect(s.x,s.y,s.r,s.r);}
+  // Planeta marciano inferior
+  cx.save();var pg=cx.createLinearGradient(0,H-80,0,H);pg.addColorStop(0,'#c4571d');pg.addColorStop(1,'#7e3410');
+  cx.fillStyle=pg;cx.beginPath();cx.arc(W/2,H+356,392,0,Math.PI*2);cx.fill();cx.restore();
+  // Búnkeres sobre el borde del planeta
+  cx.fillStyle='#d9c24a';
+  for(var bx=0;bx<4;bx++){var X=160+bx*168;cx.fillRect(X,H-22,40,14);cx.fillRect(X+14,H-29,12,7);}
+  // Los 4 tipos de invasores, atenuados, de fondo
+  cx.save();cx.globalAlpha=0.20;cx.fillStyle='#e6f2ff';
+  siDrawInvader(SI_UFO,W/2-13,30,1.6);
+  siRow(SI_SQUID,52,2.6,11,58);
+  siRow(SI_CRAB,82,2.6,11,58);
+  siRow(SI_OCTO,116,2.6,11,58);
+  cx.restore();
+}
+// Título "XPACE INVADERS" estilo Space Invaders: chunky + extrusión 3D + cromado azul/blanco
+function siTitle(text,y,size){
+  cx.save();
+  cx.textAlign='center';cx.textBaseline='alphabetic';
+  cx.font='900 '+size+'px Impact, "Arial Black", system-ui, sans-serif';
+  for(var d=8;d>=1;d--){cx.fillStyle=(d>3?'#0a1838':'#163a78');cx.fillText(text,W/2+d,y+d);}
+  var gr=cx.createLinearGradient(0,y-size*0.85,0,y+size*0.18);
+  gr.addColorStop(0,'#ffffff');gr.addColorStop(0.42,'#d6e8ff');gr.addColorStop(0.52,'#7db0ff');gr.addColorStop(0.64,'#3f74d8');gr.addColorStop(1,'#d6ecff');
+  cx.fillStyle=gr;cx.fillText(text,W/2,y);
+  cx.lineWidth=1.4;cx.strokeStyle='#0a1838';cx.strokeText(text,W/2,y);
+  cx.restore();
+}
 function drawEraSelect(){
-  r(0,0,W,H,'#000010');
-  // Banner Shoptalk EU 2026 arriba (atajo al stand) — se mantiene.
-  drawShoptalkHomeBanner();
-  // Créditos arriba (estilo arcade)
-  tx('0 CREDITS',W/2,48,'#e0eaff',14,'center');
-  // Título XPACE INVADERS con efecto de 3 capas (sombra / profundidad / frente)
-  function layered(text,y,size){
-    tx(text,W/2+3,y+3,'#0a1230',size,'center');   // capa sombra (atrás)
-    tx(text,W/2+1,y+1,'#2f6dff',size,'center');    // capa media (azul)
-    glow('#bcdcff',14);
-    tx(text,W/2,y,'#eef5ff',size,'center');         // capa frontal (clara)
-    nog();
-  }
-  layered('XPACE',98,42);
-  layered('INVADERS',146,42);
-  tx('HIGH SCORES',W/2,178,'#bfeaff',15,'center');
-  const startY=202,rowH=24;
+  drawSpaceInvadersBackdrop();
+  glow('#bcdcff',6);
+  tx('0 CREDITS',W/2,30,'#e6f0ff',14,'center');
+  nog();
+  siTitle('XPACE',92,46);
+  siTitle('INVADERS',144,46);
+  glow('#bfeaff',6);
+  tx('HIGH SCORES',W/2,186,'#dbeeff',16,'center');
+  nog();
+  const startY=210,rowH=22;
   HIGH_SCORES.forEach((s,i)=>{
     const y=startY+i*rowH;
-    const hue=(150+i*36)%360;                        // degradado arcoíris vertical
-    const col='hsl('+hue+',85%,64%)';
+    const hue=(150+i*36)%360;                        // degradado arcoíris vertical (como el original)
+    const col='hsl('+hue+',88%,66%)';
     glow(col,4);
     tx(s[0],190,y,col,15,'right');
     tx(s[1],214,y,col,15,'left');
@@ -12165,8 +12206,8 @@ function drawEraSelect(){
     nog();
   });
   glow('#7fe0ff',12);
-  tx('INSERT TOKENS',W/2,H-42,'#7fe0ff',20,'center');
-  tx('NEW HIGH SCORE',W/2,H-16,'#7fe0ff',16,'center');
+  tx('INSERT TOKENS',W/2,H-70,'#7fe0ff',20,'center');
+  tx('NEW HIGH SCORE',W/2,H-48,'#7fe0ff',16,'center');
   nog();
 }
 function drawReadyPlayerRoomBackdrop(){
