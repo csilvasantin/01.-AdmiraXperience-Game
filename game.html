@@ -1175,9 +1175,14 @@ function stopHomeMusic(){
   }
 }
 function shouldPlayHomeMusic(){
-  return homeMusicArmed && !homeMusicMuted && [S.ERA_SEL,S.PRELOAD,S.MENU,S.CLIENT_SEL,S.MODEL_SEL,S.INTRO].includes(state);
+  return homeMusicArmed && !homeMusicMuted && [S.PRELOAD,S.MENU,S.CLIENT_SEL,S.MODEL_SEL,S.INTRO].includes(state);
+}
+function shouldPlayXiMusic(){
+  return homeMusicArmed && !homeMusicMuted && state===S.ERA_SEL;
 }
 function syncHomeMusic(){
+  if(shouldPlayXiMusic()){ stopHomeMusic(); startXiMusic(); return; }
+  stopXiMusic();
   if(shouldPlayHomeMusic()){ startHomeMusic(); return; }
   stopHomeMusic();
 }
@@ -1192,6 +1197,69 @@ function armHomeMusic(){
   homeMusicArmed=true;
   syncHomeMusic();
 }
+
+// ── XPACE INVADERS — banda sonora dedicada (página 1 / ERA_SEL) ──
+// Recreación chiptune original (no es una grabación): bajo descendente de 4
+// notas que ACELERA según mueren los invasores, como el arcade clásico.
+const XI_MUSIC_NOTES=[196.00,164.81,146.83,130.81]; // G3 E3 D3 C3 descendente
+let xiMusicTimer=null,xiMusicStep=0;
+function xiMusicTone(){
+  const ac=getHomeMusicCtx();
+  if(!ac){return;}
+  const f=XI_MUSIC_NOTES[xiMusicStep%XI_MUSIC_NOTES.length];
+  playHomeMusicVoice(f,0.15,'square',0.05);
+  playHomeMusicVoice(f/2,0.17,'triangle',0.03);
+  xiMusicStep++;
+}
+function xiMusicInterval(){
+  let frac=1;
+  try{
+    if(typeof XI==='object'&&XI&&XI.phase==='play'&&XI.inv&&XI.inv.length){
+      const total=XI.inv.length;
+      const alive=XI.inv.filter(o=>o.alive).length;
+      frac=alive/total;
+    }else{frac=1.05;} // título: un pelín más lento
+  }catch(e){}
+  return 130+frac*330; // ~460ms lleno → ~130ms casi vacío
+}
+function xiMusicLoop(){
+  xiMusicTone();
+  xiMusicTimer=setTimeout(xiMusicLoop,xiMusicInterval());
+}
+async function startXiMusic(){
+  if(homeMusicMuted||xiMusicTimer) return;
+  const ac=getHomeMusicCtx();
+  if(!ac) return;
+  if(ac.state==='suspended'){try{await ac.resume();}catch(e){return;}}
+  xiMusicLoop();
+}
+function stopXiMusic(){
+  if(xiMusicTimer){clearTimeout(xiMusicTimer);xiMusicTimer=null;}
+}
+// SFX del mini-juego (disparo, explosión, bomba, impacto). Respeta el master mute.
+function xiSfx(kind){
+  if(homeMusicMuted) return;
+  const ac=getHomeMusicCtx();
+  if(!ac) return;
+  if(ac.state==='suspended'){try{ac.resume();}catch(e){}}
+  const t=ac.currentTime;
+  const o=ac.createOscillator(),g=ac.createGain();
+  o.connect(g);g.connect(ac.destination);
+  if(kind==='shoot'){
+    o.type='square';o.frequency.setValueAtTime(880,t);o.frequency.exponentialRampToValueAtTime(1760,t+0.08);
+    g.gain.setValueAtTime(0.04,t);g.gain.exponentialRampToValueAtTime(0.0001,t+0.12);o.start(t);o.stop(t+0.12);
+  }else if(kind==='kill'){
+    o.type='sawtooth';o.frequency.setValueAtTime(420,t);o.frequency.exponentialRampToValueAtTime(60,t+0.22);
+    g.gain.setValueAtTime(0.06,t);g.gain.exponentialRampToValueAtTime(0.0001,t+0.25);o.start(t);o.stop(t+0.25);
+  }else if(kind==='bomb'){
+    o.type='triangle';o.frequency.setValueAtTime(240,t);o.frequency.exponentialRampToValueAtTime(120,t+0.13);
+    g.gain.setValueAtTime(0.016,t);g.gain.exponentialRampToValueAtTime(0.0001,t+0.16);o.start(t);o.stop(t+0.16);
+  }else if(kind==='hit'){
+    o.type='sawtooth';o.frequency.setValueAtTime(200,t);o.frequency.exponentialRampToValueAtTime(40,t+0.5);
+    g.gain.setValueAtTime(0.08,t);g.gain.exponentialRampToValueAtTime(0.0001,t+0.5);o.start(t);o.stop(t+0.5);
+  }
+}
+window.xiSfx=xiSfx;
 
 // ── RESPONSIVE FULLSCREEN ────────────────────────────────────
 function isGameplayUiState(currentState){
@@ -12203,7 +12271,7 @@ function xiBunkerHit(px,py){
   }
   return false;
 }
-function xiFire(){if(XI&&XI.phase==='play'&&XI.bullets.length===0)XI.bullets.push({x:XI.ship.x,y:H-60});}
+function xiFire(){if(XI&&XI.phase==='play'&&XI.bullets.length===0){XI.bullets.push({x:XI.ship.x,y:H-60});try{xiSfx('shoot');}catch(e){}}}
 function xiUpdate(){
   if(!XI)xiInit();
   if(XI.phase!=='play'){XI.blink=(XI.blink+1)%70;return;}
@@ -12216,7 +12284,7 @@ function xiUpdate(){
     if(bl.y<28){XI.bullets.splice(i,1);continue;}
     if(xiBunkerHit(bl.x,bl.y)){XI.bullets.splice(i,1);continue;}
     var hit=false;
-    for(var j=0;j<XI.inv.length;j++){var o=XI.inv[j];if(!o.alive)continue;var p=xiPos(o);if(bl.x>=p.x&&bl.x<=p.x+30&&bl.y>=p.y&&bl.y<=p.y+22){o.alive=false;XI.score+=(o.t===2?30:o.t===1?20:10);hit=true;break;}}
+    for(var j=0;j<XI.inv.length;j++){var o=XI.inv[j];if(!o.alive)continue;var p=xiPos(o);if(bl.x>=p.x&&bl.x<=p.x+30&&bl.y>=p.y&&bl.y<=p.y+22){o.alive=false;XI.score+=(o.t===2?30:o.t===1?20:10);hit=true;try{xiSfx('kill');}catch(e){}break;}}
     if(hit)XI.bullets.splice(i,1);
   }
   // marcha de invasores (acelera al quedar menos)
@@ -12232,11 +12300,11 @@ function xiUpdate(){
     if(maxY+16>=H-64){XI.lives=0;XI.phase='over';}
   }
   // invasores bombardean
-  if(alive>0&&Math.random()<0.035){var sh2=XI.inv.filter(function(o){return o.alive;});var s=sh2[Math.floor(Math.random()*sh2.length)];var ps=xiPos(s);XI.bombs.push({x:ps.x+15,y:ps.y+22});}
+  if(alive>0&&Math.random()<0.035){var sh2=XI.inv.filter(function(o){return o.alive;});var s=sh2[Math.floor(Math.random()*sh2.length)];var ps=xiPos(s);XI.bombs.push({x:ps.x+15,y:ps.y+22});try{xiSfx('bomb');}catch(e){}}
   for(var b=XI.bombs.length-1;b>=0;b--){var bo=XI.bombs[b];bo.y+=4;
     if(bo.y>H-18){XI.bombs.splice(b,1);continue;}
     if(xiBunkerHit(bo.x,bo.y)){XI.bombs.splice(b,1);continue;}
-    if(bo.y>=H-56&&Math.abs(bo.x-sh.x)<=sh.w/2+2){XI.bombs.splice(b,1);XI.lives--;XI.flash=14;if(XI.lives<=0)XI.phase='over';continue;}
+    if(bo.y>=H-56&&Math.abs(bo.x-sh.x)<=sh.w/2+2){XI.bombs.splice(b,1);XI.lives--;XI.flash=14;try{xiSfx('hit');}catch(e){}if(XI.lives<=0)XI.phase='over';continue;}
   }
   if(alive===0){XI.level++;if(XI.score>XI.hi)XI.hi=XI.score;xiWave(XI.level);}
   if(XI.flash>0)XI.flash--;
