@@ -764,18 +764,12 @@
   <div class="evd-head">
     <div class="evd-head-left">
       <a id="evdTitle" href="https://ainimation.studio/" target="_blank" rel="noopener" style="font-weight:bold;color:inherit;text-decoration:none;border-bottom:1px dashed rgba(120,243,255,.35);transition:border-color .15s,color .15s" title="Pixer.ia · ainimation.studio (última versión auto-redirect)">ADMIRANEXT XP</a>
-      <span id="evdHint">Selecciona idioma antes de entrar</span>
+      <span id="evdHint"></span>
     </div>
     <div class="evd-head-right">
-      <span id="evdCurrent">CASTELLANO</span>
       <a id="evdHelpBtn" class="evd-help" href="./help.html" target="_blank" rel="noopener" aria-label="Ayuda · funcionalidades">? AYUDA</a>
       <button id="evdMuteBtn" class="evd-mute" type="button" aria-label="Silenciar música">🔊</button>
     </div>
-  </div>
-  <div class="evd-grid">
-    <button type="button" class="evd-btn" data-client="0"><strong>CASTELLANO</strong><span>Interfaz y storytelling en español</span></button>
-    <button type="button" class="evd-btn" data-client="1"><strong>ENGLISH</strong><span>Interface and storytelling in English</span></button>
-    <button type="button" class="evd-btn" data-client="2"><strong>CONTINUAR</strong><span>Enter para seguir</span></button>
   </div>
 </div>
 <button id="mobileSkipBtn" type="button" aria-label="Entrar al juego">JUEGO</button>
@@ -5462,7 +5456,7 @@ function updateEraVerticalDock(){
   }
   const evdHint=document.getElementById('evdHint');
   const grid=eraVerticalDock.querySelector('.evd-grid');
-  if(show&&evdHint) evdHint.textContent=lang==='es'?'Selecciona idioma antes de entrar':'Choose language before entering';
+  // (hint de idioma eliminado: el idioma se elige en el splash · página 0)
   if(evdCurrent){
     evdCurrent.textContent=lang==='es'?'CASTELLANO':'ENGLISH';
   }
@@ -12187,8 +12181,8 @@ function drawEraSelect(){
     tx(eraNoticeMsg,boxX+boxW/2,boxY+18,'#d8f6b4',9,'center');
   }else{
     const hint=lang==='es'
-      ?'Abajo eliges idioma · flechas cambian era · Enter entra'
-      :'Choose language below · arrows change era · Enter opens';
+      ?'Flechas cambian era · Enter entra'
+      :'Arrows change era · Enter opens';
     tx(hint,W/2,468,'#a8baD4',10,'center');
   }
 }
@@ -25545,6 +25539,7 @@ window.xtAPI = (function(){
    setLanguage() llama a applyHtmlLang(); el selector del splash llama a setLanguage(). */
 (function(){
   var I18N = [
+    {sel:'#navigatorBtn', en:'↗ Navigator', es:'↗ Navegador'},
     {sel:'#splashJugarBtn', en:'▶ PLAY', es:'▶ JUGAR'},
     {sel:'#splashDemoBtn', en:'▶ DEMO', es:'▶ DEMO'},
     {sel:'.splash-hint', en:'PLAY · enter your Xpace · DEMO · hands-free autoplay', es:'JUGAR · entra a tu Xpacio · DEMO · autoplay sin manos'},
