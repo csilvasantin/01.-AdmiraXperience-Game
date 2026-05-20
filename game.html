@@ -1257,6 +1257,9 @@ function xiSfx(kind){
   }else if(kind==='hit'){
     o.type='sawtooth';o.frequency.setValueAtTime(200,t);o.frequency.exponentialRampToValueAtTime(40,t+0.5);
     g.gain.setValueAtTime(0.08,t);g.gain.exponentialRampToValueAtTime(0.0001,t+0.5);o.start(t);o.stop(t+0.5);
+  }else if(kind==='ufo'){
+    o.type='square';o.frequency.setValueAtTime(620,t);o.frequency.linearRampToValueAtTime(840,t+0.16);o.frequency.linearRampToValueAtTime(620,t+0.32);
+    g.gain.setValueAtTime(0.03,t);g.gain.setValueAtTime(0.03,t+0.3);g.gain.exponentialRampToValueAtTime(0.0001,t+0.36);o.start(t);o.stop(t+0.36);
   }
 }
 window.xiSfx=xiSfx;
@@ -12207,9 +12210,20 @@ const HIGH_SCORES=[
   ['10TH','NEVIK','730000']
 ];
 // Sprites pixelados de los 4 tipos de invasores (1 = píxel encendido)
-const SI_SQUID=['00111100','01111110','11011011','11111111','01100110','10100101','01000010','00100100'];
-const SI_CRAB=['00100000100','00010001000','00111111100','01101110110','11111111111','10111111101','10100000101','00011011000'];
-const SI_OCTO=['000011110000','011111111110','111111111111','111001100111','111111111111','000110011000','001101101100','110000000011'];
+// Sprites canónicos de Space Invaders (Nishikado, 1978): 2 fotogramas cada uno
+const SI_SQUID=[
+  ['00011000','00111100','01111110','11011011','11111111','00100100','01011010','10100101'],
+  ['00011000','00111100','01111110','11011011','11111111','01011010','10000001','01000010']
+];
+const SI_CRAB=[
+  ['00100000100','00010001000','00111111100','01101110110','11111111111','10111111101','10100000101','00011011000'],
+  ['00100000100','10010001001','10111111101','11101110111','11111111111','01111111110','00100000100','01000000010']
+];
+const SI_OCTO=[
+  ['000011110000','011111111110','111111111111','111001100111','111111111111','000110011000','001101101100','110000000011'],
+  ['000011110000','011111111110','111111111111','111001100111','111111111111','001101101100','001100001100','000011110000']
+];
+// OVNI nodriza (mystery ship) que cruza por arriba, 16×7
 const SI_UFO=['0000011111100000','0001111111111000','0011111111111100','0110110110110110','1111111111111111','0011100110011100','0001000000001000'];
 // Estrellas fijas (determinista, no parpadean entre frames)
 const SI_STARS=(function(){var a=[];for(var i=0;i<90;i++)a.push({x:(i*101)%800,y:(i*61)%500,r:(i%5===0)?2:1});return a;})();
@@ -12255,12 +12269,12 @@ function xiBunkers(){
 function xiWave(level){
   var rows=5,cols=9,inv=[];
   for(var rI=0;rI<rows;rI++)for(var c=0;c<cols;c++){inv.push({c:c,r:rI,alive:true,t:(rI===0?2:(rI<3?1:0))});}
-  XI.inv=inv;XI.dx=46;XI.dy=30;XI.gx=110;XI.gy=64;XI.dir=1;XI.stepT=0;XI.stepInt=Math.max(8,28-level*3);XI.bombs=[];XI.bullets=[];
+  XI.inv=inv;XI.dx=46;XI.dy=30;XI.gx=110;XI.gy=64;XI.dir=1;XI.stepT=0;XI.stepInt=Math.max(8,28-level*3);XI.bombs=[];XI.bullets=[];XI.frame=0;
 }
-function xiInit(){XI={phase:'title',ship:{x:W/2,w:32},bullets:[],bombs:[],inv:[],bunkers:xiBunkers(),score:0,hi:9990,lives:3,level:0,dx:46,dy:30,gx:110,gy:64,dir:1,stepT:0,stepInt:28,blink:0,flash:0};}
-function xiStartGame(){XI.score=0;XI.lives=3;XI.level=0;XI.ship.x=W/2;XI.bunkers=xiBunkers();xiWave(0);XI.phase='play';}
+function xiInit(){XI={phase:'title',ship:{x:W/2,w:32},bullets:[],bombs:[],inv:[],bunkers:xiBunkers(),score:0,hi:9990,lives:3,level:0,dx:46,dy:30,gx:110,gy:64,dir:1,stepT:0,stepInt:28,blink:0,flash:0,frame:0,ufo:null,ufoHit:null,ufoCd:540+Math.floor(Math.random()*600)};}
+function xiStartGame(){XI.score=0;XI.lives=3;XI.level=0;XI.ship.x=W/2;XI.bunkers=xiBunkers();xiWave(0);XI.ufo=null;XI.ufoHit=null;XI.ufoCd=420+Math.floor(Math.random()*540);XI.phase='play';}
 function xiPos(o){return {x:XI.gx+o.c*XI.dx,y:XI.gy+o.r*XI.dy};} // celda 30x22
-function xiDrawInv(o){var p=xiPos(o);var bmp=o.t===2?SI_SQUID:(o.t===1?SI_CRAB:SI_OCTO);var px=2.3;var w=bmp[0].length*px;cx.fillStyle=o.t===2?'#9be0ff':(o.t===1?'#bfa6ff':'#ff9ad0');siDrawInvader(bmp,p.x+(30-w)/2,p.y,px);}
+function xiDrawInv(o){var p=xiPos(o);var set=o.t===2?SI_SQUID:(o.t===1?SI_CRAB:SI_OCTO);var bmp=set[(XI.frame||0)%set.length];var px=2.3;var w=bmp[0].length*px;cx.fillStyle=o.t===2?'#9be0ff':(o.t===1?'#bfa6ff':'#ff9ad0');siDrawInvader(bmp,p.x+(30-w)/2,p.y,px);}
 function xiBunkerHit(px,py){
   for(var b=0;b<XI.bunkers.length;b++){var bu=XI.bunkers[b];
     if(px>=bu.x&&px<=bu.x+bu.cols*bu.cs&&py>=bu.y&&py<=bu.y+bu.rows*bu.cs){
@@ -12281,6 +12295,7 @@ function xiUpdate(){
   sh.x=Math.max(28,Math.min(W-28,sh.x));
   // balas del jugador
   for(var i=XI.bullets.length-1;i>=0;i--){var bl=XI.bullets[i];bl.y-=8;
+    if(XI.ufo&&bl.y<=50&&bl.x>=XI.ufo.x&&bl.x<=XI.ufo.x+32){XI.score+=XI.ufo.pts;XI.ufoHit={x:XI.ufo.x+16,pts:XI.ufo.pts,t:36};XI.ufo=null;try{xiSfx('kill');}catch(e){}XI.bullets.splice(i,1);continue;}
     if(bl.y<28){XI.bullets.splice(i,1);continue;}
     if(xiBunkerHit(bl.x,bl.y)){XI.bullets.splice(i,1);continue;}
     var hit=false;
@@ -12292,7 +12307,7 @@ function xiUpdate(){
   XI.stepT++;
   var interval=Math.max(5,XI.stepInt-Math.floor((45-alive)/4));
   if(XI.stepT>=interval&&alive>0){
-    XI.stepT=0;
+    XI.stepT=0;XI.frame=XI.frame?0:1;
     var minX=1e9,maxX=-1e9,maxY=-1e9;
     for(var k=0;k<XI.inv.length;k++){var o2=XI.inv[k];if(!o2.alive)continue;var q=xiPos(o2);if(q.x<minX)minX=q.x;if(q.x+30>maxX)maxX=q.x+30;if(q.y+22>maxY)maxY=q.y+22;}
     if((XI.dir>0&&maxX>=W-22)||(XI.dir<0&&minX<=22)){XI.gy+=16;XI.dir*=-1;}
@@ -12306,6 +12321,20 @@ function xiUpdate(){
     if(xiBunkerHit(bo.x,bo.y)){XI.bombs.splice(b,1);continue;}
     if(bo.y>=H-56&&Math.abs(bo.x-sh.x)<=sh.w/2+2){XI.bombs.splice(b,1);XI.lives--;XI.flash=14;try{xiSfx('hit');}catch(e){}if(XI.lives<=0)XI.phase='over';continue;}
   }
+  // OVNI nodriza: aparece por arriba aleatoriamente y cruza la pantalla
+  if(XI.ufo){
+    XI.ufo.x+=XI.ufo.vx;
+    if(XI.ufo.x<-36||XI.ufo.x>W+36)XI.ufo=null;
+  }else{
+    XI.ufoCd--;
+    if(XI.ufoCd<=0&&alive>2){
+      var fromLeft=Math.random()<0.5;
+      XI.ufo={x:fromLeft?-34:W+2,vx:fromLeft?2:-2,y:32,pts:[50,100,150,300][Math.floor(Math.random()*4)]};
+      XI.ufoCd=720+Math.floor(Math.random()*900);
+      try{xiSfx('ufo');}catch(e){}
+    }
+  }
+  if(XI.ufoHit){XI.ufoHit.t--;if(XI.ufoHit.t<=0)XI.ufoHit=null;}
   if(alive===0){XI.level++;if(XI.score>XI.hi)XI.hi=XI.score;xiWave(XI.level);}
   if(XI.flash>0)XI.flash--;
 }
@@ -12316,6 +12345,8 @@ function xiHud(){
 }
 function xiDrawGame(){
   xiHud();
+  if(XI.ufo){glow('#ff5a6a',8);cx.fillStyle='#ff4d63';siDrawInvader(SI_UFO,XI.ufo.x,32,2.0);nog();}
+  if(XI.ufoHit){tx(''+XI.ufoHit.pts,XI.ufoHit.x,52,'#ffd166',15,'center');}
   for(var i=0;i<XI.inv.length;i++)if(XI.inv[i].alive)xiDrawInv(XI.inv[i]);
   cx.fillStyle='#46e06a';
   for(var b=0;b<XI.bunkers.length;b++){var bu=XI.bunkers[b];for(var r=0;r<bu.rows;r++)for(var c=0;c<bu.cols;c++)if(bu.cells[r][c])cx.fillRect(bu.x+c*bu.cs,bu.y+r*bu.cs,bu.cs,bu.cs);}
