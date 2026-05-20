@@ -886,6 +886,114 @@ function grokChat(prompt, context = '') {
   });
 }
 
+// ─── Tube jobs: descarga asíncrona con polling (start → status → get) ─────
+// El proxy se publica por Tailscale Funnel, que corta conexiones que tardan en
+// empezar a responder. El antiguo /tube/download retiene la respuesta hasta que
+// yt-dlp termina del todo (vídeo: descarga 2 flujos + remux → largo) y el Funnel
+// la mata por inactividad → el navegador ve "Failed to fetch". El audio termina
+// antes y por eso sí funciona. Solución: trocear en peticiones cortas.
+const TUBE_JOBS = new Map();
+
+function tubeHostAllowed(host) {
+  host = String(host || '').toLowerCase();
+  return host === 'youtu.be' || host === 'm.youtube.com' || host.endsWith('youtube.com') || host.endsWith('youtube-nocookie.com')
+    || host === 'vimeo.com' || host.endsWith('.vimeo.com') || host === 'player.vimeo.com'
+    || host === 'twitter.com' || host === 'x.com' || host === 'mobile.twitter.com' || host === 't.co'
+    || host === 'tiktok.com' || host.endsWith('.tiktok.com') || host === 'vm.tiktok.com'
+    || host === 'instagram.com' || host.endsWith('.instagram.com')
+    || host === 'linkedin.com' || host.endsWith('.linkedin.com') || host === 'lnkd.in';
+}
+
+function tubeCleanupFiles(id, extra) {
+  const paths = [
+    path.join(os.tmpdir(), `admira-tube-${id}.path`),
+    path.join(os.tmpdir(), `admira-tube-${id}.title`),
+  ];
+  if (extra) paths.push(extra);
+  for (const p of paths) { try { fs.unlink(p, () => {}); } catch (e) {} }
+}
+
+function tubeDisposeJob(id) {
+  const job = TUBE_JOBS.get(id);
+  if (!job) return;
+  if (job.timer) clearTimeout(job.timer);
+  if (job.expiry) clearTimeout(job.expiry);
+  tubeCleanupFiles(id, job.file);
+  TUBE_JOBS.delete(id);
+}
+
+function tubePartialSize(id) {
+  let total = 0;
+  try {
+    const files = fs.readdirSync(os.tmpdir())
+      .filter(f => f.startsWith(`admira-tube-${id}.`) && !/\.(path|title)$/.test(f));
+    for (const f of files) { try { total += fs.statSync(path.join(os.tmpdir(), f)).size; } catch (e) {} }
+  } catch (e) {}
+  return total;
+}
+
+function tubeStartJob(url, fmt) {
+  const id = crypto.randomBytes(8).toString('hex');
+  const outTpl = path.join(os.tmpdir(), `admira-tube-${id}.%(ext)s`);
+  const baseArgs = [
+    '--no-playlist', '--max-filesize', '300M', '--no-mtime', '--no-warnings', '--quiet',
+    '--print-to-file', 'after_move:filepath', path.join(os.tmpdir(), `admira-tube-${id}.path`),
+    '--print-to-file', 'before_dl:%(title)s', path.join(os.tmpdir(), `admira-tube-${id}.title`),
+    '-o', outTpl,
+  ];
+  const formatArgs = (fmt === 'audio')
+    ? ['-f', 'bestaudio/best', '-x', '--audio-format', 'mp3', '--audio-quality', '0']
+    : ['-f', 'bv*[height<=720][ext=mp4]+ba[ext=m4a]/b[height<=720][ext=mp4]/b[ext=mp4]/b[height<=720]/b', '--remux-video', 'mp4'];
+  const args = [...formatArgs, ...baseArgs, url];
+
+  const job = { id, fmt, status: 'running', file: '', size: 0, title: '', error: null, code: null, createdAt: Date.now(), timedOut: false, timer: null, expiry: null };
+  TUBE_JOBS.set(id, job);
+
+  const yt = spawn(YT_DLP_BIN, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+  let stderrBuf = '';
+  yt.stderr.on('data', (d) => { stderrBuf += d.toString(); if (stderrBuf.length > 16384) stderrBuf = stderrBuf.slice(-16384); });
+  yt.stdout.on('data', () => {});
+  job.timer = setTimeout(() => { job.timedOut = true; try { yt.kill('SIGTERM'); } catch (e) {} }, 180000);
+
+  yt.on('close', (code) => {
+    clearTimeout(job.timer); job.timer = null; job.code = code;
+    if (code !== 0) {
+      job.status = 'error';
+      job.error = job.timedOut ? 'yt-dlp timeout' : `yt-dlp failed (code ${code})`;
+      job.stderr = stderrBuf.slice(-800);
+      tubeCleanupFiles(id);
+    } else {
+      let outFile = '';
+      try { outFile = fs.readFileSync(path.join(os.tmpdir(), `admira-tube-${id}.path`), 'utf8').trim().split('\n').pop() || ''; } catch (e) {}
+      let title = '';
+      try { title = fs.readFileSync(path.join(os.tmpdir(), `admira-tube-${id}.title`), 'utf8').trim().split('\n').pop() || ''; } catch (e) {}
+      if (!outFile || !fs.existsSync(outFile)) {
+        const allowExt = (fmt === 'audio') ? /\.(mp3|m4a|opus|webm|aac|wav|ogg)$/i : /\.(mp4|webm|mkv|mov)$/i;
+        try {
+          const files = fs.readdirSync(os.tmpdir()).filter(f => f.startsWith(`admira-tube-${id}.`) && allowExt.test(f));
+          if (files.length) outFile = path.join(os.tmpdir(), files[0]);
+        } catch (e) {}
+      }
+      if (!outFile || !fs.existsSync(outFile)) {
+        job.status = 'error'; job.error = 'yt-dlp produced no file'; job.stderr = stderrBuf.slice(-400);
+      } else {
+        let size = 0; try { size = fs.statSync(outFile).size; } catch (e) {}
+        job.status = 'done'; job.file = outFile; job.size = size; job.title = title;
+      }
+    }
+    // Si nadie recoge el fichero en 10 min, se descarta (y se borra del disco).
+    job.expiry = setTimeout(() => tubeDisposeJob(id), 10 * 60 * 1000);
+  });
+
+  yt.on('error', (err) => {
+    clearTimeout(job.timer); job.timer = null;
+    job.status = 'error'; job.error = `yt-dlp spawn failed: ${err.message}`;
+    job.expiry = setTimeout(() => tubeDisposeJob(id), 60 * 1000);
+  });
+
+  return id;
+}
+
 const server = http.createServer((req, res) => {
   const requestUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   const requestPath = requestUrl.pathname;
@@ -1073,6 +1181,70 @@ const server = http.createServer((req, res) => {
         sendJson(res, 500, { ok: false, error: 'yt-dlp spawn failed', message: err.message });
       });
     });
+    return;
+  }
+
+  // ─── /tube/start ─ lanza la descarga y responde al instante (no bloquea) ─
+  if (requestPath === '/tube/start' && req.method === 'OPTIONS') { setCors(res); res.writeHead(204); res.end(); return; }
+  if (requestPath === '/tube/start' && req.method === 'POST') {
+    setCors(res);
+    collectJsonBody(req, (err, body) => {
+      if (err || !body || typeof body.url !== 'string' || !body.url.trim()) { sendJson(res, 400, { ok: false, error: 'Missing url' }); return; }
+      const url = body.url.trim();
+      const fmt = (body.format === 'audio') ? 'audio' : 'video';
+      let host;
+      try { host = new URL(url).hostname.toLowerCase(); } catch (e) { sendJson(res, 400, { ok: false, error: 'Invalid URL' }); return; }
+      if (!tubeHostAllowed(host)) { sendJson(res, 400, { ok: false, error: 'Host not allowed', host, allowed: ['youtube','vimeo','twitter/x','tiktok','instagram','linkedin'] }); return; }
+      const jobId = tubeStartJob(url, fmt);
+      sendJson(res, 202, { ok: true, jobId, state: 'running' });
+    });
+    return;
+  }
+
+  // ─── /tube/status?id= ─ estado/progreso del job (petición corta) ─────────
+  if (requestPath === '/tube/status' && req.method === 'OPTIONS') { setCors(res); res.writeHead(204); res.end(); return; }
+  if (requestPath === '/tube/status' && req.method === 'GET') {
+    setCors(res);
+    const id = requestUrl.searchParams.get('id') || '';
+    const job = TUBE_JOBS.get(id);
+    if (!job) { sendJson(res, 404, { ok: false, state: 'notfound' }); return; }
+    const size = job.status === 'running' ? tubePartialSize(id) : job.size;
+    sendJson(res, 200, { ok: job.status !== 'error', state: job.status, size: size || 0, title: job.title || '', error: job.error || null });
+    return;
+  }
+
+  // ─── /tube/get?id= ─ entrega el fichero ya listo y descarta el job ───────
+  if (requestPath === '/tube/get' && req.method === 'OPTIONS') { setCors(res); res.writeHead(204); res.end(); return; }
+  if (requestPath === '/tube/get' && req.method === 'GET') {
+    setCors(res);
+    const id = requestUrl.searchParams.get('id') || '';
+    const job = TUBE_JOBS.get(id);
+    if (!job) { sendJson(res, 404, { ok: false, error: 'job not found' }); return; }
+    if (job.status === 'running') { sendJson(res, 425, { ok: false, error: 'still running' }); return; }
+    if (job.status !== 'done' || !job.file || !fs.existsSync(job.file)) { sendJson(res, 500, { ok: false, error: job.error || 'no file', stderr: job.stderr }); return; }
+    if (job.expiry) { clearTimeout(job.expiry); job.expiry = null; }
+    const ext = path.extname(job.file).toLowerCase();
+    const mimeByExt = {
+      '.mp4': 'video/mp4', '.webm': 'video/webm', '.mkv': 'video/x-matroska', '.mov': 'video/quicktime',
+      '.mp3': 'audio/mpeg', '.m4a': 'audio/mp4', '.opus': 'audio/ogg', '.aac': 'audio/aac', '.wav': 'audio/wav', '.ogg': 'audio/ogg',
+    };
+    const mime = mimeByExt[ext] || (job.fmt === 'audio' ? 'audio/mpeg' : 'video/mp4');
+    let size = job.size;
+    try { size = fs.statSync(job.file).size; } catch (e) {}
+    res.writeHead(200, {
+      'Content-Type': mime,
+      'Content-Length': String(size),
+      'Content-Disposition': `inline; filename="${(job.title || 'tube').replace(/[^\w\-. ]+/g, '_').slice(0, 120)}${ext}"`,
+      'X-Tube-Title': encodeURIComponent(job.title || ''),
+      'X-Tube-Format': job.fmt,
+      'Access-Control-Expose-Headers': 'X-Tube-Title, X-Tube-Format',
+      'Access-Control-Allow-Origin': '*',
+      'Cache-Control': 'no-store',
+    });
+    const rs = fs.createReadStream(job.file);
+    rs.pipe(res);
+    rs.on('end', () => tubeDisposeJob(id));
+    rs.on('error', () => { job.expiry = setTimeout(() => tubeDisposeJob(id), 60 * 1000); });
     return;
   }
 
