@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>DigitalTwin · Diagrama de flujo (v.2026.05.18.r1)</title>
+<title>DigitalTwin · Diagrama de flujo (v.2026.05.20)</title>
 <style>
   :root{
     --bg:#070a10; --bg2:#0f1018; --bg3:#141826;
@@ -91,20 +91,51 @@
 <body>
 
 <h1>🎨 <a href="../../game.html" title="Volver al DigitalTwin (página 0)">DigitalTwin</a> · Diagrama de flujo</h1>
-<div class="sub">Flujo principal del juego + rama Xpace Creator (NUEVO r1, highlighted en violeta) · v.2026.05.18.r1 · Click en un screenshot para ver grande</div>
+<div class="sub">Flujo principal del juego + rama Xpace Creator · v.2026.05.20 · capturas reales recapturadas hoy · NUEVO en violeta · click en un screenshot para verlo grande</div>
 
 <div class="legend">
   <span class="legend-item"><span class="legend-dot normal"></span>Pantalla existente</span>
-  <span class="legend-item"><span class="legend-dot new"></span>Pantalla nueva (r1 — Xpace Creator)</span>
+  <span class="legend-item"><span class="legend-dot new"></span>Pantalla nueva (splash + era + intro + selección de cliente)</span>
   <span class="legend-item"><span class="legend-dot exit"></span>Salida / volver al menú</span>
   <span class="legend-item"><span class="legend-dot terminal"></span>Estado terminal</span>
 </div>
 
 <div class="diagram">
 
-  <!-- ── LANE 1: Flow principal del juego ────────────────────── -->
+  <!-- ── LANE 1: Flujo principal del juego ────────────────────── -->
   <div class="lane">
     <div class="lane-title">▶ Flujo principal del juego</div>
+
+    <div class="screen new">
+      <span class="screen-id">SPLASH · NEW</span>
+      <div class="screen-icon">🕹️</div>
+      <div class="screen-title">Splash de entrada</div>
+      <div class="screen-desc">Landing "DIGITAL TWIN" sobre la tienda neón. Botones <strong>▶ JUGAR</strong> / <strong>▶ DEMO</strong>, nav superior Contacto + Navigator, y enlaces del grupo Admira (Pixer.IA · XpaceOS · Xbusiness).</div>
+      <div class="screen-actions">
+        <span class="screen-action primary">▶ Jugar</span>
+        <span class="screen-action">▶ Demo</span>
+      </div>
+      <div class="screen-shot" data-src="img/digitaltwin-01-splash.png" data-caption="SPLASH — Entrada DIGITAL TWIN (JUGAR / DEMO)">
+        <img src="img/digitaltwin-01-splash.png" alt="Splash de entrada" loading="lazy">
+      </div>
+    </div>
+    <div class="arrow">▶ JUGAR</div>
+
+    <div class="screen new">
+      <span class="screen-id">S.ERA_SEL · NEW</span>
+      <div class="screen-icon">🕰️</div>
+      <div class="screen-title">Selección de era</div>
+      <div class="screen-desc">Estado inicial del canvas. Elige el arranque del storytelling: <strong>1. ZX Spectrum</strong> (8 bits, 1982–87) · <strong>2. Commodore Amiga</strong> (16 bits, 1987–92) · <strong>3. PC DX 486</strong> (32 bits, 1992–97, en preparación). Timeline + selector de idioma (Castellano / English).</div>
+      <div class="screen-actions">
+        <span class="screen-action new">ZX Spectrum</span>
+        <span class="screen-action new">Amiga</span>
+        <span class="screen-action">PC 486 · soon</span>
+      </div>
+      <div class="screen-shot" data-src="img/digitaltwin-02-era-sel.png" data-caption="S.ERA_SEL — Selección de era (NUEVO)">
+        <img src="img/digitaltwin-02-era-sel.png" alt="Selección de era" loading="lazy">
+      </div>
+    </div>
+    <div class="arrow">era elegida</div>
 
     <div class="screen">
       <span class="screen-id">S.PRELOAD</span>
@@ -118,59 +149,88 @@
       <span class="screen-id">S.MENU</span>
       <div class="screen-icon">🎮</div>
       <div class="screen-title">Menú principal</div>
-      <div class="screen-desc">Selector de idioma + acceso a Xpace Creator + tarjetas de clientes (Xtanco / Estancos, Admira Loterías, Admira Supermercado, Stand Shoptalk EU 2026, Xpace Creator).</div>
+      <div class="screen-desc"><strong>ADMIRA XP · plataforma operativa multicliente.</strong> Selector de idioma + botón <strong>ABRIR XPACE CREATOR</strong> + 5 tarjetas: XP-01 Xtanco/Estancos (LIVE), XP-02 Loterías (pipeline), XP-03 Supermercado, XP-04 Stand Shoptalk EU 2026, XP-05 Xpace Creator.</div>
       <div class="screen-actions">
         <span class="screen-action primary">▶ Abrir Xpace Creator</span>
         <span class="screen-action">tarjeta cliente</span>
       </div>
-      <div class="screen-shot" data-src="img/digitaltwin-04-menu.png" data-caption="S.MENU — Menú principal del juego">
-        <img src="img/digitaltwin-04-menu.png" alt="Menú principal" loading="lazy">
+      <div class="screen-shot" data-src="img/digitaltwin-03-menu.png" data-caption="S.MENU — Menú principal (ADMIRA XP)">
+        <img src="img/digitaltwin-03-menu.png" alt="Menú principal" loading="lazy">
       </div>
     </div>
-    <div class="arrow">cliente seleccionado</div>
+    <div class="arrow">entrar a un vertical</div>
+
+    <div class="screen new">
+      <span class="screen-id">S.INTRO · NEW</span>
+      <div class="screen-icon">📖</div>
+      <div class="screen-title">Intro storytelling</div>
+      <div class="screen-desc">Carrusel de 8 slides navegables (← →, skip con ESC). Incluye bienvenida, <strong>EL OBJETIVO</strong> (targets por año €2.2k→€40k + calificaciones S/A/B/C/D y bonus), clientes y más. Cada slide con fade animado.</div>
+      <div class="screen-actions">
+        <span class="screen-action new">← → navegar</span>
+        <span class="screen-action exit">ESC salir</span>
+      </div>
+      <div class="screen-shot" data-src="img/digitaltwin-04-intro.png" data-caption="S.INTRO — Slide 'EL OBJETIVO' (NUEVO)">
+        <img src="img/digitaltwin-04-intro.png" alt="Intro storytelling" loading="lazy">
+      </div>
+    </div>
+    <div class="arrow">fin de slides</div>
+
+    <div class="screen new">
+      <span class="screen-id">S.CLIENT_SEL · NEW</span>
+      <div class="screen-icon">🗺️</div>
+      <div class="screen-title">Selección de cliente</div>
+      <div class="screen-desc">Mapa de verticales conectados (Xpace Creator, Stand Shoptalk EU, Admira Loterías, Admira Supermercado, Xtanco + nodos "Servicios XP" / motores compartidos). El seleccionado muestra detalle abajo + <strong>ENTRAR</strong>.</div>
+      <div class="screen-actions">
+        <span class="screen-action new">← → elegir vertical</span>
+        <span class="screen-action primary">ENTER abrir</span>
+      </div>
+      <div class="screen-shot" data-src="img/digitaltwin-05-client-sel.png" data-caption="S.CLIENT_SEL — Mapa de verticales (NUEVO)">
+        <img src="img/digitaltwin-05-client-sel.png" alt="Selección de cliente" loading="lazy">
+      </div>
+    </div>
+    <div class="arrow">Xtanco</div>
 
     <div class="screen">
       <span class="screen-id">S.MODEL_SEL</span>
       <div class="screen-icon">🏷️</div>
       <div class="screen-title">Selección de modelo</div>
-      <div class="screen-desc">Dentro del cliente, elige variante (Generic / Good / Better / Best). Cada uno con dificultad ★, empleados y productos. Lleva sus FACTORY_LAYOUTS específicos.</div>
+      <div class="screen-desc">Dentro del cliente, elige escenario: <strong>GENERIC / GOOD / BETTER / BEST</strong>. Cada uno con dificultad ★, nº de empleados, productos y caja inicial. Lleva sus FACTORY_LAYOUTS específicos. Botón <strong>ABRIR SIMULADOR</strong>.</div>
       <div class="screen-actions">
-        <span class="screen-action">▶ Juego</span>
-        <span class="screen-action">Demo</span>
+        <span class="screen-action">▶ Simulador</span>
       </div>
-      <div class="screen-shot" data-src="img/digitaltwin-05-model-sel.png" data-caption="S.MODEL_SEL — Selección de modelo (XTANCO GENERIC/GOOD/BETTER/BEST)">
-        <img src="img/digitaltwin-05-model-sel.png" alt="Selección de modelo" loading="lazy">
+      <div class="screen-shot" data-src="img/digitaltwin-06-model-sel.png" data-caption="S.MODEL_SEL — Escenarios XTANCO (GENERIC/GOOD/BETTER/BEST)">
+        <img src="img/digitaltwin-06-model-sel.png" alt="Selección de modelo" loading="lazy">
       </div>
     </div>
-    <div class="arrow"></div>
+    <div class="arrow">abrir simulador</div>
 
     <div class="screen">
       <span class="screen-id">S.TUT</span>
-      <div class="screen-icon">📖</div>
+      <div class="screen-icon">📋</div>
       <div class="screen-title">Tutorial</div>
-      <div class="screen-desc">Mini-tutorial 3 pasos: "Gestiona tu estanco durante 5 años. Alcanza el objetivo de ventas cada año... Contrata personal, repón stock y fideliza clientes". Skipeable.</div>
+      <div class="screen-desc">"BIENVENIDO A XTANCO": gestiona tu estanco durante 5 años, alcanza el objetivo de ventas cada año, contrata personal, repón stock y fideliza clientes. Skipeable.</div>
       <div class="screen-actions">
         <span class="screen-action primary">SIGUIENTE →</span>
         <span class="screen-action exit">SKIP</span>
       </div>
-      <div class="screen-shot" data-src="img/digitaltwin-06-tutorial.png" data-caption="S.TUT — Tutorial de bienvenida">
-        <img src="img/digitaltwin-06-tutorial.png" alt="Tutorial" loading="lazy">
+      <div class="screen-shot" data-src="img/digitaltwin-07-tutorial.png" data-caption="S.TUT — Tutorial de bienvenida">
+        <img src="img/digitaltwin-07-tutorial.png" alt="Tutorial" loading="lazy">
       </div>
     </div>
-    <div class="arrow">Empezar partida</div>
+    <div class="arrow">empezar partida</div>
 
     <div class="screen">
       <span class="screen-id">S.GAME</span>
       <div class="screen-icon">📊</div>
       <div class="screen-title">Game (gameplay)</div>
-      <div class="screen-desc">Pantalla principal del sim. HUD top con clock + fecha + ventas/beneficio/satisfacción + cliente. Render isométrico de la tienda. Dock inferior: CONTROL TELEGRAM/WHATSAPP + EQUIPO/CLIENTES + Signage/AdmiraLive/LiveCam/Pixer.ai/Edit/Menu/Telegram.</div>
+      <div class="screen-desc">Pantalla principal del sim. HUD top (reloj + fecha + ventas/beneficio/satisfacción + cliente). Render isométrico de la tienda. Dock inferior: <strong>CONTROL TELEGRAM/WHATSAPP</strong> + panel CLIENTES + Signage/AdmiraLive/LiveCam/Pixer.ai/Edit/Menu + Ladrón/Guardia Civil/Opinador/Unitree Bot/Sponsor.</div>
       <div class="screen-actions">
         <span class="screen-action">💾 Save</span>
         <span class="screen-action">⏸ Pause</span>
         <span class="screen-action exit">⏻ Quit</span>
       </div>
-      <div class="screen-shot" data-src="img/digitaltwin-07-game.png" data-caption="S.GAME — Pantalla principal del simulador (HUD + tienda iso + dock)">
-        <img src="img/digitaltwin-07-game.png" alt="Game gameplay" loading="lazy">
+      <div class="screen-shot" data-src="img/digitaltwin-08-game.png" data-caption="S.GAME — Simulador (HUD + tienda iso + dock Telegram)">
+        <img src="img/digitaltwin-08-game.png" alt="Game gameplay" loading="lazy">
       </div>
     </div>
     <div class="arrow">fin de año</div>
@@ -179,23 +239,23 @@
       <span class="screen-id">S.YEAR_END</span>
       <div class="screen-icon">📅</div>
       <div class="screen-title">Fin de año</div>
-      <div class="screen-desc">Balance anual: ingresos del año + barra de progreso vs objetivo. Avance a siguiente año o game over si no llega al mínimo.</div>
-      <div class="screen-shot" data-src="img/digitaltwin-08-year-end.png" data-caption="S.YEAR_END — Balance fin de año (capturado sin datos reales)">
-        <img src="img/digitaltwin-08-year-end.png" alt="Year end" loading="lazy">
+      <div class="screen-desc">Balance anual: ingresos del año vs objetivo (barra animada), calificación <strong>S/A/B/C/D</strong> y bonus en € (positivo o negativo). Avanza al siguiente año o game over si falla el objetivo 2 veces.</div>
+      <div class="screen-shot" data-src="img/digitaltwin-09-year-end.png" data-caption="S.YEAR_END — Balance fin de año (datos de ejemplo)">
+        <img src="img/digitaltwin-09-year-end.png" alt="Year end" loading="lazy">
       </div>
     </div>
-    <div class="arrow">si game over</div>
+    <div class="arrow">tras 5 años o quiebra</div>
 
     <div class="screen terminal">
       <span class="screen-id">S.GAME_END</span>
       <div class="screen-icon">🏆</div>
       <div class="screen-title">Game End</div>
-      <div class="screen-desc">"XTANCO CERRADO · RESULTADO FINAL" — pantalla terminal de quiebra o tras N años. Sobre fondo verde, modal rojo con score final. SFX gameOver.</div>
+      <div class="screen-desc">"XTANCO CERRADO · RESULTADO FINAL": años completados, ingresos totales, clientes, satisfacción, fama, <strong>puntuación total</strong> y rango ("Xtanco Legendario"…) + leaderboard. Fondo verde si ganas, rojo si quiebras.</div>
       <div class="screen-actions">
-        <span class="screen-action exit">↩ Menú</span>
+        <span class="screen-action exit">↩ Reiniciar</span>
       </div>
-      <div class="screen-shot" data-src="img/digitaltwin-09-game-end.png" data-caption="S.GAME_END — Pantalla final (XTANCO CERRADO)">
-        <img src="img/digitaltwin-09-game-end.png" alt="Game end" loading="lazy">
+      <div class="screen-shot" data-src="img/digitaltwin-10-game-end.png" data-caption="S.GAME_END — Resultado final (datos de ejemplo)">
+        <img src="img/digitaltwin-10-game-end.png" alt="Game end" loading="lazy">
       </div>
     </div>
 
@@ -209,73 +269,61 @@
       <span class="screen-id">URL</span>
       <div class="screen-icon">🔗</div>
       <div class="screen-title">Entrada</div>
-      <div class="screen-desc">Desde el botón <strong>ABRIR XPACE CREATOR</strong> del menú, o vía <code>creator.html</code> que hace redirect a <code>?play=creator</code>. También bookmark directo.</div>
+      <div class="screen-desc">Desde el botón <strong>ABRIR XPACE CREATOR</strong> del menú, o vía <code>?play=creator</code> (bookmark-friendly). También <code>creator.html</code> que redirige.</div>
     </div>
     <div class="arrow alt">enterXpaceCreator()</div>
 
-    <div class="screen new">
-      <span class="screen-id">MODAL · NEW r1</span>
+    <div class="screen">
+      <span class="screen-id">MODAL</span>
       <div class="screen-icon">🎨</div>
       <div class="screen-title">Selector de plantillas</div>
-      <div class="screen-desc">Modal de bienvenida con: <strong>↩️ Continuar</strong> mi Xpacio (si hay layout), <strong>⬜ Lienzo en blanco</strong>, plantillas <strong>custom</strong> con 🗑 borrar, <strong>4 built-in</strong>: 🚬 Tabaquería urbana · 🏛️ Estanco premium · 📰 Kiosco prensa · 🎪 Pop-up store.</div>
+      <div class="screen-desc">Modal "Empezar nuevo Xpacio": <strong>↩️ Continuar</strong> mi Xpacio, <strong>⬜ Lienzo en blanco</strong>, plantillas custom guardadas, y 4 built-in con <strong>miniatura de preview</strong>: 🚬 Tabaquería urbana · 🏛️ Estanco premium · 📰 Kiosco de prensa · 🎪 Pop-up store.</div>
       <div class="screen-actions">
         <span class="screen-action">Blank</span>
-        <span class="screen-action new">🚬 Tabaquería</span>
-        <span class="screen-action new">🏛️ Estanco</span>
-        <span class="screen-action new">📰 Kiosco</span>
-        <span class="screen-action new">🎪 Pop-up</span>
+        <span class="screen-action">🚬 Tabaquería</span>
+        <span class="screen-action">🏛️ Estanco</span>
+        <span class="screen-action">📰 Kiosco</span>
+        <span class="screen-action">🎪 Pop-up</span>
       </div>
-      <div class="screen-shot" data-src="img/digitaltwin-01-modal-templates.png" data-caption="MODAL · Selector de plantillas (NUEVO r1)">
-        <img src="img/digitaltwin-01-modal-templates.png" alt="Modal selector plantillas" loading="lazy">
+      <div class="screen-shot" data-src="img/digitaltwin-11-creator-modal.png" data-caption="MODAL — Selector de plantillas (con miniaturas de preview)">
+        <img src="img/digitaltwin-11-creator-modal.png" alt="Modal selector plantillas" loading="lazy">
       </div>
     </div>
-    <div class="arrow alt">applyXpaceTemplate()</div>
+    <div class="arrow alt">elegir plantilla</div>
 
     <div class="screen">
-      <span class="screen-id">S.EDITOR · creator</span>
+      <span class="screen-id">S.EDITOR</span>
       <div class="screen-icon">🛠</div>
       <div class="screen-title">Editor del Xpacio</div>
-      <div class="screen-desc">Canvas isométrico adaptativo. Grid configurable (cols/rows/wallH). Body con clase <code>is-xpace-creator</code>. Drag-drop muebles, ↑/↓ vertical pared, colores de wall/floor.</div>
-      <div class="screen-shot" data-src="img/digitaltwin-02-editor-blank.png" data-caption="S.EDITOR — Editor del Xpacio (lienzo)">
-        <img src="img/digitaltwin-02-editor-blank.png" alt="Editor del Xpacio" loading="lazy">
+      <div class="screen-desc">Canvas isométrico adaptativo. Toolbar superior (tamaño/grid/wallH, Reset, Salir). Dock derecho con paleta <strong>MOBILIARIO</strong> (Conectados / No conectados) y panel "EN EL XPACIO". Dock izquierdo CONTROL Telegram/WhatsApp.</div>
+      <div class="screen-shot" data-src="img/digitaltwin-12-creator-editor.png" data-caption="S.EDITOR — Editor del Xpacio (paleta mobiliario)">
+        <img src="img/digitaltwin-12-creator-editor.png" alt="Editor del Xpacio" loading="lazy">
       </div>
     </div>
-    <div class="arrow">dock inferior · Mobiliario</div>
+    <div class="arrow">tab TRABAJADORES</div>
 
-    <div class="screen new">
+    <div class="screen">
       <span class="screen-id">PALETTE DOCK</span>
       <div class="screen-icon">📦</div>
-      <div class="screen-title">Paleta + acciones · NEW r1</div>
-      <div class="screen-desc">Dos tabs: <strong>MOBILIARIO</strong> (Conectados/No conectados, 18 tipos) y <strong>TRABAJADORES</strong> (5 roles). 4 acciones globales abajo: <strong>💾 Guardar · ⭐ Plantilla (NUEVO) · ↺ Reset · ✕ Salir</strong>.</div>
+      <div class="screen-title">Paleta · Trabajadores</div>
+      <div class="screen-desc">Segunda tab de la paleta: <strong>roles</strong> (Cajero/a · Repositor/a · Azafata · Store Mgr · DJ) que se arrastran a slots del Xpacio. Panel "EN EL XPACIO" con los asignados. Guardar / ⭐ Plantilla / Reset / Salir.</div>
       <div class="screen-actions">
         <span class="screen-action primary">💾 Guardar</span>
         <span class="screen-action new">⭐ Plantilla</span>
         <span class="screen-action">↺ Reset</span>
         <span class="screen-action exit">✕ Salir</span>
       </div>
-      <div class="screen-shot" data-src="img/digitaltwin-03-editor-dock-actions.png" data-caption="PALETTE DOCK — Paleta de mobiliario + acciones globales (con ⭐ Plantilla NUEVO)">
-        <img src="img/digitaltwin-03-editor-dock-actions.png" alt="Dock con paleta y acciones" loading="lazy">
+      <div class="screen-shot" data-src="img/digitaltwin-13-creator-dock.png" data-caption="PALETTE DOCK — Paleta de trabajadores (roles)">
+        <img src="img/digitaltwin-13-creator-dock.png" alt="Dock con paleta de trabajadores" loading="lazy">
       </div>
     </div>
-    <div class="arrow alt">⭐ Plantilla → prompt()</div>
-
-    <div class="screen new">
-      <span class="screen-id">PROMPT · NEW r1</span>
-      <div class="screen-icon">⭐</div>
-      <div class="screen-title">Guardar como plantilla</div>
-      <div class="screen-desc">Prompt nativo del navegador pide nombre. Captura layout + config + staffPos actuales y los guarda en <code>localStorage[xpace_user_templates]</code> (LIFO, cap 50). Aparecerá en futuras sesiones en el modal.</div>
-      <div class="screen-actions">
-        <span class="screen-action new">Guardar</span>
-        <span class="screen-action exit">Cancelar</span>
-      </div>
-    </div>
-    <div class="arrow alt">aparece en próx. modal</div>
+    <div class="arrow exit">✕ Salir</div>
 
     <div class="screen exit">
       <span class="screen-id">EXIT</span>
       <div class="screen-icon">↩</div>
       <div class="screen-title">Salir → Menú</div>
-      <div class="screen-desc">exitXpaceCreator() quita la clase, restaura HUD y canvas estándar. startTransition(S.MENU).</div>
+      <div class="screen-desc">exitXpaceCreator() restaura HUD y canvas estándar. startTransition(S.MENU).</div>
     </div>
 
   </div>
@@ -283,24 +331,22 @@
 </div>
 
 <div class="notes">
-  <strong>// Notas del flow actual</strong><br>
-  · <code>?play=creator</code> es la entrada canónica (bookmark-friendly).<br>
-  · <strong>NUEVO r1</strong>: modal con 4 built-in templates + custom user-saved (localStorage). Antes el Creator entraba directo al editor vacío sin alternativa.<br>
-  · Plantillas tienen <code>config</code> (grid+5 colores), <code>layout</code> (mobiliario) y opcional <code>staffPos</code>. <code>applyXpaceTemplate()</code> sobreescribe FACTORY_LAYOUTS.creator + slot.current de localStorage antes de que <code>initGame() → loadLayout()</code> corra.<br>
-  · El single <code>xpace_creator_template</code> legacy sigue como fallback de Shoptalk u otros Xpacios en blanco.<br>
-  · <strong>BUG detectado</strong> durante la captura: al hacer click en una tarjeta built-in (ej. 🚬 Tabaquería), el modal se cierra y el editor abre, pero <code>shopLayout</code> queda en 0 items en lugar de cargar la plantilla. <code>applyXpaceTemplate</code> escribe en <code>FACTORY_LAYOUTS.creator</code> y persiste en localStorage, pero algo del flow <code>enterXpaceCreator → proceed → initGame → loadLayout</code> termina ignorándolo. <strong>Pendiente fix en r2</strong>.<br>
+  <strong>// Notas del flow actual (2026-05-20)</strong><br>
+  · El flujo principal ganó 3 pantallas desde el navigator r1: <strong>S.ERA_SEL</strong> (ahora el estado inicial), <strong>S.INTRO</strong> (carrusel de storytelling) y <strong>S.CLIENT_SEL</strong> (mapa de verticales, antes embebido en el menú). Además hay un <strong>splash</strong> HTML de entrada con JUGAR / DEMO.<br>
+  · Orden: <code>SPLASH → ERA_SEL → PRELOAD → MENU → INTRO → CLIENT_SEL → MODEL_SEL → TUT → GAME → YEAR_END → GAME_END</code>.<br>
+  · <code>?play=creator</code> sigue siendo la entrada canónica de la rama Creator. El modal de plantillas ahora muestra <strong>miniaturas de preview</strong> del layout en cada tarjeta (era una idea pendiente en r1, ya implementada).<br>
+  · Capturas de <code>YEAR_END</code> y <code>GAME_END</code> generadas con datos de ejemplo para ilustrar la pantalla.<br>
   <br>
-  <strong>// Ideas para r2 y siguientes</strong><br>
-  · <strong>Fix del bug applyXpaceTemplate</strong> arriba.<br>
-  · <strong>Preview miniatura</strong> en cada tarjeta del modal (canvas SVG/mini-render del layout en vez de solo icon).<br>
+  <strong>// Ideas para siguientes versiones</strong><br>
   · <strong>Compartir plantilla</strong>: subir al worker (R2 + endpoint <code>/creator/template</code>) → URL pública.<br>
-  · <strong>Edit plantilla</strong>: load + edit + save reemplazando la original (ahora siempre crea nueva).<br>
+  · <strong>Editar plantilla</strong> existente (ahora siempre crea nueva).<br>
   · <strong>AI assist</strong>: brief textual → LLM genera <code>{config, layout}</code> automáticamente.<br>
-  · <strong>Multi-planta / multi-piso</strong>: ahora 1 nivel.<br>
+  · <strong>Multi-planta / multi-piso</strong> en el editor (ahora 1 nivel).<br>
+  · <strong>Era PC DX 486</strong> (32 bits) — actualmente "en preparación" en la selección de era.<br>
 </div>
 
 <div class="footer">
-  // <a href="https://csilvasantin.github.io/01.-AdmiraXperience-Game/game.html">DigitalTwin v.2026.05.19.r1</a> · Diagrama generado con screenshots reales
+  // <a href="https://csilvasantin.github.io/01.-AdmiraXperience-Game/game.html">DigitalTwin v.2026.05.20</a> · Diagrama generado con screenshots reales recapturados
 </div>
 
 <div class="lightbox" id="lightbox">
