@@ -533,6 +533,10 @@
     .splash-cta-demo:hover{box-shadow:0 0 0 1px rgba(0,0,0,.3) inset,0 0 36px rgba(255,170,68,.85),0 0 72px rgba(255,216,102,.55),0 16px 40px rgba(0,0,0,.7)}
     .splash-hint{color:#aaa;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;opacity:.7;text-shadow:0 1px 2px rgba(0,0,0,.8);animation:splashHintFade 2.4s ease-in-out infinite}
     .splash-version{margin-top:6px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;letter-spacing:.10em;color:rgba(150,190,215,.55);text-shadow:0 1px 2px rgba(0,0,0,.8)}
+    /* Cosmos a pantalla completa detrás del juego (página 1): la animación llega al borde inferior en cualquier resolución */
+    #cosmosBg{position:fixed;inset:0;width:100vw;height:100vh;z-index:0;display:none;pointer-events:none;background:#04060f}
+    #cosmosBg.show{display:block}
+    #c{position:relative;z-index:1}
     /* Splash oculto por defecto; solo visible cuando body.splash-visible */
     body:not(.splash-visible) .splash-intro{opacity:0;pointer-events:none}
     body.splash-visible .splash-intro{opacity:1;pointer-events:auto}
@@ -731,6 +735,7 @@
   <div class="ks-spinner" aria-hidden="true"></div>
   <div class="ks-foot">Admira XP // The Xpace OS</div>
 </div>
+<canvas id="cosmosBg" aria-hidden="true"></canvas>
 <canvas id="c" width="800" height="500"></canvas>
 <div id="speechOverlay" aria-hidden="true"></div>
 <div id="metahumanPanel" aria-label="Metahuman AI Assistant" aria-hidden="true">
@@ -937,6 +942,12 @@
 //  ADMIRA XP // THE XPACE OS — XTANCO — runtime version/build
 // ═══════════════════════════════════════════════════════════════
 const cv=document.getElementById('c'), cx=cv.getContext('2d');
+// Canvas de fondo a pantalla completa para el cosmos de la página 1 (XPACE INVADERS)
+const _cosmosBg=document.getElementById('cosmosBg');
+const _cosmosCtx=_cosmosBg?_cosmosBg.getContext('2d'):null;
+function resizeCosmosBg(){ if(!_cosmosBg)return; var w=Math.max(2,window.innerWidth),h=Math.max(2,window.innerHeight); if(_cosmosBg.width!==w)_cosmosBg.width=w; if(_cosmosBg.height!==h)_cosmosBg.height=h; }
+resizeCosmosBg();
+window.addEventListener('resize',resizeCosmosBg);
 cx.imageSmoothingEnabled=false;
 const mobileSkipBtn=document.getElementById('mobileSkipBtn');
 const eraVerticalDock=document.getElementById('eraVerticalDock');
@@ -1037,7 +1048,7 @@ const APP_VERSION_LABEL=APP_VERSION;
 const APP_FORMULA_LABEL='build '+APP_BUILD;
 // Versión publicada del XpaceOS (se muestra en el splash · página 0).
 // IMPORTANTE: bumpear en cada release junto al tag DigitalTwin-v.YYYY.MM.DD.rN
-const XPACE_OS_VERSION='v.2026.05.20.r17';
+const XPACE_OS_VERSION='v.2026.05.20.r18';
 try{var _sv=document.getElementById('splashVersion');if(_sv)_sv.textContent='XpaceOS '+XPACE_OS_VERSION;}catch(e){}
 const AMIGA_PAGE0_TODO=['BUY SHIP','FIND BIGWHOOP','DEFEAT LECHUCK','MARRY ELAINE!'];
 let amigaPage0Todo=AMIGA_PAGE0_TODO.slice();
@@ -12277,17 +12288,18 @@ function cosmosPalette(tier){
   return {neb:[(280+b)%360,(195+b)%360,(330+b)%360,(40+b)%360],gal:(48+b)%360,pA:(22+b)%360,pB:(205+b)%360,
     sky1:'hsl('+((222+b)%360)+',60%,7%)',sky2:'hsl('+((255+b)%360)+',52%,12%)'};
 }
-let _cosmos={tier:-99999,cv:null};
-function renderCosmos(tier){
-  var oc=_cosmos.cv;if(!oc){oc=document.createElement('canvas');oc.width=W;oc.height=H;}
-  var g=oc.getContext('2d');g.globalCompositeOperation='source-over';g.clearRect(0,0,W,H);
-  var P=cosmosPalette(tier),rnd=_rng(9173+tier*131);
-  var bg=g.createLinearGradient(0,0,0,H);bg.addColorStop(0,P.sky1);bg.addColorStop(0.62,P.sky2);bg.addColorStop(1,'#04060f');
-  g.fillStyle=bg;g.fillRect(0,0,W,H);
+let _cosmos={tier:-99999,w:0,h:0,cv:null};
+function renderCosmos(tier,ww,hh){
+  var oc=_cosmos.cv;if(!oc){oc=document.createElement('canvas');}
+  if(oc.width!==ww)oc.width=ww;if(oc.height!==hh)oc.height=hh;
+  var g=oc.getContext('2d');g.globalCompositeOperation='source-over';g.clearRect(0,0,ww,hh);
+  var P=cosmosPalette(tier),rnd=_rng(9173+tier*131),sc=Math.max(ww/800,hh/600);
+  var bg=g.createLinearGradient(0,0,0,hh);bg.addColorStop(0,P.sky1);bg.addColorStop(0.62,P.sky2);bg.addColorStop(1,'#04060f');
+  g.fillStyle=bg;g.fillRect(0,0,ww,hh);
   g.globalCompositeOperation='lighter';
   var blobs=10+Math.min(12,tier*2);
   for(var i=0;i<blobs;i++){
-    var x=rnd()*W,y=rnd()*H*0.82,r=70+rnd()*190,h=P.neb[i%P.neb.length],al=0.09+rnd()*0.12;
+    var x=rnd()*ww,y=rnd()*hh*0.9,r=(70+rnd()*190)*sc,h=P.neb[i%P.neb.length],al=0.09+rnd()*0.12;
     var rg=g.createRadialGradient(x,y,0,x,y,r);
     rg.addColorStop(0,'hsla('+h+',88%,64%,'+al+')');
     rg.addColorStop(0.5,'hsla('+h+',82%,52%,'+(al*0.45)+')');
@@ -12297,28 +12309,32 @@ function renderCosmos(tier){
   g.globalCompositeOperation='source-over';
   var planets=1+(tier%3);
   for(var p=0;p<planets;p++){
-    var px=70+rnd()*(W-140),py=50+rnd()*210,pr=20+rnd()*48,hue=(p%2?P.pB:P.pA);
+    var px=70+rnd()*(ww-140),py=50+rnd()*(hh*0.62),pr=(20+rnd()*48)*sc,hue=(p%2?P.pB:P.pA);
     var pg2=g.createRadialGradient(px-pr*0.32,py-pr*0.32,pr*0.1,px,py,pr);
     pg2.addColorStop(0,'hsl('+hue+',72%,70%)');pg2.addColorStop(0.6,'hsl('+hue+',66%,44%)');pg2.addColorStop(1,'hsl('+((hue+24)%360)+',62%,15%)');
     g.fillStyle=pg2;g.beginPath();g.arc(px,py,pr,0,6.2832);g.fill();
-    if(rnd()<0.55){g.save();g.strokeStyle='hsla('+((hue+40)%360)+',75%,72%,0.5)';g.lineWidth=2+rnd()*2.5;g.beginPath();g.ellipse(px,py,pr*1.9,pr*0.5,(-0.5+rnd()),0,6.2832);g.stroke();g.restore();}
+    if(rnd()<0.55){g.save();g.strokeStyle='hsla('+((hue+40)%360)+',75%,72%,0.5)';g.lineWidth=(2+rnd()*2.5)*sc;g.beginPath();g.ellipse(px,py,pr*1.9,pr*0.5,(-0.5+rnd()),0,6.2832);g.stroke();g.restore();}
   }
-  _cosmos.cv=oc;_cosmos.tier=tier;
+  _cosmos.cv=oc;_cosmos.tier=tier;_cosmos.w=ww;_cosmos.h=hh;
 }
+// Pinta el cosmos a pantalla completa en el canvas de fondo (#cosmosBg).
 function drawSpaceBackdrop(){
+  var g=_cosmosCtx,cbg=_cosmosBg;if(!g||!cbg)return;
+  cbg.classList.add('show');
+  var ww=cbg.width,hh=cbg.height;
   var lvl=(typeof XI==='object'&&XI&&typeof XI.level==='number')?XI.level:0;
   var scr=(typeof XI==='object'&&XI&&XI.score)?XI.score:0;
   var tier=lvl*5+Math.floor(scr/300);
-  if(_cosmos.tier!==tier||!_cosmos.cv)renderCosmos(tier);
-  cx.drawImage(_cosmos.cv,0,0);
+  if(_cosmos.tier!==tier||_cosmos.w!==ww||_cosmos.h!==hh||!_cosmos.cv)renderCosmos(tier,ww,hh);
+  g.globalCompositeOperation='source-over';g.drawImage(_cosmos.cv,0,0);
   var T=(typeof tt==='number')?tt:performance.now()*0.06;
-  var P=cosmosPalette(tier),gx=W*0.74,gy=H*0.25,rot=T*0.0022+tier*0.5;
-  cx.save();cx.globalCompositeOperation='lighter';
-  for(var a=0;a<2;a++){for(var t=2;t<150;t++){var ang=rot+a*Math.PI+t*0.17,rad=t*0.95;var x=gx+Math.cos(ang)*rad,y=gy+Math.sin(ang)*rad*0.46,al=Math.max(0,0.55-t/220);cx.fillStyle='hsla('+P.gal+',92%,'+(58+(t%26))+'%,'+al+')';cx.fillRect(x,y,1.7,1.7);}}
-  var cg=cx.createRadialGradient(gx,gy,0,gx,gy,46);cg.addColorStop(0,'rgba(255,252,236,0.85)');cg.addColorStop(1,'rgba(255,252,236,0)');cx.fillStyle=cg;cx.beginPath();cx.arc(gx,gy,46,0,6.2832);cx.fill();
-  cx.restore();
-  for(var i=0;i<SI_STARS.length;i++){var s=SI_STARS[i];var tw=0.4+0.6*Math.abs(Math.sin((T*0.05)+i));cx.fillStyle='rgba(255,255,255,'+tw+')';cx.fillRect(s.x,s.y,s.r,s.r);}
-  cx.save();var pg=cx.createLinearGradient(0,H-46,0,H);pg.addColorStop(0,'#3a1e0c');pg.addColorStop(1,'#160b04');cx.fillStyle=pg;cx.beginPath();cx.arc(W/2,H+420,448,0,6.2832);cx.fill();cx.restore();
+  var P=cosmosPalette(tier),sc=Math.max(ww/800,hh/600),gx=ww*0.74,gy=hh*0.22,rot=T*0.0022+tier*0.5;
+  g.save();g.globalCompositeOperation='lighter';
+  for(var a=0;a<2;a++){for(var t=2;t<150;t++){var ang=rot+a*Math.PI+t*0.17,rad=t*0.95*sc,x=gx+Math.cos(ang)*rad,y=gy+Math.sin(ang)*rad*0.46,al=Math.max(0,0.55-t/220);g.fillStyle='hsla('+P.gal+',92%,'+(58+(t%26))+'%,'+al+')';g.fillRect(x,y,1.7*sc,1.7*sc);}}
+  var cg=g.createRadialGradient(gx,gy,0,gx,gy,46*sc);cg.addColorStop(0,'rgba(255,252,236,0.85)');cg.addColorStop(1,'rgba(255,252,236,0)');g.fillStyle=cg;g.beginPath();g.arc(gx,gy,46*sc,0,6.2832);g.fill();
+  g.restore();
+  for(var i=0;i<SI_STARS.length;i++){var s=SI_STARS[i];var tw=0.4+0.6*Math.abs(Math.sin((T*0.05)+i));g.fillStyle='rgba(255,255,255,'+tw+')';g.fillRect(s.x*(ww/800),s.y*(hh/500),Math.max(1,s.r*sc),Math.max(1,s.r*sc));}
+  g.save();var pg=g.createLinearGradient(0,hh-80*sc,0,hh);pg.addColorStop(0,'rgba(58,30,12,0)');pg.addColorStop(1,'rgba(40,20,8,0.55)');g.fillStyle=pg;g.fillRect(0,hh-80*sc,ww,80*sc);g.restore();
 }
 // Título "XPACE INVADERS": chunky + extrusión 3D + cromado azul/blanco
 function siTitle(text,y,size){
@@ -12453,7 +12469,8 @@ function xiDrawOver(){
 }
 function drawEraSelect(){
   xiUpdate();
-  drawSpaceBackdrop();
+  drawSpaceBackdrop();      // cosmos a pantalla completa en #cosmosBg (llega al borde inferior)
+  cx.clearRect(0,0,W,H);    // canvas del juego transparente → deja ver el cosmos de fondo
   if(XI.phase==='play')xiDrawGame();
   else if(XI.phase==='over')xiDrawOver();
   else xiDrawTitle();
@@ -20929,6 +20946,7 @@ function loop(){
   for(const k in BTNS) delete BTNS[k];
   updateTransition();
 
+  if(_cosmosBg && state!==S.ERA_SEL && _cosmosBg.classList.contains('show')) _cosmosBg.classList.remove('show');
   if(state===S.ERA_SEL){drawEraSelect();finalizeFrame();return;}
   if(state===S.PRELOAD){drawPreload();finalizeFrame();return;}
   if(state===S.MENU){
