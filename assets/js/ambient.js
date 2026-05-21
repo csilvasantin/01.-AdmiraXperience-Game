@@ -37,35 +37,62 @@
     return { src, gain: g, fade: 0.2 };
   }
 
+  // El ambiente solo debe sonar si: el usuario lo tiene activado, la pestaña está
+  // visible, y el juego está en partida activa (no menú/pausa/fin). window.ambientActive
+  // lo expone game.html; si no existiera, no bloqueamos (fallback permisivo).
+  function audible(){
+    const G = window.G;
+    if (!G || !G.ambient || !G.ambient.enabled) return false;
+    if (typeof document !== 'undefined' && document.hidden) return false;
+    if (typeof window.ambientActive === 'function' && !window.ambientActive()) return false;
+    return true;
+  }
+
+  function cafeteraBlip(){
+    const a = ac; if (!a || !master) return;
+    try {
+      const G = window.G;
+      const t = a.currentTime;
+      const o = a.createOscillator(), g = a.createGain();
+      o.type = 'triangle'; o.frequency.value = 1200;
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(0.05 * (G.ambient.volume || 0.25), t + 0.05);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.6);
+      const f = a.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 2400; f.Q.value = 4;
+      o.connect(f); f.connect(g); g.connect(master);
+      o.start(t); o.stop(t + 0.65);
+    } catch (e) {}
+  }
+
+  // Auto-reprogramada: re-randomiza el retardo cada vez (antes el setInterval calculaba
+  // el retardo una sola vez, así que era fijo). Solo emite si audible().
+  function scheduleCafetera(){
+    setTimeout(function(){
+      if (audible()) cafeteraBlip();
+      scheduleCafetera();
+    }, 12000 + Math.floor(Math.random()*13000));
+  }
+
   function start(){
     const a = ctx(); if (!a || started) return;
     started = true;
     master = a.createGain(); master.gain.value = 0; master.connect(a.destination);
     nodes.push(buildRumorNoise(a));
     nodes.push(buildRainNoise(a));
-    // Cafetera ocasional
-    setInterval(function(){
-      const G = window.G;
-      if (!G || !G.ambient || !G.ambient.enabled) return;
-      try {
-        const t = a.currentTime;
-        const o = a.createOscillator(), g = a.createGain();
-        o.type = 'triangle'; o.frequency.value = 1200;
-        g.gain.setValueAtTime(0, t);
-        g.gain.linearRampToValueAtTime(0.05 * (G.ambient.volume || 0.25), t + 0.05);
-        g.gain.exponentialRampToValueAtTime(0.001, t + 0.6);
-        const f = a.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 2400; f.Q.value = 4;
-        o.connect(f); f.connect(g); g.connect(master);
-        o.start(t); o.stop(t + 0.65);
-      } catch (e) {}
-    }, 12000 + Math.floor(Math.random()*13000));
+    scheduleCafetera();
+    // Re-sincroniza el master con audible() aunque el game loop no llame a update():
+    // en pausa/menú/fin, updateGame() no corre, así que sin esto el rumor/lluvia
+    // seguirían sonando. applyVolumes es barato e idempotente (setTargetAtTime).
+    if (typeof document !== 'undefined') document.addEventListener('visibilitychange', applyVolumes);
+    setInterval(applyVolumes, 600);
   }
 
   function applyVolumes(){
     if (!ac || !master || !nodes.length) return;
     const G = window.G;
-    const vol = (G && G.ambient && G.ambient.enabled) ? (G.ambient.volume || 0.25) : 0;
-    const isRain = G && G.weather && G.weather.type === 'rain';
+    const on = audible();
+    const vol = on ? (G.ambient.volume || 0.25) : 0;
+    const isRain = on && G.weather && G.weather.type === 'rain';
     master.gain.setTargetAtTime(vol, ac.currentTime, 0.4);
     nodes[0].gain.gain.setTargetAtTime(vol * 0.7, ac.currentTime, 0.4);
     nodes[1].gain.gain.setTargetAtTime(isRain ? vol * 0.9 : 0, ac.currentTime, 0.4);

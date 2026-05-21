@@ -5501,6 +5501,9 @@ function setLanguage(nextLang){
 // ── STATE ─────────────────────────────────────────────────────
 const S={ERA_SEL:'eraSel',PRELOAD:'preload',MENU:'menu',CLIENT_SEL:'clientSel',MODEL_SEL:'modelSel',TUT:'tutorial',GAME:'game',PAUSE:'pause',YEAR_END:'yearEnd',GAME_END:'gameEnd',EDITOR:'editor',SETTINGS:'settings',HELP:'help',INTRO:'intro'};
 let state=S.ERA_SEL, eraSel=0, menuSel=0, clientSel=0, renderMode='16bit', modelSel=0, tutPage=0, helpPage=0;
+// Señal para el motor de ambiente (assets/js/ambient.js): rumor/lluvia/cafetera solo
+// deben sonar en partida activa, no en menús, pausa ni fin de partida.
+window.ambientActive=function(){return state===S.GAME;};
 let introSlide=0, introTimer=0;
 const INTRO_SLIDE_DURATION=260; // frames per slide (~4.3s at 60fps)
 const INTRO_SLIDES=8;
@@ -7527,6 +7530,11 @@ function stepActorPath(actor,pathProp='path',idxProp='pathIdx',speed=1,animEvery
 
 // ── GAME STATE ────────────────────────────────────────────────
 let G={};
+// Los motores extraídos (assets/js/sfx.js, assets/js/ambient.js) leen window.G, pero G
+// es un `let` de ámbito de script que no se adhiere a window: veían undefined. Efecto:
+// sfx.js caía a su volumen por defecto (0.7) e IGNORABA el mute, y ambient.js no sonaba.
+// Getter para que sigan el binding actual aunque G se reasigne (newGame, carga de save).
+try{ Object.defineProperty(window,'G',{get:function(){return G;},configurable:true}); }catch(e){ window.G=G; }
 const CUSTOMER_ARCHETYPES=['impatient','curious','loyal','impulsive'];
 const MANAGER_ACTION_DEFS={
   rushQueue:{cooldown:900,color:'#ffb36b'},
