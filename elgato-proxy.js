@@ -906,9 +906,9 @@ function tubeHostAllowed(host) {
 }
 
 // ─── Suno: yt-dlp no soporta suno.com (baja un silencio de ~30s, ver yt-dlp#10368).
-// El audio real cuelga de cdn1.suno.ai/<uuid>.mp3. Resolvemos el share link `/s/...`
-// (redirige a /song/<uuid>), sacamos el UUID y descargamos el mp3 directo del CDN.
-// SSRF acotado a suno.com y cdn*.suno.ai.
+// Resolvemos el share link `/s/...` (redirige a /song/<uuid>), leemos audio_url/video_url
+// del JSON embebido en la página y descargamos el medio real del CDN. Para vídeo usamos
+// el mp4 si existe y si no caemos al audio. SSRF acotado a suno.com y cdn*.suno.ai.
 function sunoSafeHost(host) {
   host = String(host || '').toLowerCase();
   return host === 'suno.com' || host.endsWith('.suno.com') || host.endsWith('.suno.ai');
@@ -971,24 +971,38 @@ function sunoMeta(html, prop) {
 
 const SUNO_UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 
+// Lee un campo URL del JSON embebido en la página (payload RSC de Next.js), tolerando
+// las comillas escapadas (\"). Devuelve null si el campo está vacío o ausente —p.ej.
+// video_url viene "" en canciones sin vídeo.
+function sunoJsonUrl(html, field) {
+  const re = new RegExp(field + '\\\\?"\\s*:\\s*\\\\?"(https?:[^"\\\\]+)', 'i');
+  const m = String(html || '').match(re);
+  return m && m[1] ? m[1] : null;
+}
+
 // Resuelve un share/song link de Suno a { mediaUrl, title, ext, mime } según formato.
-// El share corto /s/<code> redirige a /song/<uuid>?sh=...; el audio real cuelga de
-// cdn1.suno.ai/<uuid>.mp3 (4MB). OJO: el HTML ya NO trae og:audio — sólo referencia el
-// silencio sil-100.mp3 (mismo motivo por el que yt-dlp falla), así que sacamos el UUID
-// de la URL final o del input y construimos la URL del CDN directamente.
+// El share corto /s/<code> redirige a /song/<uuid>?sh=...; el HTML ya NO trae og:audio
+// (sólo referencia el silencio sil-100.mp3, por eso yt-dlp falla), pero sí lleva un JSON
+// embebido con audio_url/video_url reales. Leemos esos campos; para vídeo usamos el mp4
+// si existe y si no caemos al audio para no fallar nunca. Fallback final por UUID si el
+// JSON no se pudiera parsear.
 function sunoResolveMedia(pageUrl, fmt, cb) {
   const fromInput = (pageUrl.match(SUNO_UUID_RE) || [])[0];
   sunoFetch(pageUrl, null, (err, r) => {
     if (err) return cb(err);
+    const html = (r && r.body) || '';
     const finalUrl = (r && r.finalUrl) || pageUrl;
-    const uuid = (finalUrl.match(SUNO_UUID_RE) || [])[0]
-      || fromInput
-      || ((r && r.body || '').match(SUNO_UUID_RE) || [])[0];
-    if (!uuid) return cb(new Error('no se pudo extraer el id de la canción Suno'));
-    const title = (r && sunoMeta(r.body || '', 'og:title')) || '';
-    const ext = (fmt === 'video') ? '.mp4' : '.mp3';
-    const mime = ext === '.mp4' ? 'video/mp4' : 'audio/mpeg';
-    cb(null, { mediaUrl: `https://cdn1.suno.ai/${uuid}${ext}`, title, ext, mime });
+    const uuid = (finalUrl.match(SUNO_UUID_RE) || [])[0] || fromInput || (html.match(SUNO_UUID_RE) || [])[0];
+    const audioUrl = sunoJsonUrl(html, 'audio_url') || (uuid ? `https://cdn1.suno.ai/${uuid}.mp3` : null);
+    const videoUrl = sunoJsonUrl(html, 'video_url'); // null en canciones sin vídeo
+    const mediaUrl = (fmt === 'video') ? (videoUrl || audioUrl) : audioUrl;
+    if (!mediaUrl) return cb(new Error('no se encontró media en la página de Suno'));
+    const isMp4 = /\.mp4(\?|$)/i.test(mediaUrl);
+    const ext = isMp4 ? '.mp4' : '.mp3';
+    const mime = isMp4 ? 'video/mp4' : 'audio/mpeg';
+    const title = sunoMeta(html, 'og:title') || '';
+    if (fmt === 'video' && !videoUrl) console.log('[suno] sin video_url; sirvo audio para', finalUrl);
+    cb(null, { mediaUrl, title, ext, mime });
   });
 }
 
