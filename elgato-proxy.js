@@ -1054,8 +1054,43 @@ function tubePartialSize(id) {
   return total;
 }
 
+// Versión por job del caso Suno (ver sunoTubeDownload). Resuelve + descarga directo del
+// CDN en vez de yt-dlp, y rellena el job igual que la rama yt-dlp para que /tube/status,
+// /tube/get y /tube/import-to-stock funcionen sin cambios.
+function tubeStartSunoJob(job, url, fmt) {
+  sunoResolveMedia(url, fmt, (err, media) => {
+    if (err) {
+      job.status = 'error'; job.error = 'Suno: ' + err.message;
+      job.expiry = setTimeout(() => tubeDisposeJob(job.id), 60 * 1000);
+      return;
+    }
+    const outFile = path.join(os.tmpdir(), `admira-tube-${job.id}${media.ext}`);
+    job.timedOut = false;
+    job.timer = setTimeout(() => { job.timedOut = true; }, 180000);
+    sunoFetch(media.mediaUrl, outFile, (dErr) => {
+      clearTimeout(job.timer); job.timer = null;
+      if (dErr || job.timedOut) {
+        job.status = 'error'; job.error = 'Suno descarga: ' + (job.timedOut ? 'timeout' : dErr.message);
+        try { fs.unlinkSync(outFile); } catch (e) {}
+        job.expiry = setTimeout(() => tubeDisposeJob(job.id), 60 * 1000);
+        return;
+      }
+      let size = 0; try { size = fs.statSync(outFile).size; } catch (e) {}
+      job.status = 'done'; job.file = outFile; job.size = size; job.title = media.title || 'suno';
+      job.expiry = setTimeout(() => tubeDisposeJob(job.id), 10 * 60 * 1000);
+    });
+  });
+}
+
 function tubeStartJob(url, fmt) {
   const id = crypto.randomBytes(8).toString('hex');
+  const job = { id, fmt, status: 'running', file: '', size: 0, title: '', error: null, code: null, createdAt: Date.now(), timedOut: false, timer: null, expiry: null };
+  TUBE_JOBS.set(id, job);
+
+  let jobHost = '';
+  try { jobHost = new URL(url).hostname.toLowerCase(); } catch (e) {}
+  if (jobHost === 'suno.com' || jobHost.endsWith('.suno.com')) { tubeStartSunoJob(job, url, fmt); return id; }
+
   const outTpl = path.join(os.tmpdir(), `admira-tube-${id}.%(ext)s`);
   const baseArgs = [
     '--no-playlist', '--max-filesize', '300M', '--no-mtime', '--no-warnings', '--quiet',
@@ -1067,9 +1102,6 @@ function tubeStartJob(url, fmt) {
     ? ['-f', 'bestaudio/best', '-x', '--audio-format', 'mp3', '--audio-quality', '0']
     : ['-f', 'bv*[height<=720][ext=mp4]+ba[ext=m4a]/b[height<=720][ext=mp4]/b[ext=mp4]/b[height<=720]/b', '--remux-video', 'mp4'];
   const args = [...formatArgs, ...baseArgs, url];
-
-  const job = { id, fmt, status: 'running', file: '', size: 0, title: '', error: null, code: null, createdAt: Date.now(), timedOut: false, timer: null, expiry: null };
-  TUBE_JOBS.set(id, job);
 
   const yt = spawn(YT_DLP_BIN, args, { stdio: ['ignore', 'pipe', 'pipe'] });
   let stderrBuf = '';
@@ -1139,9 +1171,12 @@ async function tubePublishToStockWhenReady(jobId, url, fmt, comment) {
     const job = TUBE_JOBS.get(jobId);
     if (!job || !job.file || !fs.existsSync(job.file)) throw new Error('fichero no disponible');
     const buf = fs.readFileSync(job.file);
+    let importHost = '';
+    try { importHost = new URL(url).hostname.toLowerCase(); } catch (e) {}
+    const isSunoImport = importHost === 'suno.com' || importHost.endsWith('.suno.com');
     const payload = {
       type: fmt === 'audio' ? 'audio' : 'video',
-      motor: 'yt-dlp',
+      motor: isSunoImport ? 'suno' : 'yt-dlp',
       prompt: url,
       title: job.title || null,
       comment: comment || null,
@@ -1362,7 +1397,7 @@ const server = http.createServer((req, res) => {
       const fmt = (body.format === 'audio') ? 'audio' : 'video';
       let host;
       try { host = new URL(url).hostname.toLowerCase(); } catch (e) { sendJson(res, 400, { ok: false, error: 'Invalid URL' }); return; }
-      if (!tubeHostAllowed(host)) { sendJson(res, 400, { ok: false, error: 'Host not allowed', host, allowed: ['youtube','vimeo','twitter/x','tiktok','instagram','linkedin'] }); return; }
+      if (!tubeHostAllowed(host)) { sendJson(res, 400, { ok: false, error: 'Host not allowed', host, allowed: ['youtube','vimeo','twitter/x','tiktok','instagram','linkedin','suno'] }); return; }
       const jobId = tubeStartJob(url, fmt);
       sendJson(res, 202, { ok: true, jobId, state: 'running' });
     });
