@@ -901,7 +901,129 @@ function tubeHostAllowed(host) {
     || host === 'twitter.com' || host === 'x.com' || host === 'mobile.twitter.com' || host === 't.co'
     || host === 'tiktok.com' || host.endsWith('.tiktok.com') || host === 'vm.tiktok.com'
     || host === 'instagram.com' || host.endsWith('.instagram.com')
-    || host === 'linkedin.com' || host.endsWith('.linkedin.com') || host === 'lnkd.in';
+    || host === 'linkedin.com' || host.endsWith('.linkedin.com') || host === 'lnkd.in'
+    || host === 'suno.com' || host.endsWith('.suno.com');
+}
+
+// ─── Suno: yt-dlp no soporta suno.com (baja un silencio de ~30s, ver yt-dlp#10368).
+// El audio real cuelga de cdn1.suno.ai/<uuid>.mp3. Resolvemos el share link `/s/...`
+// (redirige a /song/<uuid>), sacamos el UUID y descargamos el mp3 directo del CDN.
+// SSRF acotado a suno.com y cdn*.suno.ai.
+function sunoSafeHost(host) {
+  host = String(host || '').toLowerCase();
+  return host === 'suno.com' || host.endsWith('.suno.com') || host.endsWith('.suno.ai');
+}
+
+// GET con seguimiento de redirecciones (máx 5) y host acotado a Suno.
+// onText(err, { body }) si toFile es null; si no, descarga a fichero y onText(err, { bytes }).
+function sunoFetch(urlStr, toFile, cb, redirectsLeft = 5, maxBytes = 50 * 1024 * 1024) {
+  let u;
+  try { u = new URL(urlStr); } catch (e) { return cb(new Error('bad url')); }
+  if (!sunoSafeHost(u.hostname)) return cb(new Error('host fuera de Suno: ' + u.hostname));
+  const lib = u.protocol === 'http:' ? http : https;
+  const req = lib.get(u, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
+      'Accept': '*/*',
+    },
+  }, (resp) => {
+    const sc = resp.statusCode || 0;
+    if (sc >= 300 && sc < 400 && resp.headers.location) {
+      resp.resume();
+      if (redirectsLeft <= 0) return cb(new Error('demasiadas redirecciones'));
+      const next = new URL(resp.headers.location, u).toString();
+      return sunoFetch(next, toFile, cb, redirectsLeft - 1, maxBytes);
+    }
+    if (sc !== 200) { resp.resume(); return cb(new Error('http ' + sc)); }
+    if (toFile) {
+      let bytes = 0, aborted = false;
+      const ws = fs.createWriteStream(toFile);
+      resp.on('data', (d) => {
+        bytes += d.length;
+        if (bytes > maxBytes && !aborted) { aborted = true; resp.destroy(); ws.destroy(); cb(new Error('excede tamaño máximo')); }
+      });
+      resp.pipe(ws);
+      ws.on('finish', () => { if (!aborted) cb(null, { bytes }); });
+      ws.on('error', (e) => { if (!aborted) { aborted = true; cb(e); } });
+    } else {
+      let buf = '', aborted = false;
+      const finalUrl = u.toString();
+      resp.setEncoding('utf8');
+      resp.on('data', (d) => {
+        buf += d;
+        if (buf.length > maxBytes && !aborted) { aborted = true; resp.destroy(); cb(null, { body: buf, finalUrl }); }
+      });
+      resp.on('end', () => { if (!aborted) cb(null, { body: buf, finalUrl }); });
+    }
+  });
+  req.on('error', (e) => cb(e));
+  req.setTimeout(30000, () => { req.destroy(new Error('timeout')); });
+}
+
+function sunoMeta(html, prop) {
+  // <meta property="og:audio" content="..."> en cualquier orden de atributos
+  const re = new RegExp('<meta[^>]+(?:property|name)=["\\\']' + prop.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '["\\\'][^>]*>', 'i');
+  const tag = html.match(re);
+  if (!tag) return null;
+  const c = tag[0].match(/content=["\']([^"\']+)["\']/i);
+  return c ? c[1] : null;
+}
+
+const SUNO_UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+
+// Resuelve un share/song link de Suno a { mediaUrl, title, ext, mime } según formato.
+// El share corto /s/<code> redirige a /song/<uuid>?sh=...; el audio real cuelga de
+// cdn1.suno.ai/<uuid>.mp3 (4MB). OJO: el HTML ya NO trae og:audio — sólo referencia el
+// silencio sil-100.mp3 (mismo motivo por el que yt-dlp falla), así que sacamos el UUID
+// de la URL final o del input y construimos la URL del CDN directamente.
+function sunoResolveMedia(pageUrl, fmt, cb) {
+  const fromInput = (pageUrl.match(SUNO_UUID_RE) || [])[0];
+  sunoFetch(pageUrl, null, (err, r) => {
+    if (err) return cb(err);
+    const finalUrl = (r && r.finalUrl) || pageUrl;
+    const uuid = (finalUrl.match(SUNO_UUID_RE) || [])[0]
+      || fromInput
+      || ((r && r.body || '').match(SUNO_UUID_RE) || [])[0];
+    if (!uuid) return cb(new Error('no se pudo extraer el id de la canción Suno'));
+    const title = (r && sunoMeta(r.body || '', 'og:title')) || '';
+    const ext = (fmt === 'video') ? '.mp4' : '.mp3';
+    const mime = ext === '.mp4' ? 'video/mp4' : 'audio/mpeg';
+    cb(null, { mediaUrl: `https://cdn1.suno.ai/${uuid}${ext}`, title, ext, mime });
+  });
+}
+
+// Handler completo del caso Suno para /tube/download: resuelve, descarga y hace stream
+// con las mismas cabeceras X-Tube-* que la rama yt-dlp.
+function sunoTubeDownload(res, url, host, fmt) {
+  sunoResolveMedia(url, fmt, (err, media) => {
+    if (err) { sendJson(res, 502, { ok: false, error: 'Suno: ' + err.message }); return; }
+    const id = crypto.randomBytes(8).toString('hex');
+    const outFile = path.join(os.tmpdir(), `admira-tube-${id}${media.ext}`);
+    sunoFetch(media.mediaUrl, outFile, (dErr) => {
+      if (dErr) { fs.unlink(outFile, () => {}); sendJson(res, 502, { ok: false, error: 'Suno descarga: ' + dErr.message }); return; }
+      let st;
+      try { st = fs.statSync(outFile); } catch (e) { fs.unlink(outFile, () => {}); sendJson(res, 500, { ok: false, error: 'stat failed' }); return; }
+      const title = media.title || 'suno';
+      res.writeHead(200, {
+        'Content-Type': media.mime,
+        'Content-Length': String(st.size),
+        'Content-Disposition': `inline; filename="${title.replace(/[^\w\-. ]+/g, '_').slice(0, 120)}${media.ext}"`,
+        'X-Tube-Title': encodeURIComponent(title),
+        'X-Tube-Source-Url': encodeURIComponent(url),
+        'X-Tube-Format': media.ext === '.mp4' ? 'video' : 'audio',
+        'X-Tube-Host': host,
+        'Access-Control-Expose-Headers': 'X-Tube-Title, X-Tube-Source-Url, X-Tube-Format, X-Tube-Host',
+        'Access-Control-Allow-Origin': '*',
+        'Cache-Control': 'no-store',
+      });
+      const rs = fs.createReadStream(outFile);
+      rs.pipe(res);
+      const finish = () => fs.unlink(outFile, () => {});
+      rs.on('end', finish);
+      rs.on('error', finish);
+      res.on('close', finish);
+    });
+  });
 }
 
 function tubeCleanupFiles(id, extra) {
@@ -1131,10 +1253,12 @@ const server = http.createServer((req, res) => {
       const isTikTok   = host === 'tiktok.com' || host.endsWith('.tiktok.com') || host === 'vm.tiktok.com';
       const isInstagram= host === 'instagram.com' || host.endsWith('.instagram.com');
       const isLinkedIn = host === 'linkedin.com' || host.endsWith('.linkedin.com') || host === 'lnkd.in';
-      if (!(isYouTube || isVimeo || isTwitter || isTikTok || isInstagram || isLinkedIn)) {
-        sendJson(res, 400, { ok: false, error: 'Host not allowed', host, allowed: ['youtube','vimeo','twitter/x','tiktok','instagram','linkedin'] });
+      const isSuno     = host === 'suno.com' || host.endsWith('.suno.com');
+      if (!(isYouTube || isVimeo || isTwitter || isTikTok || isInstagram || isLinkedIn || isSuno)) {
+        sendJson(res, 400, { ok: false, error: 'Host not allowed', host, allowed: ['youtube','vimeo','twitter/x','tiktok','instagram','linkedin','suno'] });
         return;
       }
+      if (isSuno) { sunoTubeDownload(res, url, host, fmt); return; }
       const id = crypto.randomBytes(8).toString('hex');
       const outTpl = path.join(os.tmpdir(), `admira-tube-${id}.%(ext)s`);
       // Args base comunes
