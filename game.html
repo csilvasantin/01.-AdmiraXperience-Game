@@ -13605,6 +13605,7 @@ const HELP_PAGES={
     '  xtAPI.command("/music on")',
     '  xtAPI.command("/ladron")',
     '  xtAPI.command("/lluvia off")',
+    '  xtAPI.command("/subasta")  → subastar el espacio en admira.live',
   ]},
   ],
   en:[
@@ -22096,6 +22097,27 @@ window.xtAPI = (function(){
         }
 
         return {ok:false,message:'Subcomandos validos: bonus, eotm, train, hire, fire. /staff sin args = panel'};
+      }
+
+      // /subasta [espacio] — abre la sala de subasta de admira.live para el
+      // espacio actual del gemelo. Identifica el hueco por la pantalla pixer
+      // (xtore-*, en localStorage) y pasa el booth/vertical activo como contexto.
+      if(['subasta','subastar','auction'].includes(cmd)){
+        let screen='';
+        try{ screen=localStorage.getItem('pixer-xtore-screen-id')||''; }catch(e){}
+        const booth=(typeof window!=='undefined' && window.XPACE_BOOTH) ? window.XPACE_BOOTH : 'xtanco';
+        const espacio=(arg && arg.trim()) || screen || booth;
+        const qs=new URLSearchParams({espacio:espacio, screen:screen, booth:booth, from:'gemelo', v:String(Date.now())});
+        const url='https://www.admira.live/subasta.html?'+qs.toString();
+        const w=460, h=760;
+        const sw=(window.screen&&window.screen.width)||1280, sh=(window.screen&&window.screen.height)||800;
+        const left=Math.max(0,Math.round((sw-w)/2)), top=Math.max(0,Math.round((sh-h)/2));
+        let win=null;
+        try{ win=window.open(url,'admiraSubasta','width='+w+',height='+h+',left='+left+',top='+top); }catch(e){}
+        if(typeof showEv==='function') showEv('🪙 Subasta · '+espacio,'#ffd866');
+        return win
+          ? {ok:true,message:'Subasta abierta en admira.live para "'+espacio+'"',data:{url,espacio,screen,booth}}
+          : {ok:false,message:'No se pudo abrir el popup (¿bloqueado por el navegador?). Abre manualmente: '+url,data:{url,espacio,screen,booth}};
       }
 
       return {ok:false,message:'Comando no reconocido: '+raw};
