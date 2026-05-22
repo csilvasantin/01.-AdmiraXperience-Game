@@ -2605,6 +2605,45 @@ function switchDSVideo(idx){
 function nextDSVideo(){ switchDSVideo(dsVideoIdx+1); }
 function prevDSVideo(){ switchDSVideo(dsVideoIdx-1); }
 
+// ── Espejo de pantalla externa (escaparate → /signage/now) ───────────────
+// Emite a un canal del worker "qué reproduce el escaparate ahora mismo" para
+// que una pantalla física (pantalla.html?screen=escaparate, mismo origen)
+// refleje en vivo el mismo vídeo/imagen. Solo hace POST cuando el contenido
+// cambia, más un keepalive cada 20s que refresca el TTL del puntero en KV.
+const SIGNAGE_NOW_URL='https://pixer-eleven.csilvasantin.workers.dev/signage/now';
+let _escNowSig='';
+function escaparateNowItem(){
+  const pin=(DS_PIN&&typeof DS_PIN==='object')?DS_PIN['escaparate']:null;
+  let name,kind;
+  if(pin){ name=pin.name; kind=pin.kind; }
+  else {
+    // Sin pin, el escaparate refleja la rotación global. Si la rotación no está
+    // reproduciendo (menú, tienda cerrada, modo slides) → idle.
+    if(!videoPlaying||dsMode==='slides') return {kind:'idle',name:'',src:null};
+    name=VIDEO_LIST[dsVideoIdx];
+    kind=DS_IMPORT.KIND[name]||'video';
+  }
+  const file=name?VIDEO_FILES[name]:null;
+  if(!file) return {kind:'idle',name:name||'',src:null};
+  if(/^blob:/i.test(file)) return {kind,name,src:null,local:true}; // import local: aún no compartible
+  let src; try{ src=new URL(file,location.href).href; }catch(e){ src=file; }
+  return {kind,name,src};
+}
+async function emitEscaparateNow(force){
+  try{
+    const it=escaparateNowItem();
+    const sig=it.src?(it.kind+'|'+it.src):(it.kind+'|'+(it.name||'')+(it.local?'|local':''));
+    if(!force && sig===_escNowSig) return;
+    _escNowSig=sig;
+    fetch(SIGNAGE_NOW_URL,{
+      method:'POST',headers:{'Content-Type':'application/json'},keepalive:true,
+      body:JSON.stringify({screen:'escaparate',item:Object.assign({},it,{ts:Date.now()})}),
+    }).catch(()=>{});
+  }catch(e){}
+}
+setInterval(()=>emitEscaparateNow(false),1200);
+setInterval(()=>emitEscaparateNow(true),20000);
+
 function setManagerSayBubble(text){
   const clean=String(text||'').replace(/\s+/g,' ').trim().slice(0,120);
   if(!clean) return '';
