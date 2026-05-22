@@ -162,6 +162,25 @@
   padding:1px 6px;border-radius:4px;color:var(--cyan);font-size:11px;
 }
 
+/* ── Draw Things local bridge ────────────────────────────────── */
+.drawthings-stage{
+  margin-top:18px;padding:16px;border-radius:10px;
+  background:rgba(202,164,102,.06);border:1px solid rgba(202,164,102,.28);
+}
+.drawthings-stage h3{color:#e9c989;margin:0 0 4px}
+.drawthings-stage p{font-size:13px;color:#cdd6e2;margin:0;line-height:1.45}
+.drawthings-actions{
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px;
+}
+.drawthings-preview{
+  display:grid;gap:10px;margin-top:12px;
+}
+.drawthings-preview img{
+  width:100%;aspect-ratio:16/9;object-fit:cover;display:block;
+  border-radius:10px;border:1px solid var(--line2);background:#05080d;
+}
+.drawthings-preview .btn{justify-self:start}
+
 /* ── Engine selector (local vs Suno) ─────────────────────────── */
 .engine-row{
   display:grid;grid-template-columns:1fr 1fr;gap:8px;

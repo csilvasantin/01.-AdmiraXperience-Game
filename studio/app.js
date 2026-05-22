@@ -13,6 +13,7 @@
 (() => {
   const GROK_API  = 'https://admira-grok-proxy.csilvasantin.workers.dev/grok/ask';
   const TUNES_API = 'https://admira-tunes.csilvasantin.workers.dev';
+  const DRAWTHINGS_API = 'http://127.0.0.1:7869';
   const SUNO_POLL_MS = 5_000;
   const SUNO_MAX_WAIT_MS = 5 * 60_000;
 
@@ -76,6 +77,12 @@
   }
   function setPlayerStatus(msg) { $('#player-status').textContent = msg || ''; }
   function setRenderStatus(msg) { $('#render-status').textContent = msg || ''; }
+  function setDrawThingsStatus(msg, mode) {
+    const el = $('#drawthings-status');
+    if (!el) return;
+    el.textContent = msg || '';
+    el.style.color = mode === 'err' ? '#ff8aa0' : 'var(--mute)';
+  }
 
   // ── Generation: prompt Gemini for structured JSON ────────────
   function buildPrompt({ brand, values, vibe, length, lang }) {
@@ -912,12 +919,67 @@
     setPlayerStatus('▶ Reproduciendo Suno');
   }
 
+  // ── Draw Things local image generation ───────────────────────
+  function buildDrawThingsPrompt() {
+    if (!TUNE) return '';
+    const mood = (TUNE.moodWords || []).join(', ');
+    return [
+      '16:9 digital signage campaign key visual',
+      'premium retail media aesthetic',
+      'brand: ' + TUNE.brand,
+      'message: ' + TUNE.hookLine,
+      'values: ' + TUNE.values,
+      'mood: ' + [TUNE.vibe, mood].filter(Boolean).join(', '),
+      'color palette: ' + (TUNE.palette || []).slice(0, 4).join(', '),
+      'clean composition, cinematic lighting, readable empty space for typography, no logos, no small text',
+    ].join('. ');
+  }
+
+  async function generateDrawThingsImage() {
+    if (!TUNE) return;
+    const btn = $('#btn-drawthings');
+    const preview = $('#drawthings-preview');
+    const img = $('#drawthings-img');
+    const link = $('#drawthings-download');
+    btn.disabled = true;
+    setDrawThingsStatus('Conectando con Draw Things local...');
+    try {
+      const r = await fetch(DRAWTHINGS_API + '/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: buildDrawThingsPrompt(),
+          negativePrompt: 'low quality, blurry, watermark, logo, text artifacts, distorted products, cluttered layout',
+          width: 1344,
+          height: 768,
+          steps: 24,
+          seed: TUNE.seed,
+        }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok || !data.ok || !data.url) {
+        const msg = data.error || data.message || ('http_' + r.status);
+        throw new Error(msg);
+      }
+      img.src = data.url + (data.url.includes('?') ? '&' : '?') + 't=' + Date.now();
+      link.href = data.url;
+      link.download = data.filename || (TUNE.brand + '-drawthings.png').replace(/[^a-z0-9.-]+/gi, '-').toLowerCase();
+      preview.hidden = false;
+      setDrawThingsStatus('Imagen lista desde Draw Things.');
+    } catch (err) {
+      setDrawThingsStatus('No conecta con el bridge local: ' + (err && err.message || err), 'err');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
   // ── Wire up ──────────────────────────────────────────────────
   $('#btn-generate').addEventListener('click', generate);
   $('#btn-play').addEventListener('click', onPlayClick);
   $('#btn-stop').addEventListener('click', stopJingle);
   $('#btn-unlock').addEventListener('click', unlockVideo);
   $('#btn-render').addEventListener('click', renderVideo);
+  $('#btn-drawthings').addEventListener('click', generateDrawThingsImage);
   $$('.engine-pill').forEach(p => p.addEventListener('click', () => setEngine(p.dataset.engine)));
   $('#suno-cancel').addEventListener('click', closeSunoConfirm);
   $('#suno-close').addEventListener('click', closeSunoConfirm);
