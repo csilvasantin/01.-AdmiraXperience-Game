@@ -22523,43 +22523,12 @@ window.xtAPI = (function(){
     ];
   }
 
-  // Abre Pixer.ai consultando el manifest.json para obtener la version vigente.
-  // El manifest se cachea al primer click para evitar el race con el popup blocker
-  // en clicks posteriores. Si manifest falla, usa la version conocida v.2026.05.02-r35.
-  let _pixerCachedUrl=null;
-  function _pixerFallbackUrl(){ return 'https://ainimation.studio/v.2026.05.02-r49/'; }
-  async function _pixerResolveUrl(){
-    if(_pixerCachedUrl) return _pixerCachedUrl;
-    try{
-      const r=await fetch('https://ainimation.studio/manifest.json',{cache:'no-cache'});
-      if(r.ok){
-        const data=await r.json();
-        if(data && data.latest){
-          _pixerCachedUrl='https://ainimation.studio/'+encodeURIComponent(data.latest)+'/';
-          return _pixerCachedUrl;
-        }
-      }
-    }catch(err){}
-    _pixerCachedUrl=_pixerFallbackUrl();
-    return _pixerCachedUrl;
-  }
-  // Pre-resolve al cargar para tener la URL lista en el primer click.
-  setTimeout(()=>{ _pixerResolveUrl(); },1500);
+  // Pixer.IA → hub del grupo en www.admira.studio (motores generativos).
+  // Apertura síncrona en el click (sin await) para no disparar el popup blocker.
   function openPixerAi(){
-    // Si tenemos URL resuelta, abrir SINCRONAMENTE en el evento de click —
-    // sin awaits — para que el navegador no marque popup blocker.
-    if(_pixerCachedUrl){
-      const w=window.open(_pixerCachedUrl,'_blank');
-      if(w){ try{ w.opener=null; }catch(e){} }
-      if(typeof showEv==='function') showEv('🎨 Pixer.ai · '+_pixerCachedUrl.split('/').filter(Boolean).pop(),'#aa66ff');
-      return;
-    }
-    // Sin cache: abrir el fallback ya, y disparar la resolucion para el proximo click.
-    const fb=_pixerFallbackUrl();
-    const w=window.open(fb,'_blank');
+    const w=window.open('https://www.admira.studio','_blank','noopener');
     if(w){ try{ w.opener=null; }catch(e){} }
-    _pixerResolveUrl();
-    if(typeof showEv==='function') showEv('🎨 Pixer.ai · v.2026.05.02-r35','#aa66ff');
+    if(typeof showEv==='function') showEv('🎨 Pixer.IA · admira.studio','#aa66ff');
   }
 
   function buildQuickButtonHtml(action,idx){
