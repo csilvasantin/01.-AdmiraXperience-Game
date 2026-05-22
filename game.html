@@ -22180,6 +22180,17 @@ window.xtAPI = (function(){
             const endDrag=function(e){ dragging=false; try{ hdr.releasePointerCapture(e.pointerId); }catch(_){} try{ localStorage.setItem('admiraSubastaPos', JSON.stringify({left:p.offsetLeft, top:p.offsetTop})); }catch(_){} };
             hdr.addEventListener('pointerup',endDrag);
             hdr.addEventListener('pointercancel',endDrag);
+            // La subasta (iframe admira.live) reporta su altura al plegar/expandir
+            // sus secciones; ajustamos el alto del panel para liberar la Xtore.
+            window.addEventListener('message',function(ev){
+              if(ev.origin!=='https://www.admira.live') return;
+              const d=ev.data;
+              if(!d || d.source!=='admira-subasta' || d.type!=='height') return;
+              const hh=(hdr.offsetHeight||38);
+              const want=Math.round(Number(d.height)||0)+hh+2;
+              const maxH=Math.round(window.innerHeight*0.92);
+              p.style.height=Math.max(120,Math.min(want,maxH))+'px';
+            });
           }
           p.style.display='flex';
           const ttlEl=document.getElementById('admiraSubastaTitle');
