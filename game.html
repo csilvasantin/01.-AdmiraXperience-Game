@@ -22100,8 +22100,11 @@ window.xtAPI = (function(){
       }
 
       // /subasta [espacio] — abre la sala de subasta de admira.live para el
-      // espacio actual del gemelo. Identifica el hueco por la pantalla pixer
-      // (xtore-*, en localStorage) y pasa el booth/vertical activo como contexto.
+      // espacio actual del gemelo en un PANEL flotante arrastrable embebido
+      // (iframe), no una ventana popup: aparece por defecto a la derecha (lejos
+      // de la zona verde de la UI) y se mueve arrastrando la cabecera.
+      // Identifica el hueco por la pantalla pixer (xtore-*, localStorage) y el
+      // booth/vertical activo (window.XPACE_BOOTH).
       if(['subasta','subastar','auction'].includes(cmd)){
         let screen='';
         try{ screen=localStorage.getItem('pixer-xtore-screen-id')||''; }catch(e){}
@@ -22109,15 +22112,63 @@ window.xtAPI = (function(){
         const espacio=(arg && arg.trim()) || screen || booth;
         const qs=new URLSearchParams({espacio:espacio, screen:screen, booth:booth, from:'gemelo', v:String(Date.now())});
         const url='https://www.admira.live/subasta.html?'+qs.toString();
-        const w=460, h=760;
-        const sw=(window.screen&&window.screen.width)||1280, sh=(window.screen&&window.screen.height)||800;
-        const left=Math.max(0,Math.round((sw-w)/2)), top=Math.max(0,Math.round((sh-h)/2));
-        let win=null;
-        try{ win=window.open(url,'admiraSubasta','width='+w+',height='+h+',left='+left+',top='+top); }catch(e){}
-        if(typeof showEv==='function') showEv('🪙 Subasta · '+espacio,'#ffd866');
-        return win
-          ? {ok:true,message:'Subasta abierta en admira.live para "'+espacio+'"',data:{url,espacio,screen,booth}}
-          : {ok:false,message:'No se pudo abrir el popup (¿bloqueado por el navegador?). Abre manualmente: '+url,data:{url,espacio,screen,booth}};
+        try{
+          let p=document.getElementById('admiraSubastaPanel');
+          if(!p){
+            p=document.createElement('div');
+            p.id='admiraSubastaPanel';
+            const _vw=window.innerWidth||1280, _vh=window.innerHeight||800;
+            const _pw=Math.min(440,Math.round(_vw*0.92)), _ph=Math.min(760,Math.round(_vh*0.86));
+            p.style.cssText='position:fixed;top:72px;right:16px;width:'+_pw+'px;height:'+_ph+'px;z-index:2147483000;background:#0a1620;border:1px solid rgba(120,243,255,.35);border-radius:12px;box-shadow:0 18px 60px rgba(0,0,0,.6);display:flex;flex-direction:column;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
+            const hdr=document.createElement('div');
+            hdr.style.cssText='flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 12px;background:#0d1c28;border-bottom:1px solid rgba(120,243,255,.22);cursor:move;touch-action:none;user-select:none';
+            const ttl=document.createElement('span');
+            ttl.id='admiraSubastaTitle';
+            ttl.style.cssText='font-size:12px;font-weight:700;letter-spacing:.04em;color:#dff8ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+            const cls=document.createElement('button');
+            cls.type='button'; cls.textContent='×'; cls.title='Cerrar';
+            cls.style.cssText='flex:0 0 auto;background:transparent;border:0;color:#75aab9;font-size:20px;line-height:1;cursor:pointer;padding:0 4px';
+            cls.onclick=function(){ p.style.display='none'; };
+            cls.onpointerdown=function(e){ e.stopPropagation(); };
+            const frame=document.createElement('iframe');
+            frame.id='admiraSubastaFrame';
+            frame.setAttribute('allow','autoplay');
+            frame.style.cssText='flex:1 1 auto;width:100%;border:0;background:#02080d';
+            hdr.appendChild(ttl); hdr.appendChild(cls);
+            p.appendChild(hdr); p.appendChild(frame);
+            document.body.appendChild(p);
+            // Arrastre por la cabecera (pointer = ratón + táctil). setPointerCapture
+            // evita que el iframe robe los eventos al pasar el cursor por encima.
+            let dragging=false,offX=0,offY=0;
+            hdr.addEventListener('pointerdown',function(e){
+              dragging=true;
+              const r=p.getBoundingClientRect();
+              p.style.left=r.left+'px'; p.style.top=r.top+'px'; p.style.right='auto';
+              offX=e.clientX-r.left; offY=e.clientY-r.top;
+              try{ hdr.setPointerCapture(e.pointerId); }catch(_){}
+            });
+            hdr.addEventListener('pointermove',function(e){
+              if(!dragging) return;
+              const pw=p.offsetWidth,ph=p.offsetHeight;
+              let nx=e.clientX-offX, ny=e.clientY-offY;
+              nx=Math.max(0,Math.min(nx,window.innerWidth-pw));
+              ny=Math.max(0,Math.min(ny,window.innerHeight-ph));
+              p.style.left=nx+'px'; p.style.top=ny+'px';
+            });
+            const endDrag=function(e){ dragging=false; try{ hdr.releasePointerCapture(e.pointerId); }catch(_){} };
+            hdr.addEventListener('pointerup',endDrag);
+            hdr.addEventListener('pointercancel',endDrag);
+          }
+          p.style.display='flex';
+          const ttlEl=document.getElementById('admiraSubastaTitle');
+          if(ttlEl) ttlEl.textContent='🪙 Subasta · '+espacio;
+          const frEl=document.getElementById('admiraSubastaFrame');
+          if(frEl) frEl.src=url;
+          if(typeof showEv==='function') showEv('🪙 Subasta · '+espacio,'#ffd866');
+          return {ok:true,message:'Subasta abierta (panel arrastrable) para "'+espacio+'"',data:{url,espacio,screen,booth}};
+        }catch(e){
+          return {ok:false,message:'No se pudo abrir el panel de subasta: '+e+'. URL: '+url,data:{url,espacio,screen,booth}};
+        }
       }
 
       return {ok:false,message:'Comando no reconocido: '+raw};
