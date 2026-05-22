@@ -24624,12 +24624,15 @@ window.xtAPI = (function(){
     renderQuickActionButtons();
   }
 
-  // Estado del grid 4x3 de acciones rápidas (botón Ocultar/Mostrar del dock)
-  let quickActionsHidden=false;
+  // Estado del grid 4x3 de acciones rápidas (botón Ocultar/Mostrar del dock).
+  // Oculto POR DEFECTO (si no, hay demasiada info en pantalla); recuerda la
+  // última elección del usuario en localStorage.
+  let quickActionsHidden=(()=>{ try{ const v=localStorage.getItem('xtanco_quickactions_hidden'); return v===null?true:v==='1'; }catch(e){ return true; } })();
   function setQuickActionsHidden(active){
     quickActionsHidden=!!active;
     if(quickActionsEl) quickActionsEl.style.display=quickActionsHidden?'none':'';
     if(hideBtn) hideBtn.textContent=quickActionsHidden?(lang==='es'?'Mostrar':'Show'):(lang==='es'?'Ocultar':'Hide');
+    try{ localStorage.setItem('xtanco_quickactions_hidden', quickActionsHidden?'1':'0'); }catch(e){}
   }
   // Exponer estado para que la función i18n pueda reflejarlo al cambiar idioma
   window.isQuickActionsHidden=()=>quickActionsHidden;
@@ -24774,6 +24777,7 @@ window.xtAPI = (function(){
     else commandHelp();
   });
   bindDockButton(hideBtn,()=>{marioBeep();setQuickActionsHidden(!quickActionsHidden);});
+  setQuickActionsHidden(quickActionsHidden); // aplica el estado inicial (oculto por defecto)
   bindDockButton(signageBtn,()=>{marioBeep();toggleSignagePanel();});
   if(signagePanel){
     signagePanel.addEventListener('dragstart',e=>{
