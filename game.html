@@ -2633,12 +2633,26 @@ async function emitEscaparateNow(force){
   try{
     const it=escaparateNowItem();
     const sig=it.src?(it.kind+'|'+it.src):(it.kind+'|'+(it.name||'')+(it.local?'|local':''));
-    if(!force && sig===_escNowSig) return;
+    const changed = sig!==_escNowSig;
+    if(!force && !changed) return;
     _escNowSig=sig;
+    // Canal limpio /signage/now (refresca TTL en keepalive; 404 hasta desplegar en el Mac).
     fetch(SIGNAGE_NOW_URL,{
       method:'POST',headers:{'Content-Type':'application/json'},keepalive:true,
       body:JSON.stringify({screen:'escaparate',item:Object.assign({},it,{ts:Date.now()})}),
     }).catch(()=>{});
+    // Canal feed YA desplegado (sin Mac): SOLO en cambios reales, no en keepalive,
+    // para no spamear el feed compartido. La receptora lo lee como fallback.
+    if(changed){
+      const marker='[scr:escaparate] ';
+      const body = it.src
+        ? {kind:it.kind, src:it.src, title:marker+(it.name||'')}
+        : {kind:'text', src:'about:blank', title:marker+'__idle__'};
+      fetch('https://pixer-eleven.csilvasantin.workers.dev/signage/push',{
+        method:'POST',headers:{'Content-Type':'application/json'},keepalive:true,
+        body:JSON.stringify(body),
+      }).catch(()=>{});
+    }
   }catch(e){}
 }
 setInterval(()=>emitEscaparateNow(false),1200);

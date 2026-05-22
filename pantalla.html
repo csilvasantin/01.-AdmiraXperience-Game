@@ -135,13 +135,33 @@
     if (item.name) showLabel((item.kind === 'image' ? '🖼 ' : '📺 ') + item.name);
   }
 
+  // Canal limpio: /signage/now (puntero por pantalla). Devuelve el item, null si
+  // no hay nada, o undefined si el endpoint aún no está desplegado (404).
+  async function fetchNow() {
+    const r = await fetch(WORKER + '/signage/now?screen=' + encodeURIComponent(SCREEN), { cache: 'no-store' });
+    if (!r.ok) return undefined; // 404 = endpoint no desplegado todavía
+    const data = await r.json();
+    return (data && data.item) || null;
+  }
+
+  // Fallback al feed YA desplegado: el juego empuja con título "[scr:<screen>] <name>".
+  async function fetchFromFeed() {
+    const r = await fetch(WORKER + '/signage/feed?limit=25', { cache: 'no-store' });
+    if (!r.ok) throw new Error('feed http ' + r.status);
+    const data = await r.json();
+    const marker = '[scr:' + SCREEN + ']';
+    const it = (data.items || []).find(i => (i.title || '').startsWith(marker));
+    if (!it) return null;
+    if (it.kind === 'text' || /__idle__/.test(it.title || '')) return { kind: 'idle', name: '' };
+    return { kind: it.kind, src: it.url, name: (it.title || '').slice(marker.length).trim() };
+  }
+
   async function poll() {
     try {
-      const r = await fetch(WORKER + '/signage/now?screen=' + encodeURIComponent(SCREEN), { cache: 'no-store' });
-      if (!r.ok) throw new Error('http ' + r.status);
-      const data = await r.json();
+      let item = await fetchNow();           // canal limpio
+      if (item === undefined) item = await fetchFromFeed(); // fallback feed
       setDot('live');
-      applyItem(data && data.item);
+      applyItem(item);
     } catch (e) {
       setDot(curSig && curSig !== 'idle' ? 'warn' : 'err');
       // Mantener el último contenido en pantalla; solo marcamos el estado.
