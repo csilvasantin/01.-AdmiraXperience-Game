@@ -22137,6 +22137,16 @@ window.xtAPI = (function(){
             hdr.appendChild(ttl); hdr.appendChild(cls);
             p.appendChild(hdr); p.appendChild(frame);
             document.body.appendChild(p);
+            // Restaurar la última posición guardada (si no hay, queda a la derecha).
+            try{
+              const _sp=JSON.parse(localStorage.getItem('admiraSubastaPos')||'null');
+              if(_sp && Number.isFinite(_sp.left) && Number.isFinite(_sp.top)){
+                const _mx=Math.max(0,window.innerWidth-p.offsetWidth), _my=Math.max(0,window.innerHeight-p.offsetHeight);
+                p.style.left=Math.max(0,Math.min(_sp.left,_mx))+'px';
+                p.style.top=Math.max(0,Math.min(_sp.top,_my))+'px';
+                p.style.right='auto';
+              }
+            }catch(_){}
             // Arrastre por la cabecera (pointer = ratón + táctil). setPointerCapture
             // evita que el iframe robe los eventos al pasar el cursor por encima.
             let dragging=false,offX=0,offY=0;
@@ -22155,7 +22165,7 @@ window.xtAPI = (function(){
               ny=Math.max(0,Math.min(ny,window.innerHeight-ph));
               p.style.left=nx+'px'; p.style.top=ny+'px';
             });
-            const endDrag=function(e){ dragging=false; try{ hdr.releasePointerCapture(e.pointerId); }catch(_){} };
+            const endDrag=function(e){ dragging=false; try{ hdr.releasePointerCapture(e.pointerId); }catch(_){} try{ localStorage.setItem('admiraSubastaPos', JSON.stringify({left:p.offsetLeft, top:p.offsetTop})); }catch(_){} };
             hdr.addEventListener('pointerup',endDrag);
             hdr.addEventListener('pointercancel',endDrag);
           }
