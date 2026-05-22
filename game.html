@@ -13605,7 +13605,7 @@ const HELP_PAGES={
     '  xtAPI.command("/music on")',
     '  xtAPI.command("/ladron")',
     '  xtAPI.command("/lluvia off")',
-    '  xtAPI.command("/subasta")  → subastar el espacio en admira.live',
+    '  xtAPI.command("/subasta")  → abre/cierra (toggle) la subasta · /subasta off cierra',
   ]},
   ],
   en:[
@@ -22106,10 +22106,22 @@ window.xtAPI = (function(){
       // Identifica el hueco por la pantalla pixer (xtore-*, localStorage) y el
       // booth/vertical activo (window.XPACE_BOOTH).
       if(['subasta','subastar','auction'].includes(cmd)){
+        // Toggle: /subasta off|cerrar la cierra; un segundo /subasta (sin arg)
+        // estando abierta también la cierra. /subasta on|abrir|<espacio> la abre.
+        const _sub=String(arg||'').trim().toLowerCase();
+        const _existing=document.getElementById('admiraSubastaPanel');
+        const _isOpen=_existing && _existing.style.display!=='none';
+        if(['off','cerrar','close','ocultar','hide','quitar','0','no'].includes(_sub) || (!_sub && _isOpen)){
+          if(_existing) _existing.style.display='none';
+          if(typeof showEv==='function') showEv('🪙 Subasta cerrada','#aaaaaa');
+          return {ok:true,message:'Subasta cerrada',data:{open:false}};
+        }
+        // 'on'/'abrir' abren sin tratarse como nombre de espacio.
+        const _argSpace=['on','abrir','open','show','mostrar','1'].includes(_sub) ? '' : (arg && arg.trim());
         let screen='';
         try{ screen=localStorage.getItem('pixer-xtore-screen-id')||''; }catch(e){}
         const booth=(typeof window!=='undefined' && window.XPACE_BOOTH) ? window.XPACE_BOOTH : 'xtanco';
-        const espacio=(arg && arg.trim()) || screen || booth;
+        const espacio=_argSpace || screen || booth;
         const qs=new URLSearchParams({espacio:espacio, screen:screen, booth:booth, from:'gemelo', v:String(Date.now())});
         const url='https://www.admira.live/subasta.html?'+qs.toString();
         try{
