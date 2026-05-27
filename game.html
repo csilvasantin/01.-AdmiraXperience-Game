@@ -1615,9 +1615,7 @@ const SONG_FILES={
   'Careless Whisper - George Michael':'music/careless.mp3',
   'Hard Techno - DJ Novah':'music/dj-novah.mp3',
   'La Perla - Rosalía':'music/rosalia-perla.mp3',
-  // Placeholder hasta que tengamos el track real de Seoul 2026 → sustituir
-  // por 'music/seoul2026.mp3' cuando esté el archivo final.
-  'Seoul 2026 - AdmiraNext':'music/dj-novah.mp3',
+  'Seoul 2026 - AdmiraNext':'music/seoul2026.mp3',
 };
 
 // ── BACKGROUND MUSIC ─────────────────────────────────────────
@@ -21687,15 +21685,14 @@ window.xtAPI = (function(){
       if(['componer','compose','compon','componer-cancion','compose-song'].includes(cmd)){
         return composeSong(arg);
       }
-      // /seoul2026 — atajo: suena el track 'Seoul 2026 - AdmiraNext' (placeholder
-      // music/dj-novah.mp3 hasta que tengamos el archivo final).
+      // /seoul2026 — atajo: suena el track 'Seoul 2026 - AdmiraNext'.
       if(['seoul2026','seoul','seoul-2026'].includes(cmd)){
         try{
           const audio=document.getElementById('bgMusic');
           if(!audio) return {ok:false,message:'No se encontró el elemento de audio'};
-          audio.src='music/dj-novah.mp3'; // TODO: sustituir por music/seoul2026.mp3 cuando exista
+          audio.src='music/seoul2026.mp3';
           audio.play().catch(function(){});
-          return {ok:true,message:'♪ Seoul 2026 — AdmiraNext (placeholder · cambia music/dj-novah.mp3 por el track real)'};
+          return {ok:true,message:'♪ Seoul 2026 — AdmiraNext'};
         }catch(e){ return {ok:false,message:'Error: '+String(e&&e.message||e)}; }
       }
       if(['sfx','fx','efectos'].includes(cmd)) return runBinaryCommand('FX',arg,()=>!!(G&&G.sfxVolume>0),setSfxState,true);
