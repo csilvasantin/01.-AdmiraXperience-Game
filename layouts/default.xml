@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<admiraLayout schema="20260426-public-canonical-1" savedAt="2026-05-27T23:21:03.116Z" savedFrom="AdmiraNext v26.05.28.12" modelKey="generic">
+  <furniture>
+    <item id="counter" type="counter" col="1" row="6" sx="1" sy="1" label="Mostrador+Caja+PC"/>
+    <item id="shelves" type="shelves" col="2" row="0" sx="1" sy="1" label="Estantería"/>
+    <item id="wineRack" type="wineRack" col="3" row="0" sx="1" sy="1" label="Botellero"/>
+    <item id="lottery" type="lottery" col="5" row="0" sx="1" sy="1" label="Lotería"/>
+    <item id="vending" type="vending" col="7" row="0" sx="1" sy="1" label="Vending"/>
+    <item id="magazines" type="magazines" col="3" row="7" sx="1" sy="1" label="Revistero"/>
+    <item id="manager" type="manager" col="6" row="7" sx="1" sy="1" label="Escritorio"/>
+    <item id="plant1" type="plant" col="0" row="1" sx="1" sy="1" label="Planta 1"/>
+    <item id="plant3" type="plant" col="0" row="5" sx="1" sy="1" label="Planta 2"/>
+    <item id="floorLamp" type="floorLamp" col="0" row="3" sx="1" sy="1" label="Lámpara pie"/>
+    <item id="led" type="led" col="0" row="0" sx="1" sy="1" label="LED Banner"/>
+    <item id="djBooth" type="djBooth" col="11" row="3" sx="1" sy="1" label="Mesa DJ"/>
+    <item id="tablet" type="tablet" col="13" row="5" sx="1" sy="1" label="Tablet Satisfacción"/>
+    <item id="turnKiosk" type="turnKiosk" col="12" row="6" sx="1" sy="1" label="Gestor Turnos"/>
+    <item id="aroma" type="aroma" col="13" row="1" sx="1" sy="1" label="Máquina olores"/>
+    <item id="metahuman" type="metahuman" col="13" row="3" sx="1" sy="1" label="Metahuman AI"/>
+  </furniture>
+  <staff>
+    <position col="2" row="1"/>
+    <position col="8" row="3"/>
+    <position col="4" row="1"/>
+    <position col="7" row="4"/>
+    <position col="12" row="2"/>
+    <position col="3" row="4"/>
+    <position col="6" row="3"/>
+    <position col="7" row="1"/>
+  </staff>
+</admiraLayout>
