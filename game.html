@@ -22316,9 +22316,14 @@ window.xtAPI = (function(){
     const tematica=parts.join(' ');
     if(!tematica) return {ok:false,message:'Indica también la temática. Ej: /componer rock una canción para Altadis'};
 
-    const SUNO=(location.protocol==='http:'||location.hostname==='localhost'||location.hostname==='127.0.0.1')
-      ? 'http://127.0.0.1:3777'
-      : 'https://macmini.tail48b61c.ts.net/suno';
+    // Endpoints en orden de preferencia. El túnel del Mac Mini funciona
+    // desde cualquier origen (HTTPS vía Tailscale Funnel). 127.0.0.1 solo
+    // si hay suno-local en la propia máquina (y la página está en http://).
+    const SUNO_CANDIDATES=['https://macmini.tail48b61c.ts.net/suno'];
+    if(location.protocol==='http:'||location.hostname==='localhost'||location.hostname==='127.0.0.1'){
+      SUNO_CANDIDATES.push('http://127.0.0.1:3777');
+    }
+    let SUNO=null;
 
     const ov=composeOverlay();
     ov.setState('init','🎵 Componiendo: '+tipo+' · '+tematica);
@@ -22328,17 +22333,21 @@ window.xtAPI = (function(){
 
     (async function(){
       try{
-        ov.setState('check','🔌 Verificando suno-local…');
-        let h=null;
-        try{
-          const r=await fetch(SUNO+'/healthz');
-          h=r.ok?await r.json():{ok:false,error:'HTTP '+r.status};
-        }catch(e){ h={ok:false,error:String(e&&e.message||e)}; }
-        if(!h||h.ok===false){
-          ov.setState('error','❌ suno-local no responde ('+SUNO+').\n'+(h&&h.error||'')+'\nArranca el servicio en el Mac Mini.');
+        ov.setState('check','🔌 Buscando suno-local…');
+        for(const url of SUNO_CANDIDATES){
+          try{
+            const r=await fetch(url+'/healthz');
+            if(r.ok){
+              const j=await r.json();
+              if(j&&j.ok!==false){ SUNO=url; break; }
+            }
+          }catch(e){}
+        }
+        if(!SUNO){
+          ov.setState('error','❌ suno-local no responde en ninguno de los endpoints conocidos:\n  · '+SUNO_CANDIDATES.join('\n  · ')+'\n\nArranca suno-local en el Mac Mini (y comprueba Tailscale).');
           return;
         }
-        ov.setState('gen','📨 Enviando prompt a Suno…');
+        ov.setState('gen','📨 Enviando prompt a Suno ('+SUNO+')…');
         const r=await fetch(SUNO+'/generate',{
           method:'POST',
           headers:{'Content-Type':'application/json'},
