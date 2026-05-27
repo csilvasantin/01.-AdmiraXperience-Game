@@ -267,20 +267,118 @@ async function getJwt() {
   return cachedJwt;
 }
 
+// ─── Puppeteer (Chromium invisible para puentear Turnstile) ──────────
+// Suno ha endurecido Cloudflare Turnstile en /api/generate/v2/ y similar:
+// rechaza 422 'token_validation_failed' aunque el JWT sea válido si la
+// request no viene de un contexto de navegador "limpio" (cf_clearance,
+// challenge cookies). Solución: lanzamos un Chromium headless al
+// arrancar, le inyectamos las cookies decifradas de tu Chrome, lo
+// dejamos en https://suno.com/create, y todos los fetch a la API se
+// ejecutan DENTRO de esa página via page.evaluate. El navegador
+// resuelve Turnstile solo en el primer navigate y reutilizamos.
+let puppeteer = null;
+try { puppeteer = require('puppeteer'); } catch (e) {
+  console.log('⚠ puppeteer no instalado — /generate y /status no funcionarán (solo /healthz)');
+}
+let browser = null;
+let page = null;
+let pageReadyPromise = null;
+
+function buildPuppeteerCookies() {
+  if (process.platform !== 'darwin' || !fs.existsSync(CHROME_COOKIES_PATH)) return [];
+  try {
+    const tmp = path.join(os.tmpdir(), `suno-local-pup-${process.pid}.sqlite`);
+    fs.copyFileSync(CHROME_COOKIES_PATH, tmp);
+    const pw = execSync('security find-generic-password -wa "Chrome" -s "Chrome Safe Storage"', {encoding:'utf8'}).trim();
+    const key = crypto.pbkdf2Sync(pw, 'saltysalt', 1003, 16, 'sha1');
+    const iv = Buffer.alloc(16, ' ');
+    function dec(b, h){
+      if(!b||b.length<4)return'';
+      if(b.slice(0,3).toString()!=='v10')return b.toString();
+      const d=crypto.createDecipheriv('aes-128-cbc',key,iv);
+      let p=Buffer.concat([d.update(b.slice(3)),d.final()]);
+      if(h&&p.length>32){const e=crypto.createHash('sha256').update(h).digest();if(p.slice(0,32).equals(e))p=p.slice(32);}
+      return p.toString('utf8');
+    }
+    const rows = execSync(
+      `/usr/bin/sqlite3 -separator $'\\t' "${tmp}" "SELECT name, host_key, hex(encrypted_value), is_secure, is_httponly, path FROM cookies WHERE host_key LIKE '%suno.com';"`,
+      {encoding:'utf8'}
+    ).trim().split('\n');
+    try { fs.unlinkSync(tmp); } catch(_) {}
+    const out = [];
+    for (const r of rows) {
+      if (!r) continue;
+      const [name, host, hex, sec, http, cpath] = r.split('\t');
+      out.push({name, value: dec(Buffer.from(hex,'hex'), host), domain: host, path: cpath||'/', secure: sec==='1', httpOnly: http==='1', sameSite:'Lax'});
+    }
+    return out;
+  } catch (e) {
+    console.log('⚠ buildPuppeteerCookies:', e.message);
+    return [];
+  }
+}
+
+async function ensurePage() {
+  if (page && !page.isClosed()) return page;
+  if (pageReadyPromise) return pageReadyPromise;
+  if (!puppeteer) throw new Error('puppeteer no instalado');
+  pageReadyPromise = (async () => {
+    if (!browser) {
+      browser = await puppeteer.launch({
+        headless: true,
+        args: ['--no-sandbox','--disable-blink-features=AutomationControlled'],
+      });
+      browser.on('disconnected', () => { browser = null; page = null; pageReadyPromise = null; });
+    }
+    const p = await browser.newPage();
+    await p.setUserAgent(UA);
+    const cookies = buildPuppeteerCookies();
+    if (cookies.length) await p.setCookie(...cookies);
+    console.log(`↻ Puppeteer: navegando a suno.com/create (${cookies.length} cookies inyectadas)…`);
+    await p.goto('https://suno.com/create', {waitUntil:'networkidle2', timeout:60000});
+    console.log('✓ Puppeteer: página suno.com lista');
+    page = p;
+    return p;
+  })();
+  try { return await pageReadyPromise; }
+  finally { pageReadyPromise = null; }
+}
+
+// Cada 30 min refrescamos la sesión del navegador re-inyectando cookies
+// frescas de tu Chrome (que rota __session vía Clerk en la web visible).
+setInterval(async () => {
+  if (!page || page.isClosed()) return;
+  const cookies = buildPuppeteerCookies();
+  if (cookies.length) {
+    try { await page.setCookie(...cookies); } catch(_) {}
+  }
+}, 30 * 60 * 1000).unref();
+
 async function sunoFetch(p, opts = {}) {
-  const jwt = await getJwt();
-  return fetch(SUNO_API + p, {
-    ...opts,
-    headers: {
-      'Authorization': `Bearer ${jwt}`,
+  const pg = await ensurePage();
+  const jwt = await getJwt().catch(() => '');
+  const result = await pg.evaluate(async (url, payload, jwt) => {
+    const headers = {
       'Content-Type': 'application/json',
-      'user-agent': UA,
       'accept': 'application/json',
-      'origin': 'https://suno.com',
-      'referer': 'https://suno.com/',
-      ...(opts.headers || {}),
-    },
-  });
+      ...(payload.headers || {}),
+    };
+    if (jwt) headers['Authorization'] = 'Bearer ' + jwt;
+    const r = await fetch(url, {
+      method: payload.method || 'GET',
+      headers,
+      body: payload.body || undefined,
+      credentials: 'include',
+    });
+    return { status: r.status, ok: r.ok, text: await r.text() };
+  }, SUNO_API + p, { method: opts.method, body: opts.body, headers: opts.headers || {} }, jwt);
+  // Devolvemos un objeto compatible con la Response usada antes por los handlers.
+  return {
+    ok: result.ok,
+    status: result.status,
+    text: async () => result.text,
+    json: async () => JSON.parse(result.text),
+  };
 }
 
 // ─── Helpers HTTP ──────────────────────────────────────────────────

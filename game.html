@@ -21679,12 +21679,10 @@ window.xtAPI = (function(){
         if(['prev','anterior','previous'].includes(head)) return api.prevTrack();
         return runBinaryCommand('Música',arg,()=>!bgMusic.paused,setMusicState,false);
       }
-      // /componer queda deprecado (2026-05-28): Suno endureció Cloudflare
-      // Turnstile en /api/generate/v2/, así que el flujo programático devuelve
-      // 422 "token validation failed" aunque el JWT sea válido. Mantenemos el
-      // comando para devolver un mensaje útil que apunte a los tracks precanned.
+      // /componer <tipo> <temática> — genera una canción con Suno vía
+      // suno-local (que usa Puppeteer headless para puentear Turnstile).
       if(['componer','compose','compon','componer-cancion','compose-song'].includes(cmd)){
-        return {ok:true,message:'⚠️ /componer está pausado (Suno bloqueó la generación programática con Turnstile). Usa los tracks ya cocinados: /seul · /seultrap · /seultecno · /seoul2026. Para añadir más canciones pídeselas al humano y se suben al repo.'};
+        return composeSong(arg);
       }
       // /seoul2026 — atajo: suena el track 'Seoul 2026 - AdmiraNext'.
       // Aliases tolerantes a typos: /seoul, /seul, /seul2026, /seoul-2026.
@@ -24068,11 +24066,10 @@ window.xtAPI = (function(){
           return '♪ Seúl Tecno — AdmiraNext';
         }catch(e){ return 'Error: '+(e&&e.message||e); }
       }
-      // /componer — deprecado (Suno Turnstile). Devolvemos mensaje desde aquí
-      // sin tocar el overlay, para que el dispatcher de Telegram responda en
-      // texto plano sin abrir player.
-      if(['componer','compose','compon'].includes(cmd)){
-        return '⚠️ /componer pausado (Suno bloqueó la generación programática con Turnstile). Usa /seul · /seultrap · /seultecno · /seoul2026.';
+      // /componer <tipo> <temática> — redirige a xtAPI.command (composeSong vive allí).
+      if(['componer','compose','compon'].includes(cmd) && typeof window.xtAPI==='object'){
+        const r=window.xtAPI.command('/componer'+(arg?' '+arg:''));
+        return (r&&r.message)||String(r);
       }
       if(cmd==='dj'||cmd==='djnovah'||cmd==='novah') return setDJCommand(arg);
       if(cmd==='pixeria'||cmd==='pixerfeed'||cmd==='pixer') return setPixerFeedCommand(arg);
