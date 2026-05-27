@@ -54,6 +54,35 @@ let cachedSid = null;
 let cachedJwt = null;
 let cachedJwtExp = 0;
 
+// Modo directo: extraer el JWT directamente del cookie __session si está
+// presente. Útil cuando solo tenemos las cookies accesibles por JS (sin
+// __client HttpOnly) y aceptamos no poder refrescar el JWT — caduca en ~1h
+// y hay que recopiar la cookie. Sin esto Clerk falla con "no active suno session".
+let DIRECT_JWT_MODE = false;
+(function extractDirectJwt() {
+  const m = SUNO_COOKIE.match(/(?:^|;\s*)__session=([^;]+)/);
+  if (!m) return;
+  const jwt = m[1].trim();
+  try {
+    const parts = jwt.split('.');
+    if (parts.length !== 3) return;
+    const pad = (s) => s + '='.repeat((4 - s.length % 4) % 4);
+    const payload = JSON.parse(Buffer.from(pad(parts[1]).replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8'));
+    const expMs = payload.exp ? payload.exp * 1000 : 0;
+    if (expMs && expMs > Date.now()) {
+      cachedJwt = jwt;
+      cachedJwtExp = expMs;
+      DIRECT_JWT_MODE = true;
+      const mins = Math.round((expMs - Date.now()) / 60000);
+      console.log(`✓ JWT extraído del cookie __session (modo directo, caduca en ${mins} min — sin auto-refresh)`);
+    } else {
+      console.log(`⚠ JWT del cookie __session ${expMs ? 'YA CADUCÓ' : 'no tiene exp legible'} — intentaré refrescar vía Clerk`);
+    }
+  } catch (e) {
+    console.log('⚠ no pude parsear el JWT del cookie __session:', e.message);
+  }
+})();
+
 async function getSessionId() {
   if (cachedSid) return cachedSid;
   const r = await fetch(`https://${CLERK_HOST}/v1/client?${CLERK_QS}`, {
@@ -73,6 +102,9 @@ async function getSessionId() {
 
 async function getJwt() {
   if (cachedJwt && Date.now() < cachedJwtExp - 30_000) return cachedJwt;
+  if (DIRECT_JWT_MODE) {
+    throw new Error('JWT directo caducó · recopia la cookie __session desde suno.com (vía JS de la página) — sin __client no podemos refrescar vía Clerk');
+  }
   const sid = await getSessionId();
   const r = await fetch(
     `https://${CLERK_HOST}/v1/client/sessions/${sid}/tokens?${CLERK_QS}`,
@@ -192,7 +224,10 @@ async function handleGenerate(req, res) {
     const lyrics = String(body.lyrics || '').slice(0, 3000).trim();
     const title = String(body.title || '').slice(0, 80).trim();
     if (!prompt && !lyrics) { sendJson(res, 400, { error: 'missing prompt or lyrics' }); return; }
-    const model = body.model === 'chirp-v4-5' ? 'chirp-v4-5' : 'chirp-v4';
+    // Modelos permitidos. chirp-v4 / chirp-v4-5 piden plan; chirp-v3-5 es el
+    // fallback más universal (incluido en planes gratuitos).
+    const ALLOWED_MV = ['chirp-v3-5','chirp-v4','chirp-v4-5'];
+    const model = ALLOWED_MV.includes(body.model) ? body.model : (body.model ? 'chirp-v3-5' : 'chirp-v4');
 
     // Dos modos:
     //   - Custom mode (lyrics presente) → Suno espera prompt=<letra>, tags=<estilo>, make_instrumental:false.
