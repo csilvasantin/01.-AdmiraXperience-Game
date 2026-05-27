@@ -22368,7 +22368,7 @@ window.xtAPI = (function(){
 
     (async function(){
       try{
-        ov.setState('check','🔌 Buscando suno-local…');
+        ov.setState('check','🔌 Buscando Admira DJ…');
         for(const url of SUNO_CANDIDATES){
           try{
             const r=await fetch(url+'/healthz');
@@ -22379,10 +22379,10 @@ window.xtAPI = (function(){
           }catch(e){}
         }
         if(!SUNO){
-          ov.setState('error','❌ suno-local no responde en ninguno de los endpoints conocidos:\n  · '+SUNO_CANDIDATES.join('\n  · ')+'\n\nArranca suno-local en el Mac Mini (y comprueba Tailscale).');
+          ov.setState('error','❌ Admira DJ no responde. Reintenta en unos segundos o avisa al humano.');
           return;
         }
-        ov.setState('gen','📨 Enviando prompt a Suno ('+SUNO+')…');
+        ov.setState('gen','📨 Enviando prompt a Admira DJ…');
         const r=await fetch(SUNO+'/generate',{
           method:'POST',
           headers:{'Content-Type':'application/json'},
@@ -22390,13 +22390,13 @@ window.xtAPI = (function(){
         });
         if(!r.ok){
           const err=await r.text().catch(function(){return '(sin cuerpo)';});
-          ov.setState('error','❌ Suno /generate '+r.status+': '+err.slice(0,200));
+          ov.setState('error','❌ Admira DJ /generate '+r.status+': '+err.slice(0,200));
           return;
         }
         const data=await r.json();
         const clipIds=(data.clips||[]).map(function(c){return c.id;}).filter(Boolean);
         if(!clipIds.length){
-          ov.setState('error','❌ Suno no devolvió clips.\n'+JSON.stringify(data).slice(0,200));
+          ov.setState('error','❌ Admira DJ no devolvió clips.');
           return;
         }
         ov.setState('poll','⏳ Generando · '+clipIds.length+' clip(s) en cola…');
@@ -22405,7 +22405,7 @@ window.xtAPI = (function(){
         while(true){
           await new Promise(function(rs){setTimeout(rs,5000);});
           attempt++;
-          if(Date.now()-t0>6*60*1000){ ov.setState('error','⏱ Timeout esperando a Suno (>6 min).'); return; }
+          if(Date.now()-t0>6*60*1000){ ov.setState('error','⏱ Timeout esperando a Admira DJ (>6 min).'); return; }
           let clips=null;
           try{
             const pr=await fetch(SUNO+'/status?ids='+clipIds.join(','));
@@ -22416,7 +22416,7 @@ window.xtAPI = (function(){
           if(ready.length>=1){
             const c=ready[0];
             ov.setState('done','🎵 '+((c.title&&c.title.trim())||title),c.audio_url,c.image_large_url||c.image_url||'');
-            try{ if(typeof showEv==='function') showEv('🎵 Suno lista la canción','#88ffaa'); }catch(e){}
+            try{ if(typeof showEv==='function') showEv('🎵 Admira DJ tiene la canción lista','#88ffaa'); }catch(e){}
             return;
           }
         }
@@ -22425,7 +22425,7 @@ window.xtAPI = (function(){
       }
     })();
 
-    return {ok:true,message:'🎵 Componiendo «'+tipo+' · '+tematica+'» con Suno… te aviso en el overlay (esquina inferior derecha).'};
+    return {ok:true,message:'🎵 Componiendo «'+tipo+' · '+tematica+'» con Admira DJ… te aviso en el overlay (esquina inferior derecha).'};
   }
 
   // Overlay flotante singleton para /componer. Pinta estado + player final.

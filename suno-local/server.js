@@ -182,7 +182,7 @@ function promptUserToReauth(reason) {
   console.log('⚠ Sesión Suno caducada en Chrome. Abriendo /sign-in…  motivo:', reason);
   try { execSync(`open -a "Google Chrome" "https://suno.com/sign-in"`); } catch (_) {}
   if (TELEGRAM_BOT && TELEGRAM_CHAT) {
-    const text = `⚠️ suno-local: sesión caducada (${reason}). Abierto Chrome en suno.com/sign-in para que vuelvas a entrar. Una vez logueado, el server retoma solo en ≤10 min (o reinícialo).`;
+    const text = `⚠️ Admira DJ: sesión caducada (${reason}). Te he abierto la ventana de login para que vuelvas a entrar. Una vez logueado, el servicio retoma solo en ≤10 min (o reinícialo).`;
     const body = `chat_id=${encodeURIComponent(TELEGRAM_CHAT)}&text=${encodeURIComponent(text)}`;
     fetch(`https://api.telegram.org/bot${TELEGRAM_BOT}/sendMessage`, {
       method: 'POST', headers: {'Content-Type':'application/x-www-form-urlencoded'}, body,
