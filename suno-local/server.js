@@ -15,6 +15,9 @@ const http = require('http');
 const url = require('url');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
+const crypto = require('crypto');
+const { execSync } = require('child_process');
 
 // ─── .env loader (sin dependencias) ─────────────────────────────────
 (function loadEnv() {
@@ -31,7 +34,7 @@ const path = require('path');
 })();
 
 const PORT = parseInt(process.env.SUNO_LOCAL_PORT || '3777', 10);
-const SUNO_COOKIE = process.env.SUNO_COOKIE || '';
+let SUNO_COOKIE = process.env.SUNO_COOKIE || '';
 const CLERK_HOST = process.env.SUNO_CLERK_HOST || 'auth.suno.com';
 const CLERK_VER = process.env.SUNO_CLERK_JS_VERSION || '5.117.0';
 const CLERK_API_VER = process.env.SUNO_CLERK_API_VERSION || '2025-11-10';
@@ -43,23 +46,130 @@ const ALLOWED_ORIGINS = (process.env.SUNO_ALLOWED_ORIGINS
 const UA = process.env.SUNO_UA
   || 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36';
 
-if (!SUNO_COOKIE) {
-  console.error('✗ SUNO_COOKIE no esta definido en .env');
-  console.error('  Crea un .env desde .env.example y pega la cookie de auth.suno.com');
-  process.exit(1);
-}
-
-// ─── Clerk auth ─────────────────────────────────────────────────────
+// ─── Estado de auth (compartido entre Chrome refresh y Clerk flow) ──
 let cachedSid = null;
 let cachedJwt = null;
 let cachedJwtExp = 0;
-
-// Modo directo: extraer el JWT directamente del cookie __session si está
-// presente. Útil cuando solo tenemos las cookies accesibles por JS (sin
-// __client HttpOnly) y aceptamos no poder refrescar el JWT — caduca en ~1h
-// y hay que recopiar la cookie. Sin esto Clerk falla con "no active suno session".
 let DIRECT_JWT_MODE = false;
-(function extractDirectJwt() {
+
+// ─── Auto-refresh desde Chrome (macOS) ───────────────────────────────
+// Lee las cookies de Suno directamente del SQLite de Chrome y las
+// descifra con la clave del Keychain. Esto incluye __client (HttpOnly,
+// no accesible por JS) que es lo que permite que Clerk auto-refresque
+// el JWT cada hora sin recopiar nada a mano.
+//
+// Requisitos:
+//   - macOS, Chrome instalado en ~/Library/Application Support/Google/Chrome.
+//   - Sesión iniciada en suno.com en el profile "Default".
+//   - Keychain accesible (pedirá permiso la primera vez al leer "Chrome Safe Storage").
+//
+// Si no estamos en macOS o Chrome no está, no hace nada y se respeta
+// el SUNO_COOKIE del .env.
+const CHROME_PROFILE = process.env.SUNO_CHROME_PROFILE || 'Default';
+const CHROME_COOKIES_PATH = path.join(
+  os.homedir(), 'Library/Application Support/Google/Chrome', CHROME_PROFILE, 'Cookies'
+);
+let CHROME_REFRESH_OK = false;
+
+function refreshCookieFromChrome() {
+  if (process.platform !== 'darwin') return false;
+  if (!fs.existsSync(CHROME_COOKIES_PATH)) return false;
+  try {
+    const tmp = path.join(os.tmpdir(), `suno-local-chrome-cookies-${process.pid}.sqlite`);
+    fs.copyFileSync(CHROME_COOKIES_PATH, tmp);
+    const pw = execSync('security find-generic-password -wa "Chrome" -s "Chrome Safe Storage"',
+      { encoding: 'utf8' }).trim();
+    const key = crypto.pbkdf2Sync(pw, 'saltysalt', 1003, 16, 'sha1');
+    const iv = Buffer.alloc(16, ' ');
+
+    function decrypt(blob, hostKey) {
+      if (!blob || blob.length < 4) return '';
+      if (blob.slice(0, 3).toString() !== 'v10') return blob.toString();
+      const ct = blob.slice(3);
+      const dec = crypto.createDecipheriv('aes-128-cbc', key, iv);
+      let pt = Buffer.concat([dec.update(ct), dec.final()]);
+      // Chrome ≥v24 prepende sha256(host_key) (32 bytes) al plaintext.
+      if (hostKey && pt.length > 32) {
+        const expected = crypto.createHash('sha256').update(hostKey).digest();
+        if (pt.slice(0, 32).equals(expected)) pt = pt.slice(32);
+      }
+      return pt.toString('utf8');
+    }
+
+    const out = execSync(
+      `/usr/bin/sqlite3 -separator $'\\t' "${tmp}" ` +
+      `"SELECT name, host_key, hex(encrypted_value) FROM cookies ` +
+      `WHERE host_key LIKE '%suno.com' AND name IN ('__client','__session','__client_uat','_cfuvid');"`,
+      { encoding: 'utf8' }
+    ).trim();
+    try { fs.unlinkSync(tmp); } catch (_) {}
+
+    const wanted = ['__client', '__session', '__client_uat', '_cfuvid'];
+    const found = {};
+    for (const row of out.split('\n')) {
+      if (!row) continue;
+      const [name, host, hex] = row.split('\t');
+      if (!wanted.includes(name)) continue;
+      const val = decrypt(Buffer.from(hex, 'hex'), host);
+      // __session aparece duplicado (suno.com + .suno.com); el de suno.com es el último escrito.
+      // Si ya tenemos uno, nos quedamos con el JWT con mayor exp (parsed).
+      if (found[name]) {
+        try {
+          const expOf = (jwt) => {
+            const p = jwt.split('.');
+            if (p.length !== 3) return 0;
+            const pad = (s) => s + '='.repeat((4 - s.length % 4) % 4);
+            const j = JSON.parse(Buffer.from(pad(p[1]).replace(/-/g,'+').replace(/_/g,'/'),'base64').toString('utf8'));
+            return j.exp || 0;
+          };
+          if (expOf(val) > expOf(found[name])) found[name] = val;
+        } catch (_) {}
+      } else {
+        found[name] = val;
+      }
+    }
+    if (!found['__client'] || !found['__session']) {
+      console.log('⚠ Chrome cookies sin __client/__session — ¿estás logueado en suno.com en Chrome?');
+      return false;
+    }
+    const cookie = Object.entries(found).map(([n,v]) => `${n}=${v}`).join('; ');
+    SUNO_COOKIE = cookie;
+    cachedSid = null; cachedJwt = null; cachedJwtExp = 0;
+    DIRECT_JWT_MODE = false;
+    CHROME_REFRESH_OK = true;
+    return true;
+  } catch (e) {
+    console.log('⚠ refreshCookieFromChrome:', e.message);
+    return false;
+  }
+}
+
+// Intento de auto-refresh al arranque. Si funciona, ignoramos lo que
+// hubiera en .env (Chrome siempre es más fresco). Si no, caemos al
+// .env como antes.
+if (refreshCookieFromChrome()) {
+  console.log('✓ Cookie de Suno leída de Chrome (auto-refresh activado)');
+} else if (!SUNO_COOKIE) {
+  console.error('✗ SUNO_COOKIE no esta definido en .env y no se pudo leer de Chrome');
+  console.error('  Opciones: (a) loguéate en suno.com en Chrome, (b) pega cookie en .env');
+  process.exit(1);
+}
+
+// Reintento periódico cada 10 min: Chrome actualiza __session cada
+// hora; con esto el server siempre tiene el JWT fresco sin que la
+// página haga nada.
+setInterval(() => {
+  if (refreshCookieFromChrome()) {
+    // silencio en consola para no spamear; solo log si algo cambia.
+  }
+}, 10 * 60 * 1000).unref();
+
+// ─── Clerk auth ─────────────────────────────────────────────────────
+// Modo directo (fallback): extraer el JWT directamente del cookie
+// __session cuando solo tenemos cookies accesibles por JS (sin
+// __client HttpOnly). Si Chrome refresh funcionó, este bloque no
+// hace nada y usamos el flujo Clerk normal (con auto-refresh).
+if (!CHROME_REFRESH_OK) (function extractDirectJwt() {
   const m = SUNO_COOKIE.match(/(?:^|;\s*)__session=([^;]+)/);
   if (!m) return;
   const jwt = m[1].trim();
