@@ -1253,27 +1253,49 @@ const server = http.createServer((req, res) => {
   }
   if (requestPath === '/tube/health' && req.method === 'OPTIONS') { setCors(res); res.writeHead(204); res.end(); return; }
 
-  // ─── /layout/save ─ persiste el layout perfect en disco (repo) ──────────
-  // Body: { path: 'layouts/xtanco-{model}-perfect.json', payload: { ... } }
-  // Restricción: el path debe empezar por 'layouts/' y terminar en '.json'.
+  // ─── /layout/save ─ persiste un layout en disco (repo) ──────────
+  // Body: { path: 'layouts/<nombre>.{json,xml}', payload?: {...}, content?: '<xml…>' }
+  //   - JSON: body.payload (objeto) o body.content (string) — se serializa con JSON.stringify si es payload.
+  //   - XML:  body.content (string) — se escribe tal cual.
+  // Restricción: path debe empezar por 'layouts/' y terminar en '.json' o '.xml'.
   if (requestPath === '/layout/save' && req.method === 'OPTIONS') { setCors(res); res.writeHead(204); res.end(); return; }
   if (requestPath === '/layout/save' && req.method === 'POST') {
     setCors(res);
     collectJsonBody(req, (err, body) => {
-      if (err || !body || typeof body.path !== 'string' || !body.payload) {
-        sendJson(res, 400, { ok: false, message: 'Body invalido: { path, payload } requeridos' });
+      if (err || !body || typeof body.path !== 'string') {
+        sendJson(res, 400, { ok: false, message: 'Body invalido: { path, payload | content } requeridos' });
         return;
       }
       const rel = body.path.replace(/^\/+/, '');
-      if (!/^layouts\/[a-z0-9_-]+\.json$/i.test(rel)) {
-        sendJson(res, 400, { ok: false, message: 'Path debe ser layouts/<nombre>.json' });
+      const m = rel.match(/^layouts\/[a-z0-9_.-]+\.(json|xml)$/i);
+      if (!m) {
+        sendJson(res, 400, { ok: false, message: 'Path debe ser layouts/<nombre>.{json,xml}' });
         return;
+      }
+      const ext = m[1].toLowerCase();
+      let toWrite;
+      if (ext === 'json') {
+        if (body.payload && typeof body.payload === 'object') {
+          toWrite = JSON.stringify(body.payload, null, 2) + '\n';
+        } else if (typeof body.content === 'string') {
+          toWrite = body.content;
+        } else {
+          sendJson(res, 400, { ok: false, message: 'JSON: necesita body.payload (objeto) o body.content (string)' });
+          return;
+        }
+      } else {
+        // xml
+        if (typeof body.content !== 'string' || !body.content.trim()) {
+          sendJson(res, 400, { ok: false, message: 'XML: necesita body.content (string)' });
+          return;
+        }
+        toWrite = body.content;
       }
       const target = path.join(__dirname, rel);
       const dir = path.dirname(target);
       try {
         if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-        fs.writeFileSync(target, JSON.stringify(body.payload, null, 2) + '\n', 'utf8');
+        fs.writeFileSync(target, toWrite, 'utf8');
         sendJson(res, 200, { ok: true, path: rel, bytes: fs.statSync(target).size });
       } catch (e) {
         sendJson(res, 500, { ok: false, message: 'Error escribiendo: ' + (e.message || String(e)) });

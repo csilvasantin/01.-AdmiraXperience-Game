@@ -277,8 +277,18 @@ async function getJwt() {
 // ejecutan DENTRO de esa página via page.evaluate. El navegador
 // resuelve Turnstile solo en el primer navigate y reutilizamos.
 let puppeteer = null;
-try { puppeteer = require('puppeteer'); } catch (e) {
-  console.log('⚠ puppeteer no instalado — /generate y /status no funcionarán (solo /healthz)');
+try {
+  // puppeteer-extra + stealth disfraza marcadores de automation que Cloudflare/Clerk
+  // usan para detectar headless. Sigue habiendo casos (Clerk Turnstile en endpoints
+  // como /api/generate/v2/) donde Suno rechaza igual; el bypass completo requiere
+  // que el widget Turnstile renderice — fuera de alcance hoy.
+  puppeteer = require('puppeteer-extra');
+  const stealth = require('puppeteer-extra-plugin-stealth');
+  puppeteer.use(stealth());
+} catch (e) {
+  try { puppeteer = require('puppeteer'); } catch (e2) {
+    console.log('⚠ puppeteer no instalado — /generate y /status no funcionarán (solo /healthz)');
+  }
 }
 let browser = null;
 let page = null;
@@ -364,6 +374,10 @@ async function sunoFetch(p, opts = {}) {
       ...(payload.headers || {}),
     };
     if (jwt) headers['Authorization'] = 'Bearer ' + jwt;
+    // Suno requires these on most studio-api endpoints. Sniffed 2026-05-28.
+    headers['browser-token'] = JSON.stringify({ token: btoa(JSON.stringify({ timestamp: Date.now() })) });
+    const did = document.cookie.match(/suno_device_id=([^;]+)/);
+    if (did && !headers['device-id']) headers['device-id'] = did[1];
     const r = await fetch(url, {
       method: payload.method || 'GET',
       headers,
@@ -499,7 +513,7 @@ async function handleGenerate(req, res) {
     });
     const txt = await r.text();
     let data; try { data = JSON.parse(txt); } catch { data = { raw: txt.slice(0, 400) }; }
-    if (!r.ok) { sendJson(res, r.status, { error: `suno generate ${r.status}`, data, mode: lyrics ? 'custom' : 'auto' }); return; }
+    if (!r.ok) { sendJson(res, r.status, { error: `admira-dj generate ${r.status}`, data, mode: lyrics ? 'custom' : 'auto' }); return; }
     // Suno puede responder con array directo o con {clips:[...]}
     const clips = Array.isArray(data) ? data : (data.clips || []);
     sendJson(res, 200, { clips, mode: lyrics ? 'custom' : 'auto' });
@@ -520,7 +534,7 @@ async function handleStatus(req, res, query) {
     const r = await sunoFetch(`/api/feed/?ids=${encodeURIComponent(ids.join(','))}`);
     const txt = await r.text();
     let data; try { data = JSON.parse(txt); } catch { data = { raw: txt.slice(0, 400) }; }
-    if (!r.ok) { sendJson(res, r.status, { error: `suno feed ${r.status}`, data }); return; }
+    if (!r.ok) { sendJson(res, r.status, { error: `admira-dj feed ${r.status}`, data }); return; }
     const clips = Array.isArray(data) ? data : (data.clips || []);
     sendJson(res, 200, clips);
   } catch (e) {

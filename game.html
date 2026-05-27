@@ -7821,6 +7821,8 @@ function initGame(){
   assignMission('start');
   buildWalkGrid();
   loadNPCCustoms();
+  // layouts/default.xml manda sobre localStorage si existe en el repo.
+  try{ if(typeof window.__loadDefaultXMLLayoutFromRepo==='function') window.__loadDefaultXMLLayoutFromRepo({silent:true}).catch(()=>{}); }catch(e){}
 }
 function quickStartLoteriasGame(){
   resetPreloadState();
@@ -22390,7 +22392,11 @@ window.xtAPI = (function(){
         });
         if(!r.ok){
           const err=await r.text().catch(function(){return '(sin cuerpo)';});
-          ov.setState('error','❌ Admira DJ /generate '+r.status+': '+err.slice(0,200));
+          if(/token_validation_failed|verify your request|verificar tu solicitud/i.test(err)){
+            ov.setState('error','⚠️ Admira DJ está validando seguridad (Cloudflare).\nReintenta en 1-2 min, o usa /seul · /seultrap · /seultecno mientras tanto.');
+          }else{
+            ov.setState('error','❌ Admira DJ /generate '+r.status+': '+err.slice(0,200));
+          }
           return;
         }
         const data=await r.json();
@@ -23300,6 +23306,159 @@ window.xtAPI = (function(){
       return '❌ Error guardando layout perfect: '+e.message;
     }
   }
+
+  // ─── Layout XML (layouts/default.xml — autoritativo en boot) ───────
+  // Si existe layouts/default.xml en el repo, el juego lo carga al
+  // arrancar y SOBREESCRIBE el localStorage. Esto permite versionar el
+  // layout "oficial" en git y que cualquier navegador lo vea sin tocar
+  // muebles. Si no existe, se cae al sistema anterior (localStorage +
+  // canónico del código). /layout xml lo guarda; /layout xml load lo
+  // recarga; /layout xml download lo baja a disco.
+  const DEFAULT_LAYOUT_XML_PATH='layouts/default.xml';
+  function xmlEscape(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+  function serializeLayoutToXML(){
+    const meta={
+      schemaVersion:(typeof LAYOUT_SCHEMA_VERSION!=='undefined'?LAYOUT_SCHEMA_VERSION:1),
+      savedAt:new Date().toISOString(),
+      savedFrom:(window.XTANCO_APP&&window.XTANCO_APP.version)||'dev',
+      modelKey:getActiveModelKey(),
+    };
+    const lines=['<?xml version="1.0" encoding="UTF-8"?>'];
+    lines.push('<admiraLayout schema="'+meta.schemaVersion+'" savedAt="'+xmlEscape(meta.savedAt)+'" savedFrom="'+xmlEscape(meta.savedFrom)+'" modelKey="'+xmlEscape(meta.modelKey)+'">');
+    lines.push('  <furniture>');
+    for(const it of (shopLayout||[])){
+      const attrs=['id','type','col','row','sx','sy','label','custom']
+        .filter(k=>it[k]!==undefined&&it[k]!==null&&it[k]!=='')
+        .map(k=>k+'="'+xmlEscape(it[k])+'"').join(' ');
+      lines.push('    <item '+attrs+'/>');
+    }
+    lines.push('  </furniture>');
+    if(Array.isArray(shopStaffPos)&&shopStaffPos.length){
+      lines.push('  <staff>');
+      for(const s of shopStaffPos){
+        const attrs=['role','name','col','row'].filter(k=>s[k]!==undefined&&s[k]!==null).map(k=>k+'="'+xmlEscape(s[k])+'"').join(' ');
+        lines.push('    <position '+attrs+'/>');
+      }
+      lines.push('  </staff>');
+    }
+    if(Array.isArray(shopStaffZones)&&shopStaffZones.length){
+      lines.push('  <zones>');
+      for(const z of shopStaffZones){
+        const attrs=['role','name','col','row','radius'].filter(k=>z[k]!==undefined&&z[k]!==null).map(k=>k+'="'+xmlEscape(z[k])+'"').join(' ');
+        lines.push('    <zone '+attrs+'/>');
+      }
+      lines.push('  </zones>');
+    }
+    lines.push('</admiraLayout>');
+    return lines.join('\n');
+  }
+  function parseLayoutFromXML(xmlText){
+    const doc=new DOMParser().parseFromString(xmlText,'application/xml');
+    if(doc.getElementsByTagName('parsererror').length) throw new Error('XML inválido');
+    const root=doc.documentElement;
+    const num=(v)=>{const n=Number(v);return Number.isFinite(n)?n:undefined;};
+    const items=Array.from(root.querySelectorAll('furniture > item')).map(el=>{
+      const o={
+        id:el.getAttribute('id')||undefined,
+        type:el.getAttribute('type')||undefined,
+        col:num(el.getAttribute('col')),
+        row:num(el.getAttribute('row')),
+        sx:num(el.getAttribute('sx'))||1,
+        sy:num(el.getAttribute('sy'))||1,
+      };
+      const label=el.getAttribute('label'); if(label) o.label=label;
+      const custom=el.getAttribute('custom'); if(custom==='true') o.custom=true;
+      return o;
+    }).filter(o=>o.id&&o.type&&Number.isFinite(o.col)&&Number.isFinite(o.row));
+    const staff=Array.from(root.querySelectorAll('staff > position')).map(el=>{
+      const o={col:num(el.getAttribute('col')),row:num(el.getAttribute('row'))};
+      const role=el.getAttribute('role'); if(role) o.role=role;
+      const name=el.getAttribute('name'); if(name) o.name=name;
+      return o;
+    }).filter(o=>Number.isFinite(o.col)&&Number.isFinite(o.row));
+    const zones=Array.from(root.querySelectorAll('zones > zone')).map(el=>{
+      const o={col:num(el.getAttribute('col')),row:num(el.getAttribute('row')),radius:num(el.getAttribute('radius'))||1};
+      const role=el.getAttribute('role'); if(role) o.role=role;
+      const name=el.getAttribute('name'); if(name) o.name=name;
+      return o;
+    }).filter(o=>Number.isFinite(o.col)&&Number.isFinite(o.row));
+    return {shopLayout:items, shopStaffPos:staff, shopStaffZones:zones, meta:{
+      savedAt:root.getAttribute('savedAt'),
+      modelKey:root.getAttribute('modelKey'),
+    }};
+  }
+  async function loadDefaultXMLLayoutFromRepo(opts){
+    const silent=!!(opts&&opts.silent);
+    try{
+      const res=await fetch(DEFAULT_LAYOUT_XML_PATH+'?ts='+Date.now(),{cache:'no-store'});
+      if(!res.ok) throw new Error('HTTP '+res.status);
+      const xml=await res.text();
+      const parsed=parseLayoutFromXML(xml);
+      if(!parsed.shopLayout.length) throw new Error('XML sin <item>');
+      shopLayout=parsed.shopLayout;
+      if(parsed.shopStaffPos.length) shopStaffPos=parsed.shopStaffPos;
+      if(parsed.shopStaffZones.length) shopStaffZones=parsed.shopStaffZones;
+      shopFurnitureVisible=true; edSelIdx=-1;
+      try{saveLayout();}catch(e){}
+      try{if(typeof buildWalkGrid==='function') buildWalkGrid();}catch(e){}
+      if(!silent){
+        if(typeof showEv==='function') showEv('🏗️ Layout XML cargado','#88ffcc');
+        return '🏗️ Layout XML cargado desde '+DEFAULT_LAYOUT_XML_PATH+' ('+parsed.shopLayout.length+' muebles, guardado '+(parsed.meta.savedAt||'?')+').';
+      }
+      return true;
+    }catch(e){
+      if(!silent) return '⚠️ No hay '+DEFAULT_LAYOUT_XML_PATH+' en el repo ('+e.message+'). Crea uno con /layout xml.';
+      return false;
+    }
+  }
+  async function saveDefaultXMLLayoutToRepo(){
+    const errL=needsGame();if(errL)return errL;
+    const xml=serializeLayoutToXML();
+    const proxyBases=[];
+    if(typeof location!=='undefined'&&/^(localhost|127\.0\.0\.1)/.test(location.hostname)){
+      proxyBases.push(location.origin);
+    }
+    proxyBases.push('http://localhost:9126','http://127.0.0.1:9126','http://macbook-pro-16.tail48b61c.ts.net','http://localhost:9124','http://127.0.0.1:9124');
+    let savedVia=null,lastErr=null;
+    for(const base of proxyBases){
+      try{
+        const res=await fetch(base+'/layout/save',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({path:DEFAULT_LAYOUT_XML_PATH,content:xml,encoding:'utf8'})
+        });
+        if(!res.ok){const j=await res.json().catch(()=>({}));throw new Error(j.message||'HTTP '+res.status);}
+        savedVia=base;
+        break;
+      }catch(e){lastErr=e;}
+    }
+    if(savedVia){
+      if(typeof showEv==='function') showEv('💾 default.xml guardado','#88ffcc');
+      return '💾 Layout XML guardado en '+DEFAULT_LAYOUT_XML_PATH+' vía '+savedVia+'.\nHaz `git add '+DEFAULT_LAYOUT_XML_PATH+' && git commit && git push` para que viaje a todos los navegadores.';
+    }
+    // Fallback: descarga
+    try{
+      const blob=new Blob([xml],{type:'application/xml'});
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement('a'); a.href=url; a.download='default.xml';
+      document.body.appendChild(a); a.click();
+      setTimeout(()=>{try{document.body.removeChild(a);URL.revokeObjectURL(url);}catch(e){}},800);
+      if(typeof showEv==='function') showEv('💾 default.xml descargado','#88ccff');
+      return '💾 Proxy no disponible ('+(lastErr&&lastErr.message||'sin proxy')+'). Descargado default.xml al disco. Móvelo a '+DEFAULT_LAYOUT_XML_PATH+' del repo y commitea.';
+    }catch(e){
+      return '❌ Error guardando default.xml: '+e.message;
+    }
+  }
+  // Hook de arranque: tras initGame, intenta default.xml. Solo lo
+  // aplica si existe (no rompe nada si falta).
+  try{
+    if(typeof window!=='undefined'){
+      window.__loadDefaultXMLLayoutFromRepo=loadDefaultXMLLayoutFromRepo;
+      window.addEventListener('admira:initgame-done', ()=>{
+        loadDefaultXMLLayoutFromRepo({silent:true}).catch(()=>{});
+      });
+    }
+  }catch(e){}
 
   async function setComunicado(arg){
     const err=needsGame();if(err)return err;
@@ -24417,6 +24576,24 @@ window.xtAPI = (function(){
         }
         if(sub==='save'||sub==='guardar'||sub==='grabar'||sub==='export'||sub==='exportar'){
           return await savePerfectLayoutToRepo();
+        }
+        // ─── XML (layouts/default.xml, autoritativo en boot) ──────────
+        if(sub==='xml'||sub==='xml save'||sub==='xml guardar'){
+          return await saveDefaultXMLLayoutToRepo();
+        }
+        if(sub==='xml load'||sub==='xml reload'||sub==='xml recargar'){
+          return await loadDefaultXMLLayoutFromRepo({silent:false});
+        }
+        if(sub==='xml download'||sub==='xml descargar'||sub==='xml dump'){
+          try{
+            const xml=serializeLayoutToXML();
+            const blob=new Blob([xml],{type:'application/xml'});
+            const url=URL.createObjectURL(blob);
+            const a=document.createElement('a'); a.href=url; a.download='default.xml';
+            document.body.appendChild(a); a.click();
+            setTimeout(()=>{try{document.body.removeChild(a);URL.revokeObjectURL(url);}catch(e){}},800);
+            return '💾 default.xml descargado al disco. Móvelo a '+DEFAULT_LAYOUT_XML_PATH+' del repo y commitea.';
+          }catch(e){ return '❌ Error: '+e.message; }
         }
         // Default: cargar el "perfect" desde el repo (layouts/xtanco-{model}-perfect.json)
         return await loadPerfectLayoutFromRepo();
