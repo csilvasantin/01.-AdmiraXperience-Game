@@ -22316,10 +22316,13 @@ window.xtAPI = (function(){
     const tematica=parts.join(' ');
     if(!tematica) return {ok:false,message:'Indica también la temática. Ej: /componer rock una canción para Altadis'};
 
-    // Endpoints en orden de preferencia. El túnel del Mac Mini funciona
-    // desde cualquier origen (HTTPS vía Tailscale Funnel). 127.0.0.1 solo
-    // si hay suno-local en la propia máquina (y la página está en http://).
-    const SUNO_CANDIDATES=['https://macmini.tail48b61c.ts.net/suno'];
+    // Endpoints en orden de preferencia. Probamos el primero que responda
+    // sano. Mac Mini (primario) → MBP16 (respaldo Plan C) → localhost (si
+    // estás corriendo suno-local en la propia máquina).
+    const SUNO_CANDIDATES=[
+      'https://macmini.tail48b61c.ts.net/suno',
+      'https://macbook-pro-16.tail48b61c.ts.net/suno',
+    ];
     if(location.protocol==='http:'||location.hostname==='localhost'||location.hostname==='127.0.0.1'){
       SUNO_CANDIDATES.push('http://127.0.0.1:3777');
     }
