@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<admiraLayout schema="20260426-public-canonical-1" savedAt="2026-05-27T23:21:03.116Z" savedFrom="AdmiraNext v26.05.28.12" modelKey="generic">
+<admiraLayout schema="20260426-public-canonical-1" savedAt="2026-05-27T23:22:13.753Z" savedFrom="AdmiraNext v26.05.28.12" modelKey="generic">
   <furniture>
     <item id="counter" type="counter" col="1" row="6" sx="1" sy="1" label="Mostrador+Caja+PC"/>
     <item id="shelves" type="shelves" col="2" row="0" sx="1" sy="1" label="Estantería"/>
@@ -14,9 +14,9 @@
     <item id="led" type="led" col="0" row="0" sx="1" sy="1" label="LED Banner"/>
     <item id="djBooth" type="djBooth" col="11" row="3" sx="1" sy="1" label="Mesa DJ"/>
     <item id="tablet" type="tablet" col="13" row="5" sx="1" sy="1" label="Tablet Satisfacción"/>
-    <item id="turnKiosk" type="turnKiosk" col="12" row="6" sx="1" sy="1" label="Gestor Turnos"/>
+    <item id="turnKiosk" type="turnKiosk" col="9" row="0" sx="1" sy="1" label="Gestor Turnos"/>
     <item id="aroma" type="aroma" col="13" row="1" sx="1" sy="1" label="Máquina olores"/>
-    <item id="metahuman" type="metahuman" col="13" row="3" sx="1" sy="1" label="Metahuman AI"/>
+    <item id="metahuman" type="metahuman" col="6" row="3" sx="1" sy="1" label="Metahuman AI"/>
   </furniture>
   <staff>
     <position col="2" row="1"/>
