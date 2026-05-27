@@ -23418,23 +23418,40 @@ window.xtAPI = (function(){
     if(typeof location!=='undefined'&&/^(localhost|127\.0\.0\.1)/.test(location.hostname)){
       proxyBases.push(location.origin);
     }
-    proxyBases.push('http://localhost:9126','http://127.0.0.1:9126','http://macbook-pro-16.tail48b61c.ts.net','http://localhost:9124','http://127.0.0.1:9124');
-    let savedVia=null,lastErr=null;
+    // Endpoints en orden: local (MBP) primero, después Tailscale Funnel
+    // (público vía macbook-pro-16.tail48b61c.ts.net/admira/...) para que el
+    // móvil u otros dispositivos también puedan empujar.
+    proxyBases.push(
+      'http://localhost:9126',
+      'http://127.0.0.1:9126',
+      'https://macbook-pro-16.tail48b61c.ts.net/admira',
+      'http://localhost:9124',
+      'http://127.0.0.1:9124'
+    );
+    let savedVia=null,lastErr=null,gitInfo=null;
     for(const base of proxyBases){
       try{
         const res=await fetch(base+'/layout/save',{
           method:'POST',
           headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({path:DEFAULT_LAYOUT_XML_PATH,content:xml,encoding:'utf8'})
+          body:JSON.stringify({path:DEFAULT_LAYOUT_XML_PATH,content:xml,encoding:'utf8',autoPush:true})
         });
         if(!res.ok){const j=await res.json().catch(()=>({}));throw new Error(j.message||'HTTP '+res.status);}
+        const j=await res.json().catch(()=>({}));
         savedVia=base;
+        gitInfo=j.git||null;
         break;
       }catch(e){lastErr=e;}
     }
     if(savedVia){
-      if(typeof showEv==='function') showEv('💾 default.xml guardado','#88ffcc');
-      return '💾 Layout XML guardado en '+DEFAULT_LAYOUT_XML_PATH+' vía '+savedVia+'.\nHaz `git add '+DEFAULT_LAYOUT_XML_PATH+' && git commit && git push` para que viaje a todos los navegadores.';
+      if(typeof showEv==='function') showEv('☁️ default.xml en la nube','#88ffcc');
+      let msg='☁️ Layout XML guardado en '+DEFAULT_LAYOUT_XML_PATH+' vía '+savedVia+'.';
+      if(gitInfo){
+        if(gitInfo.pushed) msg+='\n✓ git push OK → en 1-2 min GitHub Pages republica y el móvil / cualquier dispositivo lo carga al recargar.';
+        else if(gitInfo.noChange) msg+='\n· Sin cambios respecto al default.xml ya commiteado.';
+        else msg+='\n⚠️ git push no confirmado (exit '+gitInfo.exitCode+'). Log:\n'+gitInfo.log;
+      }
+      return msg;
     }
     // Fallback: descarga
     try{

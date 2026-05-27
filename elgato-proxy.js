@@ -1296,7 +1296,30 @@ const server = http.createServer((req, res) => {
       try {
         if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
         fs.writeFileSync(target, toWrite, 'utf8');
-        sendJson(res, 200, { ok: true, path: rel, bytes: fs.statSync(target).size });
+        const bytes = fs.statSync(target).size;
+        // Auto git commit + push para que el layout viaje a GitHub Pages
+        // y cualquier dispositivo lo cargue al recargar (1-2 min).
+        const autoPush = body.autoPush !== false; // default true
+        if (autoPush) {
+          const { spawn } = require('child_process');
+          const repo = __dirname;
+          const msg = 'layout: actualizar ' + rel + ' (auto desde gemelo digital)';
+          const cmd = `cd "${repo}" && git add "${rel}" && git diff --cached --quiet "${rel}" && echo nochange || (git commit -m "${msg.replace(/"/g, '\\"')}" && git push)`;
+          const proc = spawn('/bin/sh', ['-c', cmd], { stdio: ['ignore', 'pipe', 'pipe'] });
+          let out = '', err = '';
+          proc.stdout.on('data', d => out += d);
+          proc.stderr.on('data', d => err += d);
+          proc.on('close', code => {
+            const pushed = code === 0 && /main ->|->\smain/.test(out + err);
+            const noChange = /nochange/.test(out);
+            sendJson(res, 200, {
+              ok: true, path: rel, bytes,
+              git: { exitCode: code, pushed, noChange, log: (out + err).trim().split('\n').slice(-4).join('\n') },
+            });
+          });
+        } else {
+          sendJson(res, 200, { ok: true, path: rel, bytes, git: { skipped: true } });
+        }
       } catch (e) {
         sendJson(res, 500, { ok: false, message: 'Error escribiendo: ' + (e.message || String(e)) });
       }
