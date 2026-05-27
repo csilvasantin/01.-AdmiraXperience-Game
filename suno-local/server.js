@@ -164,6 +164,32 @@ setInterval(() => {
   }
 }, 10 * 60 * 1000).unref();
 
+// Cuando Clerk dice 401/403 (cookies caducadas o usuario deslogueado),
+// abrimos Chrome en /sign-in y avisamos por Telegram. Throttle de 15 min
+// para que un /healthz polling no spamee aperturas.
+let LAST_REAUTH_PROMPT = 0;
+const TELEGRAM_BOT = process.env.TELEGRAM_BOT_TOKEN || '';
+const TELEGRAM_CHAT = process.env.TELEGRAM_CHAT_ID || '';
+
+function promptUserToReauth(reason) {
+  if (Date.now() - LAST_REAUTH_PROMPT < 15 * 60 * 1000) return;
+  LAST_REAUTH_PROMPT = Date.now();
+  // 1) Reintenta refrescar desde Chrome — quizá el usuario ya se logueó.
+  if (refreshCookieFromChrome()) {
+    console.log('↻ Re-leído de Chrome tras error Clerk — JWT debería volver a funcionar.');
+    return;
+  }
+  console.log('⚠ Sesión Suno caducada en Chrome. Abriendo /sign-in…  motivo:', reason);
+  try { execSync(`open -a "Google Chrome" "https://suno.com/sign-in"`); } catch (_) {}
+  if (TELEGRAM_BOT && TELEGRAM_CHAT) {
+    const text = `⚠️ suno-local: sesión caducada (${reason}). Abierto Chrome en suno.com/sign-in para que vuelvas a entrar. Una vez logueado, el server retoma solo en ≤10 min (o reinícialo).`;
+    const body = `chat_id=${encodeURIComponent(TELEGRAM_CHAT)}&text=${encodeURIComponent(text)}`;
+    fetch(`https://api.telegram.org/bot${TELEGRAM_BOT}/sendMessage`, {
+      method: 'POST', headers: {'Content-Type':'application/x-www-form-urlencoded'}, body,
+    }).catch(()=>{});
+  }
+}
+
 // ─── Clerk auth ─────────────────────────────────────────────────────
 // Modo directo (fallback): extraer el JWT directamente del cookie
 // __session cuando solo tenemos cookies accesibles por JS (sin
@@ -201,11 +227,17 @@ async function getSessionId() {
       origin: 'https://suno.com', referer: 'https://suno.com/',
     },
   });
-  if (!r.ok) throw new Error(`clerk client list failed ${r.status}: ${(await r.text()).slice(0, 200)}`);
+  if (!r.ok) {
+    if (r.status === 401 || r.status === 403) promptUserToReauth(`clerk client list ${r.status}`);
+    throw new Error(`clerk client list failed ${r.status}: ${(await r.text()).slice(0, 200)}`);
+  }
   const data = await r.json();
   const sessions = data?.response?.sessions || [];
   const active = sessions.find(s => s.status === 'active') || sessions[0];
-  if (!active?.id) throw new Error('no active suno session in cookie · ¿reloguea en suno.com y vuelve a copiar la cookie?');
+  if (!active?.id) {
+    promptUserToReauth('no active session');
+    throw new Error('no active suno session in cookie · reloguea en la ventana de Chrome que acabo de abrir');
+  }
   cachedSid = active.id;
   return cachedSid;
 }
@@ -225,6 +257,7 @@ async function getJwt() {
   );
   if (!r.ok) {
     cachedSid = null; // forzar redescubrimiento
+    if (r.status === 401 || r.status === 403) promptUserToReauth(`clerk token ${r.status}`);
     throw new Error(`clerk token refresh failed ${r.status}: ${(await r.text()).slice(0, 200)}`);
   }
   const data = await r.json();
