@@ -21686,7 +21686,8 @@ window.xtAPI = (function(){
         return composeSong(arg);
       }
       // /seoul2026 — atajo: suena el track 'Seoul 2026 - AdmiraNext'.
-      if(['seoul2026','seoul','seoul-2026'].includes(cmd)){
+      // Aliases tolerantes a typos: /seoul, /seul, /seul2026, /seoul-2026.
+      if(['seoul2026','seoul','seul','seul2026','seoul-2026','seul-2026'].includes(cmd)){
         try{
           const audio=document.getElementById('bgMusic');
           if(!audio) return {ok:false,message:'No se encontró el elemento de audio'};
