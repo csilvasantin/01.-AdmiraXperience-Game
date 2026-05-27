@@ -21677,6 +21677,12 @@ window.xtAPI = (function(){
         if(['prev','anterior','previous'].includes(head)) return api.prevTrack();
         return runBinaryCommand('Música',arg,()=>!bgMusic.paused,setMusicState,false);
       }
+      // /componer <tipo> <temática> — genera una canción con Suno (suno-local
+      // en localhost / macmini.tail48b61c.ts.net/suno en GitHub Pages) y la
+      // reproduce en un overlay flotante cuando Suno termina.
+      if(['componer','compose','compon','componer-cancion','compose-song'].includes(cmd)){
+        return composeSong(arg);
+      }
       if(['sfx','fx','efectos'].includes(cmd)) return runBinaryCommand('FX',arg,()=>!!(G&&G.sfxVolume>0),setSfxState,true);
       if(['ds','pantalla','video','signage','monitor'].includes(cmd)) return runBinaryCommand('Pantalla',arg,()=>!!(videoPlaying&&!videoPaused),setDSState,false);
       if(['dsaudio','audio','monitoraudio'].includes(cmd)){
@@ -22296,6 +22302,115 @@ window.xtAPI = (function(){
       }};
     },
   };
+
+  // /componer <tipo> <temática> — genera una canción con Suno y la
+  // reproduce en un overlay flotante. Endpoint: suno-local (:3777 si la
+  // página corre en localhost; si no, vía Tailscale Funnel en
+  // https://macmini.tail48b61c.ts.net/suno). Trabajo asíncrono; el handler
+  // devuelve un mensaje inicial y el overlay va mostrando el progreso.
+  function composeSong(arg){
+    const txt=String(arg||'').trim();
+    if(!txt) return {ok:false,message:'Uso: /componer <tipo> <temática>  · ej: /componer reggaeton verano en la playa'};
+    const parts=txt.split(/\s+/);
+    const tipo=parts.shift();
+    const tematica=parts.join(' ');
+    if(!tematica) return {ok:false,message:'Indica también la temática. Ej: /componer rock una canción para Altadis'};
+
+    const SUNO=(location.protocol==='http:'||location.hostname==='localhost'||location.hostname==='127.0.0.1')
+      ? 'http://127.0.0.1:3777'
+      : 'https://macmini.tail48b61c.ts.net/suno';
+
+    const ov=composeOverlay();
+    ov.setState('init','🎵 Componiendo: '+tipo+' · '+tematica);
+
+    const prompt=tipo+', sobre '+tematica;
+    const title=(tipo+' · '+tematica).slice(0,80);
+
+    (async function(){
+      try{
+        ov.setState('check','🔌 Verificando suno-local…');
+        let h=null;
+        try{
+          const r=await fetch(SUNO+'/healthz');
+          h=r.ok?await r.json():{ok:false,error:'HTTP '+r.status};
+        }catch(e){ h={ok:false,error:String(e&&e.message||e)}; }
+        if(!h||h.ok===false){
+          ov.setState('error','❌ suno-local no responde ('+SUNO+').\n'+(h&&h.error||'')+'\nArranca el servicio en el Mac Mini.');
+          return;
+        }
+        ov.setState('gen','📨 Enviando prompt a Suno…');
+        const r=await fetch(SUNO+'/generate',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({prompt:prompt,lyrics:'',title:title,instrumental:false}),
+        });
+        if(!r.ok){
+          const err=await r.text().catch(function(){return '(sin cuerpo)';});
+          ov.setState('error','❌ Suno /generate '+r.status+': '+err.slice(0,200));
+          return;
+        }
+        const data=await r.json();
+        const clipIds=(data.clips||[]).map(function(c){return c.id;}).filter(Boolean);
+        if(!clipIds.length){
+          ov.setState('error','❌ Suno no devolvió clips.\n'+JSON.stringify(data).slice(0,200));
+          return;
+        }
+        ov.setState('poll','⏳ Generando · '+clipIds.length+' clip(s) en cola…');
+        const t0=Date.now();
+        let attempt=0;
+        while(true){
+          await new Promise(function(rs){setTimeout(rs,5000);});
+          attempt++;
+          if(Date.now()-t0>6*60*1000){ ov.setState('error','⏱ Timeout esperando a Suno (>6 min).'); return; }
+          let clips=null;
+          try{
+            const pr=await fetch(SUNO+'/status?ids='+clipIds.join(','));
+            clips=await pr.json();
+          }catch(e){ continue; }
+          const ready=(clips||[]).filter(function(c){return c.audio_url&&(c.status==='streaming'||c.status==='complete');});
+          ov.setState('poll','⏳ Intento '+attempt+' · '+ready.length+'/'+clipIds.length+' listos');
+          if(ready.length>=1){
+            const c=ready[0];
+            ov.setState('done','🎵 '+((c.title&&c.title.trim())||title),c.audio_url,c.image_large_url||c.image_url||'');
+            try{ if(typeof showEv==='function') showEv('🎵 Suno lista la canción','#88ffaa'); }catch(e){}
+            return;
+          }
+        }
+      }catch(e){
+        ov.setState('error','❌ '+String(e&&e.message||e));
+      }
+    })();
+
+    return {ok:true,message:'🎵 Componiendo «'+tipo+' · '+tematica+'» con Suno… te aviso en el overlay (esquina inferior derecha).'};
+  }
+
+  // Overlay flotante singleton para /componer. Pinta estado + player final.
+  function composeOverlay(){
+    let el=document.getElementById('composeOverlay');
+    if(!el){
+      el=document.createElement('div');
+      el.id='composeOverlay';
+      el.style.cssText='position:fixed;right:18px;bottom:18px;z-index:9999;width:340px;max-width:92vw;background:#06121a;color:#dff8ff;border:1px solid rgba(120,243,255,.32);border-radius:12px;padding:14px 16px;box-shadow:0 12px 32px rgba(0,0,0,.55);font:13px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
+      el.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px"><strong style="font-family:ui-monospace,Menlo,monospace;font-size:11px;letter-spacing:.16em;color:#78f3ff">/COMPONER · SUNO</strong><button id="composeOverlayClose" type="button" style="background:transparent;border:0;color:#75aab9;cursor:pointer;font-size:18px;line-height:1">×</button></div><div id="composeOverlayState" style="font-size:13px;color:#dff8ff;white-space:pre-wrap;line-height:1.4">…</div><div id="composeOverlayPlayer" style="margin-top:10px"></div>';
+      document.body.appendChild(el);
+      el.querySelector('#composeOverlayClose').addEventListener('click',function(){ el.remove(); });
+    }
+    const st=el.querySelector('#composeOverlayState');
+    const pl=el.querySelector('#composeOverlayPlayer');
+    return {
+      el:el,
+      setState:function(kind,text,audioUrl,imgUrl){
+        if(st){
+          st.textContent=text||'';
+          st.style.color=kind==='error'?'#ff8866':kind==='done'?'#88ffaa':'#dff8ff';
+        }
+        if(kind==='done'&&audioUrl&&pl){
+          const cover=imgUrl?'<img src="'+imgUrl+'" style="width:100%;border-radius:6px;display:block;margin-bottom:8px" alt="">':'';
+          pl.innerHTML=cover+'<audio controls autoplay src="'+audioUrl+'" style="width:100%"></audio>';
+        }
+      }
+    };
+  }
 
   console.log('%c🎮 xtAPI loaded — CLI bridge ready','color:#00ffcc;font-size:14px;font-weight:bold');
   return api;
@@ -23493,7 +23608,7 @@ window.xtAPI = (function(){
       {title:'Integración AdmiraNext',items:['/socios export']},
       {title:'IA y contenido',items:['/grok pregunta','/draw dibujo','/metahuman pregunta','/log','/log thief','/log customer','/import','/import list','/import remove 1','/importTube https://youtu.be/...']},
       {title:'Ajustes rápidos',items:['/money 12000','/sat 90','/fame 80','/set week 12','/set year 2','/set revenue 5000','/set storeLevel 2','/set customers 30']},
-      {title:'Musica y layout',items:['/song 1','/song bad bunny','/music','/next','/prev','/equipo inicio ana 3 4','/equipo zona dj 12 2 2','/mobiliario','/mobiliario inicio','/layout','/layout save','/layout factory']},
+      {title:'Musica y layout',items:['/song 1','/song bad bunny','/music','/next','/prev','/componer reggaeton verano en la playa','/componer balada altadis renovación','/equipo inicio ana 3 4','/equipo zona dj 12 2 2','/mobiliario','/mobiliario inicio','/layout','/layout save','/layout factory']},
       {title:'Mapa de navegacion',items:['/mapa','/map','/sd list','/streamdeck','/help']},
     ];
   }
