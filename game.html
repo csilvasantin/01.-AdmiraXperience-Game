@@ -24029,6 +24029,13 @@ window.xtAPI = (function(){
         return setGameField(cmd,arg);
       }
       if(cmd==='song'||cmd==='track') return setSong(arg);
+      // /seoul2026 (+ aliases typo-friendly) — track pregrabado Seoul 2026 - AdmiraNext.
+      if(['seoul2026','seoul','seul','seul2026','seoul-2026','seul-2026'].includes(cmd)) return setSong('Seoul 2026');
+      // /componer <tipo> <temática> — redirige a xtAPI.command (composeSong vive allí).
+      if(['componer','compose','compon'].includes(cmd) && typeof window.xtAPI==='object'){
+        const r=window.xtAPI.command('/componer'+(arg?' '+arg:''));
+        return (r&&r.message)||String(r);
+      }
       if(cmd==='dj'||cmd==='djnovah'||cmd==='novah') return setDJCommand(arg);
       if(cmd==='pixeria'||cmd==='pixerfeed'||cmd==='pixer') return setPixerFeedCommand(arg);
       if(cmd==='tarjetafidelidad'||cmd==='fidelidad'||cmd==='loyaltycard') return setLoyaltyCardCommand();
