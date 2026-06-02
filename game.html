@@ -1054,7 +1054,7 @@ const APP_VERSION_LABEL=APP_VERSION;
 const APP_FORMULA_LABEL='build '+APP_BUILD;
 // Versión publicada del XpaceOS (se muestra en el splash · página 0).
 // IMPORTANTE: bumpear en cada release junto al tag DigitalTwin-v.YYYY.MM.DD.rN
-const XPACE_OS_VERSION='v.2026.06.02.r2';
+const XPACE_OS_VERSION='v.2026.06.02.r3';
 try{var _sv=document.getElementById('splashVersion');if(_sv)_sv.textContent='XpaceOS '+XPACE_OS_VERSION;}catch(e){}
 const AMIGA_PAGE0_TODO=['BUY SHIP','FIND BIGWHOOP','DEFEAT LECHUCK','MARRY ELAINE!'];
 let amigaPage0Todo=AMIGA_PAGE0_TODO.slice();
@@ -3069,6 +3069,7 @@ function updateVideoPosition(){
   if((!videoPlaying&&!tubeActive)||!G||state!==S.GAME){
     videoEl.style.display='none';videoEl2.style.display='none';
     syncAdmiraTubeFrames();
+    try{ positionGenVideoOverlay(); }catch(_){}
     return;
   }
   positionDSOnLeftWall(videoEl, DS_SCREENS[0].rowT, DS_SCREENS[0].rowB);
@@ -3077,6 +3078,7 @@ function updateVideoPosition(){
   const op='1';
   videoEl.style.opacity=op;videoEl2.style.opacity=op;
   syncAdmiraTubeFrames();
+  try{ positionGenVideoOverlay(); }catch(_){}
 }
 
 function isDigitalSignageVisible(display){
@@ -3524,6 +3526,73 @@ async function startFaceLoop(){
   loop();
 }
 function stopFaceLoop(){ if(FACE_LOOP){ FACE_LOOP.stop=true; if(FACE_LOOP.timer) clearTimeout(FACE_LOOP.timer); FACE_LOOP=null; } LIVE_FACE.faces=0; }
+
+// ── /generovideo: las DOS pantallas siguen el sexo detectado en cámara ─────
+// Hombre → "Money For Nothing" + overlay HOMBRE · Mujer → "Take On Me" + MUJER.
+// Demo de cartelería reactiva en tiempo real: cambia según quién mira (LiveCam).
+const GENVIDEO={on:false,gender:'',pending:'',pendingSince:0,timer:null};
+const GENVIDEO_MAP={
+  male:{idx:VIDEO_LIST.indexOf('Dire Straits - Money For Nothing'),label:'HOMBRE',icon:'👨',color:'#2f7fff'},
+  female:{idx:VIDEO_LIST.indexOf('a-ha - Take On Me'),label:'MUJER',icon:'👩',color:'#ff4fa3'}
+};
+function genVideoApply(gender){
+  const m=GENVIDEO_MAP[gender]; if(!m||m.idx<0) return;
+  if(!videoPlaying){ try{ startVideo(); }catch(_){} }
+  try{ switchDSVideo(m.idx); }catch(_){}
+  GENVIDEO.gender=gender;
+  if(typeof showEv==='function') showEv(m.icon+' '+m.label+' · '+VIDEO_LIST[m.idx],m.color);
+}
+function genVideoTick(){
+  if(!GENVIDEO.on) return;
+  if(LIVE_CAM.active&&typeof startFaceLoop==='function'){ try{ startFaceLoop(); }catch(_){} }
+  const lf=LIVE_FACE;
+  const fresh=!!(LIVE_CAM.active&&lf&&lf.faces>0&&(performance.now()-lf.ts)<5000&&(lf.gender==='male'||lf.gender==='female'));
+  if(!fresh) return;
+  const g=lf.gender;
+  if(g===GENVIDEO.gender){ GENVIDEO.pending=''; return; }
+  // Debounce: el sexo nuevo debe mantenerse ~1,2s antes de cambiar el vídeo.
+  if(GENVIDEO.pending!==g){ GENVIDEO.pending=g; GENVIDEO.pendingSince=performance.now(); return; }
+  if(performance.now()-GENVIDEO.pendingSince>=1200){ GENVIDEO.pending=''; genVideoApply(g); }
+}
+function genVideoStart(){ if(!GENVIDEO.timer) GENVIDEO.timer=setInterval(genVideoTick,300); }
+function genVideoStop(){
+  GENVIDEO.on=false;
+  if(GENVIDEO.timer){ clearInterval(GENVIDEO.timer); GENVIDEO.timer=null; }
+  GENVIDEO.gender=''; GENVIDEO.pending='';
+  ['genvideoLabel0','genvideoLabel1'].forEach(id=>{ const e=document.getElementById(id); if(e) e.style.display='none'; });
+  if(typeof stopFaceLoop==='function'&&!(typeof window.__TARGETPUB!=='undefined'&&window.__TARGETPUB&&window.__TARGETPUB.on)){ try{ stopFaceLoop(); }catch(_){} }
+}
+function ensureGenVideoLabel(idx){
+  let e=document.getElementById('genvideoLabel'+idx);
+  if(!e){
+    e=document.createElement('div');
+    e.id='genvideoLabel'+idx;
+    e.style.cssText='position:fixed;z-index:55;pointer-events:none;display:none;align-items:flex-start;justify-content:center;font-family:"JetBrains Mono",ui-monospace,monospace;font-weight:800;letter-spacing:.08em;';
+    document.body.appendChild(e);
+  }
+  return e;
+}
+// Clona la posición/escorzo de cada pantalla para que el rótulo quede ENCIMA.
+// Se llama por frame desde updateVideoPosition.
+function positionGenVideoOverlay(){
+  if(!GENVIDEO.on||!GENVIDEO.gender){
+    ['genvideoLabel0','genvideoLabel1'].forEach(id=>{ const e=document.getElementById(id); if(e) e.style.display='none'; });
+    return;
+  }
+  const m=GENVIDEO_MAP[GENVIDEO.gender]; if(!m) return;
+  [videoEl,videoEl2].forEach((src,idx)=>{
+    const e=ensureGenVideoLabel(idx);
+    if(!src||src.style.display==='none'){ e.style.display='none'; return; }
+    const h=parseFloat(src.style.height)||120;
+    e.style.display='flex';
+    e.style.left=src.style.left; e.style.top=src.style.top;
+    e.style.width=src.style.width; e.style.height=src.style.height;
+    e.style.transformOrigin=src.style.transformOrigin||'bottom left';
+    e.style.transform=src.style.transform||'';
+    e.style.paddingTop='7%';
+    e.innerHTML='<span style="background:'+m.color+'e6;color:#fff;padding:.1em .45em;border-radius:10px;border:3px solid rgba(255,255,255,.85);text-shadow:0 2px 10px rgba(0,0,0,.8);font-size:'+Math.max(13,Math.min(60,h*0.2))+'px">'+m.icon+' '+m.label+'</span>';
+  });
+}
 
 function drawLiveMocapOverlay(vW,vH){
   if(!LIVE_MOCAP.enabled) return;
@@ -13674,6 +13743,7 @@ const HELP_PAGES={
     '  xtAPI.command("/lluvia off")',
     '  xtAPI.command("/subasta")  → abre/cierra (toggle) la subasta · /subasta off cierra',
     '  xtAPI.command("/targetPublicity aforo|genero")  → publicidad segmentada (genero=sexo+edad por LiveCam on-device) · off para parar',
+    '  xtAPI.command("/generovideo")  → las 2 pantallas siguen el sexo de la cámara: 👨→Money For Nothing · 👩→Take On Me · off para parar',
   ]},
   ],
   en:[
@@ -22322,7 +22392,7 @@ window.xtAPI = (function(){
         const stopTP=(silent)=>{
           if(TP.timer){ clearInterval(TP.timer); TP.timer=null; }
           TP.on=false; TP.lastSig='';
-          if(typeof stopFaceLoop==='function'){ try{ stopFaceLoop(); }catch(_){} }
+          if(typeof stopFaceLoop==='function'&&!(typeof GENVIDEO!=='undefined'&&GENVIDEO.on)){ try{ stopFaceLoop(); }catch(_){} }
           const h=document.getElementById('targetPubHud'); if(h) h.style.display='none';
           if(!silent && typeof showEv==='function') showEv('🎯 Target Publicity OFF','#ff99aa');
         };
@@ -22479,6 +22549,25 @@ window.xtAPI = (function(){
           ?(!(typeof LIVE_CAM!=='undefined'&&LIVE_CAM&&LIVE_CAM.active)?' · LiveCam off (señal simulada — activa LiveCam para sexo+edad real)':' · LiveCam on · cargando modelo facial on-device')
           :'';
         return {ok:true,message:'Target Publicity activado · modo '+TP.mode+(screenId?(' · pantalla '+screenId):' · sin screenId (solo HUD)')+note,data:{on:true,mode:TP.mode,screenId}};
+      }
+
+      // ── /generovideo — las 2 pantallas siguen el sexo de la cámara ──────────
+      //   hombre → Money For Nothing + overlay HOMBRE · mujer → Take On Me + MUJER
+      //   /generovideo off | repetir = toggle. Necesita LiveCam para detección real.
+      if(['generovideo','genvideo','camgenero','sexovideo','videogenero'].includes(cmd)){
+        if(typeof GENVIDEO==='undefined') return {ok:false,message:'Género→vídeo no disponible'};
+        const a=String(arg||'').trim().toLowerCase();
+        if(['off','stop','cerrar','close','0','no','quitar','desactivar'].includes(a) || (!a && GENVIDEO.on)){
+          if(typeof genVideoStop==='function') genVideoStop();
+          if(typeof showEv==='function') showEv('🎬 Género→vídeo OFF','#ff99aa');
+          return {ok:true,message:'Género→vídeo desactivado',data:{on:false}};
+        }
+        GENVIDEO.on=true; GENVIDEO.gender=''; GENVIDEO.pending='';
+        const camOn=!!(typeof LIVE_CAM!=='undefined'&&LIVE_CAM&&LIVE_CAM.active);
+        if(camOn&&typeof startFaceLoop==='function'){ try{ startFaceLoop(); }catch(_){} }
+        if(typeof genVideoStart==='function') genVideoStart();
+        if(typeof showEv==='function') showEv('🎬 Género→vídeo ON'+(camOn?'':' · enciende 📷 LiveCam'),'#66ddaa');
+        return {ok:true,message:'Género→vídeo activado · 👨 hombre→Money For Nothing · 👩 mujer→Take On Me'+(camOn?'':' · ⚠ LiveCam off (enciéndela para que detecte)'),data:{on:true,camOn}};
       }
 
       return {ok:false,message:'Comando no reconocido: '+raw};
@@ -25034,7 +25123,7 @@ window.xtAPI = (function(){
       // (CLI in-game) y aun no esta mapeado en este dispatcher de Telegram,
       // delegamos. Cubre /store, /people, /gente, /clientes, /personas y futuros
       // comandos sin necesidad de duplicar la logica.
-      if(['store','xtore','xtanco','tienda','people','gente','personas','clientes','staff','personal','subasta','subastar','auction','targetpublicity','targetpubliticy','targetpub'].includes(cmd)){
+      if(['store','xtore','xtanco','tienda','people','gente','personas','clientes','staff','personal','subasta','subastar','auction','targetpublicity','targetpubliticy','targetpub','generovideo','genvideo','camgenero','sexovideo','videogenero'].includes(cmd)){
         try{
           const res=api.command('/'+cmd+(arg?' '+arg:''));
           return res && res.message ? res.message : 'OK';
