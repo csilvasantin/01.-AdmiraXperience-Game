@@ -1054,7 +1054,7 @@ const APP_VERSION_LABEL=APP_VERSION;
 const APP_FORMULA_LABEL='build '+APP_BUILD;
 // Versión publicada del XpaceOS (se muestra en el splash · página 0).
 // IMPORTANTE: bumpear en cada release junto al tag DigitalTwin-v.YYYY.MM.DD.rN
-const XPACE_OS_VERSION='v.2026.06.02.r1';
+const XPACE_OS_VERSION='v.2026.06.02.r2';
 try{var _sv=document.getElementById('splashVersion');if(_sv)_sv.textContent='XpaceOS '+XPACE_OS_VERSION;}catch(e){}
 const AMIGA_PAGE0_TODO=['BUY SHIP','FIND BIGWHOOP','DEFEAT LECHUCK','MARRY ELAINE!'];
 let amigaPage0Todo=AMIGA_PAGE0_TODO.slice();
@@ -3461,6 +3461,69 @@ function updateLiveMocap(){
   LIVE_MOCAP.active=LIVE_MOCAP.confidence>0.06;
   LIVE_MOCAP.label=LIVE_MOCAP.active?'MOCAP Novah live':'MOCAP buscando cuerpo';
 }
+
+// ── Demografía on-device: sexo + edad para /targetPublicity genero ─────────
+// Inferencia 100% local con @vladmandic/human (TFJS/WebGL, MIT). El frame de
+// LIVE_CAM se analiza en el dispositivo y se descarta: la cara NO se envía a
+// ningún servidor ni se almacena. Es estimación estadística (no identificación):
+// edad ±5-8 años, sexo ~90-95% en cara frontal. Carga perezosa la 1ª vez que
+// se usa el modo genero con LiveCam activa (no penaliza el arranque del gemelo).
+const LIVE_FACE={ready:false,loading:false,faces:0,gender:'',genderScore:0,age:0,ageBucket:'',emotion:'',ts:0,err:''};
+let HUMAN_INSTANCE=null, HUMAN_LOADING=null, FACE_LOOP=null;
+function ageToBucket(a){ if(!a) return ''; if(a<25) return 'joven'; if(a<=45) return 'adulto'; return 'senior'; }
+function ensureHuman(){
+  if(HUMAN_INSTANCE) return Promise.resolve(HUMAN_INSTANCE);
+  if(HUMAN_LOADING) return HUMAN_LOADING;
+  LIVE_FACE.loading=true; LIVE_FACE.err='';
+  HUMAN_LOADING=(async()=>{
+    if(typeof window.Human==='undefined'){
+      await new Promise((res,rej)=>{
+        const s=document.createElement('script');
+        s.src='https://cdn.jsdelivr.net/npm/@vladmandic/human/dist/human.js';
+        s.async=true; s.onload=res; s.onerror=()=>rej(new Error('no se pudo cargar Human'));
+        document.head.appendChild(s);
+      });
+    }
+    const HumanClass=window.Human&&(window.Human.Human||window.Human);
+    if(typeof HumanClass!=='function') throw new Error('Human no disponible');
+    const human=new HumanClass({
+      modelBasePath:'https://cdn.jsdelivr.net/npm/@vladmandic/human/models/',
+      backend:'webgl', cacheSensitivity:0.7, warmup:'none',
+      face:{enabled:true, detector:{maxDetected:6,minConfidence:0.4}, mesh:{enabled:false}, iris:{enabled:false}, description:{enabled:true}, emotion:{enabled:true}, antispoof:{enabled:false}, liveness:{enabled:false}},
+      body:{enabled:false}, hand:{enabled:false}, object:{enabled:false}, gesture:{enabled:false}, filter:{enabled:false}
+    });
+    await human.load();
+    HUMAN_INSTANCE=human; LIVE_FACE.ready=true; LIVE_FACE.loading=false;
+    return human;
+  })().catch(e=>{ LIVE_FACE.err=String(e&&e.message||e); LIVE_FACE.loading=false; HUMAN_LOADING=null; throw e; });
+  return HUMAN_LOADING;
+}
+async function startFaceLoop(){
+  if(FACE_LOOP) return;
+  FACE_LOOP={stop:false,timer:null};
+  let human;
+  try{ human=await ensureHuman(); }catch(e){ FACE_LOOP=null; return; }
+  const loop=async()=>{
+    if(!FACE_LOOP||FACE_LOOP.stop) return;
+    if(LIVE_CAM.active&&liveCamVideoEl&&liveCamVideoEl.readyState>=2&&liveCamVideoEl.videoWidth){
+      try{
+        const res=await human.detect(liveCamVideoEl);
+        const fs=(res&&res.face)||[];
+        if(fs.length){
+          fs.sort((a,b)=>((b.box?b.box[2]*b.box[3]:0)-(a.box?a.box[2]*a.box[3]:0)));
+          const f=fs[0];
+          if(f.gender&&(f.genderScore||0)>0.6){ LIVE_FACE.gender=f.gender; LIVE_FACE.genderScore=f.genderScore; }
+          if(f.age){ LIVE_FACE.age=LIVE_FACE.age?Math.round(LIVE_FACE.age*0.6+f.age*0.4):Math.round(f.age); LIVE_FACE.ageBucket=ageToBucket(LIVE_FACE.age); }
+          LIVE_FACE.emotion=(f.emotion&&f.emotion[0]&&f.emotion[0].emotion)||'';
+          LIVE_FACE.faces=fs.length; LIVE_FACE.ts=performance.now();
+        }else{ LIVE_FACE.faces=0; }
+      }catch(e){ LIVE_FACE.err=String(e&&e.message||e); }
+    }
+    if(FACE_LOOP&&!FACE_LOOP.stop) FACE_LOOP.timer=setTimeout(loop,400);
+  };
+  loop();
+}
+function stopFaceLoop(){ if(FACE_LOOP){ FACE_LOOP.stop=true; if(FACE_LOOP.timer) clearTimeout(FACE_LOOP.timer); FACE_LOOP=null; } LIVE_FACE.faces=0; }
 
 function drawLiveMocapOverlay(vW,vH){
   if(!LIVE_MOCAP.enabled) return;
@@ -13610,7 +13673,7 @@ const HELP_PAGES={
     '  xtAPI.command("/ladron")',
     '  xtAPI.command("/lluvia off")',
     '  xtAPI.command("/subasta")  → abre/cierra (toggle) la subasta · /subasta off cierra',
-    '  xtAPI.command("/targetPublicity aforo|genero")  → publicidad segmentada · off para parar',
+    '  xtAPI.command("/targetPublicity aforo|genero")  → publicidad segmentada (genero=sexo+edad por LiveCam on-device) · off para parar',
   ]},
   ],
   en:[
@@ -22259,6 +22322,7 @@ window.xtAPI = (function(){
         const stopTP=(silent)=>{
           if(TP.timer){ clearInterval(TP.timer); TP.timer=null; }
           TP.on=false; TP.lastSig='';
+          if(typeof stopFaceLoop==='function'){ try{ stopFaceLoop(); }catch(_){} }
           const h=document.getElementById('targetPubHud'); if(h) h.style.display='none';
           if(!silent && typeof showEv==='function') showEv('🎯 Target Publicity OFF','#ff99aa');
         };
@@ -22298,10 +22362,28 @@ window.xtAPI = (function(){
         // Inercia 70/30 para que se sienta "vivo" sin parpadear cada tick.
         const generoSegment=()=>{
           const camOn=!!(typeof LIVE_CAM!=='undefined'&&LIVE_CAM&&LIVE_CAM.active);
-          if(Math.random()<0.3) TP.gender=TP.gender==='F'?'M':'F';
-          const g=TP.gender;
-          return {bucket:'gen-'+g,cat:g==='F'?'femenino':'masculino',audience:g==='F'?'f':'m',
-            label:(camOn?'👁 LiveCam · ':'(sim) ')+(g==='F'?'Audiencia ♀':'Audiencia ♂')};
+          // Con LiveCam activa, arranca (perezoso) el modelo facial on-device.
+          if(camOn&&typeof startFaceLoop==='function'){ try{ startFaceLoop(); }catch(_){} }
+          const lf=(typeof LIVE_FACE!=='undefined')?LIVE_FACE:null;
+          const real=!!(camOn&&lf&&lf.faces>0&&(performance.now()-lf.ts)<5000);
+          let g, age=0, ageBucket;
+          if(real){
+            g=lf.gender==='female'?'F':'M';
+            age=lf.age||0; ageBucket=lf.ageBucket||'adulto';
+          }else{
+            if(Math.random()<0.3) TP.gender=TP.gender==='F'?'M':'F';
+            g=TP.gender;
+            if(!TP.ageSim||Math.random()<0.2) TP.ageSim=['joven','adulto','senior'][Math.floor(Math.random()*3)];
+            ageBucket=TP.ageSim;
+          }
+          TP.gender=g;
+          const genTxt=g==='F'?'femenino':'masculino';
+          const sym=g==='F'?'♀':'♂';
+          const ageTxt=age?(' ~'+age+'a'):'';
+          const facesTxt=(real&&lf.faces>1)?(lf.faces+' caras · '):'';
+          return {bucket:'gen-'+g+'-'+ageBucket, cat:genTxt+'-'+ageBucket, genTxt,
+            audience:g==='F'?'f':'m', ageBucket, real,
+            label:(real?('👁 '+facesTxt):(lf&&lf.loading?'⏳ cargando IA · ':'(sim) '))+sym+' '+ageBucket+ageTxt};
         };
 
         // Fallback por keywords (title+tags) para stock aún sin categorizar.
@@ -22322,9 +22404,13 @@ window.xtAPI = (function(){
             if(!items.length) return null;
             let pool=null;
             if(seg.audience){
-              // Género: empareja por audience estructurado (f/m); 'all' vale para ambos.
-              const exact=items.filter(it=>it.audience===seg.audience);
-              pool=exact.length?exact:items.filter(it=>it.audience==='all');
+              // Género (+edad): audience+edad → audience → 'all'.
+              let p=items.filter(it=>it.audience===seg.audience);
+              if(seg.ageBucket){
+                const withAge=p.filter(it=>it.ageBucket===seg.ageBucket||it.age===seg.ageBucket);
+                if(withAge.length) p=withAge;
+              }
+              pool=p.length?p:items.filter(it=>it.audience==='all');
             }else if(seg.cat){
               // Aforo: empareja por category estructurado.
               const exact=items.filter(it=>it.category===seg.cat);
@@ -22332,7 +22418,7 @@ window.xtAPI = (function(){
             }
             // Fallback (stock sin categorizar): keywords en title+tags; si nada, todo.
             if(!pool||!pool.length){
-              const kws=KW[seg.cat]||[];
+              const kws=KW[seg.cat]||KW[seg.genTxt]||[];
               const match=items.filter(it=>{ const t=((it.title||'')+' '+((it.tags||[]).join(' '))).toLowerCase(); return kws.some(k=>t.includes(k)); });
               pool=match.length?match:items;
             }
@@ -22345,8 +22431,16 @@ window.xtAPI = (function(){
         // creative: undefined = "buscando…", null = sin resultado, objeto = ok
         const renderHud=(seg,creative,pushed)=>{
           const body=ensureHud().querySelector('#tpBody'); if(!body) return;
-          const camWarn=(TP.mode==='genero'&&!(typeof LIVE_CAM!=='undefined'&&LIVE_CAM&&LIVE_CAM.active))
-            ?'<div style="margin-top:5px;color:#ffae6b">⚠ LiveCam off · señal simulada</div>':'';
+          const camActive=(typeof LIVE_CAM!=='undefined'&&LIVE_CAM&&LIVE_CAM.active);
+          const lf=(typeof LIVE_FACE!=='undefined')?LIVE_FACE:null;
+          let camWarn='';
+          if(TP.mode==='genero'){
+            if(!camActive) camWarn='<div style="margin-top:5px;color:#ffae6b">⚠ LiveCam off · señal simulada</div>';
+            else if(lf&&lf.err) camWarn='<div style="margin-top:5px;color:#ff8a8a">⚠ IA: '+lf.err+' · señal simulada</div>';
+            else if(lf&&lf.loading) camWarn='<div style="margin-top:5px;color:#7fd6ff">⏳ cargando modelo facial on-device…</div>';
+            else if(seg&&seg.real) camWarn='<div style="margin-top:5px;color:#7fd6ff">👁 análisis on-device · datos anónimos · sin almacenamiento</div>';
+            else if(lf&&lf.ready) camWarn='<div style="margin-top:5px;color:#ffae6b">👁 buscando cara… · señal simulada</div>';
+          }
           const cre=creative===undefined?'<span style="opacity:.6">buscando…</span>'
             :(creative?((creative.title||creative.type)+(pushed?' <span style="color:#00ff41">→ pantalla</span>':'')):'—');
           body.innerHTML=
@@ -22381,7 +22475,9 @@ window.xtAPI = (function(){
         tick(true);
         TP.timer=setInterval(()=>tick(false),7000);
         if(typeof showEv==='function') showEv('🎯 Target Publicity ON · '+(TP.mode==='genero'?'género':'aforo'),'#66ddaa');
-        const note=TP.mode==='genero'&&!(typeof LIVE_CAM!=='undefined'&&LIVE_CAM&&LIVE_CAM.active)?' · LiveCam off (señal simulada)':'';
+        const note=TP.mode==='genero'
+          ?(!(typeof LIVE_CAM!=='undefined'&&LIVE_CAM&&LIVE_CAM.active)?' · LiveCam off (señal simulada — activa LiveCam para sexo+edad real)':' · LiveCam on · cargando modelo facial on-device')
+          :'';
         return {ok:true,message:'Target Publicity activado · modo '+TP.mode+(screenId?(' · pantalla '+screenId):' · sin screenId (solo HUD)')+note,data:{on:true,mode:TP.mode,screenId}};
       }
 
