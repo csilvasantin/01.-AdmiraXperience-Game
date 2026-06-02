@@ -1054,7 +1054,7 @@ const APP_VERSION_LABEL=APP_VERSION;
 const APP_FORMULA_LABEL='build '+APP_BUILD;
 // Versión publicada del XpaceOS (se muestra en el splash · página 0).
 // IMPORTANTE: bumpear en cada release junto al tag DigitalTwin-v.YYYY.MM.DD.rN
-const XPACE_OS_VERSION='v.2026.05.20.r21';
+const XPACE_OS_VERSION='v.2026.06.02.r1';
 try{var _sv=document.getElementById('splashVersion');if(_sv)_sv.textContent='XpaceOS '+XPACE_OS_VERSION;}catch(e){}
 const AMIGA_PAGE0_TODO=['BUY SHIP','FIND BIGWHOOP','DEFEAT LECHUCK','MARRY ELAINE!'];
 let amigaPage0Todo=AMIGA_PAGE0_TODO.slice();
@@ -13610,6 +13610,7 @@ const HELP_PAGES={
     '  xtAPI.command("/ladron")',
     '  xtAPI.command("/lluvia off")',
     '  xtAPI.command("/subasta")  → abre/cierra (toggle) la subasta · /subasta off cierra',
+    '  xtAPI.command("/targetPublicity aforo|genero")  → publicidad segmentada · off para parar',
   ]},
   ],
   en:[
@@ -22244,6 +22245,146 @@ window.xtAPI = (function(){
         }
       }
 
+      // ── /targetPublicity — publicidad segmentada ──────────────────────
+      // Toggle como /subasta. Lee una señal de audiencia y empuja el creativo
+      // adecuado a ESTA pantalla (reutiliza el targeting por screen del feed).
+      //   /targetPublicity aforo   → segmenta por nº de gente en la tienda (real: G.custs)
+      //   /targetPublicity genero  → segmenta por sexo del espectador vía LiveCam (simulado)
+      //   /targetPublicity off     → desactiva   ·   /targetPublicity (solo) = toggle
+      if(['targetpublicity','targetpubliticy','targetpub'].includes(cmd)){
+        const TP=(window.__TARGETPUB=window.__TARGETPUB||{on:false,mode:'aforo',timer:null,lastSig:'',gender:'F',lastCreative:null});
+        const WORKER='https://pixer-eleven.csilvasantin.workers.dev';
+        const a=String(arg||'').trim().toLowerCase();
+
+        const stopTP=(silent)=>{
+          if(TP.timer){ clearInterval(TP.timer); TP.timer=null; }
+          TP.on=false; TP.lastSig='';
+          const h=document.getElementById('targetPubHud'); if(h) h.style.display='none';
+          if(!silent && typeof showEv==='function') showEv('🎯 Target Publicity OFF','#ff99aa');
+        };
+
+        if(['off','stop','cerrar','close','0','no','quitar','desactivar'].includes(a) || (!a && TP.on)){
+          stopTP(false);
+          return {ok:true,message:'Target Publicity desactivado',data:{on:false}};
+        }
+
+        if(['genero','género','gender','sexo'].includes(a)) TP.mode='genero';
+        else if(['aforo','gente','people','occupancy','clientes'].includes(a)) TP.mode='aforo';
+
+        const ensureHud=()=>{
+          let h=document.getElementById('targetPubHud');
+          if(!h){
+            h=document.createElement('div');
+            h.id='targetPubHud';
+            h.style.cssText='position:fixed;top:72px;left:16px;z-index:2147482000;min-width:236px;background:rgba(6,16,10,.94);border:1px solid #00ff41;border-radius:10px;color:#c8ffd0;font-family:"JetBrains Mono",ui-monospace,monospace;font-size:11px;box-shadow:0 0 22px rgba(0,255,65,.3);overflow:hidden';
+            h.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 9px;border-bottom:1px dashed #2f8a3e;letter-spacing:.06em"><b>🎯 TARGET PUBLICITY</b><span id="tpClose" style="cursor:pointer;color:#999;padding:0 4px">×</span></div><div id="tpBody" style="padding:8px 10px;line-height:1.55"></div>';
+            document.body.appendChild(h);
+            const c=h.querySelector('#tpClose'); if(c) c.onclick=()=>stopTP(false);
+          }
+          h.style.display='block';
+          return h;
+        };
+
+        const aforoSegment=()=>{
+          const n=(typeof G!=='undefined'&&Array.isArray(G.custs))?G.custs.length:0;
+          let cap=30; try{ if(typeof getCurrentCustomerCap==='function') cap=getCurrentCustomerCap()||30; }catch(_){}
+          const r=cap>0?n/cap:0;
+          if(n===0) return {bucket:'vacio',label:'Tienda vacía',cat:'atraer'};
+          if(r<0.34) return {bucket:'baja',label:'Afluencia baja ('+n+')',cat:'producto'};
+          if(r<0.67) return {bucket:'media',label:'Afluencia media ('+n+')',cat:'promo'};
+          return {bucket:'alta',label:'Afluencia alta ('+n+')',cat:'marca'};
+        };
+        // Género simulado (enchufe para meter detección real desde LIVE_CAM luego).
+        // Inercia 70/30 para que se sienta "vivo" sin parpadear cada tick.
+        const generoSegment=()=>{
+          const camOn=!!(typeof LIVE_CAM!=='undefined'&&LIVE_CAM&&LIVE_CAM.active);
+          if(Math.random()<0.3) TP.gender=TP.gender==='F'?'M':'F';
+          const g=TP.gender;
+          return {bucket:'gen-'+g,cat:g==='F'?'femenino':'masculino',audience:g==='F'?'f':'m',
+            label:(camOn?'👁 LiveCam · ':'(sim) ')+(g==='F'?'Audiencia ♀':'Audiencia ♂')};
+        };
+
+        // Fallback por keywords (title+tags) para stock aún sin categorizar.
+        const KW={
+          atraer:['oferta','descuento','bienvenid','promo','rebaja'],
+          producto:['producto','novedad','catalogo','catálogo'],
+          promo:['promo','2x1','descuento','oferta'],
+          marca:['marca','brand','premium','exclusiv'],
+          femenino:['mujer','femenin','ella','women','woman'],
+          masculino:['hombre','masculin','men','man']
+        };
+        const pickCreative=async(seg)=>{
+          try{
+            const r=await fetch(WORKER+'/stock/list?limit=80',{cache:'no-store'});
+            if(!r.ok) return null;
+            const d=await r.json();
+            const items=(Array.isArray(d&&d.items)?d.items:[]).filter(it=>it&&it.url&&['image','video','animation'].includes(it.type));
+            if(!items.length) return null;
+            let pool=null;
+            if(seg.audience){
+              // Género: empareja por audience estructurado (f/m); 'all' vale para ambos.
+              const exact=items.filter(it=>it.audience===seg.audience);
+              pool=exact.length?exact:items.filter(it=>it.audience==='all');
+            }else if(seg.cat){
+              // Aforo: empareja por category estructurado.
+              const exact=items.filter(it=>it.category===seg.cat);
+              if(exact.length) pool=exact;
+            }
+            // Fallback (stock sin categorizar): keywords en title+tags; si nada, todo.
+            if(!pool||!pool.length){
+              const kws=KW[seg.cat]||[];
+              const match=items.filter(it=>{ const t=((it.title||'')+' '+((it.tags||[]).join(' '))).toLowerCase(); return kws.some(k=>t.includes(k)); });
+              pool=match.length?match:items;
+            }
+            return pool[Math.floor(Math.random()*pool.length)];
+          }catch(_){ return null; }
+        };
+
+        let screenId=''; try{ screenId=localStorage.getItem('pixer-xtore-screen-id')||''; }catch(_){}
+
+        // creative: undefined = "buscando…", null = sin resultado, objeto = ok
+        const renderHud=(seg,creative,pushed)=>{
+          const body=ensureHud().querySelector('#tpBody'); if(!body) return;
+          const camWarn=(TP.mode==='genero'&&!(typeof LIVE_CAM!=='undefined'&&LIVE_CAM&&LIVE_CAM.active))
+            ?'<div style="margin-top:5px;color:#ffae6b">⚠ LiveCam off · señal simulada</div>':'';
+          const cre=creative===undefined?'<span style="opacity:.6">buscando…</span>'
+            :(creative?((creative.title||creative.type)+(pushed?' <span style="color:#00ff41">→ pantalla</span>':'')):'—');
+          body.innerHTML=
+            '<div>Modo: <b style="color:#7dff9e">'+(TP.mode==='genero'?'Género (LiveCam)':'Aforo')+'</b></div>'+
+            '<div>Segmento: <b style="color:#7dff9e">'+seg.label+'</b></div>'+
+            '<div>Categoría: <b style="color:#ffd866">'+seg.cat+'</b></div>'+
+            '<div style="margin-top:4px;opacity:.85">Creativo: '+cre+'</div>'+camWarn;
+        };
+        const tick=async(force)=>{
+          if(!TP.on) return;
+          const seg=TP.mode==='genero'?generoSegment():aforoSegment();
+          const sig=TP.mode+'|'+seg.bucket;
+          if(!(force||sig!==TP.lastSig)){ renderHud(seg,TP.lastCreative,!!TP.lastPushed); return; }
+          TP.lastSig=sig;
+          renderHud(seg,undefined,false); // segmento al instante, creativo "buscando…"
+          const creative=await pickCreative(seg);
+          let pushed=false;
+          if(creative&&screenId){
+            try{
+              await fetch(WORKER+'/signage/push',{method:'POST',headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({kind:creative.type==='image'?'image':'video',src:creative.url,mime:creative.mime||null,
+                  title:'🎯 '+seg.label+' · '+seg.cat,target:screenId})});
+              pushed=true;
+            }catch(_){}
+          }
+          TP.lastCreative=creative; TP.lastPushed=pushed;
+          if(TP.on) renderHud(seg,creative,pushed);
+        };
+
+        TP.on=true; TP.lastSig='';
+        if(TP.timer) clearInterval(TP.timer);
+        tick(true);
+        TP.timer=setInterval(()=>tick(false),7000);
+        if(typeof showEv==='function') showEv('🎯 Target Publicity ON · '+(TP.mode==='genero'?'género':'aforo'),'#66ddaa');
+        const note=TP.mode==='genero'&&!(typeof LIVE_CAM!=='undefined'&&LIVE_CAM&&LIVE_CAM.active)?' · LiveCam off (señal simulada)':'';
+        return {ok:true,message:'Target Publicity activado · modo '+TP.mode+(screenId?(' · pantalla '+screenId):' · sin screenId (solo HUD)')+note,data:{on:true,mode:TP.mode,screenId}};
+      }
+
       return {ok:false,message:'Comando no reconocido: '+raw};
     },
 
@@ -24797,7 +24938,7 @@ window.xtAPI = (function(){
       // (CLI in-game) y aun no esta mapeado en este dispatcher de Telegram,
       // delegamos. Cubre /store, /people, /gente, /clientes, /personas y futuros
       // comandos sin necesidad de duplicar la logica.
-      if(['store','xtore','xtanco','tienda','people','gente','personas','clientes','staff','personal','subasta','subastar','auction'].includes(cmd)){
+      if(['store','xtore','xtanco','tienda','people','gente','personas','clientes','staff','personal','subasta','subastar','auction','targetpublicity','targetpubliticy','targetpub'].includes(cmd)){
         try{
           const res=api.command('/'+cmd+(arg?' '+arg:''));
           return res && res.message ? res.message : 'OK';
@@ -25905,7 +26046,7 @@ window.xtAPI = (function(){
   }
   async function pollFeed(){
     try{
-      const r=await fetch(PIXER_WORKER+'/signage/feed?limit=1');
+      const r=await fetch(PIXER_WORKER+'/signage/feed?limit=1&screen='+encodeURIComponent(screenId));
       if(!r.ok) return;
       const data=await r.json();
       totalCount=(data.items||[]).length;
