@@ -23492,6 +23492,14 @@ window.xtAPI = (function(){
         active:!!(typeof LIVE_CAM!=='undefined'&&LIVE_CAM&&LIVE_CAM.active)
       },
       {
+        label:'⏮ DVR',
+        status:(typeof REC!=='undefined'&&REC.replay&&REC.replay.on)
+          ?(isEs?'en replay':'replay')
+          :(isEs?'rebobinar':'rewind'),
+        command:(typeof REC!=='undefined'&&REC.replay&&REC.replay.on)?'/envivo':'/dvr',
+        active:!!(typeof REC!=='undefined'&&REC.replay&&REC.replay.on)
+      },
+      {
         label:'🎨 Pixer.ai',
         status:isEs?'creador':'creator',
         customAction:'pixerai'
