@@ -2658,7 +2658,7 @@ async function emitEscaparateNow(force){
   }catch(e){}
 }
 setInterval(()=>emitEscaparateNow(false),1200);
-setInterval(()=>emitEscaparateNow(true),20000);
+setInterval(()=>emitEscaparateNow(true),60000); // keepalive del puntero /now (worker dedup + TTL 180s)
 
 function setManagerSayBubble(text){
   const clean=String(text||'').replace(/\s+/g,' ').trim().slice(0,120);

@@ -56,8 +56,8 @@
   const WORKER = 'https://pixer-eleven.csilvasantin.workers.dev';
   const params = new URLSearchParams(location.search);
   const SCREEN = (params.get('screen') || 'escaparate').toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 40) || 'escaparate';
-  const POLL_MS = 1500;
-  const HB_MS = 20000;
+  const POLL_MS = 3000;   // poll del puntero /now (lectura barata; 3s da reactividad de sobra)
+  const HB_MS = 60000;    // heartbeat cada 60s (el worker deduplica; basta para el badge "online")
   const screenId = 'xtore-' + SCREEN + '-' + Math.random().toString(36).slice(2, 6);
 
   const vid = document.getElementById('vid');
