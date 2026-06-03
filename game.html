@@ -15144,20 +15144,8 @@ function drawShop(){
     drawTurnManager();
     // ── SECURITY CAMERA in the corner, aimed at the entrance ──
     drawCornerSecurityCamera();
-    // ── TFT ALTADIS (16:9 screen on back wall) ──
-    // Gemelo config-driven: tantas pantallas como tenga el punto de admira.app
-    // (STORE_CFG.screens = surfaces tipo pantalla/escaparate), repartidas por el
-    // muro del fondo con ancho adaptativo. Sin punto → una sola (comportamiento
-    // original). Cap a 4 para que sigan siendo legibles.
-    (function(){
-      const ds=(window.STORE_CFG&&window.STORE_CFG.screens)?Math.max(1,Math.min(4,window.STORE_CFG.screens|0)):1;
-      if(ds<=1){ drawAltadisTFT(); return; }
-      const span=ISO.cols;
-      const w=Math.max(2,Math.min(4,Math.floor(span/ds)));
-      for(let i=0;i<ds;i++){
-        drawAltadisTFT(span*(i+0.5)/ds-0.5, undefined, w);
-      }
-    })();
+    // ── TFT ALTADIS (16:9 screen on back wall, above 2nd window) ──
+    drawAltadisTFT();
   }
 
   // ── BLANK XPACE (Creator / Shoptalk): renderizar SOLO los items wall
@@ -21447,6 +21435,10 @@ function autoEnterVertical(id){
   try{ if(typeof loadModel==='function') loadModel(modelSel); }catch(e){}
   try{ initGame(); }catch(e){}
   state=S.GAME;
+  // Arrancar la señalética de vídeo: si no, los 2 monitores de la pared corta
+  // (videoEl/videoEl2) quedan ocultos (solo se muestran con videoPlaying).
+  try{ if(typeof startVideo==='function') startVideo(); }catch(e){}
+  try{ if(typeof startMusic==='function') startMusic(); }catch(e){}
   try{ updateMobileSkipButton(); }catch(e){}
   try{ updateEraVerticalDock(); }catch(e){}
   return true;
