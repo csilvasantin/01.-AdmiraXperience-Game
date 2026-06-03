@@ -239,13 +239,14 @@ function bufToBase64(buf) {
   for (let i = 0; i < arr.length; i++) bin += String.fromCharCode(arr[i]);
   return btoa(bin);
 }
-async function ttsBase64(env, text) {
+async function ttsBase64(env, text, voiceId) {
   const clean = String(text).slice(0, 1200);
   // 1) ElevenLabs directo (voz premium; la misma que alimentará Audio2Face en Unreal).
   const key = String(env.ELEVENLABS_API_KEY || '').trim();
   if (key) {
     try {
-      const voice = String(env.ELEVENLABS_VOICE_ID || DEFAULT_VOICE_ID);
+      // voiceId del cliente (p.ej. por sexo del avatar) → si no, el de por defecto.
+      const voice = String(voiceId || env.ELEVENLABS_VOICE_ID || DEFAULT_VOICE_ID);
       const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voice}`, {
         method: 'POST',
         headers: { 'xi-api-key': key, 'Content-Type': 'application/json', 'Accept': 'audio/mpeg' },
@@ -297,7 +298,8 @@ async function handleMetahumanAsk(request, env) {
   if (g.error) return json(request, env, g.error === 'xai_key_not_set' ? 503 : 502, { ok: false, error: g.error, detail: g.detail, context });
   const out = { ok: true, answer: g.answer, loc: id || null };
   if (wantVoice) {
-    const tts = await ttsBase64(env, g.answer);
+    const voiceId = body && typeof body.voiceId === 'string' ? body.voiceId.trim() : '';
+    const tts = await ttsBase64(env, g.answer, voiceId);
     if (tts && tts.b64) { out.audioBase64 = tts.b64; out.mime = 'audio/mpeg'; }
     else out.voiceNote = (tts && tts.err) || 'tts_unavailable';
   }
@@ -310,7 +312,8 @@ async function handleTts(request, env) {
   let body; try { body = await request.json(); } catch { return json(request, env, 400, { error: 'invalid_json' }); }
   const text = String(body && body.text || '').trim();
   if (!text) return json(request, env, 400, { error: 'missing_text' });
-  const tts = await ttsBase64(env, text);
+  const voiceId = body && typeof body.voiceId === 'string' ? body.voiceId.trim() : '';
+  const tts = await ttsBase64(env, text, voiceId);
   if (tts && tts.b64) return json(request, env, 200, { ok: true, audioBase64: tts.b64, mime: 'audio/mpeg' });
   return json(request, env, 502, { ok: false, error: (tts && tts.err) || 'tts_unavailable' });
 }
