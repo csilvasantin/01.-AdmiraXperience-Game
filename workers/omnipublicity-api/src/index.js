@@ -13,10 +13,14 @@ const KV_KEY = 'locations.v1';
 
 const DEFAULT_ALLOWED_ORIGINS = [
   'https://csilvasantin.github.io',
+  'https://admira.app',
+  'https://www.admira.app',
   'http://localhost:9124',
   'http://127.0.0.1:9124',
   'http://localhost:8085',
   'http://127.0.0.1:8085',
+  'http://localhost:8799',
+  'http://127.0.0.1:8799',
 ];
 
 function getAllowedOrigins(env) {
