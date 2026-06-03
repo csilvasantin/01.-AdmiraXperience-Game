@@ -13,6 +13,8 @@ const KV_KEY = 'locations.v1';
 
 const DEFAULT_ALLOWED_ORIGINS = [
   'https://csilvasantin.github.io',
+  'https://carlossilva.info',
+  'https://www.carlossilva.info',
   'https://admira.app',
   'https://www.admira.app',
   'http://localhost:9124',
