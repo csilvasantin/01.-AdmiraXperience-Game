@@ -257,8 +257,10 @@ async function ttsBase64(env, text) {
           voice_settings: { stability: 0.5, similarity_boost: 0.75 },
         }),
       });
-      if (res.ok) return bufToBase64(await res.arrayBuffer());
-    } catch {}
+      if (res.ok) return { b64: bufToBase64(await res.arrayBuffer()) };
+      const t = await res.text();
+      return { err: `elevenlabs_http_${res.status}: ${String(t).slice(0, 220)}`, voice };
+    } catch (e) { return { err: 'elevenlabs_exception: ' + (e && e.message || e) }; }
   }
   // 2) Fallback: worker admira-tts (si vuelve a estar operativo).
   try {
@@ -266,9 +268,9 @@ async function ttsBase64(env, text) {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text: clean }),
     });
-    if (res.ok) return bufToBase64(await res.arrayBuffer());
+    if (res.ok) return { b64: bufToBase64(await res.arrayBuffer()) };
   } catch {}
-  return null;
+  return { err: 'no_elevenlabs_key_and_admira_tts_down' };
 }
 
 async function handleMetahumanAsk(request, env) {
@@ -297,9 +299,9 @@ async function handleMetahumanAsk(request, env) {
   if (g.error) return json(request, env, g.error === 'xai_key_not_set' ? 503 : 502, { ok: false, error: g.error, detail: g.detail, context });
   const out = { ok: true, answer: g.answer, loc: id || null };
   if (wantVoice) {
-    const audio = await ttsBase64(env, g.answer);
-    if (audio) { out.audioBase64 = audio; out.mime = 'audio/mpeg'; }
-    else out.voiceNote = 'tts_unavailable';
+    const tts = await ttsBase64(env, g.answer);
+    if (tts && tts.b64) { out.audioBase64 = tts.b64; out.mime = 'audio/mpeg'; }
+    else out.voiceNote = (tts && tts.err) || 'tts_unavailable';
   }
   return json(request, env, 200, out);
 }
