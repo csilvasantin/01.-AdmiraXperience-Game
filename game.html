@@ -15626,11 +15626,15 @@ function drawEscaparate(){
   cx.fillStyle='rgba(0,0,0,0.45)';
   cx.fillRect(0,vH-18,vW,18);
   cx.font='5px sans-serif';
-  cx.fillStyle=esc.boost>0?'#ffdd88':'rgba(255,255,255,0.5)';
+  cx.fillStyle=esc.boost>0?'#ffdd88':((window.STORE_CFG&&window.STORE_CFG.name)?'#9fd0ff':'rgba(255,255,255,0.5)');
   cx.textAlign='center';
+  // Gemelo config-driven: la pantalla de EXTERIOR (escaparate, junto a la
+  // puerta) identifica el local cuando el twin abre un punto de admira.app.
   const botLabel=esc.boost>0
     ?(lang==='es'?'¡RECIÉN ACTUALIZADO!':'JUST UPDATED!')
-    :(lang==='es'?'ESCAPARATE INTERACTIVO':'INTERACTIVE DISPLAY');
+    :((window.STORE_CFG&&window.STORE_CFG.name)
+        ? String(window.STORE_CFG.name).toUpperCase().slice(0,22)
+        : (lang==='es'?'ESCAPARATE INTERACTIVO':'INTERACTIVE DISPLAY'));
   cx.fillText(botLabel, vW/2, vH-6);
 
   // Glass reflection (subtle highlight strip on left side)
