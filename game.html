@@ -15130,8 +15130,20 @@ function drawShop(){
     drawTurnManager();
     // ── SECURITY CAMERA in the corner, aimed at the entrance ──
     drawCornerSecurityCamera();
-    // ── TFT ALTADIS (16:9 screen on back wall, above 2nd window) ──
-    drawAltadisTFT();
+    // ── TFT ALTADIS (16:9 screen on back wall) ──
+    // Gemelo config-driven: tantas pantallas como tenga el punto de admira.app
+    // (STORE_CFG.screens = surfaces tipo pantalla/escaparate), repartidas por el
+    // muro del fondo con ancho adaptativo. Sin punto → una sola (comportamiento
+    // original). Cap a 4 para que sigan siendo legibles.
+    (function(){
+      const ds=(window.STORE_CFG&&window.STORE_CFG.screens)?Math.max(1,Math.min(4,window.STORE_CFG.screens|0)):1;
+      if(ds<=1){ drawAltadisTFT(); return; }
+      const span=ISO.cols;
+      const w=Math.max(2,Math.min(4,Math.floor(span/ds)));
+      for(let i=0;i<ds;i++){
+        drawAltadisTFT(span*(i+0.5)/ds-0.5, undefined, w);
+      }
+    })();
   }
 
   // ── BLANK XPACE (Creator / Shoptalk): renderizar SOLO los items wall
@@ -16618,7 +16630,7 @@ function drawSecurityCCTV(vW,vH){
 // (item.col +0.5 en el iso). Default = 7 (Xtanco legacy: cols 5..9).
 // yPx opcional — offset vertical en px desde el TOP de la pared (0 =
 // pegado arriba). Default = wallH * 0.02 (casi al top, sitio histórico).
-function drawAltadisTFT(centerCol, yPx){
+function drawAltadisTFT(centerCol, yPx, colsWide){
   // Draw as a flat parallelogram on the BACK WALL (row=0), 16:9, span 4 cols
   cx.save();
   // Clip to back wall area
@@ -16632,7 +16644,7 @@ function drawAltadisTFT(centerCol, yPx){
   // Screen ancho = 4 cols centradas en centerCol+0.5. Clamp para no salirse
   // de la pared larga.
   const cc=(typeof centerCol==='number'&&isFinite(centerCol)) ? centerCol : 7;
-  const halfW=2; // cols a cada lado
+  const halfW=(typeof colsWide==='number'&&colsWide>0)?Math.max(1,colsWide/2):2; // cols a cada lado
   const cL=Math.max(0,Math.min(ISO.cols-halfW*2,Math.round(cc+0.5)-halfW));
   const cR=cL+halfW*2;
   const pL=toIso(cL,0);
