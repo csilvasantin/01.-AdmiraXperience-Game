@@ -16957,6 +16957,19 @@ function drawAltadisTFT(centerCol, yPx){
     }
     cx.textAlign='left';
   }
+  // Gemelo config-driven: rótulo del local (lower-third) en TODAS las pantallas
+  // de signage cuando el twin abre un punto concreto de admira.app. Identifica
+  // la tienda real (nombre + dirección) sobre cualquier anuncio.
+  if(window.STORE_CFG && window.STORE_CFG.name){
+    const _scfg=window.STORE_CFG;
+    cx.fillStyle='rgba(0,0,0,0.74)'; cx.fillRect(0,vH-16,vW,16);
+    cx.fillStyle='#ffd866'; cx.fillRect(0,vH-16,vW,1);
+    cx.textAlign='center';
+    cx.fillStyle='#ffffff'; cx.font='bold 7px monospace';
+    cx.fillText(String(_scfg.name).toUpperCase().slice(0,28), cX, vH-8);
+    if(_scfg.addr){ cx.fillStyle='#9fd0ff'; cx.font='6px monospace'; cx.fillText(String(_scfg.addr).slice(0,36), cX, vH-2); }
+    cx.textAlign='left';
+  }
   cx.restore(); // undo screen clip + transform
   // Glare on bezel
   cx.globalAlpha=0.05;cx.fillStyle='#fff';
