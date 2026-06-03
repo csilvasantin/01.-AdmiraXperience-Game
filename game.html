@@ -10161,7 +10161,11 @@ window.openDVRPanel=openDVRPanel; window.closeDVRPanel=closeDVRPanel;
   if(e.time){
     e.time.addEventListener('keydown',ev=>{ ev.stopPropagation(); if(ev.key==='Enter'){ ev.preventDefault(); seek(); } if(ev.key==='Escape'){ ev.preventDefault(); e.time.blur(); } });
     e.time.addEventListener('focus',()=>{ try{ e.time.select(); }catch(_){} });
-    e.time.addEventListener('blur',()=>updateDVRPanel());
+    // Al salir del campo (clic fuera, Tab…) confirmamos el salto a la hora escrita.
+    // Así "cambio la hora" funciona sin tener que pulsar Enter; si no se entiende,
+    // restauramos la hora actual del replay.
+    e.time.addEventListener('blur',()=>{ if(!dvrSeekToTime(e.time.value)) updateDVRPanel(); });
+    e.time.addEventListener('change',()=>{ dvrSeekToTime(e.time.value); });
   }
   if(go) go.addEventListener('click',seek);
 })();
