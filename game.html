@@ -7951,12 +7951,22 @@ function initGame(){
   // [3] Store Manager → behind escritorio (col:9,row:5)
   // Use custom staff positions if saved in editor, otherwise use defaults
   const staffGridPos=(shopStaffPos&&shopStaffPos.length>0)?shopStaffPos:DEFAULT_STAFF_POS;
-  G.staff=M.staffInit.map((s,i)=>{
+  // Gemelo config-driven: si el punto de admira.app trae roster de empleados
+  // (STORE_CFG.employees), usamos ESE como plantilla (nombre+rol reales) en
+  // vez del staffInit del modelo. No mutamos el modelo (es compartido).
+  const _cfgEmp=(window.STORE_CFG&&Array.isArray(window.STORE_CFG.employees)&&window.STORE_CFG.employees.length)?window.STORE_CFG.employees:null;
+  let staffSrc=M.staffInit;
+  if(_cfgEmp){
+    const ROLE_MAP={cajero:0,cajera:0,cashier:0,caja:0,repositor:1,repositora:1,reponedor:1,stocker:1,repo:1,azafata:2,hostess:2,aza:2,manager:3,encargado:3,'store manager':3,mgr:3,dj:4,'disc jockey':4};
+    const roleOf=r=>{ if(typeof r==='number') return Math.max(0,Math.min(4,r|0)); const k=String(r||'').trim().toLowerCase(); return (k in ROLE_MAP)?ROLE_MAP[k]:0; };
+    staffSrc=_cfgEmp.slice(0,8).map((e,i)=>({slot:i,x:0,y:0,hired:i===0,name:String(e.name||('EMP'+(i+1))),role:roleOf(e.role!=null?e.role:e.roleLabel)}));
+  }
+  G.staff=staffSrc.map((s,i)=>{
     const gp=staffGridPos[i%staffGridPos.length];
     const zone=getStaffZoneConfig(i,gp.col,gp.row);
     const iso=toIso(gp.col,gp.row);
-    // Apply custom names/roles from settings
-    const custom=shopTimeSettings.staff&&shopTimeSettings.staff[i];
+    // Apply custom names/roles from settings (solo si el punto NO trae roster propio)
+    const custom=(!_cfgEmp)&&shopTimeSettings.staff&&shopTimeSettings.staff[i];
     const staffName=custom?custom.name:s.name;
     const staffRole=custom?custom.role:s.role;
     return {
