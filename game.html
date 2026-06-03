@@ -9979,6 +9979,56 @@ function updateStaffNav(s){
   } else { s.isWalking=false; }
 }
 
+// ═══════════════════════════════════════════════════════════════
+//  DVR DEL XPACIO — grabar todo open→close, velocidad y replay
+//  REC.speed: multiplicador de simulación (0.5/1/2/4/8). REC.recording:
+//  línea de tiempo de snapshots (1 por minuto de juego) con el estado
+//  dinámico que necesita el render (clientes, staff, métricas, eventos).
+//  REC.replay: modo rebobinado (Fase C) — render desde snapshot.
+// ═══════════════════════════════════════════════════════════════
+const REC = { speed:1, recording:[], maxLen:2000, replay:{on:false, idx:0, playing:true}, _lastMin:-1, _slowAcc:0 };
+window.XPACE_DVR = REC;
+const REC_SPEEDS = [0.5, 1, 2, 4, 8];
+function setXpaceSpeed(v){
+  const n = Number(v);
+  REC.speed = REC_SPEEDS.includes(n) ? n : 1;
+  return REC.speed;
+}
+// Clon ligero y serializable de un cliente/empleado para el snapshot (evita
+// refs circulares de navPath; conserva lo que el render necesita).
+function recCloneEntity(o){
+  if(!o||typeof o!=='object') return o;
+  const out={};
+  for(const k in o){
+    const v=o[k];
+    const t=typeof v;
+    if(v===null||t==='number'||t==='string'||t==='boolean'){ out[k]=v; }
+    // saltamos funciones, objetos anidados pesados y arrays (navPath, path…):
+    // el replay no los necesita para dibujar la pose básica.
+  }
+  return out;
+}
+function recSnapshot(){
+  if(!G||state!==S.GAME||REC.replay.on) return;
+  const t=G.gameTime||0;
+  const minute=Math.floor(t*60);
+  if(minute===REC._lastMin) return;   // 1 snapshot por minuto de juego
+  REC._lastMin=minute;
+  try{
+    REC.recording.push({
+      t, weekTimer:G.weekTimer,
+      money:G.money, sales:G.sales|0, sat:Math.round(G.satisfaction||0), fame:Math.round(G.fame||0),
+      custIn:G.custIn|0, custOut:G.custOut|0, passers:G.passersbyToday|0,
+      weather: (G.weather&&G.weather.type)?G.weather.type:null,
+      thiefPhase: (G.thief&&G.thief.phase)||'idle',
+      custs: (G.custs||[]).map(recCloneEntity),
+      staff: (G.staff||[]).map(recCloneEntity),
+      ev: G.eventMsg||'',
+    });
+    if(REC.recording.length>REC.maxLen) REC.recording.shift();
+  }catch(e){}
+}
+
 function updateGame(){
   tt++;
   // ── PEOPLE LOG ── observation-based: every tick, see who is around and
@@ -21447,7 +21497,13 @@ function loop(){
   }
   // GAME
   if(demoMode) demoUpdate();
-  try{updateGame();}catch(e){}
+  // DVR: velocidad de simulación (salvo en modo replay/rebobinado).
+  if(!REC.replay.on){
+    const spd=REC.speed||1;
+    if(spd>=1){ for(let i=0;i<spd;i++){ try{updateGame();}catch(e){} } }
+    else { REC._slowAcc+=spd; if(REC._slowAcc>=1){ REC._slowAcc-=1; try{updateGame();}catch(e){} } }
+    try{ recSnapshot(); }catch(e){}
+  }
   r(0,0,W,H,P.bg);
   // Each render wrapped in save/restore to prevent clip leaks on crash
   cx.save();try{drawCityBg();}catch(e){}cx.restore();
@@ -24469,6 +24525,7 @@ window.xtAPI = (function(){
       {title:'Consulta',items:['/status','/staff','/stock','/turno','/turno 12']},
       {title:'Equipo y stock',items:['/hire 1','/hire dj','/hire all','/train 1','/train all','/restock 2','/restock all','/restock prensa']},
       {title:'Equipo del punto (gemelo)',items:['/nuevoMiembro Laura azafata','/nuevoMiembro Pedro cajero','/echarMiembro Laura']},
+      {title:'DVR del Xpacio (grabar/velocidad)',items:['/velocidad 1','/velocidad 2','/velocidad 4','/velocidad 8','/velocidad 0.5']},
       {title:'Personal (panel /staff)',items:['/staff','/staff bonus 0 100','/staff eotm 0','/staff eotm ana','/staff train 1','/staff hire 2','/staff fire 1']},
       {title:'Tienda',items:['/ad 0','/ad 1','/ad 2','/upgrade','/visit com','/visit tec','/visit del','/visit gc','/save']},
       {title:'Tiempo y ambiente',items:['/reloj 14:30','/reloj 14 30','/time am','/time pm','/time night','/weather normal','/weather rain','/weather sun','/lamp','/lamp auto','/hue','/hue auto']},
@@ -24941,6 +24998,11 @@ window.xtAPI = (function(){
       if(cmd==='start'||cmd==='help') return commandHelp();
       if(['nuevomiembro','nuevomember','altamiembro','miembro','newmember','addmember','team-add'].includes(cmd)) return await addTeamMember(arg);
       if(['echarmiembro','echar','bajamiembro','despedir','firemember','removemember','team-remove'].includes(cmd)) return await removeTeamMember(arg);
+      if(['velocidad','speed','vel'].includes(cmd)){
+        const n=setXpaceSpeed(arg);
+        if(typeof showEv==='function') showEv('⏩ Velocidad x'+n,'#88ccff');
+        return '⏩ Velocidad del Xpacio: x'+n+' · opciones: 0.5, 1, 2, 4, 8';
+      }
       if(cmd==='status') return formatStatus();
       if(cmd==='stock') return formatStock();
       if(cmd==='set'){
