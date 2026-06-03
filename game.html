@@ -547,6 +547,16 @@
     body:not(.splash-visible) #splashIntro a,
     body:not(.splash-visible) #splashIntro button{pointer-events:none!important}
     body:not(.splash-visible):not(.splash-hiding) #splashIntro{visibility:hidden}
+    /* Entrada directa al gemelo por URL (?loc/?play/?view): el splash actúa como
+       pantalla de CARGA (solo fondo + "Cargando gemelo…"), sin selección ni PLAY,
+       hasta que entra al simulador. Así no se ve la pantalla de selección. */
+    body.entering-twin #splashIntro .splash-cta-row,
+    body.entering-twin #splashIntro .splash-group,
+    body.entering-twin #splashIntro .splash-hint,
+    body.entering-twin #splashIntro .splash-banner,
+    body.entering-twin #splashIntro .splash-version,
+    body.entering-twin #splashNav{display:none!important}
+    body.entering-twin #splashIntro .splash-overlay::after{content:'Cargando gemelo…';color:#dff8ff;font-family:monospace;font-size:14px;letter-spacing:.08em;opacity:.9}
     @keyframes splashKenBurns{from{transform:scale(1.02) translate(-1%,-1%)}to{transform:scale(1.08) translate(1%,1%)}}
     @keyframes splashPulse{0%,100%{transform:scale(1);filter:drop-shadow(0 0 18px rgba(255,80,200,.55)) drop-shadow(0 0 36px rgba(80,200,255,.45))}50%{transform:scale(1.025);filter:drop-shadow(0 0 26px rgba(255,80,200,.75)) drop-shadow(0 0 52px rgba(80,200,255,.6))}}
     @keyframes splashHintFade{0%,100%{opacity:.4}50%{opacity:.85}}
@@ -21506,7 +21516,12 @@ try {
   const viewParam=(_sp.get('view')||'').toLowerCase();
   // Al entrar por URL hay que DESCARTAR el splash "DIGITAL TWIN" (página 0),
   // si no el usuario se queda ahí y tiene que pulsar JUGAR a mano.
-  const _dismissSplash=()=>{ try{ if(window.hideSplash) window.hideSplash(); }catch(e){} };
+  const _dismissSplash=()=>{ try{ document.body.classList.remove('entering-twin'); }catch(e){} try{ if(window.hideSplash) window.hideSplash(); }catch(e){} };
+  // Entrada directa: oculta YA la pantalla de selección (el splash pasa a modo
+  // "Cargando gemelo…") para que no se vea mientras carga la config del punto.
+  if(playParam||locParam||viewParam==='red'||viewParam==='network'||viewParam==='tiendas'||_sp.has('red')){
+    try{ document.body.classList.add('entering-twin'); }catch(e){}
+  }
   if(viewParam==='red'||viewParam==='network'||viewParam==='tiendas'||_sp.has('red')){
     // ?view=red → abre la RED DE TIENDAS (vista mapa/red de todos los puntos).
     setTimeout(()=>{ _dismissSplash(); try{ openNetworkView(); }catch(e){ console.warn('openNetworkView failed:',e); } }, 60);
