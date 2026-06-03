@@ -3138,8 +3138,15 @@ function updateVideoPosition(){
     try{ positionGenVideoOverlay(); }catch(_){}
     return;
   }
-  positionDSOnLeftWall(videoEl, DS_SCREENS[0].rowT, DS_SCREENS[0].rowB);
-  positionDSOnLeftWall(videoEl2,DS_SCREENS[1].rowT, DS_SCREENS[1].rowB);
+  // Gemelo config-driven: nº de pantallas de la pared CORTA según las surfaces
+  // del punto. Mapeo: 1 pantalla → solo la larga (0 cortas); 2 → 1 corta;
+  // ≥3 → las 2 cortas. Sin punto activo → ambas (comportamiento original).
+  const _scr=(window.STORE_CFG&&typeof window.STORE_CFG.screens==='number')?window.STORE_CFG.screens:3;
+  const _shorts=Math.max(0,Math.min(2,_scr-1));
+  if(_shorts>=1) positionDSOnLeftWall(videoEl, DS_SCREENS[0].rowT, DS_SCREENS[0].rowB);
+  else videoEl.style.display='none';
+  if(_shorts>=2) positionDSOnLeftWall(videoEl2,DS_SCREENS[1].rowT, DS_SCREENS[1].rowB);
+  else videoEl2.style.display='none';
   // Keep screens readable; the NPC dock now lives on the grass and no longer needs global dimming.
   const op='1';
   videoEl.style.opacity=op;videoEl2.style.opacity=op;
@@ -15145,7 +15152,9 @@ function drawShop(){
     // ── SECURITY CAMERA in the corner, aimed at the entrance ──
     drawCornerSecurityCamera();
     // ── TFT ALTADIS (16:9 screen on back wall, above 2nd window) ──
-    drawAltadisTFT();
+    // Pantalla de la pared larga: se muestra si el punto tiene ≥1 pantalla
+    // (o si no hay punto activo → comportamiento original).
+    if(!window.STORE_CFG || (window.STORE_CFG.screens|0)>=1) drawAltadisTFT();
   }
 
   // ── BLANK XPACE (Creator / Shoptalk): renderizar SOLO los items wall
