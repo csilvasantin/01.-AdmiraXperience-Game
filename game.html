@@ -956,24 +956,31 @@ window.STORE_CFG=null; window.STORE_CFG_READY=false;
   let loc=''; try{ loc=(new URLSearchParams(window.location.search).get('loc')||'').trim().toLowerCase(); }catch(e){}
   if(!loc){ window.STORE_CFG_READY=true; return; }
   const API='https://omnipublicity-api.csilvasantin.workers.dev/locations';
-  fetch(API,{cache:'no-store'}).then(r=>r.json()).then(d=>{
-    const list=(d&&Array.isArray(d.locations))?d.locations:[];
-    const l=list.find(x=>x&&String(x.id).toLowerCase()===loc);
-    if(!l){ window.STORE_CFG_READY=true; return; }
-    const surfaces=Array.isArray(l.surfaces)?l.surfaces:[];
-    // nº de pantallas reales = surfaces tipo pantalla/escaparate (las que "muestran")
-    const screens=surfaces.filter(s=>s&&(s.surface==='pantalla'||s.surface==='escaparate')).length;
-    window.STORE_CFG={
-      id:l.id, name:l.name||l.id, addr:l.addr||'', kind:l.kind||'',
-      surfaces, screens: screens||0,
-      music: l.music||null,                                  // hilo musical (campo nuevo opcional)
-      cameras: (l.cameras!=null)?l.cameras:null,             // cámaras (nuevo opcional)
-      employees: Array.isArray(l.employees)?l.employees:null,// roster (nuevo opcional)
-    };
-    window.STORE_CFG_READY=true;
-    try{ window.dispatchEvent(new CustomEvent('storecfg',{detail:window.STORE_CFG})); }catch(e){}
-    try{ console.log('%c🏪 STORE_CFG cargada:','color:#76B900;font-weight:bold', window.STORE_CFG); }catch(e){}
-  }).catch(()=>{ window.STORE_CFG_READY=true; });
+  // Reintentos: el worker omnipublicity puede estar "frío" y fallar el primer
+  // fetch → sin reintento el twin se quedaba sin config (sin pantallas/nombre).
+  const MAX=4;
+  function attempt(n){
+    fetch(API,{cache:'no-store'}).then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); }).then(d=>{
+      const list=(d&&Array.isArray(d.locations))?d.locations:[];
+      const l=list.find(x=>x&&String(x.id).toLowerCase()===loc);
+      if(!l){ window.STORE_CFG_READY=true; return; }   // worker respondió pero el id no existe → no reintentar
+      const surfaces=Array.isArray(l.surfaces)?l.surfaces:[];
+      const screens=surfaces.filter(s=>s&&(s.surface==='pantalla'||s.surface==='escaparate')).length;
+      window.STORE_CFG={
+        id:l.id, name:l.name||l.id, addr:l.addr||'', kind:l.kind||'',
+        surfaces, screens: screens||0,
+        music: l.music||null, cameras: (l.cameras!=null)?l.cameras:null,
+        employees: Array.isArray(l.employees)?l.employees:null,
+      };
+      window.STORE_CFG_READY=true;
+      try{ window.dispatchEvent(new CustomEvent('storecfg',{detail:window.STORE_CFG})); }catch(e){}
+      try{ console.log('%c🏪 STORE_CFG cargada:','color:#76B900;font-weight:bold', window.STORE_CFG); }catch(e){}
+    }).catch((e)=>{
+      if(n<MAX){ setTimeout(()=>attempt(n+1), 400*n); }   // backoff y reintento
+      else { window.STORE_CFG_READY=true; try{console.warn('STORE_CFG no cargó tras',MAX,'intentos:',e&&e.message);}catch(_){}}
+    });
+  }
+  attempt(1);
 })();
 // ═══════════════════════════════════════════════════════════════
 //  ADMIRA XP // THE XPACE OS — XTANCO — runtime version/build
@@ -1694,6 +1701,9 @@ const STORE_MUSIC_MAP={lounge:'careless',chill:'careless',ambient:'careless',rel
   trap:'seultrap'};
 function applyStoreCfgAV(){
   const cfg=window.STORE_CFG; if(!cfg) return;
+  // Si STORE_CFG llegó tarde (reintento) y ya hay partida sin nombre en la
+  // corona, lo ponemos ahora vía el mecanismo AdmiraLive.
+  try{ if(typeof G!=='undefined'&&G&&!G.admiraLiveMsg&&cfg.name){ G.admiraLiveMsg=String(cfg.name)+(cfg.addr?(' · '+String(cfg.addr)):''); } }catch(e){}
   if(cfg.music){
     const m=String(cfg.music).trim().toLowerCase().replace(/[\s-]+/g,'_');
     const file=STORE_MUSIC_MAP[m]||STORE_MUSIC_MAP[m.replace(/_/g,'')]||(STORE_MUSIC_FILES.includes(cfg.music)?cfg.music:null);
@@ -7945,7 +7955,11 @@ function initGame(){
     tftStockIdx:-1,   // selected product showing on Admira screen (-1=none)
     tftStockTimer:0,  // how long to show product on Admira
     tftGrokArt:null,  // Grok-generated pixel art for the main wall screen
-    admiraLiveMsg:'',
+    // Gemelo config-driven: al abrir un punto de admira.app, su nombre+dirección
+    // van a la corona de LEDs vía el mecanismo AdmiraLive (como /AdmiraLive).
+    admiraLiveMsg: (window.STORE_CFG&&window.STORE_CFG.name)
+      ? (String(window.STORE_CFG.name) + (window.STORE_CFG.addr?(' · '+String(window.STORE_CFG.addr)):''))
+      : '',
     comunicadoMsg:'',
     socioHeat:{enabled:false,grid:Object.create(null),max:0,sampleTick:0},
     recurringSponsor:{enabled:false,intervalSec:120,lastVisitTick:0,discountPct:10,visits:0},
@@ -16403,14 +16417,10 @@ function _getLedParams(){
   const liveData=(state===S.GAME||state===S.PAUSE)
     ? `  ◈  ${lang==='es'?'PASAN':'PASS'}: ${G?(G.passersbyToday||0):0}  ◈  ${lang==='es'?'ENTRAN':'IN'}: ${G?(G.customersToday||0):0}  ◈  ${T().satisfaction}: ${G?(G.satisfaction|0):0}%  ◈  ${T().fame}: ${G?(G.fame|0):0}%  ◈  `
     : '  ◈  ';
-  // Gemelo config-driven: si abrimos un punto concreto (?loc=), su nombre y
-  // dirección encabezan el banner de signage (lo que pidió Carlos: la dirección
-  // del punto en las pantallas).
-  const cfg=window.STORE_CFG;
-  const storeBanner=(cfg&&cfg.name)
-    ? `  🏪  ${String(cfg.name).toUpperCase()}${cfg.addr?'  ·  '+String(cfg.addr).toUpperCase():''}  🏪  `
-    : '';
-  const fullMsg=storeBanner+comunicado+admiraLive+currentVideoMsg+msgs.join('   ◆   ')+liveData;
+  // El nombre+dirección del punto van a la corona de LEDs vía AdmiraLive
+  // (G.admiraLiveMsg, inicializado en initGame desde STORE_CFG) → ya entra en
+  // el banner por la variable admiraLive de arriba; no duplicamos aquí.
+  const fullMsg=comunicado+admiraLive+currentVideoMsg+msgs.join('   ◆   ')+liveData;
   cx.font='bold 9px monospace';
   const msgW=cx.measureText(fullMsg).width;
   return {fullMsg, msgW};
@@ -21469,7 +21479,7 @@ try {
     };
     let _t=0;
     (function waitCfg(){
-      if(window.STORE_CFG_READY||_t++>20){ enterForLoc(); return; }
+      if(window.STORE_CFG_READY||_t++>50){ enterForLoc(); return; } // ~5s, cubre reintentos del fetch
       setTimeout(waitCfg,100);
     })();
   }
