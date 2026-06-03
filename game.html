@@ -24663,7 +24663,7 @@ window.xtAPI = (function(){
     return [
       {title:'Consulta',items:['/status','/staff','/stock','/turno','/turno 12']},
       {title:'Equipo y stock',items:['/hire 1','/hire dj','/hire all','/train 1','/train all','/restock 2','/restock all','/restock prensa']},
-      {title:'Equipo del punto (gemelo)',items:['/nuevoMiembro Laura azafata','/nuevoMiembro Pedro cajero','/echarMiembro Laura']},
+      {title:'Equipo del punto (gemelo)',items:['/nuevoMiembro Laura azafata','/nuevoMiembro Pedro cajero','/echarMiembro Laura','/report Marta']},
       {title:'DVR del Xpacio (grabar/velocidad/replay)',items:['/velocidad 1','/velocidad 2','/velocidad 4','/velocidad 8','/dvr','/envivo']},
       {title:'Personal (panel /staff)',items:['/staff','/staff bonus 0 100','/staff eotm 0','/staff eotm ana','/staff train 1','/staff hire 2','/staff fire 1']},
       {title:'Tienda',items:['/ad 0','/ad 1','/ad 2','/upgrade','/visit com','/visit tec','/visit del','/visit gc','/save']},
@@ -25124,6 +25124,45 @@ window.xtAPI = (function(){
     }catch(err){ return '❌ Error al echar: '+(err&&err.message||err); }
   }
 
+  // /report <nombre> — el miembro reporta sus labores de la jornada al diario
+  // (https://www.carlossilva.info/18.-diario/) vía el server del gemelo.
+  const REPORT_LABORES={
+    cajero:'Atención en caja, cobros y atención al cliente.',
+    repositor:'Reposición de stock y orden de los lineales.',
+    azafata:'Recepción, atención en sala y captación de socios del Club.',
+    manager:'Gestión del equipo y supervisión de la operativa.',
+    dj:'Ambientación musical del Xpacio.'
+  };
+  async function reportTeamMember(arg){
+    const e0=needsGame(); if(e0) return e0;
+    const cfg=window.STORE_CFG;
+    const store=(cfg&&cfg.name)||'la tienda';
+    const name=String(arg||'').replace(/\s+/g,' ').trim();
+    if(!name) return 'Uso: /report <nombre> — escribe las labores de ese miembro en el diario.';
+    const roleN=['cajero','repositor','azafata','manager','dj'];
+    let s=null;
+    if(G&&G.staff) s=G.staff.find(x=>x&&!x.fired&&String(x.name||'').toLowerCase()===name.toLowerCase());
+    if(!s) return '🤷 No encontré a "'+name+'" en el equipo de '+store+'.';
+    const role=roleN[s.role]||'empleado';
+    const hora=(typeof dvrTimeLabel==='function')?dvrTimeLabel(G.gameTime):'';
+    const lines=[
+      REPORT_LABORES[role]||'Tareas de la jornada completadas.',
+      'Tienda: '+store+(hora?(' · jornada hasta las '+hora):'')+'.',
+      'Balance del día: '+(G.sales|0)+' ventas · '+(G.custIn|0)+' clientes atendidos · satisfacción '+Math.round(G.satisfaction||0)+'%.',
+    ];
+    if(s.since && typeof fmtHireSince==='function') lines.push('Antigüedad en el equipo desde '+fmtHireSince(s.since)+'.');
+    try{
+      const res=await fetch('https://macmini.tail48b61c.ts.net/yarig/report',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({member:s.name,store,role,lines})
+      });
+      const j=await res.json().catch(()=>({}));
+      if(!j||!j.ok) return '❌ No se pudo escribir el diario'+(j&&j.error?': '+j.error:'');
+      if(typeof showEv==='function') showEv('📓 Diario: '+s.name,'#88ffcc');
+      return '📓 '+s.name+' ('+role+') reportó su jornada al diario de AdmiraNeXT · https://www.carlossilva.info/18.-diario/';
+    }catch(err){ return '❌ Error al reportar (¿servidor del gemelo activo?): '+(err&&err.message||err); }
+  }
+
   async function executeTelegramText(rawText){
     const text=String(rawText||'').trim();
     if(!text) return 'Comando vacio';
@@ -25137,6 +25176,7 @@ window.xtAPI = (function(){
       if(cmd==='start'||cmd==='help') return commandHelp();
       if(['nuevomiembro','nuevomember','altamiembro','miembro','newmember','addmember','team-add'].includes(cmd)) return await addTeamMember(arg);
       if(['echarmiembro','echar','bajamiembro','despedir','firemember','removemember','team-remove'].includes(cmd)) return await removeTeamMember(arg);
+      if(['report','reportar','parte','reporte'].includes(cmd)) return await reportTeamMember(arg);
       if(['velocidad','speed','vel'].includes(cmd)){
         const n=setXpaceSpeed(arg);
         if(typeof showEv==='function') showEv('⏩ Velocidad x'+n,'#88ccff');
