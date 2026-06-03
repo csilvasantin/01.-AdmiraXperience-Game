@@ -114,28 +114,56 @@ emite de verdad. Cada surface de pantalla del KV puede traer `pixerScreens: [scr
 
 ---
 
-## 6. MetaHuman + IA (Nvidia ACE)
+## 6. MetaHuman + IA — **Audio2Face + Grok/ElevenLabs** (decisión confirmada)
 
-El tótem "Metahuman" del 2D pasa a ser un **MetaHuman de UE**:
-
-- **Voz/labios:** Nvidia **Audio2Face / ACE** (encaja con el stand Nvidia) o Convai.
-- **Cerebro:** mismo backend conversacional que `askAdmiraGrok` del juego. Contrato sugerido
-  (un thin proxy/worker que UE llama por HTTP):
+El tótem "Metahuman" del 2D pasa a ser un **MetaHuman de UE** que habla con IA. Pipeline =
+**4 etapas en bucle**; el cerebro y la voz YA están hechos (worker), el dev UE solo monta la
+cara y el render:
 
 ```
-POST <AI_ENDPOINT>
-{
-  "loc": "<id>",
-  "question": "¿tenéis tabaco de liar?",
-  "context": "<resumen del punto: nombre, dirección, nº pantallas, música,
-               cámaras, y EQUIPO con nombres/roles/antigüedad>"
-}
-→ { "answer": "Sí, en la estantería 2…", "voice": "<url mp3 opcional>" }
+[visitante: voz o texto]
+  │ (1) STT  (navegador push-to-talk / Web Speech, o texto en el MVP)
+  ▼
+POST /metahuman/ask {loc, question}        ◄── YA HECHO (worker omnipublicity-api)
+  │ (2) contexto del punto (KV) + Grok (xAI)   → answer (texto)
+  │ (3) ElevenLabs (worker admira-tts)         → audio
+  ▼
+{ ok, answer, audioBase64, mime:"audio/mpeg" }
+  │
+  ▼ (4) EN UNREAL (parte del dev):
+MetaHuman reproduce el audio  +  **Nvidia Audio2Face (ACE)** genera el lip-sync facial
 ```
 
-- El `context` lo construye el equivalente de `buildTeamContext()` del juego (el MetaHuman
-  conoce al equipo real del punto: nombres, roles, antigüedad). Reusar esa lógica.
-- Para el MVP basta texto→voz; el avatar foto-real ya es el diferencial.
+### 6.1 Endpoint (ya en producción)
+```
+POST https://omnipublicity-api.csilvasantin.workers.dev/metahuman/ask
+Content-Type: application/json
+{ "loc": "<id-del-punto>", "question": "¿tenéis tabaco de liar?", "lang": "es", "voice": true }
+
+→ 200 { "ok": true,
+        "answer": "Sí, justo en la estantería de detrás del mostrador…",
+        "audioBase64": "<mp3 en base64>", "mime": "audio/mpeg" }
+→ 503 { "ok": false, "error": "xai_key_not_set" }   // hasta poner la clave (ver 6.3)
+```
+- El worker arma SOLO el contexto real del punto desde el **mismo KV** (nombre, dirección,
+  nº pantallas, hilo musical, cámaras y **el equipo con roles + antigüedad** — equivalente a
+  `buildTeamContext()`), llama a **tu Grok** con una persona de dependiente cercano (1-3 frases,
+  hablado) y devuelve el texto **+ el audio de ElevenLabs en base64**.
+- `voice:false` → solo texto (sin audio), por si UE prefiere otra voz.
+
+### 6.2 Lo que monta el dev UE (etapa 4)
+- **MetaHuman Creator/Fab** → avatar del asistente, colocado donde el tótem del 2D.
+- Llamar al endpoint, decodificar `audioBase64` → `SoundWave`, reproducirlo.
+- **Nvidia Audio2Face (ACE)**: alimentar ese mismo audio → animación facial del MetaHuman
+  (plugin ACE/A2F-3D para UE5). Idle + gestos básicos. Tie-in directo con el stand Nvidia.
+- Disparo: botón "Pregúntale" / push-to-talk en el stand. STT en el navegador (o texto MVP).
+- **Fallback (si A2F no llega en plazo):** plugin de lip-sync por visemas en runtime con el
+  mismo audio — calidad algo menor, cero dependencia de Nvidia.
+
+### 6.3 Lo único pendiente del lado Carlos
+- Poner la **clave xAI** como secret del worker (una vez): `wrangler secret put XAI_API_KEY`
+  en `workers/omnipublicity-api/` (opcional `XAI_MODEL`). Hasta entonces devuelve 503.
+- Añadir el **hostname del stand** al CORS del worker cuando se sepa (ver §4/§7).
 
 ---
 

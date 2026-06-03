@@ -40,7 +40,7 @@ function corsHeaders(request, env) {
   const allowOrigin = (allowed.includes(origin) || LOCAL_ORIGIN_RE.test(origin)) ? origin : allowed[0];
   return {
     'Access-Control-Allow-Origin': allowOrigin,
-    'Access-Control-Allow-Methods': 'GET,PUT,OPTIONS',
+    'Access-Control-Allow-Methods': 'GET,PUT,POST,OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type,Authorization',
     'Access-Control-Max-Age': '86400',
     'Vary': 'Origin',
@@ -170,6 +170,106 @@ async function handleRemoveEmployee(request, env, id) {
   return json(request, env, 200, { ok: true, removed, employees: loc.employees });
 }
 
+// ── MetaHuman (asistente IA de la tienda) ───────────────────────────────────
+// Reúne el contexto real del punto (mismo KV) + el cerebro Grok (xAI) + la voz
+// ElevenLabs (worker admira-tts). Lo consume el gemelo hiperrealista de Unreal:
+// POST /metahuman/ask { loc, question, lang?, voice? } → { ok, answer, audioBase64?, mime? }
+// El avatar reproduce el audio y lo enchufa a Audio2Face para el lip-sync.
+const TTS_URL = 'https://admira-tts.csilvasantin.workers.dev/tts/elevenlabs';
+const ROLE_ES = { cajero: 'cajero/a', repositor: 'repositor/a', azafata: 'azafata/host', manager: 'store manager', dj: 'DJ' };
+
+function fmtSince(iso) {
+  if (!iso) return '';
+  try { const d = new Date(iso); if (isNaN(d)) return ''; return d.toISOString().slice(0, 10); } catch { return ''; }
+}
+
+function buildStoreContext(loc, lang) {
+  if (!loc) return 'Tienda Admira XP (sin datos del punto).';
+  const screens = Number.isFinite(loc.screens) ? loc.screens
+    : (Array.isArray(loc.surfaces) ? loc.surfaces.filter(s => s && (s.surface === 'pantalla' || s.surface === 'escaparate')).length : 0);
+  const emp = Array.isArray(loc.employees) ? loc.employees : [];
+  const team = emp.length
+    ? emp.map(e => {
+        const since = fmtSince(e && e.since);
+        return `${e.name} (${ROLE_ES[e && e.role] || e && e.role || 'equipo'}${since ? `, desde ${since}` : ''})`;
+      }).join('; ')
+    : 'sin equipo registrado';
+  return [
+    `Tienda: ${loc.name || loc.id}${loc.addr ? ` · ${loc.addr}` : ''}.`,
+    `Tipo: ${loc.kind || 'estanco Xtanco'}.`,
+    `Pantallas de digital signage: ${screens}. Hilo musical: ${loc.music || 'sin definir'}. Cámaras: ${loc.cameras === false ? 'no' : 'sí'}.`,
+    `Equipo del punto: ${team}.`,
+  ].join(' ');
+}
+
+async function callGrok(env, system, user) {
+  const key = String(env.XAI_API_KEY || env.GROK_API_KEY || '').trim();
+  if (!key) return { error: 'xai_key_not_set' };
+  const model = String(env.XAI_MODEL || 'grok-4.20-beta-latest-non-reasoning');
+  const res = await fetch('https://api.x.ai/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
+    body: JSON.stringify({
+      model,
+      messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
+      temperature: 0.6,
+      max_tokens: 220,
+    }),
+  });
+  const j = await res.json().catch(() => null);
+  if (!res.ok || !j) return { error: `xai_http_${res.status}`, detail: j && j.error && j.error.message };
+  const answer = j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content;
+  if (!answer) return { error: 'xai_no_answer' };
+  return { answer: String(answer).trim() };
+}
+
+async function ttsBase64(text) {
+  try {
+    const res = await fetch(TTS_URL, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: String(text).slice(0, 1200) }),
+    });
+    if (!res.ok) return null;
+    const buf = new Uint8Array(await res.arrayBuffer());
+    let bin = '';
+    for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i]);
+    return btoa(bin);
+  } catch { return null; }
+}
+
+async function handleMetahumanAsk(request, env) {
+  let body;
+  try { body = await request.json(); } catch { return json(request, env, 400, { error: 'invalid_json' }); }
+  const id = String(body && body.loc || '').trim();
+  const question = String(body && body.question || '').replace(/\s+/g, ' ').trim().slice(0, 500);
+  const lang = String(body && body.lang || 'es').trim().toLowerCase().startsWith('en') ? 'en' : 'es';
+  const wantVoice = body && body.voice !== false; // por defecto sí
+  if (!question) return json(request, env, 400, { error: 'missing_question' });
+
+  let loc = null;
+  if (id) {
+    try {
+      const raw = await env.OMNIP_KV.get(KV_KEY);
+      if (raw) { const stored = JSON.parse(raw); loc = (stored.locations || []).find(l => l && String(l.id).toLowerCase() === id.toLowerCase()) || null; }
+    } catch {}
+  }
+  const context = buildStoreContext(loc, lang);
+  const system = (lang === 'en'
+    ? `You are the in-store AI assistant (a hyperrealistic MetaHuman avatar) of an Admira XP tobacco/retail shop. Be warm, brief and helpful like a great shop clerk. Speak naturally — your text will be spoken aloud, so 1-3 short sentences, no markdown or lists. You KNOW this store and its team:\n`
+    : `Eres el asistente de IA en tienda (un avatar MetaHuman hiperrealista) de una tienda Admira XP (estanco/retail). Sé cercano, breve y útil como un buen dependiente. Habla de forma natural — tu texto se dirá en voz alta, así que 1-3 frases cortas, sin markdown ni listas. CONOCES esta tienda y a su equipo:\n`)
+    + context;
+
+  const g = await callGrok(env, system, question);
+  if (g.error) return json(request, env, g.error === 'xai_key_not_set' ? 503 : 502, { ok: false, error: g.error, detail: g.detail, context });
+  const out = { ok: true, answer: g.answer, loc: id || null };
+  if (wantVoice) {
+    const audio = await ttsBase64(g.answer);
+    if (audio) { out.audioBase64 = audio; out.mime = 'audio/mpeg'; }
+    else out.voiceNote = 'tts_unavailable';
+  }
+  return json(request, env, 200, out);
+}
+
 export default {
   async fetch(request, env) {
     if (request.method === 'OPTIONS') {
@@ -185,6 +285,7 @@ export default {
       if (request.method === 'POST' && mEmpRm) return await handleRemoveEmployee(request, env, decodeURIComponent(mEmpRm[1]));
       const mEmp = path.match(/^\/location\/([^/]+)\/employee$/);
       if (request.method === 'POST' && mEmp) return await handleAddEmployee(request, env, decodeURIComponent(mEmp[1]));
+      if (request.method === 'POST' && path === '/metahuman/ask') return await handleMetahumanAsk(request, env);
       return json(request, env, 404, { error: 'not_found', path });
     } catch (err) {
       return json(request, env, 500, { error: 'server_error', message: String(err && err.message || err) });
