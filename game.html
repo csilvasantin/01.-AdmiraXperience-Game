@@ -21285,10 +21285,28 @@ function autoEnterVertical(id){
   return true;
 }
 try {
-  const playParam=new URLSearchParams(location.search).get('play');
+  const _sp=new URLSearchParams(location.search);
+  const playParam=_sp.get('play');
+  const locParam=_sp.get('loc');
   if(playParam){
     // Pequeño delay para que initGame encuentre todo listo
     setTimeout(()=>{ try{ autoEnterVertical(playParam); }catch(e){ console.warn('autoEnterVertical failed:',e); } }, 50);
+  } else if(locParam){
+    // ?loc=<id> = punto de admira.app: entra DIRECTO a su tienda (twin del
+    // punto). Cualquier id dado de alta en el mapa abre su gemelo — no hay
+    // tiendas hardcodeadas. Mapeamos el tipo de punto al vertical más adecuado
+    // y esperamos a STORE_CFG para decorar con nombre/dirección.
+    const enterForLoc=()=>{
+      let vertical='xtanco';
+      const k=((window.STORE_CFG&&window.STORE_CFG.kind)||'').toLowerCase();
+      if(k.includes('supermercado')||k.includes('super')) vertical='supermercado';
+      try{ autoEnterVertical(vertical); }catch(e){ console.warn('autoEnter loc failed:',e); }
+    };
+    let _t=0;
+    (function waitCfg(){
+      if(window.STORE_CFG_READY||_t++>20){ enterForLoc(); return; }
+      setTimeout(waitCfg,100);
+    })();
   }
 } catch(_){}
 
