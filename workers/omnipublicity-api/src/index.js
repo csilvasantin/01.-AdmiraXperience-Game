@@ -232,18 +232,41 @@ async function callGrok(env, system, user) {
   return { answer: String(answer).trim() };
 }
 
-async function ttsBase64(text) {
+const DEFAULT_VOICE_ID = 'EXAVITQu4vr4xnSDxMaL'; // Sarah (multilingüe); override con secret ELEVENLABS_VOICE_ID
+function bufToBase64(buf) {
+  const arr = new Uint8Array(buf);
+  let bin = '';
+  for (let i = 0; i < arr.length; i++) bin += String.fromCharCode(arr[i]);
+  return btoa(bin);
+}
+async function ttsBase64(env, text) {
+  const clean = String(text).slice(0, 1200);
+  // 1) ElevenLabs directo (voz premium; la misma que alimentará Audio2Face en Unreal).
+  const key = String(env.ELEVENLABS_API_KEY || '').trim();
+  if (key) {
+    try {
+      const voice = String(env.ELEVENLABS_VOICE_ID || DEFAULT_VOICE_ID);
+      const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voice}`, {
+        method: 'POST',
+        headers: { 'xi-api-key': key, 'Content-Type': 'application/json', 'Accept': 'audio/mpeg' },
+        body: JSON.stringify({
+          text: clean,
+          model_id: String(env.ELEVENLABS_MODEL || 'eleven_multilingual_v2'),
+          voice_settings: { stability: 0.5, similarity_boost: 0.75 },
+        }),
+      });
+      if (res.ok) return bufToBase64(await res.arrayBuffer());
+    } catch {}
+  }
+  // 2) Fallback: worker admira-tts (si vuelve a estar operativo).
   try {
     const res = await fetch(TTS_URL, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: String(text).slice(0, 1200) }),
+      body: JSON.stringify({ text: clean }),
     });
-    if (!res.ok) return null;
-    const buf = new Uint8Array(await res.arrayBuffer());
-    let bin = '';
-    for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i]);
-    return btoa(bin);
-  } catch { return null; }
+    if (res.ok) return bufToBase64(await res.arrayBuffer());
+  } catch {}
+  return null;
 }
 
 async function handleMetahumanAsk(request, env) {
@@ -272,7 +295,7 @@ async function handleMetahumanAsk(request, env) {
   if (g.error) return json(request, env, g.error === 'xai_key_not_set' ? 503 : 502, { ok: false, error: g.error, detail: g.detail, context });
   const out = { ok: true, answer: g.answer, loc: id || null };
   if (wantVoice) {
-    const audio = await ttsBase64(g.answer);
+    const audio = await ttsBase64(env, g.answer);
     if (audio) { out.audioBase64 = audio; out.mime = 'audio/mpeg'; }
     else out.voiceNote = 'tts_unavailable';
   }
