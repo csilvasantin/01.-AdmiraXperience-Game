@@ -17,6 +17,9 @@ const DEFAULT_ALLOWED_ORIGINS = [
   'https://www.carlossilva.info',
   'https://admira.app',
   'https://www.admira.app',
+  'https://digitalavatar.pages.dev',
+  'https://digitalavatar.ai',
+  'https://www.digitalavatar.ai',
   'http://localhost:9124',
   'http://127.0.0.1:9124',
   'http://localhost:8085',
@@ -33,11 +36,13 @@ function getAllowedOrigins(env) {
 
 // Cualquier localhost/127.0.0.1 (cualquier puerto) para desarrollo/preview.
 const LOCAL_ORIGIN_RE = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
+// Subdominios de preview de Cloudflare Pages: <hash>.digitalavatar.pages.dev
+const PAGES_ORIGIN_RE = /^https:\/\/([a-z0-9-]+\.)?digitalavatar\.pages\.dev$/;
 
 function corsHeaders(request, env) {
   const origin = request.headers.get('Origin') || '';
   const allowed = getAllowedOrigins(env);
-  const allowOrigin = (allowed.includes(origin) || LOCAL_ORIGIN_RE.test(origin)) ? origin : allowed[0];
+  const allowOrigin = (allowed.includes(origin) || LOCAL_ORIGIN_RE.test(origin) || PAGES_ORIGIN_RE.test(origin)) ? origin : allowed[0];
   return {
     'Access-Control-Allow-Origin': allowOrigin,
     'Access-Control-Allow-Methods': 'GET,PUT,POST,OPTIONS',
