@@ -8011,7 +8011,9 @@ function initGame(){
   if(_cfgEmp){
     const ROLE_MAP={cajero:0,cajera:0,cashier:0,caja:0,repositor:1,repositora:1,reponedor:1,stocker:1,repo:1,azafata:2,hostess:2,aza:2,manager:3,encargado:3,'store manager':3,mgr:3,dj:4,'disc jockey':4};
     const roleOf=r=>{ if(typeof r==='number') return Math.max(0,Math.min(4,r|0)); const k=String(r||'').trim().toLowerCase(); return (k in ROLE_MAP)?ROLE_MAP[k]:0; };
-    staffSrc=_cfgEmp.slice(0,8).map((e,i)=>({slot:i,x:0,y:0,hired:i===0,name:String(e.name||('EMP'+(i+1))),role:roleOf(e.role!=null?e.role:e.roleLabel)}));
+    // Todos los empleados del punto son el EQUIPO real → entran contratados
+    // (hired) para que aparezcan en el panel TEAM, no como meros contratables.
+    staffSrc=_cfgEmp.slice(0,8).map((e,i)=>({slot:i,x:0,y:0,hired:true,name:String(e.name||('EMP'+(i+1))),role:roleOf(e.role!=null?e.role:e.roleLabel)}));
   }
   G.staff=staffSrc.map((s,i)=>{
     const gp=staffGridPos[i%staffGridPos.length];
@@ -24819,15 +24821,17 @@ window.xtAPI = (function(){
       const j=await res.json().catch(()=>({}));
       if(!j||!j.ok) return '❌ No se pudo dar de alta'+(j&&j.error?': '+j.error:'');
       if(Array.isArray(j.employees)) cfg.employees=j.employees;
-      // Alta en caliente como personaje contratable del equipo.
+      // Alta en caliente como miembro del equipo (solo si NO existía ya, para
+      // no duplicar el personaje que ya cargó STORE_CFG).
       try{
-        if(G&&G.staff){
+        const _dup = j.duplicate || (G&&G.staff&&G.staff.some(s=>s&&String(s.name||'').toLowerCase()===name.toLowerCase()));
+        if(!_dup && G&&G.staff){
           const idx=G.staff.length;
           const sgp=(shopStaffPos&&shopStaffPos.length>0)?shopStaffPos:DEFAULT_STAFF_POS;
           const gp=sgp[idx%sgp.length];
           const iso=toIso(gp.col,gp.row);
           const zone=(typeof getStaffZoneConfig==='function')?getStaffZoneConfig(idx,gp.col,gp.row):{col:gp.col,row:gp.row,radius:1};
-          G.staff.push({slot:idx,name:name,role:roleIdx,hired:false,fromRoster:true,x:iso.x-7,y:iso.y-20,level:1,energy:100,morale:80,busy:0,dir:1,isWalking:false,shirt:0,hair:3,look:{shirt:0,hair:3,skin:1,pants:0,shoes:0,accessory:0},bTimer:0,bIdx:idx%5,aFrame:0,aTimer:0,homeCol:gp.col,homeRow:gp.row,zoneCol:zone.col,zoneRow:zone.row,zoneRadius:zone.radius,navTarget:null,navPath:null,navPathIdx:0,navTick:0,djScratch:0,djScratchNext:90});
+          G.staff.push({slot:idx,name:name,role:roleIdx,hired:true,fromRoster:true,x:iso.x-7,y:iso.y-20,level:1,energy:100,morale:80,busy:0,dir:1,isWalking:false,shirt:0,hair:3,look:{shirt:0,hair:3,skin:1,pants:0,shoes:0,accessory:0},bTimer:0,bIdx:idx%5,aFrame:0,aTimer:0,homeCol:gp.col,homeRow:gp.row,zoneCol:zone.col,zoneRow:zone.row,zoneRadius:zone.radius,navTarget:null,navPath:null,navPathIdx:0,navTick:0,djScratch:0,djScratchNext:90});
         }
       }catch(_){}
       if(typeof showEv==='function') showEv('👤 Alta: '+name,'#88ffcc');
