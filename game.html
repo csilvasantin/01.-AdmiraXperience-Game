@@ -21418,18 +21418,22 @@ try {
   const playParam=_sp.get('play');
   const locParam=_sp.get('loc');
   const viewParam=(_sp.get('view')||'').toLowerCase();
+  // Al entrar por URL hay que DESCARTAR el splash "DIGITAL TWIN" (página 0),
+  // si no el usuario se queda ahí y tiene que pulsar JUGAR a mano.
+  const _dismissSplash=()=>{ try{ if(window.hideSplash) window.hideSplash(); }catch(e){} };
   if(viewParam==='red'||viewParam==='network'||viewParam==='tiendas'||_sp.has('red')){
     // ?view=red → abre la RED DE TIENDAS (vista mapa/red de todos los puntos).
-    setTimeout(()=>{ try{ openNetworkView(); }catch(e){ console.warn('openNetworkView failed:',e); } }, 60);
+    setTimeout(()=>{ _dismissSplash(); try{ openNetworkView(); }catch(e){ console.warn('openNetworkView failed:',e); } }, 60);
   } else if(playParam){
     // Pequeño delay para que initGame encuentre todo listo
-    setTimeout(()=>{ try{ autoEnterVertical(playParam); }catch(e){ console.warn('autoEnterVertical failed:',e); } }, 50);
+    setTimeout(()=>{ _dismissSplash(); try{ autoEnterVertical(playParam); }catch(e){ console.warn('autoEnterVertical failed:',e); } }, 50);
   } else if(locParam){
     // ?loc=<id> = punto de admira.app: entra DIRECTO a su tienda (twin del
     // punto). Cualquier id dado de alta en el mapa abre su gemelo — no hay
     // tiendas hardcodeadas. Mapeamos el tipo de punto al vertical más adecuado
     // y esperamos a STORE_CFG para decorar con nombre/dirección.
     const enterForLoc=()=>{
+      _dismissSplash();
       let vertical='xtanco';
       const k=((window.STORE_CFG&&window.STORE_CFG.kind)||'').toLowerCase();
       if(k.includes('supermercado')||k.includes('super')) vertical='supermercado';
