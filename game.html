@@ -24271,7 +24271,18 @@ window.xtAPI = (function(){
         return true;
       }
     }
-    // Fallback al default versionado.
+    // Fallback al default.xml versionado. PERO en el arranque automático
+    // (silent) NO lo cargamos si este navegador ya tiene un layout propio
+    // guardado: antes default.xml se recargaba en CADA reinicio y reseteaba
+    // los muebles que el usuario había movido (p.ej. la mesa del DJ). El
+    // default.xml solo siembra la primera visita (sin layout local). El
+    // comando explícito /layout (silent=false) sí fuerza la recarga.
+    if(silent){
+      try{
+        const keys=getLayoutSlotKeys(getLayoutStoragePrefix());
+        if(localStorage.getItem(keys.current)) return false;
+      }catch(e){}
+    }
     return loadDefaultXMLLayoutFromRepo(opts);
   }
   async function saveStoreXMLLayoutToRepo(){
