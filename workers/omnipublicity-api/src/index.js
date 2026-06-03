@@ -143,10 +143,13 @@ async function handleAddEmployee(request, env, id) {
   if (loc.employees.some(e => e && String(e.name).toLowerCase() === name.toLowerCase())) {
     return json(request, env, 200, { ok: true, duplicate: true, employee: { name, role }, employees: loc.employees });
   }
-  loc.employees.push({ name, role });
+  // `since` = antigüedad: fecha y hora de contratación (ISO).
+  const since = new Date().toISOString();
+  const emp = { name, role, since };
+  loc.employees.push(emp);
   stored.updatedAt = now();
   await env.OMNIP_KV.put(KV_KEY, JSON.stringify(stored));
-  return json(request, env, 200, { ok: true, employee: { name, role }, employees: loc.employees });
+  return json(request, env, 200, { ok: true, employee: emp, employees: loc.employees });
 }
 
 // Baja de miembro de equipo (quita por nombre). Append/remove acotado, sin

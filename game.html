@@ -140,7 +140,7 @@
     .char-body::-webkit-scrollbar-track{background:#07131b}
     .char-body::-webkit-scrollbar-thumb{background:#2a7585;border-radius:6px}
     .char-row{display:grid;grid-template-columns:58px minmax(74px,.95fr) minmax(126px,1.35fr) 58px 50px 46px auto;gap:3px;align-items:center;padding:2px 3px;border-radius:3px}
-    .char-row.team-grid{grid-template-columns:var(--team-col-0,58px) var(--team-col-1,110px) var(--team-col-2,160px) var(--team-col-3,78px) var(--team-col-4,68px)}
+    .char-row.team-grid{grid-template-columns:var(--team-col-0,58px) var(--team-col-1,110px) var(--team-col-2,150px) var(--team-col-3,78px) var(--team-col-4,64px) var(--team-col-5,108px)}
     .char-row.clients-grid{grid-template-columns:var(--cust-col-0,44px) var(--cust-col-1,72px) var(--cust-col-2,150px) var(--cust-col-3,78px) var(--cust-col-4,56px) var(--cust-col-5,50px) var(--cust-col-6,80px)}
     .char-row.socios-grid{grid-template-columns:minmax(110px,1.4fr) 56px 32px 50px minmax(140px,1.8fr) 56px}
     .char-row.is-head,.char-row.is-summary{padding:0;background:transparent}
@@ -8013,7 +8013,7 @@ function initGame(){
     const roleOf=r=>{ if(typeof r==='number') return Math.max(0,Math.min(4,r|0)); const k=String(r||'').trim().toLowerCase(); return (k in ROLE_MAP)?ROLE_MAP[k]:0; };
     // Todos los empleados del punto son el EQUIPO real → entran contratados
     // (hired) para que aparezcan en el panel TEAM, no como meros contratables.
-    staffSrc=_cfgEmp.slice(0,8).map((e,i)=>({slot:i,x:0,y:0,hired:true,name:String(e.name||('EMP'+(i+1))),role:roleOf(e.role!=null?e.role:e.roleLabel)}));
+    staffSrc=_cfgEmp.slice(0,8).map((e,i)=>({slot:i,x:0,y:0,hired:true,name:String(e.name||('EMP'+(i+1))),role:roleOf(e.role!=null?e.role:e.roleLabel),since:e.since||null}));
   }
   G.staff=staffSrc.map((s,i)=>{
     const gp=staffGridPos[i%staffGridPos.length];
@@ -19340,6 +19340,16 @@ function roleShortLabel(role){
     ? ['Caja','Repo','Aza','Mgr','DJ']
     : ['Cash','Stock','Host','Mgr','DJ'])[role]||(lang==='es'?'Eq':'Tm');
 }
+// Antigüedad del empleado = fecha y hora de contratación (campo `since`),
+// formateada compacta DD/MM HH:MM para la columna del panel TEAM.
+function fmtHireSince(since){
+  if(!since) return '—';
+  try{
+    const d=new Date(since); if(isNaN(d.getTime())) return '—';
+    const p=n=>('0'+n).slice(-2);
+    return p(d.getDate())+'/'+p(d.getMonth()+1)+'/'+p(d.getFullYear()%100)+' '+p(d.getHours())+':'+p(d.getMinutes());
+  }catch(e){ return '—'; }
+}
 
 function customerStateLabel(c){
   const map=lang==='es'
@@ -19717,11 +19727,12 @@ function drawCharacterGroupsPanel(){
           +'<span>'+roleShortLabel(s.role)+' LV'+(s.level||1)+'</span>'
           +'<span>E'+Math.round(s.energy||0)+' M'+Math.round(s.morale||0)+'</span>'
           +'<span class="'+(status==='ocupado'?'ok':'muted')+'">'+status+'</span>'
+          +'<span class="muted" title="'+(isEs?'Antigüedad · fecha y hora de contratación':'Seniority · hire date & time')+'">'+fmtHireSince(s.since)+'</span>'
           +'</div>';
       }).join('')
-    : '<div class="char-row team-grid"><span class="muted">'+(isEs?'Sin equipo activo':'No active team')+'</span><span></span><span></span><span></span></div>';
+    : '<div class="char-row team-grid"><span class="muted">'+(isEs?'Sin equipo activo':'No active team')+'</span><span></span><span></span><span></span><span></span></div>';
   if(hired.length>teamMaxRows){
-    teamHtml+='<div class="char-row team-grid is-summary"><span class="muted">+'+(hired.length-teamMaxRows)+' '+(isEs?'más':'more')+'</span><span></span><span></span><span></span></div>';
+    teamHtml+='<div class="char-row team-grid is-summary"><span class="muted">+'+(hired.length-teamMaxRows)+' '+(isEs?'más':'more')+'</span><span></span><span></span><span></span><span></span></div>';
   }
 
   let clientHtml='<div class="char-row clients-grid is-head">'
@@ -24832,7 +24843,8 @@ window.xtAPI = (function(){
           const gp=sgp[idx%sgp.length];
           const iso=toIso(gp.col,gp.row);
           const zone=(typeof getStaffZoneConfig==='function')?getStaffZoneConfig(idx,gp.col,gp.row):{col:gp.col,row:gp.row,radius:1};
-          G.staff.push({slot:idx,name:name,role:roleIdx,hired:true,fromRoster:true,x:iso.x-7,y:iso.y-20,level:1,energy:100,morale:80,busy:0,dir:1,isWalking:false,shirt:0,hair:3,look:{shirt:0,hair:3,skin:1,pants:0,shoes:0,accessory:0},bTimer:0,bIdx:idx%5,aFrame:0,aTimer:0,homeCol:gp.col,homeRow:gp.row,zoneCol:zone.col,zoneRow:zone.row,zoneRadius:zone.radius,navTarget:null,navPath:null,navPathIdx:0,navTick:0,djScratch:0,djScratchNext:90});
+          const _since=(j.employee&&j.employee.since)||new Date().toISOString();
+          G.staff.push({slot:idx,name:name,role:roleIdx,hired:true,fromRoster:true,since:_since,x:iso.x-7,y:iso.y-20,level:1,energy:100,morale:80,busy:0,dir:1,isWalking:false,shirt:0,hair:3,look:{shirt:0,hair:3,skin:1,pants:0,shoes:0,accessory:0},bTimer:0,bIdx:idx%5,aFrame:0,aTimer:0,homeCol:gp.col,homeRow:gp.row,zoneCol:zone.col,zoneRow:zone.row,zoneRadius:zone.radius,navTarget:null,navPath:null,navPathIdx:0,navTick:0,djScratch:0,djScratchNext:90});
         }
       }catch(_){}
       if(typeof showEv==='function') showEv('👤 Alta: '+name,'#88ffcc');
