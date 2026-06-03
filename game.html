@@ -945,6 +945,37 @@
   Promise.all(tasks).then(reloadFresh).catch(reloadFresh);
 })();
 // ═══════════════════════════════════════════════════════════════
+//  STORE_CFG — gemelo config-driven por punto de admira.app
+//  Si la URL trae ?loc=<id>, descargamos la ficha de ese punto del KV
+//  de OmniPublicity (misma fuente que admira.app) y exponemos window.STORE_CFG.
+//  El resto del juego lo lee de forma perezosa (banner, música, pantallas,
+//  empleados, cámaras) y se autoconfigura cuando llega.
+// ═══════════════════════════════════════════════════════════════
+window.STORE_CFG=null; window.STORE_CFG_READY=false;
+(function loadStoreCfg(){
+  let loc=''; try{ loc=(new URLSearchParams(window.location.search).get('loc')||'').trim().toLowerCase(); }catch(e){}
+  if(!loc){ window.STORE_CFG_READY=true; return; }
+  const API='https://omnipublicity-api.csilvasantin.workers.dev/locations';
+  fetch(API,{cache:'no-store'}).then(r=>r.json()).then(d=>{
+    const list=(d&&Array.isArray(d.locations))?d.locations:[];
+    const l=list.find(x=>x&&String(x.id).toLowerCase()===loc);
+    if(!l){ window.STORE_CFG_READY=true; return; }
+    const surfaces=Array.isArray(l.surfaces)?l.surfaces:[];
+    // nº de pantallas reales = surfaces tipo pantalla/escaparate (las que "muestran")
+    const screens=surfaces.filter(s=>s&&(s.surface==='pantalla'||s.surface==='escaparate')).length;
+    window.STORE_CFG={
+      id:l.id, name:l.name||l.id, addr:l.addr||'', kind:l.kind||'',
+      surfaces, screens: screens||0,
+      music: l.music||null,                                  // hilo musical (campo nuevo opcional)
+      cameras: (l.cameras!=null)?l.cameras:null,             // cámaras (nuevo opcional)
+      employees: Array.isArray(l.employees)?l.employees:null,// roster (nuevo opcional)
+    };
+    window.STORE_CFG_READY=true;
+    try{ window.dispatchEvent(new CustomEvent('storecfg',{detail:window.STORE_CFG})); }catch(e){}
+    try{ console.log('%c🏪 STORE_CFG cargada:','color:#76B900;font-weight:bold', window.STORE_CFG); }catch(e){}
+  }).catch(()=>{ window.STORE_CFG_READY=true; });
+})();
+// ═══════════════════════════════════════════════════════════════
 //  ADMIRA XP // THE XPACE OS — XTANCO — runtime version/build
 // ═══════════════════════════════════════════════════════════════
 const cv=document.getElementById('c'), cx=cv.getContext('2d');
@@ -16229,7 +16260,14 @@ function _getLedParams(){
   const liveData=(state===S.GAME||state===S.PAUSE)
     ? `  ◈  ${lang==='es'?'PASAN':'PASS'}: ${G?(G.passersbyToday||0):0}  ◈  ${lang==='es'?'ENTRAN':'IN'}: ${G?(G.customersToday||0):0}  ◈  ${T().satisfaction}: ${G?(G.satisfaction|0):0}%  ◈  ${T().fame}: ${G?(G.fame|0):0}%  ◈  `
     : '  ◈  ';
-  const fullMsg=comunicado+admiraLive+currentVideoMsg+msgs.join('   ◆   ')+liveData;
+  // Gemelo config-driven: si abrimos un punto concreto (?loc=), su nombre y
+  // dirección encabezan el banner de signage (lo que pidió Carlos: la dirección
+  // del punto en las pantallas).
+  const cfg=window.STORE_CFG;
+  const storeBanner=(cfg&&cfg.name)
+    ? `  🏪  ${String(cfg.name).toUpperCase()}${cfg.addr?'  ·  '+String(cfg.addr).toUpperCase():''}  🏪  `
+    : '';
+  const fullMsg=storeBanner+comunicado+admiraLive+currentVideoMsg+msgs.join('   ◆   ')+liveData;
   cx.font='bold 9px monospace';
   const msgW=cx.measureText(fullMsg).width;
   return {fullMsg, msgW};

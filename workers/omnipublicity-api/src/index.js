@@ -29,10 +29,13 @@ function getAllowedOrigins(env) {
     .concat(DEFAULT_ALLOWED_ORIGINS);
 }
 
+// Cualquier localhost/127.0.0.1 (cualquier puerto) para desarrollo/preview.
+const LOCAL_ORIGIN_RE = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
+
 function corsHeaders(request, env) {
   const origin = request.headers.get('Origin') || '';
   const allowed = getAllowedOrigins(env);
-  const allowOrigin = allowed.includes(origin) ? origin : allowed[0];
+  const allowOrigin = (allowed.includes(origin) || LOCAL_ORIGIN_RE.test(origin)) ? origin : allowed[0];
   return {
     'Access-Control-Allow-Origin': allowOrigin,
     'Access-Control-Allow-Methods': 'GET,PUT,OPTIONS',
