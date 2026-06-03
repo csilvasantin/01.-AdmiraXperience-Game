@@ -122,6 +122,33 @@ async function handlePutLocations(request, env) {
   return json(request, env, 200, { ok: true, count: arr.length, updatedAt: payload.updatedAt });
 }
 
+// Alta de miembro de equipo en un punto. Append-only y acotado (sin admin
+// token: lo llama el gemelo cliente; es dato de demo, validado y con tope).
+const EMPLOYEE_ROLES = ['cajero', 'repositor', 'azafata', 'manager', 'dj'];
+async function handleAddEmployee(request, env, id) {
+  let body;
+  try { body = await request.json(); } catch { return json(request, env, 400, { error: 'invalid_json' }); }
+  const name = String(body && body.name || '').replace(/\s+/g, ' ').trim().slice(0, 40);
+  if (!name) return json(request, env, 400, { error: 'missing_name' });
+  let role = String(body && body.role || 'cajero').trim().toLowerCase();
+  if (!EMPLOYEE_ROLES.includes(role)) role = 'cajero';
+
+  let stored = null;
+  try { const raw = await env.OMNIP_KV.get(KV_KEY); if (raw) stored = JSON.parse(raw); } catch {}
+  if (!stored || !Array.isArray(stored.locations)) return json(request, env, 404, { error: 'no_catalog' });
+  const loc = stored.locations.find(l => l && String(l.id).toLowerCase() === String(id).toLowerCase());
+  if (!loc) return json(request, env, 404, { error: 'location_not_found', id });
+  if (!Array.isArray(loc.employees)) loc.employees = [];
+  if (loc.employees.length >= 20) return json(request, env, 400, { error: 'too_many_employees', max: 20 });
+  if (loc.employees.some(e => e && String(e.name).toLowerCase() === name.toLowerCase())) {
+    return json(request, env, 200, { ok: true, duplicate: true, employee: { name, role }, employees: loc.employees });
+  }
+  loc.employees.push({ name, role });
+  stored.updatedAt = now();
+  await env.OMNIP_KV.put(KV_KEY, JSON.stringify(stored));
+  return json(request, env, 200, { ok: true, employee: { name, role }, employees: loc.employees });
+}
+
 export default {
   async fetch(request, env) {
     if (request.method === 'OPTIONS') {
@@ -133,6 +160,8 @@ export default {
       if (request.method === 'GET' && path === '/health')    return json(request, env, 200, { ok: true, ts: now() });
       if (request.method === 'GET' && path === '/locations') return await handleGetLocations(request, env);
       if (request.method === 'PUT' && path === '/locations') return await handlePutLocations(request, env);
+      const mEmp = path.match(/^\/location\/([^/]+)\/employee$/);
+      if (request.method === 'POST' && mEmp) return await handleAddEmployee(request, env, decodeURIComponent(mEmp[1]));
       return json(request, env, 404, { error: 'not_found', path });
     } catch (err) {
       return json(request, env, 500, { error: 'server_error', message: String(err && err.message || err) });

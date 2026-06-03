@@ -24795,6 +24795,46 @@ window.xtAPI = (function(){
   }
   window.addEventListener('resize',()=>{ if(document.body.classList.contains('ds-signage-fullwidth')) applySignageFullwidthGeometry(); });
 
+  // /nuevoMiembro <nombre> [rol] — da de alta un trabajador en el equipo del
+  // punto activo (lo persiste en el KV vía el endpoint del worker y lo añade
+  // como personaje contratable en caliente). Rol opcional: cajero·repositor·
+  // azafata·manager·dj (por defecto cajero).
+  const TEAM_ROLE_IDX={cajero:0,cajera:0,repositor:1,repositora:1,reponedor:1,azafata:2,hostess:2,manager:3,encargado:3,dj:4};
+  async function addTeamMember(arg){
+    const e0=needsGame(); if(e0) return e0;
+    const cfg=window.STORE_CFG;
+    if(!cfg||!cfg.id) return '⚠️ Abre el gemelo de un punto (admira.app → Ver Gemelo Digital) para dar de alta su equipo.';
+    let parts=String(arg||'').trim().split(/\s+/).filter(Boolean);
+    if(!parts.length) return 'Uso: /nuevoMiembro <nombre> [rol]  · rol: cajero·repositor·azafata·manager·dj';
+    let roleIdx=0;
+    const last=parts[parts.length-1].toLowerCase();
+    if(parts.length>1 && (last in TEAM_ROLE_IDX)){ roleIdx=TEAM_ROLE_IDX[last]; parts.pop(); }
+    const role=['cajero','repositor','azafata','manager','dj'][roleIdx];
+    const name=parts.join(' ').slice(0,40);
+    if(!name) return 'Falta el nombre. Uso: /nuevoMiembro <nombre> [rol]';
+    try{
+      const res=await fetch('https://omnipublicity-api.csilvasantin.workers.dev/location/'+encodeURIComponent(cfg.id)+'/employee',{
+        method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,role})
+      });
+      const j=await res.json().catch(()=>({}));
+      if(!j||!j.ok) return '❌ No se pudo dar de alta'+(j&&j.error?': '+j.error:'');
+      if(Array.isArray(j.employees)) cfg.employees=j.employees;
+      // Alta en caliente como personaje contratable del equipo.
+      try{
+        if(G&&G.staff){
+          const idx=G.staff.length;
+          const sgp=(shopStaffPos&&shopStaffPos.length>0)?shopStaffPos:DEFAULT_STAFF_POS;
+          const gp=sgp[idx%sgp.length];
+          const iso=toIso(gp.col,gp.row);
+          const zone=(typeof getStaffZoneConfig==='function')?getStaffZoneConfig(idx,gp.col,gp.row):{col:gp.col,row:gp.row,radius:1};
+          G.staff.push({slot:idx,name:name,role:roleIdx,hired:false,fromRoster:true,x:iso.x-7,y:iso.y-20,level:1,energy:100,morale:80,busy:0,dir:1,isWalking:false,shirt:0,hair:3,look:{shirt:0,hair:3,skin:1,pants:0,shoes:0,accessory:0},bTimer:0,bIdx:idx%5,aFrame:0,aTimer:0,homeCol:gp.col,homeRow:gp.row,zoneCol:zone.col,zoneRow:zone.row,zoneRadius:zone.radius,navTarget:null,navPath:null,navPathIdx:0,navTick:0,djScratch:0,djScratchNext:90});
+        }
+      }catch(_){}
+      if(typeof showEv==='function') showEv('👤 Alta: '+name,'#88ffcc');
+      return '👤 '+name+' ('+role+') dado de alta en '+(cfg.name||cfg.id)+(j.duplicate?' (ya existía)':'')+'. Contratable en el equipo y guardado en el punto.';
+    }catch(err){ return '❌ Error al dar de alta: '+(err&&err.message||err); }
+  }
+
   async function executeTelegramText(rawText){
     const text=String(rawText||'').trim();
     if(!text) return 'Comando vacio';
@@ -24806,6 +24846,7 @@ window.xtAPI = (function(){
 
     try{
       if(cmd==='start'||cmd==='help') return commandHelp();
+      if(['nuevomiembro','nuevomember','altamiembro','miembro','newmember','addmember','team-add'].includes(cmd)) return await addTeamMember(arg);
       if(cmd==='status') return formatStatus();
       if(cmd==='stock') return formatStock();
       if(cmd==='set'){
