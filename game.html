@@ -8025,8 +8025,11 @@ function initGame(){
   assignMission('start');
   buildWalkGrid();
   loadNPCCustoms();
-  // layouts/default.xml manda sobre localStorage si existe en el repo.
-  try{ if(typeof window.__loadDefaultXMLLayoutFromRepo==='function') window.__loadDefaultXMLLayoutFromRepo({silent:true}).catch(()=>{}); }catch(e){}
+  // Xpacio del punto activo (layouts/<loc>.xml) o, si no existe, default.xml.
+  try{
+    const _ll=window.__loadStoreLayoutFromRepo||window.__loadDefaultXMLLayoutFromRepo;
+    if(typeof _ll==='function') _ll({silent:true}).catch(()=>{});
+  }catch(e){}
 }
 function quickStartLoteriasGame(){
   resetPreloadState();
@@ -23921,8 +23924,9 @@ window.xtAPI = (function(){
   }
   async function loadDefaultXMLLayoutFromRepo(opts){
     const silent=!!(opts&&opts.silent);
+    const path=(opts&&opts.path)||DEFAULT_LAYOUT_XML_PATH;
     try{
-      const res=await fetch(DEFAULT_LAYOUT_XML_PATH+'?ts='+Date.now(),{cache:'no-store'});
+      const res=await fetch(path+'?ts='+Date.now(),{cache:'no-store'});
       if(!res.ok) throw new Error('HTTP '+res.status);
       const xml=await res.text();
       const parsed=parseLayoutFromXML(xml);
@@ -23935,16 +23939,43 @@ window.xtAPI = (function(){
       try{if(typeof buildWalkGrid==='function') buildWalkGrid();}catch(e){}
       if(!silent){
         if(typeof showEv==='function') showEv('🏗️ Layout XML cargado','#88ffcc');
-        return '🏗️ Layout XML cargado desde '+DEFAULT_LAYOUT_XML_PATH+' ('+parsed.shopLayout.length+' muebles, guardado '+(parsed.meta.savedAt||'?')+').';
+        return '🏗️ Layout XML cargado desde '+path+' ('+parsed.shopLayout.length+' muebles, guardado '+(parsed.meta.savedAt||'?')+').';
       }
       return true;
     }catch(e){
-      if(!silent) return '⚠️ No hay '+DEFAULT_LAYOUT_XML_PATH+' en el repo ('+e.message+'). Crea uno con /layout xml.';
+      if(!silent) return '⚠️ No hay '+path+' en el repo ('+e.message+'). Crea uno con /layout xml.';
       return false;
     }
   }
-  async function saveDefaultXMLLayoutToRepo(){
+  // Per-punto: carga layouts/<loc-id>.xml si el twin abrió un punto concreto;
+  // si ese punto no tiene Xpacio propio, cae al layouts/default.xml. Additivo:
+  // un punto sin fichero se comporta exactamente igual que antes.
+  function storeLayoutPath(){
+    const id=(window.STORE_CFG&&window.STORE_CFG.id)?String(window.STORE_CFG.id).toLowerCase().replace(/[^a-z0-9_-]/g,''):'';
+    return id?('layouts/'+id+'.xml'):null;
+  }
+  async function loadStoreLayoutFromRepo(opts){
+    const silent=!!(opts&&opts.silent);
+    const perLoc=storeLayoutPath();
+    if(perLoc){
+      const ok=await loadDefaultXMLLayoutFromRepo({silent:true,path:perLoc});
+      if(ok===true){
+        if(!silent&&typeof showEv==='function') showEv('🏗️ Xpacio propio cargado','#88ffcc');
+        return true;
+      }
+    }
+    // Fallback al default versionado.
+    return loadDefaultXMLLayoutFromRepo(opts);
+  }
+  async function saveStoreXMLLayoutToRepo(){
+    const perLoc=storeLayoutPath();
+    if(!perLoc) return '⚠️ No hay punto activo (abre el twin con ?loc=<id>) para guardar su Xpacio. Usa /layout xml para el default.';
+    return saveXMLLayoutToRepo(perLoc);
+  }
+  async function saveXMLLayoutToRepo(savePath){
     const errL=needsGame();if(errL)return errL;
+    const path=savePath||DEFAULT_LAYOUT_XML_PATH;
+    const fileName=path.split('/').pop()||'default.xml';
     const xml=serializeLayoutToXML();
     const proxyBases=[];
     if(typeof location!=='undefined'&&/^(localhost|127\.0\.0\.1)/.test(location.hostname)){
@@ -23966,7 +23997,7 @@ window.xtAPI = (function(){
         const res=await fetch(base+'/layout/save',{
           method:'POST',
           headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({path:DEFAULT_LAYOUT_XML_PATH,content:xml,encoding:'utf8',autoPush:true})
+          body:JSON.stringify({path:path,content:xml,encoding:'utf8',autoPush:true})
         });
         if(!res.ok){const j=await res.json().catch(()=>({}));throw new Error(j.message||'HTTP '+res.status);}
         const j=await res.json().catch(()=>({}));
@@ -23976,11 +24007,11 @@ window.xtAPI = (function(){
       }catch(e){lastErr=e;}
     }
     if(savedVia){
-      if(typeof showEv==='function') showEv('☁️ default.xml en la nube','#88ffcc');
-      let msg='☁️ Layout XML guardado en '+DEFAULT_LAYOUT_XML_PATH+' vía '+savedVia+'.';
+      if(typeof showEv==='function') showEv('☁️ '+fileName+' en la nube','#88ffcc');
+      let msg='☁️ Layout XML guardado en '+path+' vía '+savedVia+'.';
       if(gitInfo){
         if(gitInfo.pushed) msg+='\n✓ git push OK → en 1-2 min GitHub Pages republica y el móvil / cualquier dispositivo lo carga al recargar.';
-        else if(gitInfo.noChange) msg+='\n· Sin cambios respecto al default.xml ya commiteado.';
+        else if(gitInfo.noChange) msg+='\n· Sin cambios respecto al '+fileName+' ya commiteado.';
         else msg+='\n⚠️ git push no confirmado (exit '+gitInfo.exitCode+'). Log:\n'+gitInfo.log;
       }
       return msg;
@@ -23989,22 +24020,25 @@ window.xtAPI = (function(){
     try{
       const blob=new Blob([xml],{type:'application/xml'});
       const url=URL.createObjectURL(blob);
-      const a=document.createElement('a'); a.href=url; a.download='default.xml';
+      const a=document.createElement('a'); a.href=url; a.download=fileName;
       document.body.appendChild(a); a.click();
       setTimeout(()=>{try{document.body.removeChild(a);URL.revokeObjectURL(url);}catch(e){}},800);
-      if(typeof showEv==='function') showEv('💾 default.xml descargado','#88ccff');
-      return '💾 Proxy no disponible ('+(lastErr&&lastErr.message||'sin proxy')+'). Descargado default.xml al disco. Móvelo a '+DEFAULT_LAYOUT_XML_PATH+' del repo y commitea.';
+      if(typeof showEv==='function') showEv('💾 '+fileName+' descargado','#88ccff');
+      return '💾 Proxy no disponible ('+(lastErr&&lastErr.message||'sin proxy')+'). Descargado '+fileName+' al disco. Móvelo a '+path+' del repo y commitea.';
     }catch(e){
-      return '❌ Error guardando default.xml: '+e.message;
+      return '❌ Error guardando '+fileName+': '+e.message;
     }
   }
-  // Hook de arranque: tras initGame, intenta default.xml. Solo lo
-  // aplica si existe (no rompe nada si falta).
+  function saveDefaultXMLLayoutToRepo(){ return saveXMLLayoutToRepo(DEFAULT_LAYOUT_XML_PATH); }
+  // Hook de arranque: tras initGame, intenta el Xpacio del punto activo
+  // (layouts/<loc>.xml) y, si no existe, layouts/default.xml. Solo aplica si
+  // existe (no rompe nada si faltan).
   try{
     if(typeof window!=='undefined'){
       window.__loadDefaultXMLLayoutFromRepo=loadDefaultXMLLayoutFromRepo;
+      window.__loadStoreLayoutFromRepo=loadStoreLayoutFromRepo;
       window.addEventListener('admira:initgame-done', ()=>{
-        loadDefaultXMLLayoutFromRepo({silent:true}).catch(()=>{});
+        loadStoreLayoutFromRepo({silent:true}).catch(()=>{});
       });
     }
   }catch(e){}
@@ -25125,6 +25159,14 @@ window.xtAPI = (function(){
         }
         if(sub==='save'||sub==='guardar'||sub==='grabar'||sub==='export'||sub==='exportar'){
           return await savePerfectLayoutToRepo();
+        }
+        // ─── XPACIO del punto activo (layouts/<loc>.xml) ──────────────
+        // Guarda/carga el layout PROPIO del punto que abrió el twin (?loc=).
+        if(sub==='xpacio'||sub==='xpacio save'||sub==='xpacio guardar'||sub==='xml loc'||sub==='xml loc save'){
+          return await saveStoreXMLLayoutToRepo();
+        }
+        if(sub==='xpacio load'||sub==='xpacio cargar'||sub==='xml loc load'){
+          return await loadStoreLayoutFromRepo({silent:false});
         }
         // ─── XML (layouts/default.xml, autoritativo en boot) ──────────
         if(sub==='xml'||sub==='xml save'||sub==='xml guardar'){
