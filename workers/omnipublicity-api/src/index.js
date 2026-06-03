@@ -306,6 +306,17 @@ async function handleMetahumanAsk(request, env) {
   return json(request, env, 200, out);
 }
 
+// TTS de texto EXACTO (no pasa por Grok) → audio de la voz configurada.
+// Para guiones de vídeo (hero de digitalavatar.ai vía Kling) y locuciones fijas.
+async function handleTts(request, env) {
+  let body; try { body = await request.json(); } catch { return json(request, env, 400, { error: 'invalid_json' }); }
+  const text = String(body && body.text || '').trim();
+  if (!text) return json(request, env, 400, { error: 'missing_text' });
+  const tts = await ttsBase64(env, text);
+  if (tts && tts.b64) return json(request, env, 200, { ok: true, audioBase64: tts.b64, mime: 'audio/mpeg' });
+  return json(request, env, 502, { ok: false, error: (tts && tts.err) || 'tts_unavailable' });
+}
+
 export default {
   async fetch(request, env) {
     if (request.method === 'OPTIONS') {
@@ -322,6 +333,7 @@ export default {
       const mEmp = path.match(/^\/location\/([^/]+)\/employee$/);
       if (request.method === 'POST' && mEmp) return await handleAddEmployee(request, env, decodeURIComponent(mEmp[1]));
       if (request.method === 'POST' && path === '/metahuman/ask') return await handleMetahumanAsk(request, env);
+      if (request.method === 'POST' && path === '/tts') return await handleTts(request, env);
       return json(request, env, 404, { error: 'not_found', path });
     } catch (err) {
       return json(request, env, 500, { error: 'server_error', message: String(err && err.message || err) });
