@@ -24672,16 +24672,16 @@ window.xtAPI = (function(){
       {title:'Personal (panel /staff)',items:['/staff','/staff bonus 0 100','/staff eotm 0','/staff eotm ana','/staff train 1','/staff hire 2','/staff fire 1']},
       {title:'Tienda',items:['/ad 0','/ad 1','/ad 2','/upgrade','/visit com','/visit tec','/visit del','/visit gc','/save']},
       {title:'Tiempo y ambiente',items:['/reloj 14:30','/reloj 14 30','/time am','/time pm','/time night','/weather normal','/weather rain','/weather sun','/lamp','/lamp auto','/hue','/hue auto']},
-      {title:'Pantalla y directo',items:['/livecam','/mocap','/pixeria','/AdmiraLive texto','/comunicar texto','/comunicar texto --grok','/comunicar texto --elevenlabs','/AdmiraTube URL 2 audio','/say texto']},
-      {title:'Escena en vivo',items:['/dj','/ladron','/guardiacivil','/opinador','/robot','/sponsor','/socio','/door open','/door close','/door auto']},
+      {title:'Pantalla y directo',items:['/livecam','/mocap','/pixeria','/AdmiraLive texto','/comunicar texto','/comunicar texto --grok','/comunicar texto --elevenlabs','/AdmiraTube URL 2 audio','/say texto','/targetPublicity aforo','/targetPublicity genero','/targetPublicity off','/generovideo','/generovideo off']},
+      {title:'Escena en vivo',items:['/dj','/ladron','/guardiacivil','/opinador','/robot','/sponsor','/socio','/door open','/door close','/door auto','/subasta','/subasta off']},
       {title:'Notificaciones al personal',items:['/personal socio','/personal dashboard','/socios listado','/heatmap','/heatmap reset','/sponsor recurrente 120 10']},
       {title:'Atmósfera',items:['/ambiente','/ambiente vol 50','/voces']},
       {title:'Operativa real',items:['/devolucion','/pedido']},
       {title:'Integración AdmiraNext',items:['/socios export']},
       {title:'IA y contenido',items:['/grok pregunta','/draw dibujo','/metahuman pregunta','/log','/log thief','/log customer','/import','/import list','/import remove 1','/importTube https://youtu.be/...']},
       {title:'Ajustes rápidos',items:['/money 12000','/sat 90','/fame 80','/set week 12','/set year 2','/set revenue 5000','/set storeLevel 2','/set customers 30']},
-      {title:'Musica y layout',items:['/song 1','/song bad bunny','/music','/next','/prev','/seoul2026','/seul','/seultrap','/seultecno','/equipo inicio ana 3 4','/equipo zona dj 12 2 2','/mobiliario','/mobiliario inicio','/layout','/layout save','/layout factory']},
-      {title:'Mapa de navegacion',items:['/mapa','/map','/sd list','/streamdeck','/help']},
+      {title:'Musica y layout',items:['/song 1','/song bad bunny','/music','/next','/prev','/seoul2026','/seul','/seultrap','/seultecno','/equipo inicio ana 3 4','/equipo zona dj 12 2 2','/mobiliario','/mobiliario inicio','/layout','/layout save','/layout factory','/layout xpacio','/layout xpacio load']},
+      {title:'Mapa de navegacion',items:['/mapa','/map','/red','/sd list','/streamdeck','/help','/debug']},
     ];
   }
 
@@ -24705,6 +24705,37 @@ window.xtAPI = (function(){
   function commandHelp(){
     showHelpPanel();
     return 'Ayuda abierta en la ventana de Control de la Store. Pulsa un comando para prepararlo.';
+  }
+
+  // /debug — volcado de diagnóstico: estado del runtime, Xpacio activo, DVR y
+  // la LISTA COMPLETA de comandos del CLI (todas las secciones de helpSections,
+  // así cualquier comando nuevo aparece aquí automáticamente).
+  function debugDump(){
+    const L=[];
+    const app=(typeof window!=='undefined'&&window.XTANCO_APP)||{};
+    L.push('🔧 DEBUG — '+(app.name||'Admira XP')+' '+(app.version||'')+' (build '+(app.build||'?')+')');
+    try{
+      const st=(typeof state!=='undefined')?state:'?';
+      if(typeof G!=='undefined'&&G){
+        L.push('estado: '+st+' · día '+(G.gameTime!=null?(+G.gameTime).toFixed(2):'?')+'h · '+(G.sales|0)+' ventas · '+Math.round(G.money||0)+'€ · sat '+Math.round(G.satisfaction||0)+'% · fama '+Math.round(G.fame||0));
+        L.push('staff: '+((G.staff||[]).length)+' · clientes en sala: '+((G.custs||[]).length));
+      } else { L.push('estado: '+st+' · (sin partida en curso)'); }
+    }catch(e){ L.push('estado: (error: '+e.message+')'); }
+    try{
+      const c=(typeof STORE_CFG!=='undefined')?STORE_CFG:null;
+      if(c) L.push('Xpacio: '+c.name+' ['+c.id+'] · '+(c.addr||'')+' · pantallas '+(c.screens!=null?c.screens:'?')+' · música '+(c.music||'—')+' · cámaras '+(c.cameras?'on':'off')+' · equipo '+((c.employees||[]).length));
+      else L.push('Xpacio: (genérico, sin STORE_CFG cargado)');
+    }catch(e){ L.push('Xpacio: (error)'); }
+    try{
+      const r=(typeof REC!=='undefined')?REC:null;
+      if(r) L.push('DVR: grabación '+((r.recording||[]).length)+' snaps · velocidad x'+(r.speed||1)+' · replay '+(r.replay&&r.replay.on?('ON idx '+r.replay.idx):'off'));
+    }catch(e){}
+    L.push('');
+    const secs=helpSections();
+    let total=0; secs.forEach(s=>total+=s.items.length);
+    L.push('📋 COMANDOS DEL CLI ('+total+'):');
+    secs.forEach((s,i)=>L.push((i+1)+'. '+s.title+' — '+s.items.join(' · ')));
+    return L.join('\n');
   }
 
   function dsKindIcon(name){
@@ -25178,6 +25209,7 @@ window.xtAPI = (function(){
 
     try{
       if(cmd==='start'||cmd==='help') return commandHelp();
+      if(['debug','diag','dump','debugger','diagnostico','diagnóstico'].includes(cmd)) return debugDump();
       if(['nuevomiembro','nuevomember','altamiembro','miembro','newmember','addmember','team-add'].includes(cmd)) return await addTeamMember(arg);
       if(['echarmiembro','echar','bajamiembro','despedir','firemember','removemember','team-remove'].includes(cmd)) return await removeTeamMember(arg);
       if(['report','reportar','parte','reporte'].includes(cmd)) return await reportTeamMember(arg);
