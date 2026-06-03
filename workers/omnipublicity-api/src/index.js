@@ -20,6 +20,8 @@ const DEFAULT_ALLOWED_ORIGINS = [
   'https://digitalavatar.pages.dev',
   'https://digitalavatar.ai',
   'https://www.digitalavatar.ai',
+  'http://digitalavatar.ai',
+  'http://www.digitalavatar.ai',
   'http://localhost:9124',
   'http://127.0.0.1:9124',
   'http://localhost:8085',
