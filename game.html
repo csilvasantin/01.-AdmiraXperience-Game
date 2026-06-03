@@ -10095,6 +10095,9 @@ function applyReplayFrame(){
   G.money=s.money; G.sales=s.sales; G.satisfaction=s.sat; G.fame=s.fame;
   G.custIn=s.custIn; G.custOut=s.custOut; G.passersbyToday=s.passers;
   if(G.weather) G.weather.type=s.weather; if(G.thief) G.thief.phase=s.thiefPhase;
+  // Mover también las agujas del reloj de pared al instante del replay (updateGame
+  // no corre en replay, así que refrescamos aquí _clockH/_clockM desde gameTime).
+  _clockH=Math.floor(G.gameTime)%12; _clockM=Math.floor((G.gameTime%1)*60);
   try{ if(typeof updateDVRPanel==='function') updateDVRPanel(); }catch(e){}
 }
 // ── Panel DVR (UI de rebobinado) ────────────────────────────────
