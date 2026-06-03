@@ -1679,6 +1679,31 @@ function toggleMusic(){
   if(bgMusic.paused){bgMusic.play();initEQAnalyser();} else {bgMusic.pause();}
 }
 
+// ── Gemelo config-driven: hilo musical + cámaras del punto (STORE_CFG) ──
+// Música: deja cargada la pista del punto en bgMusic (el audio arranca con el
+//   botón ♪ por diseño, así que no autoplay — respeta la política del navegador).
+// Cámaras: si el punto declara cameras:false, oculta el botón LiveCam; el
+//   navegador no permite auto-activar la webcam sin gesto del usuario.
+const STORE_MUSIC_FILES=['careless','dj-novah','rosalia-perla','seoul2026','seultecno','seultrap','titi'];
+const STORE_MUSIC_MAP={lounge:'careless',chill:'careless',ambient:'careless',relax:'careless',
+  techno:'seultecno',electronica:'seultecno',electro:'seultecno',club:'seultecno',
+  dj:'dj-novah',hardtechno:'dj-novah',
+  pop:'titi',urban:'titi',reggaeton:'titi',latino:'titi',
+  flamenco:'rosalia-perla',rosalia:'rosalia-perla',espanol:'rosalia-perla',
+  seoul:'seoul2026',kpop:'seoul2026',k_pop:'seoul2026',
+  trap:'seultrap'};
+function applyStoreCfgAV(){
+  const cfg=window.STORE_CFG; if(!cfg) return;
+  if(cfg.music){
+    const m=String(cfg.music).trim().toLowerCase().replace(/[\s-]+/g,'_');
+    const file=STORE_MUSIC_MAP[m]||STORE_MUSIC_MAP[m.replace(/_/g,'')]||(STORE_MUSIC_FILES.includes(cfg.music)?cfg.music:null);
+    if(file){ try{ bgMusic.src='music/'+file+'.mp3'; bgMusic.load(); }catch(e){} }
+  }
+  if(cfg.cameras===false){ const b=document.getElementById('btnLiveCam'); if(b) b.style.display='none'; }
+}
+window.addEventListener('storecfg',applyStoreCfgAV);
+if(window.STORE_CFG) applyStoreCfgAV();
+
 // ── DIGITAL SIGNAGE (video + animated canvas screens) ─────────
 let videoPlaying=false, videoPaused=false, currentVideoId='';
 const videoEl=document.getElementById('videoMonitor');
@@ -3328,6 +3353,12 @@ function describeCameraError(error){
 
 async function setLiveCamState(on){
   const targetOn=!!on;
+  // Gemelo config-driven: si el punto declara cameras:false, no hay cámaras
+  // que activar (refleja la realidad del punto de admira.app).
+  if(targetOn && window.STORE_CFG && window.STORE_CFG.cameras===false){
+    showEv('📷 Este punto no tiene cámaras','#ff99aa');
+    return false;
+  }
   if(targetOn===LIVE_CAM.active&&!LIVE_CAM.requesting){
     updateLiveCamButtonUi();
     return LIVE_CAM.active;
