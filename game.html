@@ -5748,7 +5748,7 @@ function setLanguage(nextLang){
 }
 
 // ── STATE ─────────────────────────────────────────────────────
-const S={ERA_SEL:'eraSel',PRELOAD:'preload',MENU:'menu',CLIENT_SEL:'clientSel',MODEL_SEL:'modelSel',TUT:'tutorial',GAME:'game',PAUSE:'pause',YEAR_END:'yearEnd',GAME_END:'gameEnd',EDITOR:'editor',SETTINGS:'settings',HELP:'help',INTRO:'intro'};
+const S={ERA_SEL:'eraSel',PRELOAD:'preload',MENU:'menu',CLIENT_SEL:'clientSel',MODEL_SEL:'modelSel',TUT:'tutorial',GAME:'game',PAUSE:'pause',YEAR_END:'yearEnd',GAME_END:'gameEnd',EDITOR:'editor',SETTINGS:'settings',HELP:'help',INTRO:'intro',NETWORK:'network'};
 let state=S.ERA_SEL, eraSel=0, menuSel=0, clientSel=0, renderMode='16bit', modelSel=0, tutPage=0, helpPage=0;
 // Señal para el motor de ambiente (assets/js/ambient.js): rumor/lluvia/cafetera solo
 // deben sonar en partida activa, no en menús, pausa ni fin de partida.
@@ -8323,6 +8323,18 @@ document.addEventListener('keydown',e=>{
   if((state===S.ERA_SEL||state===S.PRELOAD||state===S.MENU||state===S.CLIENT_SEL||state===S.MODEL_SEL||state===S.INTRO)&&e.code==='KeyZ'){
     e.preventDefault();
     quickStartLoteriasGame();
+    return;
+  }
+  // RED DE TIENDAS: tecla N abre la vista mapa/red desde los menús.
+  if((state===S.ERA_SEL||state===S.MENU||state===S.CLIENT_SEL||state===S.MODEL_SEL||state===S.INTRO)&&e.code==='KeyN'){
+    e.preventDefault(); openNetworkView(); return;
+  }
+  if(state===S.NETWORK){
+    const n=(window.STORE_LIST||[]).length||1;
+    if(e.code==='ArrowLeft'||e.code==='ArrowUp'){netSel=(netSel-1+n)%n;e.preventDefault();}
+    if(e.code==='ArrowRight'||e.code==='ArrowDown'){netSel=(netSel+1)%n;e.preventDefault();}
+    if(e.code==='Enter'||e.code==='Space'){e.preventDefault();enterStoreFromNetwork();}
+    if(e.code==='Escape'){ state=_netReturnState||S.ERA_SEL; }
     return;
   }
   if(state===S.ERA_SEL){
@@ -14299,6 +14311,81 @@ function drawModelSelect(){
 }
 
 // ── DRAW TUTORIAL ─────────────────────────────────────────────
+// ── RED DE TIENDAS — vista mapa/red de los puntos de admira.app ──────
+// Screen nuevo (S.NETWORK): plotea TODOS los puntos del KV de OmniPublicity
+// como pins sobre un mapa estilizado; al elegir uno se entra a SU twin.
+window.STORE_LIST = window.STORE_LIST || [];
+let netSel = 0, netLoading = false, _netReturnState = null;
+function openNetworkView(){
+  _netReturnState = (state===S.GAME) ? null : state;
+  state = S.NETWORK; netSel = 0;
+  if(!Array.isArray(window.STORE_LIST) || !window.STORE_LIST.length){
+    netLoading = true;
+    fetch('https://omnipublicity-api.csilvasantin.workers.dev/locations',{cache:'no-store'})
+      .then(rs=>rs.json()).then(d=>{ window.STORE_LIST=(d&&Array.isArray(d.locations))?d.locations:[]; netLoading=false; netSel=0; })
+      .catch(()=>{ netLoading=false; });
+  }
+}
+function netVerticalFor(kind){ const k=String(kind||'').toLowerCase(); return (k.includes('supermercado')||k.includes('super'))?'supermercado':'xtanco'; }
+function enterStoreFromNetwork(){
+  const list=window.STORE_LIST||[]; const l=list[netSel]; if(!l) return;
+  const surfaces=Array.isArray(l.surfaces)?l.surfaces:[];
+  const screens=surfaces.filter(s=>s&&(s.surface==='pantalla'||s.surface==='escaparate')).length;
+  window.STORE_CFG={id:l.id,name:l.name||l.id,addr:l.addr||'',kind:l.kind||'',surfaces,screens,
+    music:l.music||null,cameras:(l.cameras!=null)?l.cameras:null,employees:Array.isArray(l.employees)?l.employees:null};
+  window.STORE_CFG_READY=true;
+  try{ window.dispatchEvent(new CustomEvent('storecfg',{detail:window.STORE_CFG})); }catch(e){}
+  try{ history.replaceState(null,'',location.pathname+'?loc='+encodeURIComponent(l.id)+(location.hash||'')); }catch(e){}
+  try{ autoEnterVertical(netVerticalFor(l.kind)); }catch(e){}
+}
+function _netPos(l, mx, my, mw, mh, b){
+  const c=l.coords||[0,0], pad=0.14;
+  const nx=(c[0]-b.minLng)/b.spanLng, ny=(c[1]-b.minLat)/b.spanLat;
+  return { x: mx+mw*(pad+(1-2*pad)*nx), y: my+mh*(pad+(1-2*pad)*(1-ny)) };
+}
+function drawNetwork(){
+  const list=window.STORE_LIST||[];
+  r(0,0,W,H,'#0a1018');
+  cx.globalAlpha=0.10;
+  for(let x=0;x<W;x+=32){cx.strokeStyle=P.wall;cx.lineWidth=1;cx.beginPath();cx.moveTo(x,0);cx.lineTo(x,H);cx.stroke();}
+  for(let y=0;y<H;y+=32){cx.beginPath();cx.moveTo(0,y);cx.lineTo(W,y);cx.stroke();}
+  cx.globalAlpha=1;
+  nl(0,5,W,5,P.neon2,3); nl(0,H-5,W,H-5,P.neon1,3);
+  nt('RED DE TIENDAS · ADMIRA XP',W/2,24,P.neon3,14);
+  if(netLoading){ tx('Cargando red de tiendas…',W/2,(H/2)|0,P.uiT2,10,'center'); return; }
+  if(!list.length){ tx('Sin tiendas en la red',W/2,(H/2)|0,P.uiT2,10,'center'); tx('ESC volver',W/2,H-16,P.gray,8,'center'); return; }
+  if(netSel>=list.length) netSel=0;
+  const mx=40,my=44,mw=W-80,mh=H-122;
+  let minLng=Infinity,maxLng=-Infinity,minLat=Infinity,maxLat=-Infinity;
+  list.forEach(l=>{const c=l.coords||[0,0];minLng=Math.min(minLng,c[0]);maxLng=Math.max(maxLng,c[0]);minLat=Math.min(minLat,c[1]);maxLat=Math.max(maxLat,c[1]);});
+  const b={minLng,minLat,spanLng:(maxLng-minLng)||1,spanLat:(maxLat-minLat)||1};
+  cx.globalAlpha=0.08;cx.strokeStyle=P.neon2;cx.lineWidth=1;
+  for(let i=0;i<list.length;i++){const a=_netPos(list[i],mx,my,mw,mh,b);for(let j=i+1;j<list.length;j++){const q=_netPos(list[j],mx,my,mw,mh,b);cx.beginPath();cx.moveTo(a.x,a.y);cx.lineTo(q.x,q.y);cx.stroke();}}
+  cx.globalAlpha=1;
+  list.forEach((l,i)=>{
+    const p=_netPos(l,mx,my,mw,mh,b),sel=i===netSel;
+    const liveN=(l.surfaces||[]).filter(s=>s&&s.status==='live').length;
+    if(sel){glow(P.neon3,16);}
+    cx.fillStyle=sel?P.neon3:(liveN?'#88ffaa':P.gray);cx.beginPath();cx.arc(p.x,p.y,sel?6:4,0,Math.PI*2);cx.fill();nog();
+    if(sel){cx.strokeStyle=P.neon3;cx.lineWidth=1;cx.globalAlpha=.5+.3*Math.sin(tt*.1);cx.beginPath();cx.arc(p.x,p.y,11,0,Math.PI*2);cx.stroke();cx.globalAlpha=1;}
+    tx(String(l.name||l.id),p.x,p.y-11,sel?P.neon3:P.uiT2,sel?9:7,'center');
+  });
+  const l=list[netSel];
+  if(l){
+    const cw=320,ch=80,cx0=(W/2-cw/2)|0,cy0=H-102;
+    r(cx0,cy0,cw,ch,'#060610');glow(P.neon3,8);rx(cx0,cy0,cw,ch,P.neon3,2);nog();
+    const surf=l.surfaces||[];
+    const screens=surf.filter(s=>s&&(s.surface==='pantalla'||s.surface==='escaparate')).length;
+    const liveN=surf.filter(s=>s&&s.status==='live').length;
+    const emp=Array.isArray(l.employees)?l.employees.length:0;
+    glow(P.neon3,8);tx(String(l.name||l.id).toUpperCase(),cx0+12,cy0+19,P.neon3,11);nog();
+    tx(String(l.addr||''),cx0+12,cy0+34,P.uiT2,8);
+    tx(String(l.kind||'').toUpperCase(),cx0+12,cy0+48,'#ffd866',7);
+    tx('📺 '+screens+' pantallas    👥 '+emp+' empleados    ● '+liveN+' LIVE',cx0+12,cy0+66,P.green,8);
+  }
+  tx('← → seleccionar    ENTER entrar al gemelo    ESC volver',W/2,H-12,P.gray,8,'center');
+}
+
 function drawTutorial(){
   r(0,0,W,H,'#1a1420');
   // Draw dimmed game background
@@ -21239,6 +21326,7 @@ function loop(){
   }
   if(state===S.INTRO){drawIntro();finalizeFrame();return;}
   if(state===S.CLIENT_SEL){drawClientSelect();finalizeFrame();return;}
+  if(state===S.NETWORK){drawNetwork();finalizeFrame();return;}
   if(state===S.MODEL_SEL){drawModelSelect();drawDemoBadge();if(demoMode)demoUpdate();finalizeFrame();return;}
   if(state===S.TUT){drawTutorial();drawDemoBadge();if(demoMode)demoUpdate();finalizeFrame();return;}
   if(state===S.YEAR_END){drawYearEnd();finalizeFrame();return;}
@@ -21329,7 +21417,11 @@ try {
   const _sp=new URLSearchParams(location.search);
   const playParam=_sp.get('play');
   const locParam=_sp.get('loc');
-  if(playParam){
+  const viewParam=(_sp.get('view')||'').toLowerCase();
+  if(viewParam==='red'||viewParam==='network'||viewParam==='tiendas'||_sp.has('red')){
+    // ?view=red → abre la RED DE TIENDAS (vista mapa/red de todos los puntos).
+    setTimeout(()=>{ try{ openNetworkView(); }catch(e){ console.warn('openNetworkView failed:',e); } }, 60);
+  } else if(playParam){
     // Pequeño delay para que initGame encuentre todo listo
     setTimeout(()=>{ try{ autoEnterVertical(playParam); }catch(e){ console.warn('autoEnterVertical failed:',e); } }, 50);
   } else if(locParam){
