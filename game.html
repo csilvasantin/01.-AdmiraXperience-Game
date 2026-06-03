@@ -564,7 +564,8 @@
     #dvrPanel .dvr-btn:hover,#dvrPanel .dvr-live:hover,#dvrPanel .dvr-close:hover{border-color:#78f3ff}
     #dvrPanel .dvr-live{color:#ff7a7a;border-color:rgba(255,120,120,.5)}
     #dvrPanel .dvr-scrub{width:min(380px,38vw);accent-color:#78f3ff;cursor:pointer}
-    #dvrPanel .dvr-time{font-size:13px;font-weight:bold;color:#ffd866;min-width:48px;text-align:center}
+    #dvrPanel .dvr-time{font-size:13px;font-weight:bold;color:#ffd866;width:54px;text-align:center;background:rgba(2,8,13,.85);border:1px solid rgba(255,216,102,.45);border-radius:6px;padding:4px 2px;font-family:monospace;outline:none}
+    #dvrPanel .dvr-time:focus{border-color:#ffd866;box-shadow:0 0 0 2px rgba(255,216,102,.25)}
     #dvrPanel .dvr-speed{display:flex;gap:2px}
     #dvrPanel .dvr-speed button{background:rgba(10,22,32,.9);border:1px solid rgba(120,243,255,.25);color:#9ec7d0;border-radius:5px;padding:4px 6px;cursor:pointer;font-family:monospace;font-size:10px}
     #dvrPanel .dvr-speed button.on{background:#1e7d8d;color:#fff;border-color:#78f3ff}
@@ -795,7 +796,8 @@
   <button type="button" id="dvrStepB" class="dvr-btn" title="Un paso atrás">◀◀</button>
   <button type="button" id="dvrStepF" class="dvr-btn" title="Un paso adelante">▶▶</button>
   <input id="dvrScrub" class="dvr-scrub" type="range" min="0" max="0" value="0" step="1" aria-label="Línea de tiempo del día">
-  <span id="dvrTime" class="dvr-time">--:--</span>
+  <input id="dvrTime" class="dvr-time" type="text" inputmode="numeric" maxlength="5" value="--:--" title="Escribe una hora (HH:MM) y pulsa Enter para saltar ahí" aria-label="Hora — editable para saltar">
+  <button type="button" id="dvrGo" class="dvr-btn" title="Ir a la hora escrita">⏎</button>
   <span class="dvr-speed" id="dvrSpeed">
     <button type="button" data-spd="0.5">0.5×</button><button type="button" data-spd="1" class="on">1×</button><button type="button" data-spd="2">2×</button><button type="button" data-spd="4">4×</button><button type="button" data-spd="8">8×</button>
   </span>
@@ -10102,9 +10104,29 @@ function updateDVRPanel(){
   const n=REC.recording.length;
   if(e.scrub){ e.scrub.max=Math.max(0,n-1); if(document.activeElement!==e.scrub) e.scrub.value=REC.replay.idx; }
   const s=REC.recording[REC.replay.idx];
-  if(e.time) e.time.textContent=s?dvrTimeLabel(s.t):'--:--';
+  // El tiempo lee del reloj del juego (gameTime del snapshot = lo que marca el
+  // reloj de pared). No lo pisamos mientras el usuario lo edita.
+  if(e.time && document.activeElement!==e.time) e.time.value=s?dvrTimeLabel(s.t):'--:--';
   if(e.play) e.play.textContent=REC.replay.playing?'⏸':'▶';
   if(e.speed) [...e.speed.querySelectorAll('button')].forEach(b=>b.classList.toggle('on', Number(b.dataset.spd)===REC.speed));
+}
+// Salta el replay a la hora HH:MM escrita (rebobinar/avanzar), buscando el
+// snapshot más cercano. Acepta "14:30", "14 30", "14h30", "14.5".
+function dvrSeekToTime(str){
+  if(!REC.recording.length) return false;
+  const s=String(str==null?'':str).trim().replace(',', '.');
+  let h=NaN, m=0;
+  let mt=s.match(/^(\d{1,2})\s*[:h\. ]\s*(\d{1,2})$/);
+  if(mt){ h=+mt[1]; m=+mt[2]; }
+  else if(/^\d{3,4}$/.test(s)){ h=+s.slice(0,s.length-2); m=+s.slice(-2); }
+  else { const f=parseFloat(s); if(isFinite(f)){ h=Math.floor(f); m=Math.round((f-h)*60); } }
+  if(!isFinite(h)) return false;
+  const target=h+(m||0)/60;
+  let best=0, bd=Infinity;
+  REC.recording.forEach((sn,i)=>{ const d=Math.abs((sn.t||0)-target); if(d<bd){ bd=d; best=i; } });
+  REC.replay.playing=false; REC.replay._fidx=best; REC.replay.idx=best;
+  updateDVRPanel();
+  return true;
 }
 function openDVRPanel(){
   if(state!==S.GAME) return 'Abre el gemelo (en juego) para usar el DVR.';
@@ -10130,6 +10152,15 @@ window.openDVRPanel=openDVRPanel; window.closeDVRPanel=closeDVRPanel;
   if(live) live.addEventListener('click',closeDVRPanel);
   if(close) close.addEventListener('click',closeDVRPanel);
   if(e.speed) [...e.speed.querySelectorAll('button')].forEach(b=>b.addEventListener('click',()=>{ setXpaceSpeed(b.dataset.spd); updateDVRPanel(); }));
+  // Campo de hora editable: Enter o botón ⏎ saltan a esa hora (rebobinar/avanzar).
+  const go=document.getElementById('dvrGo');
+  const seek=()=>{ if(dvrSeekToTime(e.time&&e.time.value)){ try{ e.time.blur(); }catch(_){} } };
+  if(e.time){
+    e.time.addEventListener('keydown',ev=>{ ev.stopPropagation(); if(ev.key==='Enter'){ ev.preventDefault(); seek(); } if(ev.key==='Escape'){ ev.preventDefault(); e.time.blur(); } });
+    e.time.addEventListener('focus',()=>{ try{ e.time.select(); }catch(_){} });
+    e.time.addEventListener('blur',()=>updateDVRPanel());
+  }
+  if(go) go.addEventListener('click',seek);
 })();
 
 function updateGame(){
