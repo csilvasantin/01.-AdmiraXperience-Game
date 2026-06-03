@@ -221,8 +221,12 @@ async function callGrok(env, system, user) {
       max_tokens: 220,
     }),
   });
-  const j = await res.json().catch(() => null);
-  if (!res.ok || !j) return { error: `xai_http_${res.status}`, detail: j && j.error && j.error.message };
+  const txt = await res.text();
+  let j = null; try { j = JSON.parse(txt); } catch {}
+  if (!res.ok || !j) {
+    const detail = (j && j.error && (j.error.message || j.error)) || String(txt).slice(0, 400);
+    return { error: `xai_http_${res.status}`, detail, model };
+  }
   const answer = j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content;
   if (!answer) return { error: 'xai_no_answer' };
   return { answer: String(answer).trim() };
