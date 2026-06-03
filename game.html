@@ -24412,6 +24412,7 @@ window.xtAPI = (function(){
     return [
       {title:'Consulta',items:['/status','/staff','/stock','/turno','/turno 12']},
       {title:'Equipo y stock',items:['/hire 1','/hire dj','/hire all','/train 1','/train all','/restock 2','/restock all','/restock prensa']},
+      {title:'Equipo del punto (gemelo)',items:['/nuevoMiembro Laura azafata','/nuevoMiembro Pedro cajero','/echarMiembro Laura']},
       {title:'Personal (panel /staff)',items:['/staff','/staff bonus 0 100','/staff eotm 0','/staff eotm ana','/staff train 1','/staff hire 2','/staff fire 1']},
       {title:'Tienda',items:['/ad 0','/ad 1','/ad 2','/upgrade','/visit com','/visit tec','/visit del','/visit gc','/save']},
       {title:'Tiempo y ambiente',items:['/reloj 14:30','/reloj 14 30','/time am','/time pm','/time night','/weather normal','/weather rain','/weather sun','/lamp','/lamp auto','/hue','/hue auto']},
@@ -24839,6 +24840,37 @@ window.xtAPI = (function(){
     }catch(err){ return '❌ Error al dar de alta: '+(err&&err.message||err); }
   }
 
+  // /echarMiembro <nombre> — da de baja a un miembro del equipo del punto
+  // activo: lo quita del KV y lo manda a la salida (animación de la puerta).
+  async function removeTeamMember(arg){
+    const e0=needsGame(); if(e0) return e0;
+    const cfg=window.STORE_CFG;
+    if(!cfg||!cfg.id) return '⚠️ Abre el gemelo de un punto (admira.app → Ver Gemelo Digital) para gestionar su equipo.';
+    const name=String(arg||'').replace(/\s+/g,' ').trim();
+    if(!name) return 'Uso: /echarMiembro <nombre>';
+    let idx=-1;
+    if(G&&G.staff) idx=G.staff.findIndex(s=>s&&!s.fired&&String(s.name||'').toLowerCase()===name.toLowerCase());
+    if(idx===0) return '⚠️ No se puede echar al cajero principal ('+(G.staff[0].name||'')+'), es el control del jugador.';
+    try{
+      const res=await fetch('https://omnipublicity-api.csilvasantin.workers.dev/location/'+encodeURIComponent(cfg.id)+'/employee/remove',{
+        method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})
+      });
+      const j=await res.json().catch(()=>({}));
+      if(!j||!j.ok) return '❌ No se pudo echar'+(j&&j.error?': '+j.error:'');
+      if(Array.isArray(j.employees)) cfg.employees=j.employees;
+      // Baja en el juego: salida por la puerta (misma mecánica que el botón fire).
+      if(idx>0 && G.staff[idx]){
+        const s=G.staff[idx];
+        s.fired=true; s.clickBubble=120; s.fireBubble=true;
+        try{ const d=getDoorOutsidePos(); s.fireTx=d.x; s.fireTy=d.y; G.doorOpen=60; }catch(_){}
+        try{ addFloat(s.x,s.y-40,'Bye bye!','#cc4444'); }catch(_){}
+      }
+      if(!(j.removed>0) && idx<0) return '🤷 No encontré a "'+name+'" en el equipo de '+(cfg.name||cfg.id)+'.';
+      if(typeof showEv==='function') showEv('👋 Baja: '+name,'#ff99aa');
+      return '👋 '+name+' dado de baja del equipo de '+(cfg.name||cfg.id)+'.';
+    }catch(err){ return '❌ Error al echar: '+(err&&err.message||err); }
+  }
+
   async function executeTelegramText(rawText){
     const text=String(rawText||'').trim();
     if(!text) return 'Comando vacio';
@@ -24851,6 +24883,7 @@ window.xtAPI = (function(){
     try{
       if(cmd==='start'||cmd==='help') return commandHelp();
       if(['nuevomiembro','nuevomember','altamiembro','miembro','newmember','addmember','team-add'].includes(cmd)) return await addTeamMember(arg);
+      if(['echarmiembro','echar','bajamiembro','despedir','firemember','removemember','team-remove'].includes(cmd)) return await removeTeamMember(arg);
       if(cmd==='status') return formatStatus();
       if(cmd==='stock') return formatStock();
       if(cmd==='set'){

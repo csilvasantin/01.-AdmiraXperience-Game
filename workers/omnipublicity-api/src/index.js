@@ -149,6 +149,24 @@ async function handleAddEmployee(request, env, id) {
   return json(request, env, 200, { ok: true, employee: { name, role }, employees: loc.employees });
 }
 
+// Baja de miembro de equipo (quita por nombre). Append/remove acotado, sin
+// admin token (dato de demo), igual que el alta.
+async function handleRemoveEmployee(request, env, id) {
+  let body; try { body = await request.json(); } catch { body = {}; }
+  const name = String(body && body.name || '').replace(/\s+/g, ' ').trim();
+  if (!name) return json(request, env, 400, { error: 'missing_name' });
+  let stored = null;
+  try { const raw = await env.OMNIP_KV.get(KV_KEY); if (raw) stored = JSON.parse(raw); } catch {}
+  if (!stored || !Array.isArray(stored.locations)) return json(request, env, 404, { error: 'no_catalog' });
+  const loc = stored.locations.find(l => l && String(l.id).toLowerCase() === String(id).toLowerCase());
+  if (!loc) return json(request, env, 404, { error: 'location_not_found', id });
+  const before = Array.isArray(loc.employees) ? loc.employees.length : 0;
+  loc.employees = (loc.employees || []).filter(e => !(e && String(e.name).toLowerCase() === name.toLowerCase()));
+  const removed = before - loc.employees.length;
+  if (removed > 0) { stored.updatedAt = now(); await env.OMNIP_KV.put(KV_KEY, JSON.stringify(stored)); }
+  return json(request, env, 200, { ok: true, removed, employees: loc.employees });
+}
+
 export default {
   async fetch(request, env) {
     if (request.method === 'OPTIONS') {
@@ -160,6 +178,8 @@ export default {
       if (request.method === 'GET' && path === '/health')    return json(request, env, 200, { ok: true, ts: now() });
       if (request.method === 'GET' && path === '/locations') return await handleGetLocations(request, env);
       if (request.method === 'PUT' && path === '/locations') return await handlePutLocations(request, env);
+      const mEmpRm = path.match(/^\/location\/([^/]+)\/employee\/remove$/);
+      if (request.method === 'POST' && mEmpRm) return await handleRemoveEmployee(request, env, decodeURIComponent(mEmpRm[1]));
       const mEmp = path.match(/^\/location\/([^/]+)\/employee$/);
       if (request.method === 'POST' && mEmp) return await handleAddEmployee(request, env, decodeURIComponent(mEmp[1]));
       return json(request, env, 404, { error: 'not_found', path });
