@@ -21059,6 +21059,12 @@ function drawNPCEditor(){
   npcBtn('npcEdReset',px+160,btnY,100,24);
   cx.fillStyle='#8a7a60';cx.fillRect(px+160,btnY,100,24);
   tx('RESET',px+210,btnY+16,'#fff',10,'center');
+  // Reportar al diario — escribe las labores de la jornada de este miembro
+  // en el diario (https://www.carlossilva.info/18.-diario/) vía /report.
+  npcBtn('npcEdReport',px+280,btnY,120,24);
+  cx.fillStyle='#0e4a3a';cx.fillRect(px+280,btnY,120,24);
+  cx.strokeStyle='#2aa07a';cx.lineWidth=1.5;cx.strokeRect(px+280,btnY,120,24);
+  tx('📓 REPORTAR',px+340,btnY+16,'#bff0dd',10,'center');
   cx.restore();
 }
 
@@ -21106,6 +21112,15 @@ function handleNPCEditorClick(id){
     return true;
   }
   if(npcEdKind!=='staff') return false;
+  if(id==='npcEdReport'){
+    const name=String((npcEdDraft&&npcEdDraft.name)||'').replace(/\s*🎂.*$/,'').trim();
+    if(name && typeof window.sendComposerText==='function'){
+      try{ window.sendComposerText('/report '+name); }catch(e){}
+      try{ if(typeof setManagerSayBubble==='function') setManagerSayBubble('📓 '+name+' reporta su jornada al diario…'); }catch(e){}
+      try{ if(typeof SFX!=='undefined' && SFX.eventChime) SFX.eventChime(); }catch(e){}
+    }
+    return true;
+  }
   if(id==='npcEdSave'){applyNPCEditor();closeNPCEditor();return true;}
   if(id==='npcEdReset'){
     if(npcEdIdx>=0&&G.staff[npcEdIdx]){
