@@ -557,6 +557,17 @@
     body.entering-twin #splashIntro .splash-version,
     body.entering-twin #splashNav{display:none!important}
     body.entering-twin #splashIntro .splash-overlay::after{content:'Cargando gemelo…';color:#dff8ff;font-family:monospace;font-size:14px;letter-spacing:.08em;opacity:.9}
+    /* DVR del Xpacio — barra de rebobinado/replay */
+    #dvrPanel{display:none;position:fixed;left:50%;transform:translateX(-50%);bottom:14px;z-index:40;align-items:center;gap:8px;padding:8px 12px;background:rgba(6,14,24,.96);border:1px solid rgba(120,243,255,.45);border-radius:12px;box-shadow:0 12px 30px rgba(0,0,0,.5);font-family:monospace;color:#dff8ff;max-width:94vw}
+    #dvrPanel.show{display:flex}
+    #dvrPanel .dvr-btn,#dvrPanel .dvr-live,#dvrPanel .dvr-close{background:rgba(10,22,32,.9);border:1px solid rgba(120,243,255,.35);color:#dff8ff;border-radius:7px;padding:5px 9px;cursor:pointer;font-family:monospace;font-size:12px;font-weight:bold}
+    #dvrPanel .dvr-btn:hover,#dvrPanel .dvr-live:hover,#dvrPanel .dvr-close:hover{border-color:#78f3ff}
+    #dvrPanel .dvr-live{color:#ff7a7a;border-color:rgba(255,120,120,.5)}
+    #dvrPanel .dvr-scrub{width:min(380px,38vw);accent-color:#78f3ff;cursor:pointer}
+    #dvrPanel .dvr-time{font-size:13px;font-weight:bold;color:#ffd866;min-width:48px;text-align:center}
+    #dvrPanel .dvr-speed{display:flex;gap:2px}
+    #dvrPanel .dvr-speed button{background:rgba(10,22,32,.9);border:1px solid rgba(120,243,255,.25);color:#9ec7d0;border-radius:5px;padding:4px 6px;cursor:pointer;font-family:monospace;font-size:10px}
+    #dvrPanel .dvr-speed button.on{background:#1e7d8d;color:#fff;border-color:#78f3ff}
     @keyframes splashKenBurns{from{transform:scale(1.02) translate(-1%,-1%)}to{transform:scale(1.08) translate(1%,1%)}}
     @keyframes splashPulse{0%,100%{transform:scale(1);filter:drop-shadow(0 0 18px rgba(255,80,200,.55)) drop-shadow(0 0 36px rgba(80,200,255,.45))}50%{transform:scale(1.025);filter:drop-shadow(0 0 26px rgba(255,80,200,.75)) drop-shadow(0 0 52px rgba(80,200,255,.6))}}
     @keyframes splashHintFade{0%,100%{opacity:.4}50%{opacity:.85}}
@@ -776,6 +787,19 @@
       </div>
     </div>
   </div>
+</div>
+<!-- DVR del Xpacio: barra de rebobinado/replay (open→close) -->
+<div id="dvrPanel" aria-hidden="true">
+  <button type="button" id="dvrLive" class="dvr-live" title="Volver a EN VIVO">● EN VIVO</button>
+  <button type="button" id="dvrPlay" class="dvr-btn" title="Reproducir / Pausa">▶</button>
+  <button type="button" id="dvrStepB" class="dvr-btn" title="Un paso atrás">◀◀</button>
+  <button type="button" id="dvrStepF" class="dvr-btn" title="Un paso adelante">▶▶</button>
+  <input id="dvrScrub" class="dvr-scrub" type="range" min="0" max="0" value="0" step="1" aria-label="Línea de tiempo del día">
+  <span id="dvrTime" class="dvr-time">--:--</span>
+  <span class="dvr-speed" id="dvrSpeed">
+    <button type="button" data-spd="0.5">0.5×</button><button type="button" data-spd="1" class="on">1×</button><button type="button" data-spd="2">2×</button><button type="button" data-spd="4">4×</button><button type="button" data-spd="8">8×</button>
+  </span>
+  <button type="button" id="dvrClose" class="dvr-close" title="Cerrar DVR">×</button>
 </div>
 <div id="robotGrokPanel" aria-label="Consulta Grok del Unitree Bot">
   <div class="robot-grok-head"><span>Unitree Intelligence</span><span id="robotGrokStatus">Grok listo</span></div>
@@ -10028,6 +10052,85 @@ function recSnapshot(){
     if(REC.recording.length>REC.maxLen) REC.recording.shift();
   }catch(e){}
 }
+
+// ── REPLAY (rebobinado visual) ──────────────────────────────────
+function dvrTimeLabel(t){ const h=Math.floor(t||0), m=Math.floor(((t||0)-h)*60); return ('0'+h).slice(-2)+':'+('0'+m).slice(-2); }
+function enterReplay(){
+  if(REC.replay.on) return true;
+  if(!REC.recording.length||!G) return false;
+  // Guardamos el estado vivo para restaurarlo al salir del replay.
+  REC._liveBackup={ custs:G.custs, staff:G.staff, gameTime:G.gameTime, weekTimer:G.weekTimer,
+    money:G.money, sales:G.sales, satisfaction:G.satisfaction, fame:G.fame,
+    custIn:G.custIn, custOut:G.custOut, passers:G.passersbyToday,
+    weather:(G.weather&&G.weather.type), thief:(G.thief&&G.thief.phase) };
+  REC.replay.on=true;
+  REC.replay.idx=REC.recording.length-1;
+  REC.replay._fidx=REC.replay.idx;
+  REC.replay.playing=false;
+  return true;
+}
+function exitReplay(){
+  if(!REC.replay.on) return;
+  const b=REC._liveBackup;
+  if(b&&G){ G.custs=b.custs; G.staff=b.staff; G.gameTime=b.gameTime; G.weekTimer=b.weekTimer;
+    G.money=b.money; G.sales=b.sales; G.satisfaction=b.satisfaction; G.fame=b.fame;
+    G.custIn=b.custIn; G.custOut=b.custOut; G.passersbyToday=b.passers;
+    if(G.weather) G.weather.type=b.weather; if(G.thief) G.thief.phase=b.thief; }
+  REC.replay.on=false; REC._liveBackup=null;
+}
+// Aplica el snapshot actual a G para que el render dibuje el pasado (la sim
+// está pausada en replay, no se corrompe nada; se restaura al salir).
+function applyReplayFrame(){
+  const rec=REC.recording; if(!rec.length){ exitReplay(); return; }
+  if(REC.replay.playing){
+    REC.replay._fidx += Math.max(0.05, (REC.speed||1)*0.3);
+    if(REC.replay._fidx>=rec.length-1){ REC.replay._fidx=rec.length-1; REC.replay.playing=false; }
+  }
+  let idx=Math.round(REC.replay._fidx);
+  idx=Math.max(0,Math.min(rec.length-1,idx)); REC.replay.idx=idx;
+  const s=rec[idx]; if(!s||!G) return;
+  G.custs=s.custs; G.staff=s.staff; G.gameTime=s.t; G.weekTimer=s.weekTimer;
+  G.money=s.money; G.sales=s.sales; G.satisfaction=s.sat; G.fame=s.fame;
+  G.custIn=s.custIn; G.custOut=s.custOut; G.passersbyToday=s.passers;
+  if(G.weather) G.weather.type=s.weather; if(G.thief) G.thief.phase=s.thiefPhase;
+  try{ if(typeof updateDVRPanel==='function') updateDVRPanel(); }catch(e){}
+}
+// ── Panel DVR (UI de rebobinado) ────────────────────────────────
+function _dvrEls(){ return { panel:document.getElementById('dvrPanel'), scrub:document.getElementById('dvrScrub'), time:document.getElementById('dvrTime'), play:document.getElementById('dvrPlay'), speed:document.getElementById('dvrSpeed') }; }
+function updateDVRPanel(){
+  const e=_dvrEls(); if(!e.panel) return;
+  const n=REC.recording.length;
+  if(e.scrub){ e.scrub.max=Math.max(0,n-1); if(document.activeElement!==e.scrub) e.scrub.value=REC.replay.idx; }
+  const s=REC.recording[REC.replay.idx];
+  if(e.time) e.time.textContent=s?dvrTimeLabel(s.t):'--:--';
+  if(e.play) e.play.textContent=REC.replay.playing?'⏸':'▶';
+  if(e.speed) [...e.speed.querySelectorAll('button')].forEach(b=>b.classList.toggle('on', Number(b.dataset.spd)===REC.speed));
+}
+function openDVRPanel(){
+  if(state!==S.GAME) return 'Abre el gemelo (en juego) para usar el DVR.';
+  if(!REC.recording.length) return 'Aún no hay grabación — deja correr el día un poco (prueba /velocidad 8).';
+  if(!enterReplay()) return 'No se pudo entrar en replay.';
+  const e=_dvrEls(); if(e.panel){ e.panel.classList.add('show'); e.panel.setAttribute('aria-hidden','false'); }
+  updateDVRPanel();
+  return '⏮ DVR abierto: arrastra la línea de tiempo o pulsa ▶. Pulsa "● EN VIVO" para volver.';
+}
+function closeDVRPanel(){
+  exitReplay();
+  const e=_dvrEls(); if(e.panel){ e.panel.classList.remove('show'); e.panel.setAttribute('aria-hidden','true'); }
+}
+window.openDVRPanel=openDVRPanel; window.closeDVRPanel=closeDVRPanel;
+(function wireDVR(){
+  const e=_dvrEls(); if(!e.panel) return;
+  const setIdx=v=>{ REC.replay.playing=false; REC.replay._fidx=Math.max(0,Math.min(REC.recording.length-1,v)); REC.replay.idx=Math.round(REC.replay._fidx); updateDVRPanel(); };
+  if(e.scrub) e.scrub.addEventListener('input',()=>setIdx(Number(e.scrub.value)||0));
+  if(e.play) e.play.addEventListener('click',()=>{ if(REC.replay.idx>=REC.recording.length-1) REC.replay._fidx=0; REC.replay.playing=!REC.replay.playing; updateDVRPanel(); });
+  const stepB=document.getElementById('dvrStepB'), stepF=document.getElementById('dvrStepF'), live=document.getElementById('dvrLive'), close=document.getElementById('dvrClose');
+  if(stepB) stepB.addEventListener('click',()=>setIdx(REC.replay.idx-1));
+  if(stepF) stepF.addEventListener('click',()=>setIdx(REC.replay.idx+1));
+  if(live) live.addEventListener('click',closeDVRPanel);
+  if(close) close.addEventListener('click',closeDVRPanel);
+  if(e.speed) [...e.speed.querySelectorAll('button')].forEach(b=>b.addEventListener('click',()=>{ setXpaceSpeed(b.dataset.spd); updateDVRPanel(); }));
+})();
 
 function updateGame(){
   tt++;
@@ -21497,8 +21600,10 @@ function loop(){
   }
   // GAME
   if(demoMode) demoUpdate();
-  // DVR: velocidad de simulación (salvo en modo replay/rebobinado).
-  if(!REC.replay.on){
+  // DVR: en replay renderiza desde el snapshot; si no, simula a la velocidad fijada y graba.
+  if(REC.replay.on){
+    try{ applyReplayFrame(); }catch(e){}
+  } else {
     const spd=REC.speed||1;
     if(spd>=1){ for(let i=0;i<spd;i++){ try{updateGame();}catch(e){} } }
     else { REC._slowAcc+=spd; if(REC._slowAcc>=1){ REC._slowAcc-=1; try{updateGame();}catch(e){} } }
@@ -24525,7 +24630,7 @@ window.xtAPI = (function(){
       {title:'Consulta',items:['/status','/staff','/stock','/turno','/turno 12']},
       {title:'Equipo y stock',items:['/hire 1','/hire dj','/hire all','/train 1','/train all','/restock 2','/restock all','/restock prensa']},
       {title:'Equipo del punto (gemelo)',items:['/nuevoMiembro Laura azafata','/nuevoMiembro Pedro cajero','/echarMiembro Laura']},
-      {title:'DVR del Xpacio (grabar/velocidad)',items:['/velocidad 1','/velocidad 2','/velocidad 4','/velocidad 8','/velocidad 0.5']},
+      {title:'DVR del Xpacio (grabar/velocidad/replay)',items:['/velocidad 1','/velocidad 2','/velocidad 4','/velocidad 8','/dvr','/envivo']},
       {title:'Personal (panel /staff)',items:['/staff','/staff bonus 0 100','/staff eotm 0','/staff eotm ana','/staff train 1','/staff hire 2','/staff fire 1']},
       {title:'Tienda',items:['/ad 0','/ad 1','/ad 2','/upgrade','/visit com','/visit tec','/visit del','/visit gc','/save']},
       {title:'Tiempo y ambiente',items:['/reloj 14:30','/reloj 14 30','/time am','/time pm','/time night','/weather normal','/weather rain','/weather sun','/lamp','/lamp auto','/hue','/hue auto']},
@@ -25002,6 +25107,13 @@ window.xtAPI = (function(){
         const n=setXpaceSpeed(arg);
         if(typeof showEv==='function') showEv('⏩ Velocidad x'+n,'#88ccff');
         return '⏩ Velocidad del Xpacio: x'+n+' · opciones: 0.5, 1, 2, 4, 8';
+      }
+      if(['dvr','replay','rebobinar','grabacion','grabación','rewind'].includes(cmd)){
+        return (typeof openDVRPanel==='function') ? openDVRPanel() : 'DVR no disponible';
+      }
+      if(['envivo','live','enviva','directo'].includes(cmd)){
+        if(typeof closeDVRPanel==='function') closeDVRPanel();
+        return '● EN VIVO — replay cerrado.';
       }
       if(cmd==='status') return formatStatus();
       if(cmd==='stock') return formatStock();
