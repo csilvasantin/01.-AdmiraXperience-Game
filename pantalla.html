@@ -103,6 +103,8 @@
   let curSig = '';          // firma del item actual mostrado
   let wantSound = false;    // el usuario pidió sonido
   let lastShowingName = ''; // para heartbeat
+  let curObjUrl = null;     // blob: URL del vídeo en reproducción (para revocar)
+  const MEDIA_CACHE = 'xtore-media-v1'; // caché local de vídeos (como Admira)
 
   // ── Reloj del idle ──
   function tickClock() {
@@ -119,19 +121,51 @@
     clearTimeout(showLabel._t); showLabel._t = setTimeout(() => label.classList.remove('show'), 4000);
   }
 
+  function revokeObj() {
+    if (curObjUrl) { try { URL.revokeObjectURL(curObjUrl); } catch (e) {} curObjUrl = null; }
+  }
+
   function showIdle(msg) {
     idle.style.display = 'flex';
     vid.style.display = 'none'; pic.style.display = 'none';
     try { vid.pause(); vid.removeAttribute('src'); vid.load(); } catch (e) {}
+    revokeObj();
     pic.removeAttribute('src');
     lastShowingName = '';
     if (msg) idlemsg.textContent = msg;
   }
 
-  function showVideo(src) {
+  // Descarga el vídeo a caché local (Cache API) una vez y devuelve un blob: URL
+  // para reproducir desde disco/memoria, como el player de Admira. Si algo
+  // falla, cae a streaming directo (devuelve la URL original).
+  async function localBlobUrl(url) {
+    if (!('caches' in window) || !/^https?:/.test(url)) return url;
+    try {
+      const cache = await caches.open(MEDIA_CACHE);
+      let resp = await cache.match(url);
+      if (!resp) {
+        const net = await fetch(url, { mode: 'cors' });
+        if (!net || !net.ok) return url;
+        try { await cache.put(url, net.clone()); } catch (e) {}
+        resp = net;
+      }
+      const blob = await resp.blob();
+      return URL.createObjectURL(blob);
+    } catch (e) { return url; }
+  }
+
+  async function showVideo(src) {
     idle.style.display = 'none'; pic.style.display = 'none';
+    const playUrl = await localBlobUrl(src);
+    // Si el contenido cambió mientras descargaba, abortar (no pisar lo nuevo).
+    if (curSig !== 'video|' + src) {
+      if (playUrl.indexOf('blob:') === 0) { try { URL.revokeObjectURL(playUrl); } catch (e) {} }
+      return;
+    }
+    revokeObj();
+    if (playUrl.indexOf('blob:') === 0) curObjUrl = playUrl;
     vid.style.display = 'block';
-    vid.src = src;
+    vid.src = playUrl;
     vid.muted = !wantSound;
     vid.play().catch(() => {});
     if (!wantSound) tap.style.display = 'flex';
