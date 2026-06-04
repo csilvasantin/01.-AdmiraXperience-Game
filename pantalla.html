@@ -316,7 +316,9 @@
     if (!('caches' in window)) return;
     let manifest;
     try {
-      const r = await fetch('escaparate-manifest.json', { cache: 'no-store' });
+      // Manifest por canal: escaparate-manifest.json, totem-manifest.json, …
+      // Si el canal no tiene manifest (404), no precarga (cachea al reproducir).
+      const r = await fetch(SCREEN + '-manifest.json', { cache: 'no-store' });
       if (!r.ok) return;
       manifest = await r.json();
     } catch (e) { return; }

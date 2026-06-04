@@ -1835,6 +1835,13 @@ const SIGNAGE_HD={
     {h:720,src:'https://pixer-eleven.csilvasantin.workers.dev/signage/media/freedom90_720.mp4'},
   ],
 };
+// Versión VERTICAL (9:16) de cada vídeo, para el canal del tótem (Lenovo en
+// vertical). name → archivo vertical. Mientras esté vacío, el canal 'totem' cae
+// al archivo horizontal (la pantalla lo muestra a cover). Al añadir los 9:16
+// reales (assets o R2) se actualiza automáticamente. Ver totem-manifest.json.
+const VIDEO_FILES_VERTICAL={
+  // 'Wham! - Last Christmas':'assets/videos/signage_last_christmas_90x160.mp4',
+};
 const VIDEO_LED_MESSAGES={
   'Dire Straits - Money For Nothing':'  ◆  VISITAS: AHORA SUENA MONEY FOR NOTHING  ◆  DIRE STRAITS EN PANTALLA  ◆  ',
   'a-ha - Take On Me':'  ◆  VISITAS: AHORA SUENA TAKE ON ME  ◆  A-HA EN PANTALLA  ◆  ',
@@ -2778,6 +2785,49 @@ async function emitEscaparateNow(force){
 }
 setInterval(()=>emitEscaparateNow(false),1200);
 setInterval(()=>emitEscaparateNow(true),60000); // keepalive del puntero /now (worker dedup + TTL 180s)
+
+// ── Espejo del TÓTEM (canal 'totem' → Lenovo vertical) ───────────────────
+// Igual que el escaparate pero para la superficie 'metahuman' (el tótem AI).
+// Emite lo que el usuario fije (pin) ahí. Si el vídeo tiene versión vertical
+// (VIDEO_FILES_VERTICAL) la usa; si no, cae al horizontal (la pantalla lo
+// muestra a cover en el panel vertical). Sin pin → idle (el tótem 3D enseña
+// el Metahuman AI, que no es espejable como vídeo).
+let _totemNowSig='';
+function totemNowItem(){
+  const pin=(DS_PIN&&typeof DS_PIN==='object')?DS_PIN['metahuman']:null;
+  if(!pin) return {kind:'idle',name:'',src:null};
+  const name=pin.name, kind=pin.kind;
+  const file = VIDEO_FILES_VERTICAL[name] || (name?VIDEO_FILES[name]:null);
+  if(!file) return {kind:'idle',name:name||'',src:null};
+  if(/^blob:/i.test(file)) return {kind,name,src:null,local:true};
+  let src; try{ src=new URL(file,location.href).href; }catch(e){ src=file; }
+  return {kind,name,src};
+}
+async function emitTotemNow(force){
+  try{
+    const it=totemNowItem();
+    const sig=it.src?(it.kind+'|'+it.src):(it.kind+'|'+(it.name||'')+(it.local?'|local':''));
+    const changed = sig!==_totemNowSig;
+    if(!force && !changed) return;
+    _totemNowSig=sig;
+    fetch(SIGNAGE_NOW_URL,{
+      method:'POST',headers:{'Content-Type':'application/json'},keepalive:true,
+      body:JSON.stringify({screen:'totem',item:Object.assign({},it,{ts:Date.now()})}),
+    }).catch(()=>{});
+    if(changed){
+      const marker='[scr:totem] ';
+      const body = it.src
+        ? {kind:it.kind, src:it.src, title:marker+(it.name||'')}
+        : {kind:'text', src:'about:blank', title:marker+'__idle__'};
+      fetch('https://pixer-eleven.csilvasantin.workers.dev/signage/push',{
+        method:'POST',headers:{'Content-Type':'application/json'},keepalive:true,
+        body:JSON.stringify(body),
+      }).catch(()=>{});
+    }
+  }catch(e){}
+}
+setInterval(()=>emitTotemNow(false),1200);
+setInterval(()=>emitTotemNow(true),60000);
 
 function setManagerSayBubble(text){
   const clean=String(text||'').replace(/\s+/g,' ').trim().slice(0,120);
