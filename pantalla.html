@@ -127,8 +127,22 @@
     pic.src = src;
   }
 
+  // Auto por pantalla: de las variantes (item.variants:[{h,src}]) elige la mayor
+  // altura que el dispositivo puede mover (≤ MAXH). Si no hay variantes, usa src.
+  function pickSrc(item) {
+    const vs = Array.isArray(item.variants) ? item.variants.filter(v => v && v.src && v.h) : [];
+    if (vs.length) {
+      const sorted = vs.slice().sort((a, b) => a.h - b.h);
+      let chosen = sorted[0];                 // por defecto la menor (por si el cap es bajísimo)
+      for (const v of sorted) { if (v.h <= MAXH) chosen = v; }
+      return chosen.src;
+    }
+    return item.src;
+  }
+
   function applyItem(item) {
-    if (!item || item.kind === 'idle' || (!item.src && !item.local)) {
+    const hasVariants = item && Array.isArray(item.variants) && item.variants.length;
+    if (!item || item.kind === 'idle' || (!item.src && !item.local && !hasVariants)) {
       if (curSig !== 'idle') { curSig = 'idle'; showIdle('Esperando contenido del escaparate'); }
       return;
     }
@@ -141,12 +155,13 @@
       }
       return;
     }
-    const sig = item.kind + '|' + item.src;
+    const src = pickSrc(item);
+    const sig = item.kind + '|' + src;
     if (sig === curSig) { if (item.kind === 'video') vid.muted = !wantSound; return; }
     curSig = sig;
     lastShowingName = item.name || '';
-    if (item.kind === 'image') showImage(item.src);
-    else showVideo(item.src);
+    if (item.kind === 'image') showImage(src);
+    else showVideo(src);
     if (item.name) showLabel((item.kind === 'image' ? '🖼 ' : '📺 ') + item.name);
   }
 
