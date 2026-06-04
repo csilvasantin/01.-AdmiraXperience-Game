@@ -19,6 +19,8 @@
   #idle .logo b{ color:var(--gold); }
   #idle .clock{ font-size:clamp(20px,5vw,56px); color:#bfe9f2; opacity:.9; }
   #idle .msg{ font-size:clamp(11px,2.2vw,18px); color:#5a8aa0; letter-spacing:.08em; text-transform:uppercase; }
+  #idle .caps{ margin-top:14px; font-size:clamp(9px,1.6vw,12px); color:#3f6478; letter-spacing:.06em; font-family:monospace; line-height:1.6; }
+  #idle .caps b{ color:#7fb8cc; }
   /* Indicador de estado */
   #dot{ position:fixed; top:10px; right:12px; width:12px; height:12px; border-radius:50%; background:#444;
         box-shadow:0 0 8px rgba(0,0,0,.6); z-index:30; transition:background .3s; }
@@ -44,6 +46,7 @@
       <div class="logo">ADMIRA <b>XP</b></div>
       <div class="clock" id="clock">--:--</div>
       <div class="msg" id="idlemsg">Esperando contenido del escaparate</div>
+      <div class="caps" id="caps"></div>
     </div>
   </div>
   <div id="dot" title="estado de conexión"></div>
@@ -59,6 +62,18 @@
   const POLL_MS = 1500;   // poll del puntero /now (1.5s = menos latencia al cambiar contenido)
   const HB_MS = 60000;    // heartbeat cada 60s (el worker deduplica; basta para el badge "online")
   const screenId = 'xtore-' + SCREEN + '-' + Math.random().toString(36).slice(2, 6);
+
+  // ── Capacidades del dispositivo (calidad máxima que puede mover) ──
+  // Reportadas en el heartbeat y mostradas en la pantalla de espera, para
+  // controlar la calidad por aparato (p. ej. un MediaTek de gama baja).
+  const dpr = Math.round((window.devicePixelRatio || 1) * 100) / 100;
+  const scrW = Math.round((screen.width || 0) * dpr);
+  const scrH = Math.round((screen.height || 0) * dpr);
+  // Cap de calidad: ?maxh= manda; si no, la altura física de la pantalla.
+  const maxhParam = parseInt(params.get('maxh') || '', 10);
+  const MAXH = (maxhParam > 0) ? maxhParam : Math.max(scrW, scrH); // alto máx útil (landscape)
+  const DEVCAPS = { w: Math.max(scrW, scrH), h: Math.min(scrW, scrH), dpr: dpr, maxh: MAXH };
+  function tierLabel(h){ return h >= 2160 ? '4K' : h >= 1080 ? '1080p' : h >= 720 ? '720p' : h >= 480 ? '480p' : (h + 'p'); }
 
   const vid = document.getElementById('vid');
   const pic = document.getElementById('pic');
@@ -174,7 +189,7 @@
     try {
       await fetch(WORKER + '/signage/heartbeat', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, keepalive: true,
-        body: JSON.stringify({ screen: screenId, role: 'xtore-screen', version: 'pantalla-r1', showing_id: lastShowingName || null }),
+        body: JSON.stringify({ screen: screenId, role: 'xtore-screen', version: 'pantalla-r2', showing_id: lastShowingName || null, caps: DEVCAPS }),
       });
     } catch (e) {}
   }
@@ -207,6 +222,14 @@
 
   // El vídeo en bucle no necesita re-arranque, pero por si el navegador lo pausa:
   vid.addEventListener('pause', () => { if (vid.style.display === 'block' && !vid.ended) vid.play().catch(() => {}); });
+
+  // Muestra las capacidades del aparato en la pantalla de espera.
+  const capsEl = document.getElementById('caps');
+  if (capsEl) {
+    capsEl.innerHTML = 'Pantalla <b>' + DEVCAPS.w + '×' + DEVCAPS.h + '</b> · DPR <b>' + dpr + '</b>'
+      + '<br>Calidad máx · <b>' + tierLabel(MAXH) + '</b>' + (maxhParam > 0 ? ' (fijada)' : '')
+      + '<br>canal <b>' + SCREEN + '</b>';
+  }
 
   showIdle('Conectando…');
   requestWake();
