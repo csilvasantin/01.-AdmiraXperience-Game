@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Admira XP · Conectar pantalla física</title>
+<script src="qrcode.min.js"></script>
+<style>
+  :root{--bg:#02080d;--ink:#dff8ff;--mut:#75aab9;--brand:#78f3ff;--accent:#f7c95d;--good:#37e07a;--line:rgba(120,243,255,.18);--card:#0a1620}
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{min-height:100%}
+  body{background:radial-gradient(120% 90% at 50% 0%,#06121f,#02080d 70%);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;display:flex;align-items:center;justify-content:center;padding:24px;min-height:100vh}
+  .wrap{width:min(560px,100%);background:rgba(10,22,32,.7);border:1px solid var(--line);border-radius:20px;padding:30px 30px 26px;box-shadow:0 24px 70px rgba(0,0,0,.5),inset 0 1px 0 rgba(120,243,255,.12)}
+  .logo{font-family:monospace;font-size:13px;letter-spacing:.16em;font-weight:bold;color:var(--accent)}
+  .logo .dot{color:var(--brand)}
+  .eyebrow{font-family:monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--brand);margin:14px 0 6px;display:flex;align-items:center;gap:8px}
+  .eyebrow .pulse{width:7px;height:7px;border-radius:50%;background:var(--good);box-shadow:0 0 8px var(--good);animation:p 1.4s ease-in-out infinite}
+  @keyframes p{0%,100%{opacity:1}50%{opacity:.35}}
+  h1{font-size:26px;letter-spacing:-.01em;margin-bottom:6px}
+  .sub{color:var(--mut);font-size:14px;line-height:1.5;margin-bottom:22px}
+  .qr-card{background:#dff8ff;border-radius:16px;padding:18px;width:fit-content;margin:0 auto 18px;box-shadow:0 10px 36px rgba(0,0,0,.45)}
+  .qr-card #qr img,.qr-card #qr canvas{display:block;border-radius:6px}
+  .urlbox{display:flex;gap:8px;align-items:center;background:rgba(2,8,13,.6);border:1px solid var(--line);border-radius:10px;padding:9px 12px;margin-bottom:18px}
+  .urlbox code{flex:1;font-family:monospace;font-size:12px;color:var(--brand);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .urlbox button{font-family:monospace;font-size:11px;letter-spacing:.04em;color:var(--ink);background:transparent;border:1px solid var(--line);border-radius:7px;padding:6px 10px;cursor:pointer;white-space:nowrap;transition:border-color .15s,color .15s}
+  .urlbox button:hover{border-color:var(--brand);color:var(--brand)}
+  .row{display:flex;align-items:center;gap:10px;margin-bottom:18px;flex-wrap:wrap}
+  .row label{font-family:monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut)}
+  .row input{flex:1;min-width:140px;background:rgba(2,8,13,.6);border:1px solid var(--line);border-radius:8px;padding:9px 12px;color:var(--ink);font-family:monospace;font-size:13px;outline:none}
+  .row input:focus{border-color:var(--brand)}
+  .status{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--mut);background:rgba(2,8,13,.5);border:1px solid var(--line);border-radius:10px;padding:11px 14px;margin-bottom:20px}
+  .status .d{width:9px;height:9px;border-radius:50%;background:#456;flex-shrink:0;transition:background .3s,box-shadow .3s}
+  .status.on .d{background:var(--good);box-shadow:0 0 9px var(--good)}
+  .status b{color:var(--ink);font-weight:600}
+  .steps{list-style:none;display:grid;gap:11px;margin-bottom:22px}
+  .steps li{display:flex;gap:12px;font-size:13.5px;color:#bcdfe8;line-height:1.45}
+  .steps .n{flex-shrink:0;width:22px;height:22px;border-radius:50%;background:rgba(120,243,255,.12);border:1px solid var(--line);color:var(--brand);font-family:monospace;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center}
+  .steps b{color:var(--ink)}
+  .actions{display:flex;gap:10px;flex-wrap:wrap}
+  .actions a{flex:1;min-width:160px;text-align:center;text-decoration:none;font-family:monospace;font-size:12px;letter-spacing:.06em;text-transform:uppercase;padding:12px;border-radius:9px;font-weight:700}
+  .actions .primary{background:var(--brand);color:#001620}
+  .actions .ghost{border:1px solid var(--line);color:var(--mut)}
+  .actions .ghost:hover{color:var(--ink);border-color:var(--brand)}
+  .foot{margin-top:18px;font-size:11px;color:var(--mut);font-family:monospace;text-align:center}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="logo">ADMIRA<span class="dot">·</span>XP</div>
+    <div class="eyebrow"><span class="pulse"></span>Gemelo digital → pantalla física</div>
+    <h1>Conectar pantalla física</h1>
+    <p class="sub">Escanea este QR con la tablet (o cualquier pantalla con navegador). Mostrará <b>en vivo</b> lo mismo que el escaparate del gemelo: si cambia la digital, cambia la física.</p>
+
+    <div class="qr-card"><div id="qr"></div></div>
+
+    <div class="urlbox">
+      <code id="url">—</code>
+      <button id="copyBtn" type="button">Copiar</button>
+    </div>
+
+    <div class="row">
+      <label for="screen">Canal</label>
+      <input id="screen" type="text" value="escaparate" autocomplete="off" spellcheck="false">
+    </div>
+
+    <div class="status" id="status">
+      <span class="d"></span><span id="statusTxt">Comprobando si el gemelo está emitiendo…</span>
+    </div>
+
+    <ol class="steps">
+      <li><span class="n">1</span><span>Abre el QR con la cámara de la tablet (o teclea la URL en Chrome).</span></li>
+      <li><span class="n">2</span><span>Ponla en <b>pantalla completa / modo kiosko</b> (en Chrome: "Añadir a pantalla de inicio", o una app como Fully Kiosk).</span></li>
+      <li><span class="n">3</span><span>Si emites vídeo con sonido, <b>toca una vez</b> la pantalla para activar el audio.</span></li>
+      <li><span class="n">4</span><span>La pantalla ya pide <b>wake-lock</b> (no se apaga) mientras está cargada.</span></li>
+    </ol>
+
+    <div class="actions">
+      <a class="primary" id="openBtn" href="#" target="_blank" rel="noopener">Abrir aquí ↗</a>
+      <a class="ghost" href="game.html" target="_blank" rel="noopener">Volver al gemelo</a>
+    </div>
+
+    <div class="foot" id="foot">canal: escaparate</div>
+  </div>
+
+<script>
+(() => {
+  'use strict';
+  const WORKER = 'https://pixer-eleven.csilvasantin.workers.dev';
+  const qrBox = document.getElementById('qr');
+  const urlEl = document.getElementById('url');
+  const screenEl = document.getElementById('screen');
+  const openBtn = document.getElementById('openBtn');
+  const copyBtn = document.getElementById('copyBtn');
+  const statusEl = document.getElementById('status');
+  const statusTxt = document.getElementById('statusTxt');
+  const footEl = document.getElementById('foot');
+
+  // Pre-rellena el canal desde ?screen= si viene en la URL.
+  const qp = new URLSearchParams(location.search).get('screen');
+  if (qp) screenEl.value = qp;
+
+  function cleanScreen(v){ return (v || 'escaparate').toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 40) || 'escaparate'; }
+  function playerUrl(screen){ return new URL('pantalla.html?screen=' + encodeURIComponent(screen), location.href).href; }
+
+  let qr = new QRCode(qrBox, { text: 'about:blank', width: 280, height: 280, colorDark: '#04101a', colorLight: '#dff8ff', correctLevel: QRCode.CorrectLevel.M });
+
+  function render(){
+    const screen = cleanScreen(screenEl.value);
+    const url = playerUrl(screen);
+    urlEl.textContent = url;
+    openBtn.href = url;
+    footEl.textContent = 'canal: ' + screen;
+    try { qr.clear(); qr.makeCode(url); } catch (e) {}
+  }
+  screenEl.addEventListener('input', render);
+  render();
+
+  copyBtn.addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(urlEl.textContent); copyBtn.textContent = '✓ Copiado'; }
+    catch { copyBtn.textContent = 'Copia manual'; }
+    setTimeout(() => copyBtn.textContent = 'Copiar', 1800);
+  });
+
+  // Estado: ¿el gemelo está emitiendo algo en este canal ahora mismo?
+  async function pollStatus(){
+    const screen = cleanScreen(screenEl.value);
+    try {
+      const r = await fetch(WORKER + '/signage/now?screen=' + encodeURIComponent(screen), { cache: 'no-store' });
+      const d = await r.json();
+      const it = d && d.item;
+      if (it && it.kind && it.kind !== 'idle' && (it.src || it.local)) {
+        statusEl.classList.add('on');
+        statusTxt.innerHTML = 'El gemelo está emitiendo: <b>' + (it.name ? String(it.name).replace(/[<>&]/g, '') : it.kind) + '</b>';
+      } else {
+        statusEl.classList.remove('on');
+        statusTxt.textContent = 'Esperando contenido del gemelo en este canal…';
+      }
+    } catch (e) {
+      statusEl.classList.remove('on');
+      statusTxt.textContent = 'Sin conexión con el worker.';
+    } finally {
+      setTimeout(pollStatus, 3000);
+    }
+  }
+  pollStatus();
+})();
+</script>
+</body>
+</html>
