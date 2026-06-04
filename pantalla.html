@@ -10,7 +10,7 @@
   html,body{ width:100%; height:100%; background:#000; overflow:hidden; }
   body{ font-family:monospace; color:#dff8ff; cursor:none; }
   #stage{ position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:#000; }
-  #vid,#pic{ position:absolute; inset:0; width:100%; height:100%; object-fit:contain; background:#000; display:none; }
+  #vid,#pic{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; background:#000; display:none; }
   /* Idle / esperando */
   #idle{ position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px;
          background:radial-gradient(circle at 50% 35%,rgba(120,243,255,.10),transparent 60%),#04101a; }
@@ -56,7 +56,7 @@
   const WORKER = 'https://pixer-eleven.csilvasantin.workers.dev';
   const params = new URLSearchParams(location.search);
   const SCREEN = (params.get('screen') || 'escaparate').toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 40) || 'escaparate';
-  const POLL_MS = 3000;   // poll del puntero /now (lectura barata; 3s da reactividad de sobra)
+  const POLL_MS = 1500;   // poll del puntero /now (1.5s = menos latencia al cambiar contenido)
   const HB_MS = 60000;    // heartbeat cada 60s (el worker deduplica; basta para el badge "online")
   const screenId = 'xtore-' + SCREEN + '-' + Math.random().toString(36).slice(2, 6);
 
@@ -179,10 +179,22 @@
     } catch (e) {}
   }
 
-  // ── Tap para sonido ──
+  // ── Pantalla completa real (oculta la UI del navegador) ──
+  // Requiere gesto del usuario: cualquier toque/clic la activa.
+  function goFullscreen() {
+    if (document.fullscreenElement || document.webkitFullscreenElement) return;
+    const el = document.documentElement;
+    const fn = el.requestFullscreen || el.webkitRequestFullscreen || el.webkitRequestFullScreen;
+    if (fn) { try { fn.call(el); } catch (e) {} }
+  }
+  document.addEventListener('click', goFullscreen);
+  document.addEventListener('touchend', goFullscreen, { passive: true });
+
+  // ── Tap para sonido (+ pantalla completa) ──
   tap.addEventListener('click', () => {
     wantSound = true;
     tap.style.display = 'none';
+    goFullscreen();
     try { vid.muted = false; vid.play().catch(() => {}); } catch (e) {}
   });
 
