@@ -232,6 +232,29 @@ async function callGrok(env, system, user) {
   return { answer: String(answer).trim() };
 }
 
+// Limpia el texto de Grok para que ElevenLabs NO lea símbolos de markdown en
+// voz alta (asteriscos de negrita, almohadillas, comillas de código, viñetas,
+// enlaces…). Conserva el contenido; solo quita los marcadores.
+function cleanForSpeech(input) {
+  let t = String(input || '');
+  t = t.replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1');     // imágenes ![alt](url) → alt
+  t = t.replace(/\[([^\]]+)\]\([^)]*\)/g, '$1');       // enlaces [texto](url) → texto
+  t = t.replace(/\*\*([^*]+)\*\*/g, '$1');             // **negrita** → negrita
+  t = t.replace(/\*([^*]+)\*/g, '$1');                 // *cursiva* → cursiva
+  t = t.replace(/__([^_]+)__/g, '$1');                 // __negrita__ → negrita
+  t = t.replace(/~~([^~]+)~~/g, '$1');                 // ~~tachado~~ → tachado
+  t = t.replace(/`{1,3}([^`]+)`{1,3}/g, '$1');         // `código` → código
+  t = t.replace(/^\s{0,3}#{1,6}\s+/gm, '');            // # Encabezados
+  t = t.replace(/^\s*[-*•]\s+/gm, '');                 // viñetas - * •
+  t = t.replace(/^\s*>\s?/gm, '');                     // citas >
+  t = t.replace(/[*_`#]/g, '');                        // cualquier marcador suelto restante
+  t = t.replace(/\s*\n+\s*/g, '. ');                   // saltos de línea → pausa hablada
+  t = t.replace(/\s{2,}/g, ' ');
+  t = t.replace(/([:;,])\s*\.\s+/g, '$1 ');            // ":. " (lista) → ": "
+  t = t.replace(/\s*\.\s*\.\s*/g, '. ').trim();        // evita ".." al unir líneas
+  return t;
+}
+
 const DEFAULT_VOICE_ID = 'EXAVITQu4vr4xnSDxMaL'; // Sarah (multilingüe); override con secret ELEVENLABS_VOICE_ID
 function bufToBase64(buf) {
   const arr = new Uint8Array(buf);
@@ -240,7 +263,7 @@ function bufToBase64(buf) {
   return btoa(bin);
 }
 async function ttsBase64(env, text, voiceId) {
-  const clean = String(text).slice(0, 1200);
+  const clean = cleanForSpeech(text).slice(0, 1200);
   // 1) ElevenLabs directo (voz premium; la misma que alimentará Audio2Face en Unreal).
   const key = String(env.ELEVENLABS_API_KEY || '').trim();
   if (key) {
@@ -290,16 +313,17 @@ async function handleMetahumanAsk(request, env) {
   }
   const context = buildStoreContext(loc, lang);
   const system = (lang === 'en'
-    ? `You are the in-store AI assistant (a hyperrealistic MetaHuman avatar) of an Admira XP tobacco/retail shop. Be warm, brief and helpful like a great shop clerk. Speak naturally — your text will be spoken aloud, so 1-3 short sentences, no markdown or lists. You KNOW this store and its team:\n`
-    : `Eres el asistente de IA en tienda (un avatar MetaHuman hiperrealista) de una tienda Admira XP (estanco/retail). Sé cercano, breve y útil como un buen dependiente. Habla de forma natural — tu texto se dirá en voz alta, así que 1-3 frases cortas, sin markdown ni listas. CONOCES esta tienda y a su equipo:\n`)
+    ? `You are the in-store AI assistant (a hyperrealistic MetaHuman avatar) of an Admira XP tobacco/retail shop. Be warm, brief and helpful like a great shop clerk. Speak naturally — your text will be spoken aloud by a TTS voice, so reply in 1-3 short sentences of PLAIN TEXT: no markdown, no asterisks, no bold, no bullet points, no emojis, no headings. You KNOW this store and its team:\n`
+    : `Eres el asistente de IA en tienda (un avatar MetaHuman hiperrealista) de una tienda Admira XP (estanco/retail). Sé cercano, breve y útil como un buen dependiente. Habla de forma natural — tu texto se leerá en voz alta con una voz TTS, así que responde en 1-3 frases cortas de TEXTO PLANO: sin markdown, sin asteriscos, sin negritas, sin viñetas, sin emojis, sin encabezados. CONOCES esta tienda y a su equipo:\n`)
     + context;
 
   const g = await callGrok(env, system, question);
   if (g.error) return json(request, env, g.error === 'xai_key_not_set' ? 503 : 502, { ok: false, error: g.error, detail: g.detail, context });
-  const out = { ok: true, answer: g.answer, loc: id || null };
+  const spoken = cleanForSpeech(g.answer); // sin asteriscos/markdown: se ve y se oye limpio
+  const out = { ok: true, answer: spoken, loc: id || null };
   if (wantVoice) {
     const voiceId = body && typeof body.voiceId === 'string' ? body.voiceId.trim() : '';
-    const tts = await ttsBase64(env, g.answer, voiceId);
+    const tts = await ttsBase64(env, spoken, voiceId);
     if (tts && tts.b64) { out.audioBase64 = tts.b64; out.mime = 'audio/mpeg'; }
     else out.voiceNote = (tts && tts.err) || 'tts_unavailable';
   }
