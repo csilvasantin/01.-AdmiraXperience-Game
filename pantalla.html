@@ -9,6 +9,13 @@
   *{ box-sizing:border-box; margin:0; padding:0; }
   html,body{ width:100%; height:100%; background:#000; overflow:hidden; }
   body{ font-family:monospace; color:#dff8ff; cursor:none; }
+  /* Contenedor de rotación: con ?rotate=90/270 rota TODO a horizontal y lo
+     escala a 1280x800 (vh/vw del viewport vertical). Al tener transform, pasa
+     a ser el bloque contenedor de sus hijos position:fixed. */
+  #rotor{ position:fixed; top:0; left:0; width:100%; height:100%; }
+  #rotor.land{ top:50%; left:50%; width:100vh; height:100vw;
+               transform:translate(-50%,-50%) rotate(90deg); transform-origin:center center; }
+  #rotor.land.ccw{ transform:translate(-50%,-50%) rotate(-90deg); }
   #stage{ position:fixed; top:0; right:0; bottom:0; left:0; display:flex; align-items:center; justify-content:center; background:#000; }
   #vid,#pic{ position:absolute; top:0; right:0; bottom:0; left:0; width:100%; height:100%; object-fit:cover; background:#000; display:none; }
   /* Idle / esperando */
@@ -39,19 +46,21 @@
 </style>
 </head>
 <body>
-  <div id="stage">
-    <video id="vid" muted loop playsinline></video>
-    <img id="pic" alt="">
-    <div id="idle">
-      <div class="logo">ADMIRA <b>XP</b></div>
-      <div class="clock" id="clock">--:--</div>
-      <div class="msg" id="idlemsg">Esperando contenido del escaparate</div>
-      <div class="caps" id="caps"></div>
+  <div id="rotor">
+    <div id="stage">
+      <video id="vid" muted loop playsinline></video>
+      <img id="pic" alt="">
+      <div id="idle">
+        <div class="logo">ADMIRA <b>XP</b></div>
+        <div class="clock" id="clock">--:--</div>
+        <div class="msg" id="idlemsg">Esperando contenido del escaparate</div>
+        <div class="caps" id="caps"></div>
+      </div>
     </div>
+    <div id="dot" title="estado de conexión"></div>
+    <div id="tap"><span>🔊 Toca para activar el sonido</span></div>
+    <div id="label"></div>
   </div>
-  <div id="dot" title="estado de conexión"></div>
-  <div id="tap"><span>🔊 Toca para activar el sonido</span></div>
-  <div id="label"></div>
 
 <script>
 (() => {
@@ -82,6 +91,14 @@
   const tap = document.getElementById('tap');
   const label = document.getElementById('label');
   const idlemsg = document.getElementById('idlemsg');
+
+  // Rotación forzada por software (paneles signage clavados en vertical):
+  // ?rotate=90 (horario) o ?rotate=270 (antihorario). El contenedor con
+  // transform pasa a ser el viewport "horizontal" de 1280x800.
+  const rotor = document.getElementById('rotor');
+  const ROT = (params.get('rotate') || '').toLowerCase();
+  if (ROT === '90' || ROT === 'cw' || ROT === 'l' || ROT === 'landscape') rotor.classList.add('land');
+  else if (ROT === '270' || ROT === 'ccw') rotor.classList.add('land', 'ccw');
 
   let curSig = '';          // firma del item actual mostrado
   let wantSound = false;    // el usuario pidió sonido
