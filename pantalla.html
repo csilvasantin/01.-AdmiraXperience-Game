@@ -291,12 +291,62 @@
   // El vídeo en bucle no necesita re-arranque, pero por si el navegador lo pausa:
   vid.addEventListener('pause', () => { if (vid.style.display === 'block' && !vid.ended) vid.play().catch(() => {}); });
 
-  // Muestra las capacidades del aparato en la pantalla de espera.
-  const capsEl = document.getElementById('caps');
-  if (capsEl) {
-    capsEl.innerHTML = 'Pantalla <b>' + DEVCAPS.w + '×' + DEVCAPS.h + '</b> · DPR <b>' + dpr + '</b>'
+  // Muestra las capacidades del aparato (y el progreso de precarga) en la espera.
+  let pfTotal = 0, pfDone = 0; // contadores de precarga de la videoteca
+  function renderCaps() {
+    const capsEl = document.getElementById('caps');
+    if (!capsEl) return;
+    let html = 'Pantalla <b>' + DEVCAPS.w + '×' + DEVCAPS.h + '</b> · DPR <b>' + dpr + '</b>'
       + '<br>Calidad máx · <b>' + tierLabel(MAXH) + '</b>' + (maxhParam > 0 ? ' (fijada)' : '')
       + '<br>canal <b>' + SCREEN + '</b>';
+    if (pfTotal) html += '<br>caché escaparate · <b>' + pfDone + '/' + pfTotal + '</b>' + (pfDone >= pfTotal ? ' ✓' : ' …');
+    capsEl.innerHTML = html;
+  }
+  renderCaps();
+
+  // ── Precarga de la videoteca del escaparate (Cache API) ─────────────
+  // Baja TODOS los vídeos del canal una vez y los deja en caché local, para
+  // que al rotar el escaparate cada cambio arranque al instante desde disco
+  // en vez de descargarse al vuelo. Resuelve los paths del manifest contra el
+  // MISMO origen que carga esta página (= el que usa el gemelo al emitir con
+  // new URL(file,location.href)), así la clave de caché coincide con la que
+  // luego pide /signage/now. Para freedom90 (variantes HD) usa pickSrc → baja
+  // exactamente la calidad que este aparato reproducirá. Salta lo ya cacheado.
+  async function prefetchLibrary() {
+    if (!('caches' in window)) return;
+    let manifest;
+    try {
+      const r = await fetch('escaparate-manifest.json', { cache: 'no-store' });
+      if (!r.ok) return;
+      manifest = await r.json();
+    } catch (e) { return; }
+    if (!Array.isArray(manifest) || !manifest.length) return;
+
+    // URL exacta que reproducirá este aparato para cada item (misma lógica que /now).
+    const urls = [];
+    for (const it of manifest) {
+      try {
+        const item = { kind: it.kind || 'video', variants: it.variants };
+        item.src = it.file ? new URL(it.file, location.href).href : it.src;
+        const u = pickSrc(item);
+        if (u && /^https?:/.test(u) && urls.indexOf(u) < 0) urls.push(u);
+      } catch (e) {}
+    }
+    if (!urls.length) return;
+
+    const cache = await caches.open(MEDIA_CACHE);
+    pfTotal = urls.length; pfDone = 0; renderCaps();
+    // Secuencial y de baja prioridad: no compite con el vídeo en reproducción.
+    for (const u of urls) {
+      try {
+        const hit = await cache.match(u);   // ya está → no re-descargar
+        if (!hit) {
+          const net = await fetch(u, { mode: 'cors' });
+          if (net && net.ok) await cache.put(u, net.clone());
+        }
+      } catch (e) {}
+      pfDone++; renderCaps();
+    }
   }
 
   showIdle('Conectando…');
@@ -304,6 +354,9 @@
   poll();
   heartbeat();
   setInterval(heartbeat, HB_MS);
+  // Arranca la precarga unos segundos después, dejando que el contenido actual
+  // empiece primero (su descarga lo deja ya cacheado para cuando llegue su turno).
+  setTimeout(() => { prefetchLibrary().catch(() => {}); }, 5000);
 })();
 </script>
 </body>
