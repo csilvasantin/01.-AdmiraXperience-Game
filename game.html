@@ -1812,6 +1812,7 @@ const VIDEO_LIST=[
   'Lotería Navidad',
   'Promo Vapes',
   'DJ Novah - Live Set',
+  'George Michael - Freedom! 90',
 ];
 const VIDEO_FILES={
   'Dire Straits - Money For Nothing':'assets/videos/signage_money_for_nothing_160x90.mp4',
@@ -1823,6 +1824,16 @@ const VIDEO_FILES={
   'Siempre Volvía - Loving Someone Who Hurts You':'assets/videos/signage_siempre_volvia_160x90.mp4',
   'Que Hablen de Mí - Layah Noir':'assets/videos/signage_que_hablen_de_mi_160x90.mp4',
   'DJ Novah - Live Set':'assets/videos/signage_dj_novah_set_160x90.mp4',
+  'George Michael - Freedom! 90':'assets/videos/signage_freedom_90_160x90.mp4',
+};
+// Variantes HD por vídeo (servidas desde R2 vía el worker, fuera de git): el
+// gemelo usa el 160×90 para su pantalla 3D, pero emite estas URLs a las pantallas
+// físicas, que eligen calidad según su resolución (auto por pantalla).
+const SIGNAGE_HD={
+  'George Michael - Freedom! 90':[
+    {h:480,src:'https://pixer-eleven.csilvasantin.workers.dev/signage/media/freedom90_480.mp4'},
+    {h:720,src:'https://pixer-eleven.csilvasantin.workers.dev/signage/media/freedom90_720.mp4'},
+  ],
 };
 const VIDEO_LED_MESSAGES={
   'Dire Straits - Money For Nothing':'  ◆  VISITAS: AHORA SUENA MONEY FOR NOTHING  ◆  DIRE STRAITS EN PANTALLA  ◆  ',
@@ -1834,6 +1845,7 @@ const VIDEO_LED_MESSAGES={
   'Siempre Volvía - Loving Someone Who Hurts You':'  ◆  VISITAS: AHORA SUENA SIEMPRE VOLVIA  ◆  SOUL BLUES EN ESPANOL PARA EL XTANCO  ◆  ',
   'Que Hablen de Mí - Layah Noir':'  ◆  VISITAS: AHORA SUENA QUE HABLEN DE MI  ◆  LAYAH NOIR EN PANTALLA  ◆  ',
   'DJ Novah - Live Set':'  ◆  🎧 DJ NOVAH EN DIRECTO  ◆  HARD TECHNO SESSION LIVE  ◆  XTANCO PARTY!!  ◆  ',
+  'George Michael - Freedom! 90':'  ◆  VISITAS: AHORA SUENA FREEDOM! 90  ◆  GEORGE MICHAEL EN PANTALLA  ◆  ',
 };
 // Conditions: map video name → function that returns true when it should auto-play
 const VIDEO_CONDITIONS={
@@ -2732,7 +2744,11 @@ function escaparateNowItem(){
   if(!file) return {kind:'idle',name:name||'',src:null};
   if(/^blob:/i.test(file)) return {kind,name,src:null,local:true}; // import local: aún no compartible
   let src; try{ src=new URL(file,location.href).href; }catch(e){ src=file; }
-  return {kind,name,src};
+  const out={kind,name,src};
+  // Si el vídeo tiene variantes HD (R2), las añadimos para que la pantalla
+  // física elija calidad según su resolución. El 160×90 (src) queda de fallback.
+  if(SIGNAGE_HD[name]) out.variants=SIGNAGE_HD[name];
+  return out;
 }
 async function emitEscaparateNow(force){
   try{
