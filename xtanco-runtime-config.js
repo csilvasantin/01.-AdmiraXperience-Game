@@ -51,11 +51,12 @@
       // así que el aforo-proxy lo expone con CORS desde *.workers.dev.
       url: 'https://aforo-proxy.csilvasantin.workers.dev/',
       pollMs: 5000,
-      // Modo de arranque: true = "/aforo real" (la cámara controla los clientes);
-      // false = "/aforo fake" (spawn aleatorio del juego). Conmutable en caliente
-      // con el comando CLI /aforo real | /aforo fake. El badge del HUD siempre
-      // muestra lo que dice la cámara.
-      drive: true,
+      // Modo de arranque (conmutable en caliente con /aforo real|exacto|fake):
+      //   'real'   → la cámara marca el objetivo de clientes (ambiente).
+      //   'exacto' → espejo estricto 1:1: la tienda = exactamente lo que dice la cámara.
+      //   'fake'   → spawn aleatorio del juego (cámara ignorada).
+      // El badge del HUD siempre muestra lo que dice la cámara.
+      mode: 'real',
     },
   };
 })();

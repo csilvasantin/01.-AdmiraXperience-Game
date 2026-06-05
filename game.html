@@ -4719,29 +4719,63 @@ const CAM={
   enabled:OCC_CONFIG.enabled!==false,
   url:typeof OCC_CONFIG.url==='string'?OCC_CONFIG.url:'',
   pollMs:Number(OCC_CONFIG.pollMs)>0?Number(OCC_CONFIG.pollMs):5000,
-  drive:OCC_CONFIG.drive!==false,
+  // Modo de aforo:
+  //   'fake'   → clientes aleatorios del juego (la cámara se ignora).
+  //   'real'   → la cámara marca el OBJETIVO; la tienda respira hacia él (ambiente;
+  //              no rellena las bajas naturales hasta que la cámara cambia).
+  //   'exacto' → espejo ESTRICTO 1:1: en cada sondeo la tienda contiene EXACTAMENTE
+  //              lo que dice la cámara; cada entrada/salida de la cámara entra/sale.
+  mode:['fake','real','exacto'].includes(OCC_CONFIG.mode)?OCC_CONFIG.mode:(OCC_CONFIG.drive===false?'fake':'real'),
   connected:false, occupancy:0, enter:0, leave:0, peak:0, lastApplied:null,
 };
+function camModeLabel(){ return CAM.mode==='exacto'?'EXACTO':(CAM.mode==='real'?'REAL':'FAKE'); }
+// Resumen para el "cerebro" de la tienda (contexto IA) y diagnósticos.
+function camBrainLine(){
+  if(CAM.mode==='fake') return 'FAKE (clientes aleatorios del juego; cámara ignorada)';
+  return camModeLabel()+' · cámara Hikvision '+(CAM.connected
+    ? (CAM.occupancy+' dentro (+'+CAM.enter+'/-'+CAM.leave+', pico '+CAM.peak+')')
+    : 'sin conexión');
+}
 function updateCamHud(){
   const val=document.getElementById('bbCamVal'); if(!val) return;
   const dot=document.getElementById('bbCamDot');
   const box=document.getElementById('bbCamBox');
   val.textContent=CAM.connected?CAM.occupancy:'—';
   if(dot) dot.style.background=CAM.connected?'#33dd66':'#cc4444';
+  const modeTxt=CAM.mode==='exacto'?'EXACTO — la tienda es exactamente lo que dice la cámara'
+    :CAM.mode==='real'?'REAL — la tienda respira con la gente real'
+    :'FAKE — clientes aleatorios del juego';
   if(box) box.title=CAM.connected
-    ?'Aforo real (cámara Hikvision)\nDentro: '+CAM.occupancy+' · Pico hoy: '+CAM.peak+'\nEntradas: '+CAM.enter+' · Salidas: '+CAM.leave+'\nModo: '+(CAM.drive?'REAL — la tienda respira con la gente real':'FAKE — clientes aleatorios del juego')+'  (/aforo real | /aforo fake)'
-    :'Aforo real: cámara sin conexión  (/aforo real | /aforo fake)';
+    ?'Aforo (cámara Hikvision)\nDentro: '+CAM.occupancy+' · Pico hoy: '+CAM.peak+'\nEntradas: '+CAM.enter+' · Salidas: '+CAM.leave+'\nModo: '+modeTxt+'  (/aforo real | /aforo exacto | /aforo fake)'
+    :'Aforo: cámara sin conexión  (/aforo real | /aforo exacto | /aforo fake)';
 }
 function camApplyToStore(){
-  if(!CAM.drive||!CAM.connected) return;
+  if(CAM.mode==='fake'||!CAM.connected) return;
   if(typeof state==='undefined'||state!==S.GAME) return;
   if(typeof G==='undefined'||!G||!Array.isArray(G.custs)) return;
   const n=Math.max(0,Math.min(30,Math.round(CAM.occupancy)));
+  if(CAM.mode==='exacto'){ camForceExact(n); return; }
+  // real: objetivo en cada cambio (ambiente; reutiliza /people store, probado).
   if(n===CAM.lastApplied) return;
   CAM.lastApplied=n;
-  // Reutiliza el comando ya probado: fija G.peopleOverride y spawnea/saca
-  // clientes hasta cuadrar (no toca al staff).
   try{ if(window.xtAPI&&typeof window.xtAPI.command==='function') window.xtAPI.command('/people store '+n); }catch(e){}
+}
+// EXACTO: en CADA sondeo la tienda contiene exactamente N = ocupación de la cámara.
+// Rellena bajas naturales y recorta excesos. Respeta clientes a media compra
+// (queue/buy/leave) para no romper transacciones; se cuadra en el siguiente sondeo.
+function camForceExact(n){
+  G.peopleOverride=n; G.customerCapAdjustTimer=0;
+  const cur=G.custs.length;
+  if(cur<n){
+    for(let i=cur;i<n;i++){ try{ spawnCust(false,false,true); }catch(e){} }
+  } else if(cur>n){
+    const exit=(G.custs||[]).filter(c=>c&&c.st!=='queue'&&c.st!=='buy'&&c.st!=='leave')
+      .sort((a,b)=>(b.dwellTicks||0)-(a.dwellTicks||0)).slice(0,cur-n);
+    for(const t of exit){
+      try{ if(typeof startCustomerLeave==='function'&&t.st==='walk') startCustomerLeave(t); else t.st='leave'; }catch(e){}
+    }
+  }
+  if(n!==CAM.lastApplied){ CAM.lastApplied=n; try{ if(typeof saveGame==='function') saveGame(); }catch(e){} }
 }
 async function camPoll(){
   if(!CAM.enabled||!CAM.url) return;
@@ -14184,8 +14218,9 @@ const HELP_PAGES={
     '  xtAPI.command("/subasta")  → abre/cierra (toggle) la subasta · /subasta off cierra',
     '  xtAPI.command("/targetPublicity aforo|genero")  → publicidad segmentada (genero=sexo+edad por LiveCam on-device) · off para parar',
     '  xtAPI.command("/generovideo")  → las 2 pantallas siguen el sexo de la cámara: 👨→Money For Nothing · 👩→Take On Me · off para parar',
-    '  xtAPI.command("/aforo real")  → la cámara Hikvision (ieu.ai) controla los clientes de la tienda',
-    '  xtAPI.command("/aforo fake")  → clientes en modo aleatorio del juego (por defecto) · /aforo = estado',
+    '  xtAPI.command("/aforo real")  → la cámara Hikvision (ieu.ai) marca el objetivo de clientes (ambiente)',
+    '  xtAPI.command("/aforo exacto")  → espejo ESTRICTO 1:1: la tienda = exactamente lo que dice la cámara; cada entrada/salida entra/sale',
+    '  xtAPI.command("/aforo fake")  → clientes en modo aleatorio del juego · /aforo = estado actual',
   ]},
   ],
   en:[
@@ -22731,26 +22766,33 @@ window.xtAPI = (function(){
         return {ok:true,message:'Clientes: '+count+'/'+cap+(Number.isFinite(ov)?' (override '+ov+')':' (cap auto, hora '+(G.gameTime||0).toFixed(1)+'h)')+' · Staff: '+staff,data:{count,cap,peopleOverride:ov,staff}};
       }
 
-      // /aforo real|fake → elige la fuente del aforo de la tienda.
-      //   real → la ocupación de la cámara Hikvision (ieu.ai) controla los clientes.
-      //   fake → modo automático del juego (spawn aleatorio por hora). Sin args: estado.
+      // /aforo real|exacto|fake → fuente del aforo de la tienda.
+      //   real   → la cámara Hikvision marca el objetivo (ambiente).
+      //   exacto → espejo ESTRICTO 1:1: la tienda = exactamente lo que dice la cámara;
+      //            cada entrada/salida de la cámara entra/sale; rellena bajas naturales.
+      //   fake   → spawn aleatorio del juego (cámara ignorada). Sin args: estado.
       if(['aforo','occupancy','camara','cámara'].includes(cmd)){
         if(typeof CAM==='undefined') return {ok:false,message:'Módulo de aforo no disponible'};
         const sub=(parts[0]||'').toLowerCase();
-        if(['real','hikvision','camara','cámara','on','si','sí','start','conectar'].includes(sub)){
-          CAM.drive=true; CAM.lastApplied=null;
+        if(['exacto','exact','estricto','strict','espejo','mirror','1:1'].includes(sub)){
+          CAM.mode='exacto'; CAM.lastApplied=null;
           try{ if(typeof camApplyToStore==='function') camApplyToStore(); }catch(e){}
           try{ if(typeof updateCamHud==='function') updateCamHud(); }catch(e){}
-          return {ok:true,message:'Aforo REAL · la cámara Hikvision controla los clientes ('+(CAM.connected?CAM.occupancy+' dentro':'cámara sin señal — esperando datos de ieu.ai')+')',data:{mode:'real',drive:true,connected:CAM.connected,occupancy:CAM.occupancy}};
+          return {ok:true,message:'Aforo EXACTO · la tienda es estrictamente lo que dice la cámara Hikvision: entran/salen exactamente sus personas ('+(CAM.connected?CAM.occupancy+' dentro':'cámara sin señal — esperando datos de ieu.ai')+')',data:{mode:'exacto',connected:CAM.connected,occupancy:CAM.occupancy}};
+        }
+        if(['real','hikvision','on','si','sí','start','conectar'].includes(sub)){
+          CAM.mode='real'; CAM.lastApplied=null;
+          try{ if(typeof camApplyToStore==='function') camApplyToStore(); }catch(e){}
+          try{ if(typeof updateCamHud==='function') updateCamHud(); }catch(e){}
+          return {ok:true,message:'Aforo REAL · la cámara Hikvision marca el objetivo de clientes ('+(CAM.connected?CAM.occupancy+' dentro':'cámara sin señal — esperando datos de ieu.ai')+')',data:{mode:'real',connected:CAM.connected,occupancy:CAM.occupancy}};
         }
         if(['fake','falso','auto','aleatorio','random','juego','off','no','stop','desconectar'].includes(sub)){
-          CAM.drive=false; CAM.lastApplied=null;
+          CAM.mode='fake'; CAM.lastApplied=null;
           try{ if(window.xtAPI&&typeof window.xtAPI.command==='function') window.xtAPI.command('/people store auto'); }catch(e){}
           try{ if(typeof updateCamHud==='function') updateCamHud(); }catch(e){}
-          return {ok:true,message:'Aforo FAKE · clientes generados por el juego (spawn aleatorio por hora)',data:{mode:'fake',drive:false}};
+          return {ok:true,message:'Aforo FAKE · clientes generados por el juego (spawn aleatorio por hora)',data:{mode:'fake'}};
         }
-        const modeLabel=CAM.drive?'REAL (cámara Hikvision)':'FAKE (juego aleatorio)';
-        return {ok:true,message:'Aforo: '+modeLabel+' · cámara '+(CAM.connected?(CAM.occupancy+' dentro, pico '+CAM.peak+' (+'+CAM.enter+'/-'+CAM.leave+')'):'sin conexión')+'. Uso: /aforo real | /aforo fake',data:{mode:CAM.drive?'real':'fake',connected:CAM.connected,occupancy:CAM.occupancy,enter:CAM.enter,leave:CAM.leave,peak:CAM.peak,drive:CAM.drive}};
+        return {ok:true,message:'Aforo: '+(typeof camBrainLine==='function'?camBrainLine():camModeLabel())+'. Uso: /aforo real | /aforo exacto | /aforo fake',data:{mode:CAM.mode,connected:CAM.connected,occupancy:CAM.occupancy,enter:CAM.enter,leave:CAM.leave,peak:CAM.peak}};
       }
 
       // /store close → cierra TODO: clientes salen, staff desaparece, audio+luces+aroma+AC apagados
@@ -24067,6 +24109,7 @@ window.xtAPI = (function(){
       'Nivel tienda: '+d.storeLevel,
       'Pasan por puerta: '+(d.passersbyToday||0),
       'Entran en tienda: '+d.customersToday,
+      'Aforo (cámara Hikvision): '+(typeof camBrainLine==='function'?camBrainLine():'n/a'),
       'Hora tienda: '+hour,
       'Clima: '+weather,
       'Puerta: '+(G&&G.doorMode?G.doorMode:'auto'),
@@ -24874,7 +24917,7 @@ window.xtAPI = (function(){
       {title:'Equipo del punto (gemelo)',items:['/nuevoMiembro Laura azafata','/nuevoMiembro Pedro cajero','/echarMiembro Laura','/report Marta']},
       {title:'DVR del Xpacio (grabar/velocidad/replay)',items:['/velocidad 1','/velocidad 2','/velocidad 4','/velocidad 8','/dvr','/envivo']},
       {title:'Personal (panel /staff)',items:['/staff','/staff bonus 0 100','/staff eotm 0','/staff eotm ana','/staff train 1','/staff hire 2','/staff fire 1']},
-      {title:'Tienda',items:['/ad 0','/ad 1','/ad 2','/upgrade','/aforo real','/aforo fake','/aforo','/visit com','/visit tec','/visit del','/visit gc','/save']},
+      {title:'Tienda',items:['/ad 0','/ad 1','/ad 2','/upgrade','/aforo real','/aforo exacto','/aforo fake','/aforo','/visit com','/visit tec','/visit del','/visit gc','/save']},
       {title:'Tiempo y ambiente',items:['/reloj 14:30','/reloj 14 30','/time am','/time pm','/time night','/weather normal','/weather rain','/weather sun','/lamp','/lamp auto','/hue','/hue auto']},
       {title:'Pantalla y directo',items:['/livecam','/mocap','/pixeria','/AdmiraLive texto','/comunicar texto','/comunicar texto --grok','/comunicar texto --elevenlabs','/AdmiraTube URL 2 audio','/say texto','/targetPublicity aforo','/targetPublicity genero','/targetPublicity off','/generovideo','/generovideo off']},
       {title:'Escena en vivo',items:['/dj','/ladron','/guardiacivil','/opinador','/robot','/sponsor','/socio','/door open','/door close','/door auto','/subasta','/subasta off']},
