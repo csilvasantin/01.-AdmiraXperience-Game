@@ -11408,6 +11408,13 @@ function updateGame(){
   updateBars();
 }
 
+// Número estable de cliente (el menor libre) para identificarlo de un vistazo
+// en la camiseta, la lista CLIENTES y la ficha. Se reutiliza cuando uno se va.
+function nextCustNum(){
+  const used=new Set();
+  if(G&&Array.isArray(G.custs)) for(const c of G.custs){ if(c&&c.num) used.add(c.num); }
+  let n=1; while(used.has(n)) n++; return n;
+}
 function spawnCust(isVip,isSponsor,force){
   // 'force' (true) salta el limite del SPAWNER PASIVO (ej: cap horario que limita
   // a 7), usado por /sponsor /socio /devolucion etc. del CLI para invocar al
@@ -11503,6 +11510,7 @@ function spawnCust(isVip,isSponsor,force){
     persona:persona
   });
   const newCust=G.custs[G.custs.length-1];
+  newCust.num=nextCustNum();
   if(G.loyaltyCard&&G.loyaltyCard.pending){
     newCust.loyaltyFree=true;
     G.loyaltyCard.pending=false;
@@ -18668,11 +18676,26 @@ function drawIsoCust(c){
   } else {
     chibi(c.x,c.y,c.dir||1,shirtIdx,hairIdx,c.fr,false,tt,1,false,cLook);
   }
+  // Número identificador en la camiseta — coincide con la lista CLIENTES y con
+  // la ficha al pulsar el cliente. Asignación perezosa para los ya en sala.
+  if(c.num==null) c.num=nextCustNum();
+  {
+    const nStr=String(c.num);
+    const nX=c.x+7, nY=renderY+(c.fanCustomerId?16:13);
+    cx.save();
+    cx.font='bold 8px monospace';
+    cx.textAlign='center'; cx.textBaseline='middle';
+    cx.lineWidth=2.5; cx.strokeStyle='rgba(2,8,14,0.92)';
+    cx.strokeText(nStr,nX,nY);
+    cx.fillStyle='#ffffff';
+    cx.fillText(nStr,nX,nY);
+    cx.restore();
+  }
   // Xtanco Club fan emblem — a heart painted over the chest so members of the
   // Club are instantly recognizable in the shop, regardless of their shirt
   // colour or pattern. Drawn after chibi() so it sits on top of any shirt.
   if(c.fanCustomerId){
-    const hxX=c.x+7, hxY=renderY+13;
+    const hxX=c.x+7, hxY=renderY+(c.num?9:13);
     const isBday=!!c.fanIsBirthday;
     const fillCol=isBday?'#ff4d8a':'#ff3344';
     const haloCol=isBday?'#ff7eb6':'#ff5566';
@@ -20108,7 +20131,8 @@ function drawCharacterGroupsPanel(){
     const ticket=customerTicketLabel(c);
     const rowClass=rowIdx%2===0?'row-even':'row-odd';
     const activityZone=customerStateLabel(c)+(zoneLabel&&zoneLabel!=='-'?' · '+zoneLabel:'');
-    const indexLabel=String(rowIdx+1).padStart(2,'0');
+    if(c.num==null) c.num=nextCustNum();
+    const indexLabel=String(c.num).padStart(2,'0');
     return '<div class="char-row clients-grid '+rowClass+'">'
       +'<span class="muted">'+indexLabel+'</span>'
       +'<span><button type="button" class="char-trigger" data-customer-idx="'+custIdx+'" aria-label="Abrir ficha de '+typeLabel+'" onpointerdown="window.openCharacterDockCustomerDetail&&window.openCharacterDockCustomerDetail('+custIdx+');event.preventDefault();event.stopPropagation();return false;" onclick="event.preventDefault();event.stopPropagation();return false;">'+customerMiniAvatar(c)+'</button> <span style="color:'+customerTone(c)+'">'+typeLabel+'</span></span>'
@@ -20820,6 +20844,7 @@ function openNPCEditor(staffIdx){
 function openCustomerEditor(custIdx){
   if(!G||!G.custs||!G.custs[custIdx]) return;
   const c=G.custs[custIdx];
+  if(c.num==null) c.num=nextCustNum();
   npcEdOpen=true;npcEdIdx=custIdx;npcEdTab='look';npcEdNameEdit=false;npcEdKind='customer';npcPlacementDirty=false;
   npcEdDockSide='left';
   // Socio del Xtanco Club → ficha dedicada con datos de la app de fidelizacion
@@ -20849,7 +20874,7 @@ function openCustomerEditor(custIdx){
     const dwellSs=dwellSec%60;
     const tiempoTienda=dwellMm>0?(dwellMm+'m '+String(dwellSs).padStart(2,'0')+'s'):(dwellSec+' seg');
     npcEdDraft={
-      title:'FICHA DE SOCIO · XTANCO CLUB',
+      title:'FICHA DE SOCIO · XTANCO CLUB'+(c.num?' · Nº '+c.num:''),
       name:(c.fanEmoji?c.fanEmoji+' ':'')+(c.fanName||'Socio')+cake,
       look:JSON.parse(JSON.stringify(c.look||{shirt:1,hair:0,skin:1,pants:0,shoes:0,accessory:0})),
       lines:(()=>{
@@ -20872,8 +20897,8 @@ function openCustomerEditor(custIdx){
     return;
   }
   npcEdDraft={
-    title:c.sponsor?'🦆 SPONSOR · TIO GILITO':(c.vip?'CLIENTE VIP':'CLIENTE'),
-    name:c.sponsor?'Tio Gilito':(c.vip?'Cliente VIP':'Cliente'),
+    title:(c.sponsor?'🦆 SPONSOR · TIO GILITO':(c.vip?'CLIENTE VIP':'CLIENTE'))+(c.num?' · Nº '+c.num:''),
+    name:(c.sponsor?'Tio Gilito':(c.vip?'Cliente VIP':'Cliente'))+(c.num?' #'+c.num:''),
     look:JSON.parse(JSON.stringify(c.look||{shirt:1,hair:0,skin:1,pants:0,shoes:0,accessory:0})),
     lines:[
       'Estado: '+customerStateLabel(c),
