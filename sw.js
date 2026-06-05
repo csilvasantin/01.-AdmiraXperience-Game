@@ -76,7 +76,10 @@ function isMediaRequest(request, pathname) {
 async function networkFirst(request, cacheName) {
   const cache = await caches.open(cacheName);
   try {
-    const response = await fetch(request);
+    // Bypass the HTTP cache so documents/JS are ALWAYS fresh when online
+    // (GitHub Pages serves these with max-age; without this the SW could keep
+    // returning a stale build for up to ~10 min after each fetch).
+    const response = await fetch(request, { cache: 'reload' });
     if (response && response.ok) {
       cache.put(request, response.clone());
     }
