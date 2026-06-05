@@ -24849,7 +24849,7 @@ window.xtAPI = (function(){
       {title:'Equipo del punto (gemelo)',items:['/nuevoMiembro Laura azafata','/nuevoMiembro Pedro cajero','/echarMiembro Laura','/report Marta']},
       {title:'DVR del Xpacio (grabar/velocidad/replay)',items:['/velocidad 1','/velocidad 2','/velocidad 4','/velocidad 8','/dvr','/envivo']},
       {title:'Personal (panel /staff)',items:['/staff','/staff bonus 0 100','/staff eotm 0','/staff eotm ana','/staff train 1','/staff hire 2','/staff fire 1']},
-      {title:'Tienda',items:['/ad 0','/ad 1','/ad 2','/upgrade','/visit com','/visit tec','/visit del','/visit gc','/save']},
+      {title:'Tienda',items:['/ad 0','/ad 1','/ad 2','/upgrade','/aforo real','/aforo fake','/aforo','/visit com','/visit tec','/visit del','/visit gc','/save']},
       {title:'Tiempo y ambiente',items:['/reloj 14:30','/reloj 14 30','/time am','/time pm','/time night','/weather normal','/weather rain','/weather sun','/lamp','/lamp auto','/hue','/hue auto']},
       {title:'Pantalla y directo',items:['/livecam','/mocap','/pixeria','/AdmiraLive texto','/comunicar texto','/comunicar texto --grok','/comunicar texto --elevenlabs','/AdmiraTube URL 2 audio','/say texto','/targetPublicity aforo','/targetPublicity genero','/targetPublicity off','/generovideo','/generovideo off']},
       {title:'Escena en vivo',items:['/dj','/ladron','/guardiacivil','/opinador','/robot','/sponsor','/socio','/door open','/door close','/door auto','/subasta','/subasta off']},
@@ -26010,7 +26010,7 @@ window.xtAPI = (function(){
       // (CLI in-game) y aun no esta mapeado en este dispatcher de Telegram,
       // delegamos. Cubre /store, /people, /gente, /clientes, /personas y futuros
       // comandos sin necesidad de duplicar la logica.
-      if(['store','xtore','xtanco','tienda','people','gente','personas','clientes','staff','personal','subasta','subastar','auction','targetpublicity','targetpubliticy','targetpub','generovideo','genvideo','camgenero','sexovideo','videogenero'].includes(cmd)){
+      if(['store','xtore','xtanco','tienda','people','gente','personas','clientes','staff','personal','subasta','subastar','auction','targetpublicity','targetpubliticy','targetpub','generovideo','genvideo','camgenero','sexovideo','videogenero','aforo','occupancy','camara','cámara'].includes(cmd)){
         try{
           const res=api.command('/'+cmd+(arg?' '+arg:''));
           return res && res.message ? res.message : 'OK';
