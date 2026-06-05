@@ -4753,7 +4753,7 @@ function camApplyToStore(){
   if(CAM.mode==='fake'||!CAM.connected) return;
   if(typeof state==='undefined'||state!==S.GAME) return;
   if(typeof G==='undefined'||!G||!Array.isArray(G.custs)) return;
-  const n=Math.max(0,Math.min(30,Math.round(CAM.occupancy)));
+  const n=Math.max(0,Math.min(MAX_PEOPLE_OVERRIDE,Math.round(CAM.occupancy)));
   if(CAM.mode==='exacto'){ camForceExact(n); return; }
   // real: objetivo en cada cambio (ambiente; reutiliza /people store, probado).
   if(n===CAM.lastApplied) return;
@@ -4987,6 +4987,11 @@ loadShopSettings();
 // getSkyColors extraído a assets/js/sky.js — sigue accesible en window.
 
 const MAX_CUSTOMERS_IN_STORE=7;
+// Tope del aforo FORZADO (override manual /people store y modos de cámara
+// real/exacto). El cap ambiental del juego sigue siendo MAX_CUSTOMERS_IN_STORE;
+// este sube el techo cuando la cámara/usuario fija el aforo (gemelo real).
+// Límite de seguridad para que un fallo de la cámara no spawnee miles.
+const MAX_PEOPLE_OVERRIDE=80;
 function getCustomerFlowProfile(hour){
   const h=Number.isFinite(hour)?hour:shopTimeSettings.openHour;
   if(h<10.5) return {cap:3,spawnMult:0.55,label:'valle-manana'};
@@ -5000,7 +5005,7 @@ function getCurrentCustomerCap(){
   // MAX_CUSTOMERS_IN_STORE (hasta 30 por seguridad). Para reactivar el cap
   // automatico segun hora: /people store auto.
   if (G && Number.isFinite(G.peopleOverride) && G.peopleOverride >= 0) {
-    return Math.min(30, G.peopleOverride);
+    return Math.min(MAX_PEOPLE_OVERRIDE, G.peopleOverride);
   }
   return Math.max(1,Math.min(MAX_CUSTOMERS_IN_STORE,getCustomerFlowProfile(G&&G.gameTime).cap|0));
 }
@@ -22835,7 +22840,7 @@ window.xtAPI = (function(){
             return {ok:true,message:'Override de clientes desactivado · cap automatico segun hora ('+getCurrentCustomerCap()+')',data:{peopleOverride:null,cap:getCurrentCustomerCap()}};
           }
           const n=parseInt(arg2,10);
-          if(!Number.isFinite(n)||n<0||n>30) return {ok:false,message:'Uso: /people store <N> (0-30, solo clientes; staff no se toca) | /people store auto'};
+          if(!Number.isFinite(n)||n<0||n>MAX_PEOPLE_OVERRIDE) return {ok:false,message:'Uso: /people store <N> (0-'+MAX_PEOPLE_OVERRIDE+', solo clientes; staff no se toca) | /people store auto'};
           G.peopleOverride=n;
           G.customerCapAdjustTimer=0;
           const current=(G.custs||[]).length;
