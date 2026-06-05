@@ -1131,7 +1131,7 @@ const APP_VERSION_LABEL=APP_VERSION;
 const APP_FORMULA_LABEL='build '+APP_BUILD;
 // Versión publicada del XpaceOS (se muestra en el splash · página 0).
 // IMPORTANTE: bumpear en cada release junto al tag DigitalTwin-v.YYYY.MM.DD.rN
-const XPACE_OS_VERSION='v.2026.06.05.r2';
+const XPACE_OS_VERSION='v.2026.06.05.r3';
 try{var _sv=document.getElementById('splashVersion');if(_sv)_sv.textContent='XpaceOS '+XPACE_OS_VERSION;}catch(e){}
 const AMIGA_PAGE0_TODO=['BUY SHIP','FIND BIGWHOOP','DEFEAT LECHUCK','MARRY ELAINE!'];
 let amigaPage0Todo=AMIGA_PAGE0_TODO.slice();
@@ -18509,6 +18509,18 @@ function drawIsoWineRack(col,row){
 // billboard erguido anclado en su huella, con sombra de contacto. Es el
 // cimiento del importador: catálogo (nube, Fase 2) → /importar → Xpacio.
 const CUSTOM_IMG_CACHE=Object.create(null);   // url -> {img, loaded, error}
+// Catálogo de elementos en la nube (Pixeria → Stock del pixer-worker, R2+KV).
+// Los elementos de los Xpacios se crean en pixeria.com y se publican como
+// type 'furni'; el juego los lista y coloca como muebles 'custom'.
+const PIXERIA_STOCK_BASE='https://pixer-eleven.csilvasantin.workers.dev';
+let IMPORT_CATALOG=[];                          // último /stock/list?type=furni
+async function fetchPixeriaCatalog(typeFilter){
+  const t=typeFilter||'furni';
+  const r=await fetch(PIXERIA_STOCK_BASE+'/stock/list?type='+encodeURIComponent(t)+'&limit=60',{cache:'no-store'});
+  if(!r.ok) throw new Error('HTTP '+r.status);
+  const data=await r.json();
+  return Array.isArray(data.items)?data.items:[];
+}
 function getCustomFurniImage(url){
   if(!url) return null;
   let rec=CUSTOM_IMG_CACHE[url];
@@ -25333,7 +25345,7 @@ window.xtAPI = (function(){
       {title:'Integración AdmiraNext',items:['/socios export']},
       {title:'IA y contenido',items:['/grok pregunta','/draw dibujo','/metahuman pregunta','/log','/log thief','/log customer','/import','/import list','/import remove 1','/importTube https://youtu.be/...']},
       {title:'Ajustes rápidos',items:['/money 12000','/sat 90','/fame 80','/set week 12','/set year 2','/set revenue 5000','/set storeLevel 2','/set customers 30']},
-      {title:'Musica y layout',items:['/song 1','/song bad bunny','/music','/next','/prev','/seoul2026','/seul','/seultrap','/seultecno','/equipo inicio ana 3 4','/equipo zona dj 12 2 2','/catalogo','/catalogo pared','/importar','/importar demo','/importar lista','/mobiliario','/mobiliario inicio','/layout','/layout save','/layout factory','/layout xpacio','/layout xpacio load']},
+      {title:'Musica y layout',items:['/song 1','/song bad bunny','/music','/next','/prev','/seoul2026','/seul','/seultrap','/seultecno','/equipo inicio ana 3 4','/equipo zona dj 12 2 2','/catalogo','/catalogo pared','/importar catalogo','/importar 1','/importar lista','/importar quitar 1','/mobiliario','/mobiliario inicio','/layout','/layout save','/layout factory','/layout xpacio','/layout xpacio load']},
       {title:'Estilo visual',items:['/16bits','/8bits','/render habbo','/render 16bit']},
       {title:'Mapa de navegacion',items:['/mapa','/map','/red','/sd list','/streamdeck','/help','/debug']},
     ];
@@ -25902,8 +25914,31 @@ window.xtAPI = (function(){
         const sub=(parts2[0]||'').toLowerCase();
         const customs=()=>shopLayout.map((it,i)=>({it,i})).filter(x=>x.it&&x.it.type==='custom');
         if(!sub) return isEs
-          ? 'Importador de mobiliario (Fase 1 · local).\nUso:\n/importar url <imgURL> | <nombre>  → coloca una imagen como mueble\n/importar demo  → prueba con un asset del juego\n/importar lista  → lista los importados en el Xpacio\n/importar quitar <n>  → elimina el nº n\nFase 2: catálogo compartido en la nube + /importar catalogo.'
-          : 'Furniture importer (Phase 1 · local).\nUsage:\n/importar url <imgURL> | <name>  → place an image as furniture\n/importar demo  → test with a game asset\n/importar lista  → list imported items\n/importar quitar <n>  → remove item n';
+          ? 'Importador de mobiliario · catálogo Pixeria (nube).\nUso:\n/importar catalogo  → lista los elementos de pixeria.com\n/importar <n>  → coloca el elemento nº n del catálogo en el Xpacio\n/importar url <imgURL> | <nombre>  → coloca una imagen suelta\n/importar lista  → muebles importados en el Xpacio\n/importar quitar <n>  → elimina el importado nº n'
+          : 'Furniture importer · Pixeria cloud catalog.\nUsage:\n/importar catalogo  → list elements from pixeria.com\n/importar <n>  → place catalog element n in the Xpace\n/importar url <imgURL> | <name>  → place a loose image\n/importar lista  → imported items in the Xpace\n/importar quitar <n>  → remove imported item n';
+        if(sub==='catalogo'||sub==='catálogo'||sub==='catalog'||sub==='nube'||sub==='cloud'||sub==='pixeria'){
+          try{
+            IMPORT_CATALOG=await fetchPixeriaCatalog('furni');
+            if(!IMPORT_CATALOG.length) return isEs
+              ? '📭 El catálogo de Pixeria no tiene mobiliario aún (type "furni"). Crea elementos en pixeria.com y vuelve a probar.'
+              : '📭 Pixeria catalog has no furniture yet.';
+            return (isEs?'🛋 Catálogo Pixeria (nube) · /importar <n> para colocar:\n':'🛋 Pixeria catalog · /importar <n> to place:\n')
+              +IMPORT_CATALOG.map((m,n)=>{
+                const nm=m.title||(m.tags&&m.tags.length?m.tags.join(' · '):m.motor||'elemento');
+                const sz=m.fp?(' · '+m.fp[0]+'x'+m.fp[1]):'';
+                return (n+1)+'. '+nm+sz;
+              }).join('\n');
+          }catch(e){ return (isEs?'⚠️ No pude leer el catálogo de Pixeria: ':'⚠️ Could not read Pixeria catalog: ')+e.message; }
+        }
+        if(/^\d+$/.test(sub)){
+          const n=parseInt(sub,10);
+          if(!IMPORT_CATALOG.length) return isEs?'Primero abre el catálogo: /importar catalogo':'Open the catalog first: /importar catalogo';
+          if(n<1||n>IMPORT_CATALOG.length) return isEs?('Indica un nº entre 1 y '+IMPORT_CATALOG.length+'.'):'Out of range.';
+          const m=IMPORT_CATALOG[n-1];
+          const nm=m.title||(m.tags&&m.tags.length?m.tags[0]:'Elemento');
+          const it=addCustomFurni({img:m.url,label:nm,fp:Array.isArray(m.fp)?m.fp:[1,1],ph:m.ph||46});
+          return it?('✅ '+(isEs?'Colocado':'Placed')+' "'+it.label+'" '+(isEs?'en':'at')+' ('+it.col+','+it.row+').'):'No se pudo colocar.';
+        }
         if(sub==='demo'){
           const it=addCustomFurni({img:'assets/images/digital-twin-banner.png?v=2',label:'Demo',fp:[1,1],ph:42});
           return it?('✅ '+(isEs?'Mueble demo colocado en':'Demo item placed at')+' ('+it.col+','+it.row+'). '+(isEs?'Abre el editor (/render) para moverlo.':'')):'No se pudo colocar.';
