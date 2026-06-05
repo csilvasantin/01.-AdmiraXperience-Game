@@ -25310,6 +25310,20 @@ window.xtAPI = (function(){
 
     try{
       if(cmd==='start'||cmd==='help') return commandHelp();
+      // /present [next|prev|close|auto|stop|<n>] — popup-presentación del gemelo
+      // (controlable por Telegram, StreamDeck y remote.html). Solo explica.
+      if(['present','presentacion','presentación','explainer','presenta'].includes(cmd)){
+        const TP=window.TwinPresent;
+        if(!TP) return 'Presentación no disponible (recarga el gemelo).';
+        const sub=(arg||'').toLowerCase().trim();
+        if(['next','sig','siguiente','+'].includes(sub)){ TP.next(); return '▸ Presentación: siguiente'; }
+        if(['prev','ant','anterior','-'].includes(sub)){ TP.prev(); return '◂ Presentación: anterior'; }
+        if(['close','cerrar','off','exit','salir'].includes(sub)){ TP.close(); return '✕ Presentación cerrada'; }
+        if(sub==='auto'){ TP.toggleAuto(true); return '▸ Presentación en automático'; }
+        if(sub==='stop'){ TP.toggleAuto(false); return '⏸ Auto detenido'; }
+        if(/^\d+$/.test(sub)){ TP.open(parseInt(sub,10)); return '▸ Presentación: slide '+sub; }
+        TP.open(0); return '🎞️ Presentación abierta';
+      }
       if(['debug','diag','dump','debugger','diagnostico','diagnóstico'].includes(cmd)) return debugDump();
       if(['nuevomiembro','nuevomember','altamiembro','miembro','newmember','addmember','team-add'].includes(cmd)) return await addTeamMember(arg);
       if(['echarmiembro','echar','bajamiembro','despedir','firemember','removemember','team-remove'].includes(cmd)) return await removeTeamMember(arg);
@@ -27524,6 +27538,184 @@ window.xtAPI = (function(){
     document.querySelectorAll('#splashLang .splash-lang-btn').forEach(function(b){ b.classList.toggle('is-active', b.dataset.lang===cur); });
   }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', wire); else wire();
+})();
+</script>
+<script>
+/* ── Twin Present — popup-presentación del gemelo digital (vertical Shoptalk) ──
+   Autónomo: crea su propio DOM y estilos, lee el idioma de localStorage
+   ('xtanco_lang', misma fuente que el juego) y expone window.TwinPresent
+   { open, close, next, prev, goto, toggleAuto, isOpen }. Lo disparan: el botón
+   flotante (visible en la vertical Shoptalk), el comando /present (vía el
+   dispatcher del juego y por tanto Telegram/StreamDeck/móvil) y remote.html.
+   Solo explica — no toca el estado del juego, seguro para que lo use cualquiera. */
+(function(){
+  if(window.TwinPresent) return;
+  function L(){ try{ return localStorage.getItem('xtanco_lang')==='es'?'es':'en'; }catch(e){ return 'en'; } }
+  var T={
+    es:{ swipe:'Desliza o toca los lados · Esc para salir', of:'de', auto:'Auto', cta:'Pide la demo', close:'Cerrar' },
+    en:{ swipe:'Swipe or tap the sides · Esc to exit', of:'of', auto:'Auto', cta:'Book the demo', close:'Close' }
+  };
+  var SLIDES=[
+    { icon:'🏙️', k:{es:'EL GEMELO DIGITAL',en:'THE DIGITAL TWIN'},
+      t:{es:'Tu espacio, vivo y en tiempo real',en:'Your space, live and in real time'},
+      b:{es:'Una réplica isométrica del estanco o el stand corriendo en el navegador. Lo que cambias en el gemelo, cambia en el espacio físico.',en:'An isometric replica of the store or booth running in the browser. What you change in the twin changes the physical space.'} },
+    { icon:'🧱', k:{es:'3 CAPAS · XPACEOS',en:'3 LAYERS · XPACEOS'},
+      t:{es:'De la idea al anuncio, sin agencia',en:'From idea to ad, no agency'},
+      b:{es:'Pixer.ai crea el contenido con IA · Admira XP lo distribuye sobre el gemelo · OmniPublicity lo subasta en tiempo real (RTB &lt;200 ms).',en:'Pixer.ai creates content with AI · Admira XP distributes it on the twin · OmniPublicity auctions it in real time (RTB &lt;200 ms).'} },
+    { icon:'📺', k:{es:'PANTALLAS VIVAS',en:'LIVE SCREENS'},
+      t:{es:'El gemelo controla pantallas reales',en:'The twin controls real screens'},
+      b:{es:'El escaparate y el tótem del gemelo se reflejan en pantallas físicas en menos de 1,5 s. Cambia el contenido digital y la pantalla física obedece.',en:'The twin’s shop window and totem mirror onto physical screens in under 1.5 s. Change the digital content and the physical screen follows.'} },
+    { icon:'🧠', k:{es:'AUDIENCIA + IA',en:'AUDIENCE + AI'},
+      t:{es:'Mide quién mira y responde',en:'Measure who watches and react'},
+      b:{es:'Captura de audiencia anónima, métricas de atención y un Metahuman (agente Grok) en el tótem que conversa con el visitante.',en:'Anonymous audience capture, attention metrics and a Metahuman (Grok agent) on the totem that talks to the visitor.'} },
+    { icon:'🎛️', k:{es:'CONTROL TOTAL',en:'FULL CONTROL'},
+      t:{es:'Desde un mando, una tecla o el móvil',en:'From a deck, a key or your phone'},
+      b:{es:'Comandos en vivo por CLI, Telegram o móvil, sobre Lenovo edge + Nvidia. Todo el stand se maneja desde un solo sitio.',en:'Live commands via CLI, Telegram or phone, on Lenovo edge + Nvidia. The whole booth is run from one place.'} },
+    { icon:'🚀', k:{es:'SHOPTALK EUROPE 2026',en:'SHOPTALK EUROPE 2026'},
+      t:{es:'Velo en directo en el stand',en:'See it live at the booth'},
+      b:{es:'9-11 junio · Fira Barcelona · Lenovo × Nvidia × ADmiraNeXT. Pide la demo y controla el espacio con tus propias manos.',en:'June 9-11 · Fira Barcelona · Lenovo × Nvidia × ADmiraNeXT. Book the demo and control the space with your own hands.'} }
+  ];
+  var AUTO_MS=9000;
+
+  var css='\
+  #tpModal{position:fixed;inset:0;z-index:100200;display:none;align-items:center;justify-content:center;padding:max(18px,4vw);\
+    background:radial-gradient(120% 90% at 50% 0%,rgba(6,18,31,.97),rgba(2,8,13,.985) 70%);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-tap-highlight-color:transparent}\
+  #tpModal.tp-on{display:flex;animation:tpFade .25s ease}\
+  @keyframes tpFade{from{opacity:0}to{opacity:1}}\
+  #tpCard{position:relative;width:min(560px,100%);max-height:94vh;display:flex;flex-direction:column;gap:18px;\
+    background:linear-gradient(160deg,rgba(10,22,32,.92),rgba(8,16,24,.96));border:1px solid rgba(120,243,255,.30);border-radius:22px;\
+    padding:30px 28px 22px;box-shadow:0 28px 90px rgba(0,0,0,.6),inset 0 1px 0 rgba(120,243,255,.14);overflow:hidden}\
+  #tpCard::before{content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(circle at 18% 8%,rgba(120,243,255,.14),transparent 42%)}\
+  .tp-top{display:flex;align-items:center;gap:10px;position:relative;z-index:1}\
+  .tp-brand{font-family:monospace;font-size:11px;letter-spacing:.18em;color:#f7c95d;font-weight:bold}\
+  .tp-brand b{color:#78f3ff}\
+  .tp-x{margin-left:auto;width:36px;height:36px;border-radius:9px;border:1px solid rgba(120,243,255,.32);background:rgba(2,8,13,.5);color:#9fd9e6;font:700 18px/1 monospace;cursor:pointer}\
+  .tp-x:hover{color:#fff;border-color:#78f3ff}\
+  .tp-stage{position:relative;z-index:1;min-height:240px;display:flex;flex-direction:column;justify-content:center;gap:14px;text-align:center;padding:6px 4px}\
+  .tp-icon{font-size:clamp(46px,12vw,68px);line-height:1;filter:drop-shadow(0 6px 22px rgba(120,243,255,.4))}\
+  .tp-k{font-family:monospace;font-size:12px;letter-spacing:.2em;color:#f7c95d;text-transform:uppercase}\
+  .tp-t{font-size:clamp(22px,5.4vw,30px);line-height:1.18;color:#eafcff;font-weight:800;letter-spacing:-.01em;margin:0}\
+  .tp-b{font-size:clamp(14px,3.4vw,17px);line-height:1.55;color:#a9d4e2;margin:0 auto;max-width:30em}\
+  .tp-stage.tp-anim{animation:tpSlide .3s ease}\
+  @keyframes tpSlide{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}\
+  .tp-dots{display:flex;gap:8px;justify-content:center;position:relative;z-index:1}\
+  .tp-dot{width:8px;height:8px;border-radius:50%;background:rgba(120,243,255,.25);cursor:pointer;transition:background .2s,transform .2s}\
+  .tp-dot.on{background:#78f3ff;transform:scale(1.35)}\
+  .tp-nav{display:flex;align-items:center;gap:10px;position:relative;z-index:1}\
+  .tp-arrow{flex:0 0 auto;width:46px;height:46px;border-radius:12px;border:1px solid rgba(120,243,255,.3);background:rgba(2,8,13,.5);color:#cdeef6;font:700 20px/1 monospace;cursor:pointer;transition:border-color .15s,color .15s,background .15s}\
+  .tp-arrow:hover{border-color:#78f3ff;color:#fff}\
+  .tp-arrow:disabled{opacity:.3;cursor:default}\
+  .tp-mid{flex:1;display:flex;align-items:center;justify-content:space-between;gap:10px;font-family:monospace;font-size:11px;color:#5a8aa0;letter-spacing:.06em}\
+  .tp-count{color:#9fd9e6}\
+  .tp-auto{border:1px solid rgba(120,243,255,.28);background:rgba(2,8,13,.5);color:#9fd9e6;border-radius:999px;padding:5px 11px;font:inherit;cursor:pointer;letter-spacing:.08em}\
+  .tp-auto.on{background:#78f3ff;color:#001620;border-color:#78f3ff;font-weight:bold}\
+  .tp-cta{position:relative;z-index:1;display:none;text-align:center;background:linear-gradient(90deg,#78f3ff,#f7c95d);color:#001620;\
+    font-weight:800;font-size:14px;letter-spacing:.04em;padding:12px;border-radius:11px;text-decoration:none}\
+  .tp-cta.show{display:block}\
+  .tp-hint{position:relative;z-index:1;text-align:center;font-family:monospace;font-size:10.5px;letter-spacing:.07em;color:#456;text-transform:uppercase}\
+  #tpOpen{position:fixed;left:50%;bottom:max(14px,env(safe-area-inset-bottom));transform:translateX(-50%);z-index:100100;display:none;\
+    align-items:center;gap:8px;border:1px solid rgba(120,243,255,.4);border-radius:999px;background:rgba(4,16,26,.82);backdrop-filter:blur(8px);\
+    color:#bfe9f2;font-family:monospace;font-size:12px;letter-spacing:.08em;padding:9px 16px;cursor:pointer;box-shadow:0 6px 24px rgba(0,0,0,.4)}\
+  #tpOpen.show{display:inline-flex}\
+  #tpOpen:hover{border-color:#78f3ff;color:#fff}\
+  #tpOpen .tp-pulse{width:7px;height:7px;border-radius:50%;background:#37e07a;box-shadow:0 0 8px #37e07a}\
+  ';
+  var st=document.createElement('style'); st.textContent=css; document.head.appendChild(st);
+
+  var modal=document.createElement('div'); modal.id='tpModal';
+  modal.innerHTML='\
+    <div id="tpCard" role="dialog" aria-modal="true" aria-label="Qué es el gemelo digital">\
+      <div class="tp-top"><span class="tp-brand">ADMIRA <b>XP</b> · XPACEOS</span>\
+        <button class="tp-x" type="button" id="tpX" aria-label="Cerrar">×</button></div>\
+      <div class="tp-stage" id="tpStage">\
+        <div class="tp-icon" id="tpIcon"></div>\
+        <div class="tp-k" id="tpK"></div>\
+        <h2 class="tp-t" id="tpT"></h2>\
+        <p class="tp-b" id="tpB"></p>\
+      </div>\
+      <a class="tp-cta" id="tpCta" href="https://europe.shoptalk.com/" target="_blank" rel="noopener"></a>\
+      <div class="tp-dots" id="tpDots"></div>\
+      <div class="tp-nav">\
+        <button class="tp-arrow" id="tpPrev" aria-label="Anterior">‹</button>\
+        <div class="tp-mid"><span class="tp-count" id="tpCount"></span>\
+          <button class="tp-auto" id="tpAuto" type="button"></button></div>\
+        <button class="tp-arrow" id="tpNext" aria-label="Siguiente">›</button>\
+      </div>\
+      <div class="tp-hint" id="tpHint"></div>\
+    </div>';
+  document.body.appendChild(modal);
+
+  var openBtn=document.createElement('button'); openBtn.id='tpOpen'; openBtn.type='button';
+  openBtn.innerHTML='<span class="tp-pulse"></span><span id="tpOpenLbl"></span>';
+  document.body.appendChild(openBtn);
+
+  var idx=0, autoOn=false, autoTimer=null, isOpen=false;
+  var el=function(id){ return document.getElementById(id); };
+
+  function render(anim){
+    var l=L(), s=SLIDES[idx], tr=T[l];
+    el('tpIcon').textContent=s.icon;
+    el('tpK').textContent=s.k[l];
+    el('tpT').textContent=s.t[l];
+    el('tpB').innerHTML=s.b[l];
+    el('tpCount').textContent=(idx+1)+' '+tr.of+' '+SLIDES.length;
+    el('tpHint').textContent=tr.swipe;
+    el('tpAuto').textContent='▸ '+tr.auto;
+    el('tpAuto').classList.toggle('on',autoOn);
+    el('tpPrev').disabled=(idx===0);
+    el('tpNext').disabled=(idx===SLIDES.length-1);
+    var cta=el('tpCta'); var last=(idx===SLIDES.length-1);
+    cta.classList.toggle('show',last); if(last) cta.textContent=tr.cta+' ↗';
+    var dots=el('tpDots'); dots.innerHTML='';
+    SLIDES.forEach(function(_,i){ var d=document.createElement('span'); d.className='tp-dot'+(i===idx?' on':'');
+      d.onclick=function(){ goto(i); }; dots.appendChild(d); });
+    openBtn.querySelector('#tpOpenLbl').textContent=(l==='es'?'¿Qué es esto?':'What is this?');
+    var stage=el('tpStage'); if(anim){ stage.classList.remove('tp-anim'); void stage.offsetWidth; stage.classList.add('tp-anim'); }
+  }
+  function clearAuto(){ if(autoTimer){ clearInterval(autoTimer); autoTimer=null; } }
+  function startAuto(){ clearAuto(); if(autoOn && isOpen) autoTimer=setInterval(function(){
+    if(idx>=SLIDES.length-1){ idx=0; } else { idx++; } render(true); },AUTO_MS); }
+  function goto(n){ idx=Math.max(0,Math.min(SLIDES.length-1,n)); render(true); startAuto(); }
+  function next(){ if(idx<SLIDES.length-1){ idx++; render(true); } startAuto(); }
+  function prev(){ if(idx>0){ idx--; render(true); } startAuto(); }
+  function toggleAuto(f){ autoOn=(f===undefined)?!autoOn:!!f; render(false); startAuto(); }
+  function open(n){ idx=(typeof n==='number'&&n>=1)?Math.min(SLIDES.length-1,n-1):0; isOpen=true;
+    modal.classList.add('tp-on'); render(true); startAuto();
+    try{ if(window.AudioBackgroundDuck) {} }catch(e){} }
+  function close(){ isOpen=false; autoOn=false; clearAuto(); modal.classList.remove('tp-on'); }
+
+  el('tpX').onclick=close; el('tpNext').onclick=next; el('tpPrev').onclick=prev;
+  el('tpAuto').onclick=function(){ toggleAuto(); };
+  openBtn.onclick=function(){ open(0); };
+  // Cerrar al tocar el fondo (fuera de la tarjeta), no al tocar la tarjeta.
+  modal.addEventListener('click',function(e){ if(e.target===modal) close(); });
+  // Teclado
+  document.addEventListener('keydown',function(e){ if(!isOpen) return;
+    if(e.key==='Escape') close();
+    else if(e.key==='ArrowRight'||e.key===' ') { e.preventDefault(); next(); }
+    else if(e.key==='ArrowLeft') prev();
+  });
+  // Swipe
+  var tx=0,ty=0;
+  modal.addEventListener('touchstart',function(e){ var t=e.changedTouches[0]; tx=t.clientX; ty=t.clientY; },{passive:true});
+  modal.addEventListener('touchend',function(e){ var t=e.changedTouches[0]; var dx=t.clientX-tx, dy=t.clientY-ty;
+    if(Math.abs(dx)>40 && Math.abs(dx)>Math.abs(dy)){ if(dx<0) next(); else prev(); } },{passive:true});
+
+  // Botón flotante: visible en la vertical Shoptalk (o con ?present=1). Se
+  // re-evalúa un momento después porque XPACE_BOOTH se fija durante el preload.
+  function maybeShowButton(){
+    var sp; try{ sp=new URLSearchParams(location.search); }catch(e){ sp=null; }
+    var force=sp&&(sp.get('present')==='1');
+    var shop=(window.XPACE_BOOTH==='shoptalk');
+    openBtn.querySelector('#tpOpenLbl').textContent=(L()==='es'?'¿Qué es esto?':'What is this?');
+    openBtn.classList.toggle('show', !!(force||shop));
+  }
+  maybeShowButton();
+  setTimeout(maybeShowButton,1500); setTimeout(maybeShowButton,4000);
+
+  window.TwinPresent={ open:open, close:close, next:next, prev:prev, goto:goto,
+    toggleAuto:toggleAuto, isOpen:function(){ return isOpen; },
+    showButton:function(v){ openBtn.classList.toggle("show",v!==false); } };
 })();
 </script>
 </body>
