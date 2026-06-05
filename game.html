@@ -4729,8 +4729,8 @@ function updateCamHud(){
   val.textContent=CAM.connected?CAM.occupancy:'—';
   if(dot) dot.style.background=CAM.connected?'#33dd66':'#cc4444';
   if(box) box.title=CAM.connected
-    ?'Aforo real (cámara Hikvision)\nDentro: '+CAM.occupancy+' · Pico hoy: '+CAM.peak+'\nEntradas: '+CAM.enter+' · Salidas: '+CAM.leave+(CAM.drive?'\nEl local respira con la gente real':'')
-    :'Aforo real: cámara sin conexión';
+    ?'Aforo real (cámara Hikvision)\nDentro: '+CAM.occupancy+' · Pico hoy: '+CAM.peak+'\nEntradas: '+CAM.enter+' · Salidas: '+CAM.leave+'\nModo: '+(CAM.drive?'REAL — la tienda respira con la gente real':'FAKE — clientes aleatorios del juego')+'  (/aforo real | /aforo fake)'
+    :'Aforo real: cámara sin conexión  (/aforo real | /aforo fake)';
 }
 function camApplyToStore(){
   if(!CAM.drive||!CAM.connected) return;
@@ -14175,6 +14175,8 @@ const HELP_PAGES={
     '  xtAPI.command("/subasta")  → abre/cierra (toggle) la subasta · /subasta off cierra',
     '  xtAPI.command("/targetPublicity aforo|genero")  → publicidad segmentada (genero=sexo+edad por LiveCam on-device) · off para parar',
     '  xtAPI.command("/generovideo")  → las 2 pantallas siguen el sexo de la cámara: 👨→Money For Nothing · 👩→Take On Me · off para parar',
+    '  xtAPI.command("/aforo real")  → la cámara Hikvision (ieu.ai) controla los clientes de la tienda',
+    '  xtAPI.command("/aforo fake")  → clientes en modo aleatorio del juego (por defecto) · /aforo = estado',
   ]},
   ],
   en:[
@@ -22703,22 +22705,26 @@ window.xtAPI = (function(){
         return {ok:true,message:'Clientes: '+count+'/'+cap+(Number.isFinite(ov)?' (override '+ov+')':' (cap auto, hora '+(G.gameTime||0).toFixed(1)+'h)')+' · Staff: '+staff,data:{count,cap,peopleOverride:ov,staff}};
       }
 
-      // /aforo [on|off] → conecta/desconecta el "respirar con la gente real"
-      // (cámara Hikvision vía ieu.ai → G.peopleOverride). Sin args: estado.
+      // /aforo real|fake → elige la fuente del aforo de la tienda.
+      //   real → la ocupación de la cámara Hikvision (ieu.ai) controla los clientes.
+      //   fake → modo automático del juego (spawn aleatorio por hora). Sin args: estado.
       if(['aforo','occupancy','camara','cámara'].includes(cmd)){
         if(typeof CAM==='undefined') return {ok:false,message:'Módulo de aforo no disponible'};
         const sub=(parts[0]||'').toLowerCase();
-        if(['on','si','sí','start','conectar'].includes(sub)){
+        if(['real','hikvision','camara','cámara','on','si','sí','start','conectar'].includes(sub)){
           CAM.drive=true; CAM.lastApplied=null;
           try{ if(typeof camApplyToStore==='function') camApplyToStore(); }catch(e){}
-          return {ok:true,message:'Aforo real CONECTADO · el local respira con la gente real ('+(CAM.connected?CAM.occupancy+' dentro':'cámara sin señal')+')',data:{drive:true,connected:CAM.connected,occupancy:CAM.occupancy}};
+          try{ if(typeof updateCamHud==='function') updateCamHud(); }catch(e){}
+          return {ok:true,message:'Aforo REAL · la cámara Hikvision controla los clientes ('+(CAM.connected?CAM.occupancy+' dentro':'cámara sin señal — esperando datos de ieu.ai')+')',data:{mode:'real',drive:true,connected:CAM.connected,occupancy:CAM.occupancy}};
         }
-        if(['off','no','stop','auto','desconectar'].includes(sub)){
+        if(['fake','falso','auto','aleatorio','random','juego','off','no','stop','desconectar'].includes(sub)){
           CAM.drive=false; CAM.lastApplied=null;
           try{ if(window.xtAPI&&typeof window.xtAPI.command==='function') window.xtAPI.command('/people store auto'); }catch(e){}
-          return {ok:true,message:'Aforo real DESCONECTADO · clientes en modo automático',data:{drive:false}};
+          try{ if(typeof updateCamHud==='function') updateCamHud(); }catch(e){}
+          return {ok:true,message:'Aforo FAKE · clientes generados por el juego (spawn aleatorio por hora)',data:{mode:'fake',drive:false}};
         }
-        return {ok:true,message:'Aforo real: '+(CAM.connected?(CAM.occupancy+' dentro (pico '+CAM.peak+', +'+CAM.enter+'/-'+CAM.leave+')'):'cámara sin conexión')+' · respira='+(CAM.drive?'ON':'OFF'),data:{connected:CAM.connected,occupancy:CAM.occupancy,enter:CAM.enter,leave:CAM.leave,peak:CAM.peak,drive:CAM.drive}};
+        const modeLabel=CAM.drive?'REAL (cámara Hikvision)':'FAKE (juego aleatorio)';
+        return {ok:true,message:'Aforo: '+modeLabel+' · cámara '+(CAM.connected?(CAM.occupancy+' dentro, pico '+CAM.peak+' (+'+CAM.enter+'/-'+CAM.leave+')'):'sin conexión')+'. Uso: /aforo real | /aforo fake',data:{mode:CAM.drive?'real':'fake',connected:CAM.connected,occupancy:CAM.occupancy,enter:CAM.enter,leave:CAM.leave,peak:CAM.peak,drive:CAM.drive}};
       }
 
       // /store close → cierra TODO: clientes salen, staff desaparece, audio+luces+aroma+AC apagados

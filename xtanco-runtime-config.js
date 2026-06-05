@@ -48,7 +48,11 @@
       enabled: true,
       url: 'https://ieu.ai/api/ocuppancy',
       pollMs: 5000,
-      drive: true, // false = solo muestra el número en el HUD, sin tocar los clientes
+      // Modo de arranque: true = "/aforo real" (la cámara controla los clientes);
+      // false = "/aforo fake" (spawn aleatorio del juego). Conmutable en caliente
+      // con el comando CLI /aforo real | /aforo fake. El badge del HUD siempre
+      // muestra lo que dice la cámara.
+      drive: true,
     },
   };
 })();
