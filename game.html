@@ -4749,7 +4749,8 @@ async function camPoll(){
     const r=await fetch(CAM.url,{cache:'no-store',signal:AbortSignal.timeout(4000)});
     const j=r.ok?await r.json():null;
     if(!j||j.ok===false){ CAM.connected=false; updateCamHud(); return; }
-    CAM.connected=j.connection?j.connection==='receiving':true;
+    // 'receiving'/'listening' = sistema vivo; solo rojo en estado muerto explícito.
+    CAM.connected=!['error','disconnected','offline','off','down'].includes(String(j.connection||'').toLowerCase());
     CAM.occupancy=Math.max(0,parseInt(j.current_occupancy!=null?j.current_occupancy:j.occupancy,10)||0);
     CAM.enter=parseInt(j.total_enter!=null?j.total_enter:j.camera_total_enter,10)||0;
     CAM.leave=parseInt(j.total_leave!=null?j.total_leave:(j.total_exit!=null?j.total_exit:j.camera_total_leave),10)||0;

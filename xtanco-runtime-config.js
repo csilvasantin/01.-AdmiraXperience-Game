@@ -46,7 +46,10 @@
       // NOTA: ieu.ai debe permitir CORS desde este origen
       // (Access-Control-Allow-Origin) o el navegador bloqueará la lectura.
       enabled: true,
-      url: 'https://ieu.ai/api/ocuppancy',
+      // Worker proxy (CORS) que re-sirve ieu.ai/api/ocuppancy. El navegador no
+      // puede leer ieu.ai directo (no es zona Cloudflare, sin Access-Control-*),
+      // así que el aforo-proxy lo expone con CORS desde *.workers.dev.
+      url: 'https://aforo-proxy.csilvasantin.workers.dev/',
       pollMs: 5000,
       // Modo de arranque: true = "/aforo real" (la cámara controla los clientes);
       // false = "/aforo fake" (spawn aleatorio del juego). Conmutable en caliente
