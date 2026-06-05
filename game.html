@@ -1131,7 +1131,7 @@ const APP_VERSION_LABEL=APP_VERSION;
 const APP_FORMULA_LABEL='build '+APP_BUILD;
 // Versión publicada del XpaceOS (se muestra en el splash · página 0).
 // IMPORTANTE: bumpear en cada release junto al tag DigitalTwin-v.YYYY.MM.DD.rN
-const XPACE_OS_VERSION='v.2026.06.05.r3';
+const XPACE_OS_VERSION='v.2026.06.05.r4';
 try{var _sv=document.getElementById('splashVersion');if(_sv)_sv.textContent='XpaceOS '+XPACE_OS_VERSION;}catch(e){}
 const AMIGA_PAGE0_TODO=['BUY SHIP','FIND BIGWHOOP','DEFEAT LECHUCK','MARRY ELAINE!'];
 let amigaPage0Todo=AMIGA_PAGE0_TODO.slice();
@@ -24098,7 +24098,7 @@ window.xtAPI = (function(){
       },
       {
         label:'🎨 Pixeria',
-        status:isEs?'creador':'creator',
+        status:isEs?'último → gemelo':'latest → twin',
         customAction:'pixerai'
       },
       {
@@ -24152,10 +24152,32 @@ window.xtAPI = (function(){
 
   // Pixer.IA → hub del grupo en www.admira.studio (motores generativos).
   // Apertura síncrona en el click (sin await) para no disparar el popup blocker.
-  function openPixerAi(){
-    const w=window.open('https://www.admira.studio','_blank','noopener');
-    if(w){ try{ w.opener=null; }catch(e){} }
-    if(typeof showEv==='function') showEv('🎨 Pixer.IA · admira.studio','#aa66ff');
+  // Botón "🎨 Pixeria": importa de un toque el ÚLTIMO mobiliario creado en
+  // pixeria.com (type 'furni' del Stock) y lo coloca en el Xpacio del gemelo.
+  async function openPixerAi(){
+    try{
+      if(typeof showEv==='function') showEv('🎨 Importando lo último de Pixeria…','#aa66ff');
+      const items=await fetchPixeriaCatalog('furni');
+      if(!items||!items.length){
+        if(typeof showEv==='function') showEv('Pixeria: aún no hay mobiliario','#ff99aa');
+        return;
+      }
+      const m=items[0]; // el Stock ordena por createdAt desc → el más reciente
+      const it=addCustomFurni({
+        img:m.url,
+        label:m.title||(m.tags&&m.tags.length?m.tags[0]:'Pixeria'),
+        fp:Array.isArray(m.fp)?m.fp:[1,1],
+        ph:m.ph||46,
+      });
+      if(it){
+        if(typeof showEv==='function') showEv('🎨 "'+it.label+'" importado de Pixeria','#7dffb5');
+        try{ if(typeof setManagerSayBubble==='function') setManagerSayBubble('Nuevo de Pixeria: '+it.label); }catch(e){}
+      }else{
+        if(typeof showEv==='function') showEv('Pixeria: no se pudo colocar','#ff6b6b');
+      }
+    }catch(e){
+      if(typeof showEv==='function') showEv('Pixeria: error importando','#ff6b6b');
+    }
   }
 
   function buildQuickButtonHtml(action,idx){
