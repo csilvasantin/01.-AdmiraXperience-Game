@@ -7444,6 +7444,10 @@ let npcEdNameEdit=false;   // is name field in edit mode
 let npcEdNameBuf='';       // name buffer while editing
 let npcEdDockSide='left';  // 'left' | 'right' — open opposite to clicked NPC when possible
 let npcEdKind='staff';     // 'staff' | 'customer' | 'special'
+// Posición arrastrable del panel de detalle del NPC. null = posición por defecto
+// (abajo-izquierda). Se arrastra por su barra de título y se recuerda (localStorage).
+let npcEdPos=(()=>{ try{ const p=JSON.parse(localStorage.getItem('xt_npcEdPos')||'null'); return (p&&typeof p.x==='number'&&typeof p.y==='number')?p:null; }catch(e){ return null; } })();
+let npcEdDrag={active:false,offX:0,offY:0,moved:false};
 let npcPlacementDirty=false;
 let custTemplates=[];      // customer appearance templates [{look:{shirt,hair,skin,pants,shoes,accessory}}]
 let custTplSelIdx=-1;      // selected customer template index
@@ -9072,6 +9076,20 @@ function hitTestShopLayoutItem(mx,my){
 
 cv.addEventListener('mousedown',e=>{
   if(e.button!==0) return;
+  // Arrastrar el panel de detalle del NPC por su barra de título (cualquier estado).
+  if(npcEdOpen){
+    const r3=cv.getBoundingClientRect();
+    const mx=(e.clientX-r3.left)*(W/r3.width);
+    const my=(e.clientY-r3.top)*(H/r3.height);
+    if(npcEdTitleBarHit(mx,my)){
+      const b=getNPCEditorBounds();
+      npcEdDrag.active=true; npcEdDrag.moved=false;
+      npcEdDrag.offX=mx-b.x; npcEdDrag.offY=my-b.y;
+      cv.style.cursor='grabbing';
+      e.preventDefault();
+      return;
+    }
+  }
   if(state!==S.EDITOR || !isXpaceCreator()) return;
   const r2=cv.getBoundingClientRect();
   const mx=(e.clientX-r2.left)*(W/r2.width)|0;
@@ -9089,6 +9107,20 @@ cv.addEventListener('mousedown',e=>{
 });
 
 cv.addEventListener('mousemove',e=>{
+  if(npcEdDrag.active){
+    const r3=cv.getBoundingClientRect();
+    const mx=(e.clientX-r3.left)*(W/r3.width);
+    const my=(e.clientY-r3.top)*(H/r3.height);
+    const b=getNPCEditorBounds();
+    let nx=mx-npcEdDrag.offX, ny=my-npcEdDrag.offY;
+    nx=Math.max(0,Math.min(W-b.w,nx));
+    ny=Math.max(0,Math.min(H-b.h,ny));
+    npcEdPos={x:nx,y:ny};
+    npcEdDrag.moved=true;
+    cv.style.cursor='grabbing';
+    e.preventDefault();
+    return;
+  }
   if(!edDrag.active) return;
   const dx=e.clientX-edDrag.startX, dy=e.clientY-edDrag.startY;
   if(!edDrag.moved && (Math.abs(dx)+Math.abs(dy))<6) return; // umbral 6px para considerar drag
@@ -9121,6 +9153,15 @@ cv.addEventListener('mousemove',e=>{
 });
 
 cv.addEventListener('mouseup',e=>{
+  if(npcEdDrag.active){
+    npcEdDrag.active=false;
+    cv.style.cursor='';
+    if(npcEdDrag.moved){
+      try{ localStorage.setItem('xt_npcEdPos',JSON.stringify(npcEdPos)); }catch(_){}
+      edDrag.suppressClick=true; setTimeout(()=>{edDrag.suppressClick=false;},50);
+    }
+    return;
+  }
   if(!edDrag.active) return;
   cv.style.cursor='';
   try{ document.body.classList.remove('dragging-item'); }catch(_){}
@@ -9145,7 +9186,7 @@ cv.addEventListener('mousemove',e=>{
   // Cursor: pointer over any clickable button
   let overBtn=state===S.GAME&&getDigitalSignageHitIndex(e.clientX,e.clientY)!==-1;
   for(const id in BTNS){const b=BTNS[id];if(mx>=b.x&&mx<=b.x+b.w&&my>=b.y&&my<=b.y+b.h){overBtn=true;break;}}
-  cv.style.cursor=overBtn?'pointer':'default';
+  cv.style.cursor=npcEdDrag.active?'grabbing':(overBtn?'pointer':((npcEdOpen&&npcEdTitleBarHit(mx,my))?'grab':'default'));
   if(state===S.EDITOR) edHoverTile=screenToIso(mx,my);
 });
 
@@ -21008,8 +21049,19 @@ function openSpecialEditor(kind,label,lines){
 function getNPCEditorBounds(){
   const pw=420,ph=280,dockScale=0.85;
   const dockW=pw*dockScale,dockH=ph*dockScale;
-  const bottomGap=0;
-  return {x:14,y:H-dockH-bottomGap,w:dockW,h:dockH};
+  let x = npcEdPos ? npcEdPos.x : 14;
+  let y = npcEdPos ? npcEdPos.y : (H-dockH);
+  // Mantener el panel siempre dentro del canvas.
+  x=Math.max(0,Math.min(W-dockW,x));
+  y=Math.max(0,Math.min(H-dockH,y));
+  return {x,y,w:dockW,h:dockH};
+}
+// ¿El puntero (coords canvas) está sobre la barra de título arrastrable?
+// (excluye la zona del botón de cerrar, arriba a la derecha).
+function npcEdTitleBarHit(mx,my){
+  if(!npcEdOpen||!npcEdDraft) return false;
+  const b=getNPCEditorBounds(), s=0.85;
+  return mx>=b.x && mx<=b.x+b.w-24*s && my>=b.y && my<=b.y+22*s;
 }
 function persistSelectedStaffPlacement(){
   if(!npcEdOpen||npcEdKind!=='staff'||npcEdIdx<0||!G||!G.staff||!G.staff[npcEdIdx]) return false;
@@ -21062,8 +21114,8 @@ function drawNPCEditor(){
   const pw=420,ph=280;
   const dockScale=0.85;
   const dockW=pw*dockScale,dockH=ph*dockScale;
-  const bottomGap=0;
-  const dockX=14,dockY=H-dockH-bottomGap;
+  const _b=getNPCEditorBounds();
+  const dockX=_b.x,dockY=_b.y;
   const px=0,py=0;
   const npcBtn=(id,x,y,w,h)=>{BTNS[id]={x:dockX+x*dockScale,y:dockY+y*dockScale,w:w*dockScale,h:h*dockScale};};
   cx.save();
@@ -21081,6 +21133,8 @@ function drawNPCEditor(){
   cx.beginPath();cx.moveTo(px,py+22);cx.lineTo(px+pw,py+22);cx.stroke();
   const title=(d.title?d.title+': ':'EDITOR NPC: ')+d.name;
   tx(title,px+pw/2,py+15,'#3a2a1a',11,'center');
+  // Grip: indica que la barra de título se puede arrastrar.
+  tx('✥',px+9,py+16,'#9a8a6a',12);
   // Close button
   npcBtn('npcEdClose',px+pw-20,py+2,18,18);
   cx.fillStyle='#cc4444';cx.fillRect(px+pw-20,py+3,16,16);
