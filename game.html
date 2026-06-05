@@ -1131,7 +1131,7 @@ const APP_VERSION_LABEL=APP_VERSION;
 const APP_FORMULA_LABEL='build '+APP_BUILD;
 // Versión publicada del XpaceOS (se muestra en el splash · página 0).
 // IMPORTANTE: bumpear en cada release junto al tag DigitalTwin-v.YYYY.MM.DD.rN
-const XPACE_OS_VERSION='v.2026.06.05.r1';
+const XPACE_OS_VERSION='v.2026.06.05.r2';
 try{var _sv=document.getElementById('splashVersion');if(_sv)_sv.textContent='XpaceOS '+XPACE_OS_VERSION;}catch(e){}
 const AMIGA_PAGE0_TODO=['BUY SHIP','FIND BIGWHOOP','DEFEAT LECHUCK','MARRY ELAINE!'];
 let amigaPage0Todo=AMIGA_PAGE0_TODO.slice();
@@ -7844,7 +7844,7 @@ const FURNITURE_SIZE={
 function gridKey(col,row){return Math.round(col)+','+Math.round(row);}
 function isGridInside(col,row){return col>=0&&col<ISO.cols&&row>=0&&row<ISO.rows;}
 function getFurnitureFootprint(item){
-  const base=FURNITURE_SIZE[item.type]||[1,1];
+  const base=(item.type==='custom'&&Array.isArray(item.fp)&&item.fp.length===2)?item.fp:(FURNITURE_SIZE[item.type]||[1,1]);
   const rot=((item.rot||0)%4+4)%4;
   let w=Math.max(1,Math.ceil(base[0]*Math.max(0.2,item.sx||1)));
   let d=Math.max(1,Math.ceil(base[1]*Math.max(0.2,item.sy||1)));
@@ -15748,7 +15748,7 @@ function drawShop(){
       if(item.type==='led'||item.type==='tft') continue;
       if(item.type==='aroma'&&!editorSceneActive) continue;
       const d=item.type==='rug'?-999:item.type==='aroma'?-1200:isoDepth(item.col,item.row+1);
-      entities.push({type:item.type,col:item.col,row:item.row,depth:d,layoutId:item.id,sx:item.sx||1,sy:item.sy||1,flipX:item.flipX||false,rot:item.rot||0,wallY:(typeof item.wallY==='number'?item.wallY:undefined)});
+      entities.push({type:item.type,col:item.col,row:item.row,depth:d,layoutId:item.id,sx:item.sx||1,sy:item.sy||1,flipX:item.flipX||false,rot:item.rot||0,wallY:(typeof item.wallY==='number'?item.wallY:undefined),img:item.img,fp:item.fp,ph:item.ph,label:item.label});
     }
   }
 
@@ -15841,6 +15841,7 @@ function drawShop(){
       case 'turnKiosk': drawScaled(e,drawIsoTurnKiosk); break;
       case 'aroma': drawAromatizer(e.col,e.row,typeof e.wallY==='number'?e.wallY:undefined); break;
       case 'metahuman': drawScaled(e,drawIsoMetahuman); break;
+      case 'custom': drawCustomFurni(e); break;
       case 'staff': drawIsoStaff(e.data); break;
       case 'cust': drawIsoCust(e.data); break;
       case 'passerby': drawIsoCust(e.data); break;
@@ -18502,6 +18503,96 @@ function drawIsoWineRack(col,row){
 
 // ── VENDING MACHINE (máquina expendedora) ────────────────────
 // (already exists as drawIsoVending — keeping it)
+
+// ── CUSTOM IMPORTED FURNITURE (importador de elementos · Fase 1) ──────
+// Un mueble tipo 'custom' se dibuja desde una imagen (item.img) como sprite
+// billboard erguido anclado en su huella, con sombra de contacto. Es el
+// cimiento del importador: catálogo (nube, Fase 2) → /importar → Xpacio.
+const CUSTOM_IMG_CACHE=Object.create(null);   // url -> {img, loaded, error}
+function getCustomFurniImage(url){
+  if(!url) return null;
+  let rec=CUSTOM_IMG_CACHE[url];
+  if(!rec){
+    rec={img:new Image(), loaded:false, error:false};
+    // Para imágenes de la nube (Fase 2) el worker debe enviar CORS; con
+    // crossOrigin podremos hacer readback del canvas sin "tainted".
+    if(/^https?:\/\//i.test(url) && url.indexOf(location.origin)!==0){ try{ rec.img.crossOrigin='anonymous'; }catch(_){} }
+    rec.img.onload=()=>{ rec.loaded=true; };
+    rec.img.onerror=()=>{ rec.error=true; };
+    rec.img.src=url;
+    CUSTOM_IMG_CACHE[url]=rec;
+  }
+  return rec;
+}
+function customFurniFootprint(e){
+  const fp=Array.isArray(e.fp)&&e.fp.length===2?e.fp:[1,1];
+  let w=fp[0]*(e.sx||1), d=fp[1]*(e.sy||1);
+  if((((e.rot||0)%2)+2)%2===1){ const t=w; w=d; d=t; }
+  return [Math.max(0.4,w), Math.max(0.4,d)];
+}
+function drawCustomFurni(e){
+  const [fw,fd]=customFurniFootprint(e);
+  // Ground-contact shadow (anchored to footprint) — same look as the rest.
+  drawFurnitureContactShadow(e.col,e.row,fw,fd);
+  // Anchor: footprint centre on the floor; sprite bottom sits there.
+  const p=toIso(e.col+fw/2,e.row+fd/2);
+  const rec=getCustomFurniImage(e.img);
+  const ph=Math.max(12,(e.ph||46));               // billboard height in px
+  if(rec&&rec.loaded&&rec.img.naturalWidth>0){
+    const ar=rec.img.naturalWidth/rec.img.naturalHeight;
+    const h=ph, w=Math.max(6,ph*ar);
+    cx.save();
+    cx.translate(p.x,p.y);
+    if(e.flipX) cx.scale(-1,1);
+    cx.imageSmoothingEnabled=false;             // crisp pixel-art sprites
+    cx.drawImage(rec.img,-w/2,-h,w,h);
+    cx.restore();
+  } else {
+    // Placeholder while loading (or on error): a labelled ghost box.
+    const w=22, h=ph;
+    cx.save();
+    cx.globalAlpha=rec&&rec.error?0.5:0.8;
+    r(p.x-w/2,p.y-h,w,h, rec&&rec.error?'#5a2230':'#1d3540');
+    rx(p.x-w/2,p.y-h,w,h,'#78f3ff',1);
+    tx(rec&&rec.error?'✕':'…',p.x,p.y-h/2,'#9fe7ff',8,'center');
+    cx.restore();
+  }
+  if(e.label){ tx(e.label,p.x,p.y-ph-4,'#bfe9f2',6,'center'); }
+}
+// Coloca un mueble 'custom' (imagen importada) en el Xpacio. Reusa la
+// búsqueda de hueco libre de addCreatorFurniture.
+function addCustomFurni(opts){
+  opts=opts||{};
+  if(!opts.img) return null;
+  const taken=new Set();
+  for(const it of shopLayout){ if(it&&typeof it.col==='number') taken.add(gridKey(it.col,it.row)); }
+  const cx0=Math.floor(ISO.cols/2), cy0=Math.floor(ISO.rows/2);
+  let col=cx0,row=cy0;
+  if(taken.has(gridKey(col,row))){
+    outer: for(let rr=1;rr<Math.max(ISO.cols,ISO.rows);rr++){
+      for(let dy=-rr;dy<=rr;dy++) for(let dx=-rr;dx<=rr;dx++){
+        if(Math.abs(dx)!==rr&&Math.abs(dy)!==rr) continue;
+        const c=cx0+dx, r2=cy0+dy;
+        if(c<0||r2<0||c>=ISO.cols||r2>=ISO.rows) continue;
+        if(!taken.has(gridKey(c,r2))){ col=c; row=r2; break outer; }
+      }
+    }
+  }
+  const item={
+    id:'custom_'+Date.now().toString(36).slice(-5),
+    type:'custom', custom:true,
+    col, row, sx:1, sy:1, rot:0,
+    img:opts.img,
+    label:opts.label||'Importado',
+    fp:Array.isArray(opts.fp)&&opts.fp.length===2?opts.fp:[1,1],
+    ph:opts.ph||46,
+  };
+  shopLayout.push(item);
+  edSelIdx=shopLayout.length-1; edStaffSelIdx=-1;
+  try{ saveLayout(); }catch(_){}
+  try{ buildWalkGrid(); }catch(_){}
+  return item;
+}
 
 // ── MAGAZINE RACK (revistero) ────────────────────────────────
 // Entity wrapper: rotation-aware (footprint swaps with rot so the rack reads
@@ -25242,7 +25333,7 @@ window.xtAPI = (function(){
       {title:'Integración AdmiraNext',items:['/socios export']},
       {title:'IA y contenido',items:['/grok pregunta','/draw dibujo','/metahuman pregunta','/log','/log thief','/log customer','/import','/import list','/import remove 1','/importTube https://youtu.be/...']},
       {title:'Ajustes rápidos',items:['/money 12000','/sat 90','/fame 80','/set week 12','/set year 2','/set revenue 5000','/set storeLevel 2','/set customers 30']},
-      {title:'Musica y layout',items:['/song 1','/song bad bunny','/music','/next','/prev','/seoul2026','/seul','/seultrap','/seultecno','/equipo inicio ana 3 4','/equipo zona dj 12 2 2','/catalogo','/catalogo pared','/mobiliario','/mobiliario inicio','/layout','/layout save','/layout factory','/layout xpacio','/layout xpacio load']},
+      {title:'Musica y layout',items:['/song 1','/song bad bunny','/music','/next','/prev','/seoul2026','/seul','/seultrap','/seultecno','/equipo inicio ana 3 4','/equipo zona dj 12 2 2','/catalogo','/catalogo pared','/importar','/importar demo','/importar lista','/mobiliario','/mobiliario inicio','/layout','/layout save','/layout factory','/layout xpacio','/layout xpacio load']},
       {title:'Estilo visual',items:['/16bits','/8bits','/render habbo','/render 16bit']},
       {title:'Mapa de navegacion',items:['/mapa','/map','/red','/sd list','/streamdeck','/help','/debug']},
     ];
@@ -25805,6 +25896,42 @@ window.xtAPI = (function(){
       if(cmd==='status') return formatStatus();
       if(cmd==='stock') return formatStock();
       if(cmd==='catalogo'||cmd==='catálogo'||cmd==='catalog'||cmd==='muebleria'||cmd==='mueblería') return formatFurnitureCatalog(arg);
+      if(cmd==='importar'||cmd==='importmueble'||cmd==='importfurni'||cmd==='importelemento'){
+        const isEs=lang!=='en';
+        const parts2=(arg||'').trim().split(/\s+/).filter(Boolean);
+        const sub=(parts2[0]||'').toLowerCase();
+        const customs=()=>shopLayout.map((it,i)=>({it,i})).filter(x=>x.it&&x.it.type==='custom');
+        if(!sub) return isEs
+          ? 'Importador de mobiliario (Fase 1 · local).\nUso:\n/importar url <imgURL> | <nombre>  → coloca una imagen como mueble\n/importar demo  → prueba con un asset del juego\n/importar lista  → lista los importados en el Xpacio\n/importar quitar <n>  → elimina el nº n\nFase 2: catálogo compartido en la nube + /importar catalogo.'
+          : 'Furniture importer (Phase 1 · local).\nUsage:\n/importar url <imgURL> | <name>  → place an image as furniture\n/importar demo  → test with a game asset\n/importar lista  → list imported items\n/importar quitar <n>  → remove item n';
+        if(sub==='demo'){
+          const it=addCustomFurni({img:'assets/images/digital-twin-banner.png?v=2',label:'Demo',fp:[1,1],ph:42});
+          return it?('✅ '+(isEs?'Mueble demo colocado en':'Demo item placed at')+' ('+it.col+','+it.row+'). '+(isEs?'Abre el editor (/render) para moverlo.':'')):'No se pudo colocar.';
+        }
+        if(sub==='url'||/^https?:\/\//i.test(sub)){
+          const rest=sub==='url'?parts2.slice(1).join(' '):parts2.join(' ');
+          const [urlPart,labelPart]=rest.split('|').map(s=>s.trim());
+          if(!urlPart||!/^https?:\/\/|^assets\/|^\.\//i.test(urlPart)) return isEs?'Falta la URL de imagen. Ej: /importar url https://… | Sofá':'Missing image URL.';
+          const it=addCustomFurni({img:urlPart,label:labelPart||'Importado',fp:[1,1],ph:46});
+          return it?('✅ '+(isEs?'Colocado':'Placed')+' "'+it.label+'" '+(isEs?'en':'at')+' ('+it.col+','+it.row+').'):'No se pudo colocar.';
+        }
+        if(sub==='lista'||sub==='list'){
+          const cs=customs();
+          if(!cs.length) return isEs?'No hay muebles importados en el Xpacio.':'No imported furniture in the Xpace.';
+          return (isEs?'Importados en el Xpacio:\n':'Imported in Xpace:\n')+cs.map((x,n)=>(n+1)+'. '+(x.it.label||'—')+' ('+x.it.col+','+x.it.row+')').join('\n');
+        }
+        if(sub==='quitar'||sub==='remove'||sub==='borrar'){
+          const cs=customs();
+          const n=parseInt(parts2[1],10);
+          if(!n||n<1||n>cs.length) return isEs?('Indica nº válido (1..'+cs.length+').'):'Invalid number.';
+          const target=cs[n-1];
+          shopLayout.splice(target.i,1);
+          try{ saveLayout(); buildWalkGrid(); }catch(_){}
+          if(edSelIdx===target.i) edSelIdx=-1;
+          return '🗑 '+(isEs?'Eliminado':'Removed')+' "'+(target.it.label||'—')+'".';
+        }
+        return isEs?'Subcomando no reconocido. /importar para ver la ayuda.':'Unknown subcommand.';
+      }
       if(cmd==='render'||cmd==='estilo'||cmd==='style'||cmd==='renderizado'){
         const m=(arg||'').trim().toLowerCase();
         const map={habbo:'habbo','16bit':'16bit','16':'16bit','8bit':'8bit','8':'8bit',flat:'8bit',plano:'8bit'};
