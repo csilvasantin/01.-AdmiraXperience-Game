@@ -1131,7 +1131,7 @@ const APP_VERSION_LABEL=APP_VERSION;
 const APP_FORMULA_LABEL='build '+APP_BUILD;
 // Versión publicada del XpaceOS (se muestra en el splash · página 0).
 // IMPORTANTE: bumpear en cada release junto al tag DigitalTwin-v.YYYY.MM.DD.rN
-const XPACE_OS_VERSION='v.2026.06.02.r3';
+const XPACE_OS_VERSION='v.2026.06.05.r1';
 try{var _sv=document.getElementById('splashVersion');if(_sv)_sv.textContent='XpaceOS '+XPACE_OS_VERSION;}catch(e){}
 const AMIGA_PAGE0_TODO=['BUY SHIP','FIND BIGWHOOP','DEFEAT LECHUCK','MARRY ELAINE!'];
 let amigaPage0Todo=AMIGA_PAGE0_TODO.slice();
@@ -12133,7 +12133,32 @@ function drawIsoTile16(col,row,color,strokeColor){
   cx.beginPath();cx.moveTo(p.x,p.y+1);cx.lineTo(p.x+hw,p.y+hh+1);cx.stroke();
   cx.globalAlpha=1;
 }
+// HABBO TIER — flat checkerboard diamond with crisp dark "grout" outline and a
+// 1px bevel highlight on the back edges. No gradients: Habbo floors are flat
+// banded shades, not smooth fills. Original art (style only, no Habbo assets).
+function drawIsoFloorTileHabbo(col,row,color){
+  const p=toIso(col,row);
+  const hw=ISO.tileW/2, hh=ISO.tileH/2;
+  // cDark/cLight need a hex base; rush-hour passes an rgba() pulse string.
+  const base=(typeof color==='string'&&color[0]==='#')?color:'#b8bcc0';
+  // Strong checkerboard so the tiling is unmistakable: light vs clearly darker.
+  const odd=((col+row)%2+2)%2===1;
+  const fill=odd?cDark(base,26):cLight(base,8);
+  cx.beginPath();
+  cx.moveTo(p.x,p.y);
+  cx.lineTo(p.x+hw,p.y+hh);
+  cx.lineTo(p.x,p.y+ISO.tileH);
+  cx.lineTo(p.x-hw,p.y+hh);
+  cx.closePath();
+  cx.fillStyle=fill;cx.fill();
+  // Grout — bold dark edge defines every tile (the Habbo signature).
+  cx.strokeStyle=cDark(base,62);cx.lineWidth=1.5;cx.stroke();
+  // Bevel highlight on the two back (top) edges for a tile lip.
+  cx.strokeStyle=cLight(fill,26);cx.lineWidth=1;
+  cx.beginPath();cx.moveTo(p.x-hw,p.y+hh);cx.lineTo(p.x,p.y);cx.lineTo(p.x+hw,p.y+hh);cx.stroke();
+}
 function drawIsoFloorTile(col,row,color,strokeColor='#aab4be44'){
+  if(renderMode==='habbo'){drawIsoFloorTileHabbo(col,row,color);return;}
   const p=toIso(col,row);
   const hw=ISO.tileW/2, hh=ISO.tileH/2;
   cx.beginPath();
@@ -12250,6 +12275,60 @@ function drawIsoShadow(sx,sy,rw,rh){
   cx.beginPath();cx.ellipse(sx,sy+2,rw,rh,0,0,Math.PI*2);
   cx.fillStyle='#000';cx.fill();
   cx.restore();
+}
+// Soft ground-contact shadow for floor furniture — a radial darkening
+// clipped to the piece's footprint diamond so it anchors the item to the
+// floor (ambient occlusion) without bleeding onto neighbouring tiles.
+// Part of the "más realista" shading pass: drawIsoBlock16 has gradient
+// faces but no contact shadow, so furniture used to float slightly.
+function drawFurnitureContactShadow(col,row,bw,bd){
+  const p=toIso(col,row);
+  const hw=ISO.tileW/2, hh=ISO.tileH/2;
+  const w=bw*hw, d=bd*hw, wh=bw*hh, dh=bd*hh;
+  // Footprint diamond corners at floor level (bh=0), matching drawIsoBlock.
+  const ax=p.x,        ay=p.y;
+  const bx=p.x+w,      by=p.y+wh;
+  const cx0=p.x+w-d,   cy0=p.y+wh+dh;
+  const dx=p.x-d,      dy=p.y+dh;
+  const ctrX=(ax+cx0)/2, ctrY=(ay+cy0)/2;
+  const R=Math.max(w+d,wh+dh);
+  cx.save();
+  cx.beginPath();
+  cx.moveTo(ax,ay);cx.lineTo(bx,by);cx.lineTo(cx0,cy0);cx.lineTo(dx,dy);cx.closePath();
+  cx.clip();
+  const g=cx.createRadialGradient(ctrX,ctrY,2,ctrX,ctrY,Math.max(6,R*0.62));
+  g.addColorStop(0,'rgba(0,0,0,0.30)');
+  g.addColorStop(0.6,'rgba(0,0,0,0.15)');
+  g.addColorStop(1,'rgba(0,0,0,0)');
+  cx.fillStyle=g;
+  cx.fillRect(ctrX-R,ctrY-R,R*2,R*2);
+  cx.restore();
+}
+
+// ── ISO FACE HELPERS — place content parametrically on a block face ──
+// Lets furniture decoration follow the real isometric geometry for ANY
+// footprint (bw×bd), so a piece reads correctly at every rotation instead
+// of being baked for one orientation. Used by the magazine rack.
+function isoFaceQuad(col,row,bw,bd,bh,which){
+  const p=toIso(col,row);const hw=ISO.tileW/2,hh=ISO.tileH/2;
+  const w=bw*hw,d=bd*hw,wh=bw*hh,dh=bd*hh;
+  if(which==='top')  return [{x:p.x,y:p.y-bh},{x:p.x+w,y:p.y+wh-bh},{x:p.x+w-d,y:p.y+wh+dh-bh},{x:p.x-d,y:p.y+dh-bh}];
+  if(which==='left') return [{x:p.x-d,y:p.y+dh-bh},{x:p.x+w-d,y:p.y+wh+dh-bh},{x:p.x+w-d,y:p.y+wh+dh},{x:p.x-d,y:p.y+dh}];
+  return [{x:p.x+w-d,y:p.y+wh+dh-bh},{x:p.x+w,y:p.y+wh-bh},{x:p.x+w,y:p.y+wh},{x:p.x+w-d,y:p.y+wh+dh}]; // right
+}
+// Bilinear point inside a face quad [topA,topB,botB,botA]; u=length, v=height.
+function quadPt(q,u,v){
+  const tx=q[0].x+(q[1].x-q[0].x)*u, ty=q[0].y+(q[1].y-q[0].y)*u;
+  const bx=q[3].x+(q[2].x-q[3].x)*u, by=q[3].y+(q[2].y-q[3].y)*u;
+  return {x:tx+(bx-tx)*v, y:ty+(by-ty)*v};
+}
+function quadCell(q,u0,u1,v0,v1){
+  return [quadPt(q,u0,v0),quadPt(q,u1,v0),quadPt(q,u1,v1),quadPt(q,u0,v1)];
+}
+function fillQuad(c,col){
+  cx.fillStyle=col;cx.beginPath();
+  cx.moveTo(c[0].x,c[0].y);cx.lineTo(c[1].x,c[1].y);cx.lineTo(c[2].x,c[2].y);cx.lineTo(c[3].x,c[3].y);
+  cx.closePath();cx.fill();
 }
 
 // ── DRAW CHIBI (ISOMETRIC) ────────────────────────────────────
@@ -15378,6 +15457,17 @@ function drawShop(){
     cx.moveTo(wallPts[0].x,wallPts[0].y-ISO.wallH);
     for(let i=1;i<wallPts.length;i++) cx.lineTo(wallPts[i].x,wallPts[i].y-ISO.wallH);
     cx.stroke();
+    // HABBO TIER — crisp dark top outline + floor seam define the wall plane.
+    if(renderMode==='habbo'){
+      cx.strokeStyle='#5a4f3a';cx.lineWidth=1.5;cx.beginPath();
+      cx.moveTo(wallPts[0].x,wallPts[0].y-ISO.wallH);
+      for(let i=1;i<wallPts.length;i++) cx.lineTo(wallPts[i].x,wallPts[i].y-ISO.wallH);
+      cx.stroke();
+      cx.strokeStyle='#6f6149';cx.lineWidth=1;cx.beginPath();
+      cx.moveTo(wallPts[0].x,wallPts[0].y);
+      for(let i=1;i<wallPts.length;i++) cx.lineTo(wallPts[i].x,wallPts[i].y);
+      cx.stroke();
+    }
   }
 
   // ── WINDOWS on back wall (half size, centered in wall) ──
@@ -15565,6 +15655,17 @@ function drawShop(){
     cx.moveTo(lwVisible[0].x,lwVisible[0].y-ISO.wallH);
     for(let i=1;i<lwVisible.length;i++) cx.lineTo(lwVisible[i].x,lwVisible[i].y-ISO.wallH);
     cx.stroke();
+    // HABBO TIER — crisp dark top outline + floor seam (left wall).
+    if(renderMode==='habbo'){
+      cx.strokeStyle='#52473270';cx.lineWidth=1.5;cx.beginPath();
+      cx.moveTo(lwVisible[0].x,lwVisible[0].y-ISO.wallH);
+      for(let i=1;i<lwVisible.length;i++) cx.lineTo(lwVisible[i].x,lwVisible[i].y-ISO.wallH);
+      cx.stroke();
+      cx.strokeStyle='#6a5c44';cx.lineWidth=1;cx.beginPath();
+      cx.moveTo(lwVisible[0].x,lwVisible[0].y);
+      for(let i=1;i<lwVisible.length;i++) cx.lineTo(lwVisible[i].x,lwVisible[i].y);
+      cx.stroke();
+    }
   }
 
   // ── CORNER FILL (covers sky gap where left wall meets back wall) ──
@@ -15715,6 +15816,15 @@ function drawShop(){
       cx.save();
       cx.globalAlpha=selectedEditorLayoutId?(isSelectedEditorFurniture?0.62:0.16):0.84;
     }
+    // Ground-contact shadow under floor furniture (shading pass). Skips
+    // wall-mounted items, the flat rug, and non-furniture entities (staff,
+    // customers) which aren't in FURNITURE_SIZE.
+    if(e.layoutId && e.type!=='rug' && FURNITURE_SIZE[e.type] && !isWallMountedType(e.type)){
+      const fp=FURNITURE_SIZE[e.type];
+      let sbw=fp[0]*(e.sx||1), sbd=fp[1]*(e.sy||1);
+      if((((e.rot||0)%2)+2)%2===1){ const t=sbw; sbw=sbd; sbd=t; }
+      drawFurnitureContactShadow(e.col,e.row,sbw,sbd);
+    }
     switch(e.type){
       case 'counter': drawScaled(e,drawIsoCounter); break;
       case 'shelves': drawScaled(e,drawIsoShelves); break;
@@ -15724,7 +15834,7 @@ function drawShop(){
       case 'floorLamp': drawScaled(e,drawIsoFloorLamp); break;
       case 'vending': drawScaled(e,drawIsoVending); break;
       case 'wineRack': drawScaled(e,drawIsoWineRack); break;
-      case 'magazines': drawScaled(e,drawIsoMagazineRack); break;
+      case 'magazines': drawMagazineRack(e); break;
       case 'rug': drawScaled(e,drawIsoRug); break;
       case 'djBooth': drawScaled(e,drawIsoDJBooth); break;
       case 'tablet': drawScaled(e,drawIsoTabletKiosk); break;
@@ -17950,33 +18060,63 @@ function drawIsoMonitor(col,row){
 }
 
 function drawIsoShelves(col,row){
-  // Wooden shelf unit: 1 wide, 2 deep, 55px tall (40% narrower)
+  // Wooden shelf unit: 1 wide, 2 deep, 55px tall. Carcass via the iso block,
+  // then a detailed front elevation: recessed back panel, side posts with
+  // wood shading, shelf boards with thickness + per-cubby ambient occlusion,
+  // and products resting on each board with a contact shadow. (Pilot piece
+  // for the "más realista" pass.)
   drawIsoBlock(col,row,1,2,55,P.furnitureLight,P.furnitureDark,P.furniture,null);
-  // Shelf levels with products
-  const levels=[12,24,36,48];
   const p=toIso(col+0.5,row+1);
-  r(p.x-11,p.y-57,22,8,'#efe2c2');
-  rx(p.x-11,p.y-57,22,8,'#8f6d42',1);
-  tx('SHOP',p.x,p.y-51,'#7a5532',5,'center');
+  const left=p.x-12, right=p.x+12, top=p.y-54, bot=p.y-4, inW=(right-left)-4;
+  const woodMid=P.furniture, woodLo=cDark(P.furniture,16), woodHi=cLight(P.furnitureLight,10);
+  // ── Recessed interior back panel (darker → reads as depth) ──
+  const bg=cx.createLinearGradient(0,top,0,bot);
+  bg.addColorStop(0,cDark(woodMid,24));
+  bg.addColorStop(1,cDark(woodMid,38));
+  cx.fillStyle=bg;cx.fillRect(left+2,top,inW,bot-top);
+  // ── Side posts with rounded wood shading (light edge → dark edge) ──
   for(let side=0;side<2;side++){
-    const x=p.x+(side===0?-12:10);
-    r(x,p.y-54,2,50,side===0?'#d8b178':'#6f5431');
+    const x=side===0?left:right-3;
+    const pg=cx.createLinearGradient(x,0,x+3,0);
+    pg.addColorStop(0,woodHi);pg.addColorStop(1,woodLo);
+    cx.fillStyle=pg;cx.fillRect(x,top,3,bot-top);
   }
+  // ── Header sign with bevel ──
+  r(left,top-6,right-left,8,'#efe2c2');
+  r(left,top-6,right-left,2,'#fff6df');
+  r(left,top+1,right-left,1,'#bfa06a');
+  rx(left,top-6,right-left,8,'#8f6d42',1);
+  tx('SHOP',p.x,top,'#7a5532',5,'center');
+  // ── Shelves (boards) + products, bottom → top ──
+  const levels=[12,24,36,48];
   for(let lv=0;lv<levels.length;lv++){
+    const by=p.y-levels[lv];                 // board top y
+    // Ambient occlusion: soft darkening inside the cubby above each board
+    const ao=cx.createLinearGradient(0,by-12,0,by);
+    ao.addColorStop(0,'rgba(0,0,0,0)');
+    ao.addColorStop(1,'rgba(0,0,0,0.22)');
+    cx.fillStyle=ao;cx.fillRect(left+2,by-12,inW,12);
+    // Products resting on this board
     const numP=G.storeLevel>=2?3:2;
     for(let i=0;i<numP;i++){
       const prod=G.prods[i%G.prods.length];
       const stk=prod.stock/prod.max;
-      const px2=p.x-8+i*7, py2=p.y-levels[lv]-8;
-      r(px2,py2,5,6+lv%2,prod.color);
-      r(px2,py2,5,2,'#ffffff33');
+      const ph=6+lv%2;
+      const px2=p.x-8+i*7, py2=by-ph-2;
+      cx.fillStyle='rgba(0,0,0,0.25)';cx.fillRect(px2-1,by-3,7,2);   // contact shadow
+      r(px2,py2,5,ph,prod.color);
+      r(px2,py2,5,2,'#ffffff40');                                    // top highlight
+      r(px2,py2,1,ph,cLight(prod.color,18));                         // lit left edge
+      r(px2+4,py2,1,ph,cDark(prod.color,18));                        // shaded right edge
       const dc=stk>0.5?P.green:stk>0.2?P.yellow:P.red;
-      r(px2+1,py2-3,3,2,dc);
+      r(px2+1,py2-3,3,2,dc);                                         // stock LED
     }
-    cx.strokeStyle=P.furnitureLight;cx.lineWidth=1;
-    cx.beginPath();cx.moveTo(p.x-10,p.y-levels[lv]);cx.lineTo(p.x+10,p.y-levels[lv]);cx.stroke();
+    // Board with thickness: lit top, mid front, dark underside
+    r(left+1,by,inW+2,1,woodHi);
+    r(left+1,by+1,inW+2,2,woodMid);
+    r(left+1,by+3,inW+2,1,woodLo);
   }
-  tx(T().staffLabel[1],p.x,p.y-63,'#5a4a30',6,'center');
+  tx(T().staffLabel[1],p.x,top-9,'#5a4a30',6,'center');
 }
 
 function drawIsoLottery(col,row){
@@ -18364,73 +18504,86 @@ function drawIsoWineRack(col,row){
 // (already exists as drawIsoVending — keeping it)
 
 // ── MAGAZINE RACK (revistero) ────────────────────────────────
-function drawIsoMagazineRack(col,row){
-  const hw=ISO.tileW/2, hh=ISO.tileH/2;
-  const p0=toIso(col,row);
-  const p=toIso(col+1,row+0.5);
+// Entity wrapper: rotation-aware (footprint swaps with rot so the rack reads
+// correctly in iso at every orientation, instead of canvas-rotating baked art).
+function drawMagazineRack(e){
+  const base=FURNITURE_SIZE.magazines;            // [2,1]
+  let bw=base[0]*(e.sx||1), bd=base[1]*(e.sy||1);
+  if((((e.rot||0)%2)+2)%2===1){ const t=bw; bw=bd; bd=t; }  // 90°/270° → swap
+  drawIsoMagazineRack(e.col,e.row,bw,bd);
+}
+// Press display: open kiosk with NEWSPAPERS on the top tray, MAGAZINE covers
+// on the upper shelves and BOOK spines on the lower shelf, on both visible
+// faces. Footprint-driven (bw×bd) so it survives rotation.
+function drawIsoMagazineRack(col,row,bw,bd){
+  bw=bw||2; bd=bd||1;
   const rackH=42;
-  const magColors=['#dd3333','#3366cc','#33aa55','#dd8822','#cc33aa','#4488aa','#ddcc22','#ee5566','#3388bb'];
-  // Rack frame
-  drawIsoBlock(col,row,2,1,rackH,'#c8c0b0','#8a8478','#a09890',null);
-  r(p.x-18,p.y-rackH-6,36,8,'#f2efe6');
-  rx(p.x-18,p.y-rackH-6,36,8,'#8d8577',1);
-  tx('PRENSA',p.x,p.y-rackH+0,'#6c6458',5,'center');
-  // ── RIGHT FACE: magazine spines (lomos) on isometric right face ──
-  // Right face corners: top-front, top-back, bottom-back, bottom-front
-  const rTF={x:p0.x+2*hw, y:p0.y+2*hh-rackH};       // top front
-  const rTB={x:p0.x+2*hw-hw, y:p0.y+2*hh+hh-rackH};  // top back
-  const rBF={x:p0.x+2*hw, y:p0.y+2*hh};               // bottom front
-  const rBB={x:p0.x+2*hw-hw, y:p0.y+2*hh+hh};         // bottom back
-  for(let shelf=0;shelf<3;shelf++){
-    const t0=shelf/3, t1=(shelf+1)/3;
-    // Top and bottom edges of this shelf band
-    const sTopF={x:rTF.x,y:rTF.y+(rBF.y-rTF.y)*t0};
-    const sTopB={x:rTB.x,y:rTB.y+(rBB.y-rTB.y)*t0};
-    const sBotF={x:rTF.x,y:rTF.y+(rBF.y-rTF.y)*t1};
-    const sBotB={x:rTB.x,y:rTB.y+(rBB.y-rTB.y)*t1};
-    const shH=sBotF.y-sTopF.y;
-    // Draw 5 spines per shelf as parallelograms following the wall
-    for(let i=0;i<5;i++){
-      const f0=i/5, f1=(i+1)/5;
-      const mc=magColors[(shelf*5+i)%magColors.length];
-      // Interpolate position along back edge
-      const x0=sTopF.x+(sTopB.x-sTopF.x)*f0, y0=sTopF.y+(sTopB.y-sTopF.y)*f0;
-      const x1=sTopF.x+(sTopB.x-sTopF.x)*f1, y1=sTopF.y+(sTopB.y-sTopF.y)*f1;
-      cx.beginPath();
-      cx.moveTo(x0,y0+2);
-      cx.lineTo(x1,y1+2);
-      cx.lineTo(x1,y1+shH-2);
-      cx.lineTo(x0,y0+shH-2);
-      cx.closePath();
-      cx.fillStyle=mc;cx.fill();
-      // Page edge highlight
-      cx.fillStyle='#f0eee8';
-      cx.beginPath();
-      cx.moveTo(x0,y0+shH-3);cx.lineTo(x1,y1+shH-3);
-      cx.lineTo(x1,y1+shH-2);cx.lineTo(x0,y0+shH-2);
-      cx.closePath();cx.fill();
+  const frameTop='#cdc6b6', frameL='#8f897c', frameR='#aaa395';
+  const magColors=['#dd3333','#3366cc','#33aa55','#dd8822','#cc33aa','#4488aa','#ddcc22','#ee5566','#22aa88','#9955cc'];
+  const bookColors=['#7a3b2e','#2e5a7a','#3a6e3a','#6e5a2e','#5a2e5a','#444a55','#8a5a2e','#2e6e6e'];
+  const paperGray=['#e8e6df','#dedcd3','#f0eee7'];
+  // Carcass
+  drawIsoBlock(col,row,bw,bd,rackH,frameTop,frameL,frameR,null);
+
+  // Decorate one vertical side face with magazines (top 2 tiers) + books (bottom).
+  function decorate(which,Ltiles,shade){
+    const q=isoFaceQuad(col,row,bw,bd,rackH,which);
+    const magCount=Math.max(4,Math.round(Ltiles*5));
+    for(let tier=0;tier<2;tier++){
+      const v0=tier*0.30+0.05, v1=v0+0.25;
+      const pad=0.18/magCount;
+      for(let i=0;i<magCount;i++){
+        const u0=i/magCount+0.01, u1=(i+1)/magCount-0.01;
+        let mc=magColors[(tier*3+i*3)%magColors.length];
+        if(shade) mc=cDark(mc,shade);
+        fillQuad(quadCell(q,u0,u1,v0,v1),mc);                       // glossy cover
+        fillQuad(quadCell(q,u0,u1,v0,v0+0.045),'#ffffffcc');         // title bar (top)
+        fillQuad(quadCell(q,u0+pad,u1-pad,v0+0.09,v1-0.07),cDark(mc,24)); // cover image
+        fillQuad(quadCell(q,u0,u1,v1-0.022,v1),'#f4f1e8');           // page-edge sliver
+      }
+      fillQuad(quadCell(q,0,1,v1,v1+0.035),cDark(frameR,(shade||0)+8)); // shelf board
     }
-    // Shelf divider line
-    cx.strokeStyle='#6a6458';cx.lineWidth=1;
-    cx.beginPath();cx.moveTo(sBotF.x,sBotF.y);cx.lineTo(sBotB.x,sBotB.y);cx.stroke();
-  }
-  // ── FRONT: magazine covers (on top face, visible from above) ──
-  for(let row2=0;row2<3;row2++){
-    const ry=p.y-14-row2*10;
-    for(let i=0;i<4;i++){
-      const mx=p.x-15+i*8;
-      const mc=magColors[(row2*4+i)%magColors.length];
-      r(mx,ry-6,7,8,mc);
-      r(mx,ry+1,7,1,'#f0eee8');
-      r(mx+1,ry-5,5,2,'#ffffff55');
-      r(mx+1,ry-2,5,3,'#00000022');
+    // Bottom tier: BOOK spines, slight height variation.
+    const bookCount=Math.max(6,Math.round(Ltiles*9));
+    const vb1=0.965;
+    for(let i=0;i<bookCount;i++){
+      const u0=i/bookCount+0.004, u1=(i+1)/bookCount-0.004;
+      const tall=0.66+((i*7)%5)*0.013;
+      let bc=bookColors[(i*5)%bookColors.length];
+      if(shade) bc=cDark(bc,shade);
+      fillQuad(quadCell(q,u0,u1,tall,vb1),bc);                        // spine
+      fillQuad(quadCell(q,u0,u1,tall,tall+0.016),cDark(bc,18));        // top board
+      const ml=(tall+vb1)/2;
+      fillQuad(quadCell(q,u0,u1,ml-0.01,ml+0.01),cLight(bc,30));       // title label
     }
-    cx.strokeStyle='#9a9488';cx.lineWidth=1;
-    cx.beginPath();cx.moveTo(p.x-17,ry+2);cx.lineTo(p.x+17,ry+2);cx.stroke();
+    fillQuad(quadCell(q,0,1,vb1,1),'rgba(0,0,0,0.22)');               // plinth shadow
   }
-  // Top label
-  r(p.x-12,p.y-46,24,7,'#f0e8d0');
-  tx('PRENSA',p.x,p.y-41,'#3a3a5a',6,'center');
+  // Left face length = bw tiles (lit); right face = bd tiles (slightly shaded).
+  decorate('right',bd,9);
+  decorate('left', bw,0);
+
+  // TOP FACE: folded newspapers in a grid.
+  const top=isoFaceQuad(col,row,bw,bd,rackH,'top');
+  const nU=Math.max(2,Math.round(bw*2)), nV=Math.max(2,Math.round(bd*2));
+  for(let a=0;a<nU;a++){
+    for(let b=0;b<nV;b++){
+      const u0=a/nU+0.06, u1=(a+1)/nU-0.06;
+      const v0=b/nV+0.10, v1=(b+1)/nV-0.10;
+      const dv=v1-v0;
+      fillQuad(quadCell(top,u0,u1,v0,v1),paperGray[(a+b)%paperGray.length]); // paper
+      fillQuad(quadCell(top,u0,u1,v0,v0+dv*0.22),'#2a2a33');                  // masthead
+      fillQuad(quadCell(top,u0+0.02,u1-0.02,v0+dv*0.40,v0+dv*0.50),'#7a7a82');// headline
+      fillQuad(quadCell(top,u0+0.02,(u0+u1)/2,v0+dv*0.60,v0+dv*0.68),'#9a9aa2');// subhead
+      fillQuad(quadCell(top,(u0+u1)/2-0.004,(u0+u1)/2+0.004,v0,v1),'rgba(0,0,0,0.10)'); // fold
+    }
+  }
+  // Header sign floating above the rack centre (axis-aligned, rotation-safe).
+  const ctr=toIso(col+bw/2,row+bd/2);
+  const sy=ctr.y-rackH-7;
+  r(ctr.x-17,sy,34,9,'#f0e8d0');
+  r(ctr.x-17,sy,34,2,'#fffaf0');
+  rx(ctr.x-17,sy,34,9,'#8d8577',1);
+  tx('PRENSA',ctr.x,sy+7,'#3a3a5a',6,'center');
 }
 
 // ── DRAW STAFF (ISOMETRIC) ───────────────────────────────────
@@ -23841,12 +23994,12 @@ window.xtAPI = (function(){
         active:!!(typeof REC!=='undefined'&&REC.replay&&REC.replay.on)
       },
       {
-        label:'🎨 Pixer.ai',
+        label:'🎨 Pixeria',
         status:isEs?'creador':'creator',
         customAction:'pixerai'
       },
       {
-        label:'✏ Edit',
+        label:'✏ Mobiliario',
         status:isEs?'editor':'editor',
         customAction:'editor'
       },
@@ -25033,6 +25186,37 @@ window.xtAPI = (function(){
     ].join(' · ')).join('\n');
   }
 
+  function formatFurnitureCatalog(arg){
+    const isEs=lang!=='en';
+    const placed={};
+    (Array.isArray(shopLayout)?shopLayout:[]).forEach(it=>{ if(it&&it.type) placed[it.type]=(placed[it.type]||0)+1; });
+    const filter=(arg||'').trim().toLowerCase();
+    const catName={connected:isEs?'CONECTADOS · IoT/Pantallas':'CONNECTED · IoT/Screens',common:isEs?'COMUNES · Mobiliario tienda':'COMMON · Store furniture'};
+    const lines=[isEs?'🪑 CATÁLOGO DE MOBILIARIO':'🪑 FURNITURE CATALOG'];
+    let shown=0;
+    for(const cat of ['connected','common']){
+      if(filter&&filter!==cat&&filter!=='all'&&filter!=='todo'&&filter!=='todos'){
+        // also allow filtering by mount keyword
+        if(!((filter==='pared'||filter==='wall')||(filter==='suelo'||filter==='floor'))) continue;
+      }
+      const list=XPACE_CREATOR_FURNITURE_CATALOG[cat]||[];
+      const rows=[];
+      for(const d of list){
+        const mount=d.mount==='wall'?(isEs?'pared':'wall'):(isEs?'suelo':'floor');
+        if(filter==='pared'||filter==='wall'){ if(d.mount!=='wall') continue; }
+        if(filter==='suelo'||filter==='floor'){ if(d.mount!=='floor') continue; }
+        const n=placed[d.type]||0;
+        const label=isEs?d.label_es:d.label_en;
+        rows.push(d.icon+' '+label+' · '+(isEs?'tipo':'type')+' '+d.type+' · '+mount+(n?(' · ×'+n+(isEs?' en tienda':' in store')):''));
+        shown++;
+      }
+      if(rows.length){ lines.push('','── '+catName[cat]+' ──',...rows); }
+    }
+    lines.push('',(isEs?'Total colocados: ':'Total placed: ')+(Array.isArray(shopLayout)?shopLayout.length:0)+(isEs?' · usa /mobiliario y el editor (✏ Mobiliario) para añadir':' · use /mobiliario and the editor (✏ Mobiliario) to add'));
+    if(!shown) return isEs?'Sin resultados. Usa /catalogo, /catalogo pared, /catalogo suelo, /catalogo connected o /catalogo common.':'No results. Try /catalogo, /catalogo wall, /catalogo floor, /catalogo connected or /catalogo common.';
+    return lines.join('\n');
+  }
+
   function formatStock(){
     const res=window.xtAPI.stock();
     if(!res.ok) return res.message;
@@ -25058,7 +25242,8 @@ window.xtAPI = (function(){
       {title:'Integración AdmiraNext',items:['/socios export']},
       {title:'IA y contenido',items:['/grok pregunta','/draw dibujo','/metahuman pregunta','/log','/log thief','/log customer','/import','/import list','/import remove 1','/importTube https://youtu.be/...']},
       {title:'Ajustes rápidos',items:['/money 12000','/sat 90','/fame 80','/set week 12','/set year 2','/set revenue 5000','/set storeLevel 2','/set customers 30']},
-      {title:'Musica y layout',items:['/song 1','/song bad bunny','/music','/next','/prev','/seoul2026','/seul','/seultrap','/seultecno','/equipo inicio ana 3 4','/equipo zona dj 12 2 2','/mobiliario','/mobiliario inicio','/layout','/layout save','/layout factory','/layout xpacio','/layout xpacio load']},
+      {title:'Musica y layout',items:['/song 1','/song bad bunny','/music','/next','/prev','/seoul2026','/seul','/seultrap','/seultecno','/equipo inicio ana 3 4','/equipo zona dj 12 2 2','/catalogo','/catalogo pared','/mobiliario','/mobiliario inicio','/layout','/layout save','/layout factory','/layout xpacio','/layout xpacio load']},
+      {title:'Estilo visual',items:['/16bits','/8bits','/render habbo','/render 16bit']},
       {title:'Mapa de navegacion',items:['/mapa','/map','/red','/sd list','/streamdeck','/help','/debug']},
     ];
   }
@@ -25619,6 +25804,16 @@ window.xtAPI = (function(){
       }
       if(cmd==='status') return formatStatus();
       if(cmd==='stock') return formatStock();
+      if(cmd==='catalogo'||cmd==='catálogo'||cmd==='catalog'||cmd==='muebleria'||cmd==='mueblería') return formatFurnitureCatalog(arg);
+      if(cmd==='render'||cmd==='estilo'||cmd==='style'||cmd==='renderizado'){
+        const m=(arg||'').trim().toLowerCase();
+        const map={habbo:'habbo','16bit':'16bit','16':'16bit','8bit':'8bit','8':'8bit',flat:'8bit',plano:'8bit'};
+        if(map[m]){ renderMode=map[m]; return 'Render: '+renderMode+(renderMode==='habbo'?' · estilo Habbo (piloto: sala)':''); }
+        return 'Render actual: '+renderMode+'. Uso: /render habbo | /render 16bit | /render 8bit';
+      }
+      // Atajos de Carlos: "16 bits" = estilo Habbo nuevo, "8 bits" = el actual.
+      if(cmd==='16bits'||cmd==='16'){ renderMode='habbo'; return '🟦 Modo 16-bit (estilo Habbo) ACTIVADO · /8bits para volver al actual'; }
+      if(cmd==='8bits'||cmd==='8'){ renderMode='16bit'; return '◻️ Modo actual restaurado · /16bits para el estilo Habbo'; }
       if(cmd==='set'){
         const setParts=arg.split(/\s+/);
         const field=setParts.shift();
