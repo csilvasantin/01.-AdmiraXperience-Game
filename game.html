@@ -4794,6 +4794,44 @@ async function camPoll(){
   camApplyToStore();
 }
 if(CAM.enabled&&CAM.url){ camPoll(); setInterval(camPoll,CAM.pollMs); }
+
+// ── LOOK & FEEL — ajustes visuales conmutables (CLI + metahuman) ──
+// Persisten en localStorage. Cada toggle se controla por comando (/camiseta on|off)
+// y por lenguaje natural a través del metahuman ("pon número a la camiseta").
+const LOOK=(()=>{
+  const def={shirtNum:true};
+  try{ const s=JSON.parse(localStorage.getItem('xt_look')||'{}'); return Object.assign(def, (s&&typeof s==='object')?s:{}); }catch(e){ return def; }
+})();
+function saveLook(){ try{ localStorage.setItem('xt_look', JSON.stringify(LOOK)); }catch(e){} }
+// Registro de toggles: clave de estado + comando + términos que lo identifican en
+// lenguaje natural. Añadir aquí un objeto da CLI + metahuman + ayuda "gratis".
+const LOOK_TOGGLES=[
+  { key:'shirtNum', cmd:'camiseta', label:'Números en la camiseta de los clientes',
+    aliases:['camiseta','camisetas','dorsal','dorsales','numerocamiseta'],
+    match:/\b(camiseta|camisetas|dorsal|dorsales)\b/i },
+];
+function lookToggleByCmd(cmd){ return LOOK_TOGGLES.find(t=>t.cmd===cmd||t.aliases.includes(cmd)); }
+// Devuelve true (encender), false (apagar) o null (no está claro) según el texto.
+function lookOnOffIntent(s){
+  const t=String(s||'').toLowerCase();
+  if(/(\boff\b|\bno\b|quit|desactiv|ocult|esconde|\bsin\b|fuera|elimin|borra|apag|retir)/.test(t)) return false;
+  if(/(\bon\b|\bpon\b|poner|activ|muestra|mostrar|ense|añad|anad|dale|quiero|\bs[ií]\b|enciend|saca|mete|ponle)/.test(t)) return true;
+  return null;
+}
+// Intento de look&feel desde lenguaje natural (lo usa el metahuman). Si encaja un
+// toggle y la intención on/off es clara, lo aplica y devuelve confirmación.
+function tryLookAndFeelIntent(text){
+  const t=String(text||'');
+  for(const tog of LOOK_TOGGLES){
+    if(tog.match.test(t)){
+      const want=lookOnOffIntent(t);
+      if(want===null) return {handled:false};
+      LOOK[tog.key]=want; saveLook();
+      return {handled:true, message:(want?'✅ ':'🚫 ')+tog.label+': '+(want?'ACTIVADO':'DESACTIVADO')+' (/'+tog.cmd+' '+(want?'on':'off')+')'};
+    }
+  }
+  return {handled:false};
+}
 const ELGATO={
   ip:typeof ELGATO_CONFIG.directIp==='string'?ELGATO_CONFIG.directIp:'',
   port:Number(ELGATO_CONFIG.directPort)||9123,
@@ -14221,6 +14259,7 @@ const HELP_PAGES={
     '  xtAPI.command("/aforo real")  → la cámara Hikvision (ieu.ai) marca el objetivo de clientes (ambiente)',
     '  xtAPI.command("/aforo exacto")  → espejo ESTRICTO 1:1: la tienda = exactamente lo que dice la cámara; cada entrada/salida entra/sale',
     '  xtAPI.command("/aforo fake")  → clientes en modo aleatorio del juego · /aforo = estado actual',
+    '  xtAPI.command("/camiseta on|off")  → muestra/oculta el número en la camiseta de los clientes (look&feel; el metahuman también lo hace por voz: "pon número a la camiseta")',
   ]},
   ],
   en:[
@@ -16682,6 +16721,19 @@ async function askMetahuman(text){
   // Mirror the question into the textarea so it reads exactly the same whether
   // the user typed it in directly or fired it from /metahuman in the CLI.
   if(els.prompt) els.prompt.value=clean;
+  // Acción de look&feel en lenguaje natural ("pon número a la camiseta",
+  // "quita los dorsales"…): el metahuman la EJECUTA directamente, sin Grok.
+  try{
+    const lf=(typeof tryLookAndFeelIntent==='function')?tryLookAndFeelIntent(clean):{handled:false};
+    if(lf&&lf.handled){
+      MH.lastAnswer=lf.message;
+      MH.speaking=true; MH.speakUntil=Date.now()+2600;
+      if(els.status) els.status.textContent='listo';
+      if(els.answer){ els.answer.classList.remove('is-thinking','is-error'); els.answer.textContent=lf.message; }
+      try{ if(typeof showEv==='function') showEv(lf.message,'#66ddaa'); }catch(e){}
+      return;
+    }
+  }catch(e){}
   MH.speaking=true;
   MH.speakUntil=Date.now()+30000;
   if(els.status) els.status.textContent='pensando…';
@@ -16695,6 +16747,9 @@ async function askMetahuman(text){
     // puedas responder sobre empleados (nombres, roles, antigüedad), etc.
     const teamCtx=buildTeamContext();
     if(teamCtx) promptToSend+='\n\n[Datos reales de la tienda y su equipo — úsalos como verdad]\n'+teamCtx;
+    // Acciones de look&feel que el metahuman puede ejecutar (se aplican solas si la
+    // orden es clara; si el usuario duda, explícale cómo).
+    if(typeof LOOK!=='undefined') promptToSend+='\n\n[Acciones de look&feel disponibles: /camiseta on|off → números en la camiseta de los clientes (ahora '+(LOOK.shirtNum?'ON':'OFF')+'). Si te piden activarlas o quitarlas, ya se aplican automáticamente.]';
     if(_mhDetectsLogQuery(clean)){
       const ctx=buildPeopleLogContext();
       if(ctx) promptToSend+='\n\n[Registro real de gente del día — usa estos datos para la respuesta]\n'+ctx;
@@ -18714,7 +18769,7 @@ function drawIsoCust(c){
   // Número identificador en la camiseta — coincide con la lista CLIENTES y con
   // la ficha al pulsar el cliente. Asignación perezosa para los ya en sala.
   if(c.num==null) c.num=nextCustNum();
-  {
+  if(typeof LOOK==='undefined'||LOOK.shirtNum){
     const nStr=String(c.num);
     const nX=c.x+7, nY=renderY+(c.fanCustomerId?16:13);
     cx.save();
@@ -22766,6 +22821,21 @@ window.xtAPI = (function(){
         return {ok:true,message:'Clientes: '+count+'/'+cap+(Number.isFinite(ov)?' (override '+ov+')':' (cap auto, hora '+(G.gameTime||0).toFixed(1)+'h)')+' · Staff: '+staff,data:{count,cap,peopleOverride:ov,staff}};
       }
 
+      // Look & feel: /camiseta on|off (y futuros toggles del registro LOOK_TOGGLES).
+      // Sin argumento: estado. También accesible por lenguaje natural vía metahuman.
+      if(typeof LOOK!=='undefined' && typeof lookToggleByCmd==='function' && lookToggleByCmd(cmd)){
+        const tog=lookToggleByCmd(cmd);
+        const sub=(parts[0]||'').toLowerCase();
+        if(!sub) return {ok:true,message:tog.label+': '+(LOOK[tog.key]?'ON':'OFF')+'. Uso: /'+tog.cmd+' on | off',data:{key:tog.key,value:!!LOOK[tog.key]}};
+        let want;
+        if(['on','si','sí','1','activar','activa','pon','poner','mostrar','muestra','ver'].includes(sub)) want=true;
+        else if(['off','no','0','quitar','quita','desactivar','desactiva','ocultar','oculta','sin'].includes(sub)) want=false;
+        else if(['toggle','alterna','cambia'].includes(sub)) want=!LOOK[tog.key];
+        else return {ok:false,message:'Uso: /'+tog.cmd+' on | off'};
+        LOOK[tog.key]=want; saveLook();
+        return {ok:true,message:tog.label+': '+(want?'ACTIVADO':'DESACTIVADO'),data:{key:tog.key,value:want}};
+      }
+
       // /aforo real|exacto|fake → fuente del aforo de la tienda.
       //   real   → la cámara Hikvision marca el objetivo (ambiente).
       //   exacto → espejo ESTRICTO 1:1: la tienda = exactamente lo que dice la cámara;
@@ -24110,6 +24180,7 @@ window.xtAPI = (function(){
       'Pasan por puerta: '+(d.passersbyToday||0),
       'Entran en tienda: '+d.customersToday,
       'Aforo (cámara Hikvision): '+(typeof camBrainLine==='function'?camBrainLine():'n/a'),
+      'Look&feel · números en camiseta: '+(typeof LOOK!=='undefined'?(LOOK.shirtNum?'ON':'OFF'):'n/a'),
       'Hora tienda: '+hour,
       'Clima: '+weather,
       'Puerta: '+(G&&G.doorMode?G.doorMode:'auto'),
@@ -24918,6 +24989,7 @@ window.xtAPI = (function(){
       {title:'DVR del Xpacio (grabar/velocidad/replay)',items:['/velocidad 1','/velocidad 2','/velocidad 4','/velocidad 8','/dvr','/envivo']},
       {title:'Personal (panel /staff)',items:['/staff','/staff bonus 0 100','/staff eotm 0','/staff eotm ana','/staff train 1','/staff hire 2','/staff fire 1']},
       {title:'Tienda',items:['/ad 0','/ad 1','/ad 2','/upgrade','/aforo real','/aforo exacto','/aforo fake','/aforo','/visit com','/visit tec','/visit del','/visit gc','/save']},
+      {title:'Look & feel',items:['/camiseta on','/camiseta off','/camiseta']},
       {title:'Tiempo y ambiente',items:['/reloj 14:30','/reloj 14 30','/time am','/time pm','/time night','/weather normal','/weather rain','/weather sun','/lamp','/lamp auto','/hue','/hue auto']},
       {title:'Pantalla y directo',items:['/livecam','/mocap','/pixeria','/AdmiraLive texto','/comunicar texto','/comunicar texto --grok','/comunicar texto --elevenlabs','/AdmiraTube URL 2 audio','/say texto','/targetPublicity aforo','/targetPublicity genero','/targetPublicity off','/generovideo','/generovideo off']},
       {title:'Escena en vivo',items:['/dj','/ladron','/guardiacivil','/opinador','/robot','/sponsor','/socio','/door open','/door close','/door auto','/subasta','/subasta off']},
@@ -26078,7 +26150,7 @@ window.xtAPI = (function(){
       // (CLI in-game) y aun no esta mapeado en este dispatcher de Telegram,
       // delegamos. Cubre /store, /people, /gente, /clientes, /personas y futuros
       // comandos sin necesidad de duplicar la logica.
-      if(['store','xtore','xtanco','tienda','people','gente','personas','clientes','staff','personal','subasta','subastar','auction','targetpublicity','targetpubliticy','targetpub','generovideo','genvideo','camgenero','sexovideo','videogenero','aforo','occupancy','camara','cámara'].includes(cmd)){
+      if(['store','xtore','xtanco','tienda','people','gente','personas','clientes','staff','personal','subasta','subastar','auction','targetpublicity','targetpubliticy','targetpub','generovideo','genvideo','camgenero','sexovideo','videogenero','aforo','occupancy','camara','cámara','camiseta','camisetas','dorsal','dorsales'].includes(cmd)){
         try{
           const res=api.command('/'+cmd+(arg?' '+arg:''));
           return res && res.message ? res.message : 'OK';
