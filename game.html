@@ -727,6 +727,8 @@
   <div class="sep"></div>
   <div class="stat"><span class="stat-label" id="bbTrafficLabel">Tráfico</span><span class="stat-val" id="bbCli">0/0</span></div>
   <div class="sep"></div>
+  <div class="stat" id="bbCamBox" title="Aforo real (cámara Hikvision)"><span class="stat-label">👁 Aforo real</span><span class="stat-val"><span id="bbCamDot" style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#cc4444;margin-right:4px;vertical-align:middle"></span><span id="bbCamVal">—</span></span></div>
+  <div class="sep"></div>
   <span id="bbStatus" style="color:#88cc88;font-size:10px">Idle</span>
   <div class="sep"></div>
   <div class="comp-box" style="border-color:#1a3a6a"><span class="comp-name">Altadis</span><span class="comp-pct" id="compAlt">0%</span></div>
@@ -4706,6 +4708,57 @@ const TUBE={
   proxyUrl:typeof TUBE_CONFIG.proxyUrl==='string'?TUBE_CONFIG.proxyUrl.replace(/\/+$/,''):'',
   enabled:TUBE_CONFIG.enabled!==false,
 };
+
+// ── AFORO REAL — cámara Hikvision (people-counting) vía ieu.ai ──
+// El contador hace POST a ieu.ai (/api/ocuppancy). El juego lo lee y, si
+// drive=true, "respira" con la gente real: fija el aforo del local
+// (G.peopleOverride) a la ocupación real reutilizando /people store <N>.
+// Requiere CORS en ieu.ai para poder leerlo desde este origen estático.
+const OCC_CONFIG=(RUNTIME_CONFIG.occupancy&&typeof RUNTIME_CONFIG.occupancy==='object')?RUNTIME_CONFIG.occupancy:{};
+const CAM={
+  enabled:OCC_CONFIG.enabled!==false,
+  url:typeof OCC_CONFIG.url==='string'?OCC_CONFIG.url:'',
+  pollMs:Number(OCC_CONFIG.pollMs)>0?Number(OCC_CONFIG.pollMs):5000,
+  drive:OCC_CONFIG.drive!==false,
+  connected:false, occupancy:0, enter:0, leave:0, peak:0, lastApplied:null,
+};
+function updateCamHud(){
+  const val=document.getElementById('bbCamVal'); if(!val) return;
+  const dot=document.getElementById('bbCamDot');
+  const box=document.getElementById('bbCamBox');
+  val.textContent=CAM.connected?CAM.occupancy:'—';
+  if(dot) dot.style.background=CAM.connected?'#33dd66':'#cc4444';
+  if(box) box.title=CAM.connected
+    ?'Aforo real (cámara Hikvision)\nDentro: '+CAM.occupancy+' · Pico hoy: '+CAM.peak+'\nEntradas: '+CAM.enter+' · Salidas: '+CAM.leave+(CAM.drive?'\nEl local respira con la gente real':'')
+    :'Aforo real: cámara sin conexión';
+}
+function camApplyToStore(){
+  if(!CAM.drive||!CAM.connected) return;
+  if(typeof state==='undefined'||state!==S.GAME) return;
+  if(typeof G==='undefined'||!G||!Array.isArray(G.custs)) return;
+  const n=Math.max(0,Math.min(30,Math.round(CAM.occupancy)));
+  if(n===CAM.lastApplied) return;
+  CAM.lastApplied=n;
+  // Reutiliza el comando ya probado: fija G.peopleOverride y spawnea/saca
+  // clientes hasta cuadrar (no toca al staff).
+  try{ if(window.xtAPI&&typeof window.xtAPI.command==='function') window.xtAPI.command('/people store '+n); }catch(e){}
+}
+async function camPoll(){
+  if(!CAM.enabled||!CAM.url) return;
+  try{
+    const r=await fetch(CAM.url,{cache:'no-store',signal:AbortSignal.timeout(4000)});
+    const j=r.ok?await r.json():null;
+    if(!j||j.ok===false){ CAM.connected=false; updateCamHud(); return; }
+    CAM.connected=j.connection?j.connection==='receiving':true;
+    CAM.occupancy=Math.max(0,parseInt(j.current_occupancy!=null?j.current_occupancy:j.occupancy,10)||0);
+    CAM.enter=parseInt(j.total_enter!=null?j.total_enter:j.camera_total_enter,10)||0;
+    CAM.leave=parseInt(j.total_leave!=null?j.total_leave:(j.total_exit!=null?j.total_exit:j.camera_total_leave),10)||0;
+    if(CAM.occupancy>CAM.peak) CAM.peak=CAM.occupancy;
+  }catch(e){ CAM.connected=false; }
+  updateCamHud();
+  camApplyToStore();
+}
+if(CAM.enabled&&CAM.url){ camPoll(); setInterval(camPoll,CAM.pollMs); }
 const ELGATO={
   ip:typeof ELGATO_CONFIG.directIp==='string'?ELGATO_CONFIG.directIp:'',
   port:Number(ELGATO_CONFIG.directPort)||9123,
@@ -22648,6 +22701,24 @@ window.xtAPI = (function(){
         const cap=getCurrentCustomerCap();
         const ov=G.peopleOverride;
         return {ok:true,message:'Clientes: '+count+'/'+cap+(Number.isFinite(ov)?' (override '+ov+')':' (cap auto, hora '+(G.gameTime||0).toFixed(1)+'h)')+' · Staff: '+staff,data:{count,cap,peopleOverride:ov,staff}};
+      }
+
+      // /aforo [on|off] → conecta/desconecta el "respirar con la gente real"
+      // (cámara Hikvision vía ieu.ai → G.peopleOverride). Sin args: estado.
+      if(['aforo','occupancy','camara','cámara'].includes(cmd)){
+        if(typeof CAM==='undefined') return {ok:false,message:'Módulo de aforo no disponible'};
+        const sub=(parts[0]||'').toLowerCase();
+        if(['on','si','sí','start','conectar'].includes(sub)){
+          CAM.drive=true; CAM.lastApplied=null;
+          try{ if(typeof camApplyToStore==='function') camApplyToStore(); }catch(e){}
+          return {ok:true,message:'Aforo real CONECTADO · el local respira con la gente real ('+(CAM.connected?CAM.occupancy+' dentro':'cámara sin señal')+')',data:{drive:true,connected:CAM.connected,occupancy:CAM.occupancy}};
+        }
+        if(['off','no','stop','auto','desconectar'].includes(sub)){
+          CAM.drive=false; CAM.lastApplied=null;
+          try{ if(window.xtAPI&&typeof window.xtAPI.command==='function') window.xtAPI.command('/people store auto'); }catch(e){}
+          return {ok:true,message:'Aforo real DESCONECTADO · clientes en modo automático',data:{drive:false}};
+        }
+        return {ok:true,message:'Aforo real: '+(CAM.connected?(CAM.occupancy+' dentro (pico '+CAM.peak+', +'+CAM.enter+'/-'+CAM.leave+')'):'cámara sin conexión')+' · respira='+(CAM.drive?'ON':'OFF'),data:{connected:CAM.connected,occupancy:CAM.occupancy,enter:CAM.enter,leave:CAM.leave,peak:CAM.peak,drive:CAM.drive}};
       }
 
       // /store close → cierra TODO: clientes salen, staff desaparece, audio+luces+aroma+AC apagados

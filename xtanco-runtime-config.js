@@ -39,5 +39,16 @@
       proxyUrl: 'https://macmini.tail48b61c.ts.net/admira',
       enabled: true,
     },
+    occupancy: {
+      // Aforo real del punto: la cámara Hikvision (people-counting) hace POST a
+      // ieu.ai, que expone el estado en /api/ocuppancy. El juego lo lee y "respira"
+      // con la gente real (G.peopleOverride = ocupación real).
+      // NOTA: ieu.ai debe permitir CORS desde este origen
+      // (Access-Control-Allow-Origin) o el navegador bloqueará la lectura.
+      enabled: true,
+      url: 'https://ieu.ai/api/ocuppancy',
+      pollMs: 5000,
+      drive: true, // false = solo muestra el número en el HUD, sin tocar los clientes
+    },
   };
 })();
