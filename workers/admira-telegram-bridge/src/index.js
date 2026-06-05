@@ -1,9 +1,12 @@
 const DEFAULT_ALLOWED_ORIGINS = [
   'https://csilvasantin.github.io',
+  'https://www.carlossilva.info',
+  'https://carlossilva.info',
   'https://www.xpaceos.com',
   'https://xpaceos.com',
   'http://localhost:4175',
   'http://127.0.0.1:4175',
+  'http://localhost:8084',
   'http://localhost:9124',
   'http://127.0.0.1:9124',
 ];
@@ -406,6 +409,40 @@ export default {
       const storeResponse = await commandStore(env).fetch(`https://command-store/commands${url.search}`);
       const payload = await storeResponse.json();
       return jsonResponse(request, env, storeResponse.status, payload);
+    }
+
+    // Mando móvil propio (remote.html): encola un comando CLI autenticado por
+    // REMOTE_KEY. Reutiliza el mismo /queue del Durable Object que usa Telegram,
+    // con el chat por defecto (autorizado) como remitente sintético. El gemelo
+    // lo pollea por /telegram/commands y lo ejecuta vía executeTelegramText.
+    if (url.pathname === '/remote/cmd' && request.method === 'POST') {
+      if (!env.REMOTE_KEY) {
+        return jsonResponse(request, env, 503, { ok: false, error: 'remote_key_not_set' });
+      }
+      const body = await readJson(request);
+      const key = String(body.key || request.headers.get('X-Remote-Key') || '');
+      if (key !== String(env.REMOTE_KEY)) {
+        return jsonResponse(request, env, 401, { ok: false, error: 'unauthorized' });
+      }
+      const text = String(body.text || '').trim().slice(0, 200);
+      if (!text) return jsonResponse(request, env, 400, { ok: false, error: 'missing_text' });
+      const chatId = defaultChatId(env) || 'remote';
+      const now = Date.now();
+      const update = {
+        update_id: now,
+        message: {
+          message_id: now,
+          chat: { id: chatId },
+          from: { first_name: 'Remote', username: 'remote' },
+          text,
+          date: Math.floor(now / 1000),
+        },
+      };
+      const storeResponse = await commandStore(env).fetch('https://command-store/queue', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(update),
+      });
+      const data = await storeResponse.json().catch(() => ({}));
+      return jsonResponse(request, env, 200, { ok: true, queued: data.queued === true, commandId: data.commandId || null, text });
     }
 
     const webhookMatch = url.pathname.match(/^\/telegram\/webhook\/([^/]+)$/);
