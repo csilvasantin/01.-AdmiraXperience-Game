@@ -11,6 +11,8 @@
 
 const DEFAULT_ALLOWED_ORIGINS = [
   'https://csilvasantin.github.io',
+  'https://www.carlossilva.info',
+  'https://carlossilva.info',
   'http://localhost:9124',
   'http://127.0.0.1:9124',
   'http://localhost:9126',
@@ -63,9 +65,66 @@ function normalizePrompt(body) {
   return `${prompt}\n\nContexto del juego:\n${context}`;
 }
 
+// ── Visión: normaliza imágenes de entrada a [{mime, b64}] ──────────
+// Acepta: body.image / body.images (data-URL, base64 crudo, o {url}|{b64}),
+// y body.imageUrl / body.imageUrls (http(s) o data-URL). Máx 4 imágenes.
+const MAX_IMAGES = 4;
+
+function bytesToBase64(bytes) {
+  let bin = '';
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+  }
+  return btoa(bin);
+}
+
+function parseDataUrl(s) {
+  const m = /^data:([^;,]+);base64,([\s\S]*)$/.exec(String(s || ''));
+  return m ? { mime: m[1], b64: m[2] } : null;
+}
+
+async function urlToImage(url) {
+  const d = parseDataUrl(url);
+  if (d) return d;
+  const r = await fetch(url, {
+    headers: { 'User-Agent': 'Mozilla/5.0 (compatible; AdmiraXP-GrokProxy/1.0)', 'Accept': 'image/*' },
+  });
+  if (!r.ok) throw new Error(`image fetch HTTP ${r.status}`);
+  const mime = (r.headers.get('Content-Type') || 'image/jpeg').split(';')[0];
+  const buf = new Uint8Array(await r.arrayBuffer());
+  return { mime, b64: bytesToBase64(buf) };
+}
+
+async function collectImages(body) {
+  const out = [];
+  const urls = [];
+  const items = [];
+  if (body.image) items.push(body.image);
+  if (Array.isArray(body.images)) items.push(...body.images);
+  if (body.imageUrl) urls.push(body.imageUrl);
+  if (Array.isArray(body.imageUrls)) urls.push(...body.imageUrls);
+
+  for (const item of items) {
+    if (typeof item === 'string') {
+      const d = parseDataUrl(item);
+      if (d) out.push(d);
+      else out.push({ mime: body.imageMime || 'image/jpeg', b64: item });
+    } else if (item && typeof item === 'object') {
+      if (item.url) urls.push(item.url);
+      else if (item.b64 || item.data) out.push({ mime: item.mime || 'image/jpeg', b64: item.b64 || item.data });
+    }
+  }
+  for (const u of urls) out.push(await urlToImage(u));
+  return out.slice(0, MAX_IMAGES);
+}
+
 const SYSTEM_PROMPT = 'Eres AdmiraXPBot dentro de Admira XP. Responde breve, claro y útil para un juego de simulación de tienda. Usa el idioma indicado por el contexto o el usuario. No antepongas nombres de rol ni estados internos como "Unitree Bot:" o "Scan in progress".';
 
-function pickProvider(env) {
+function pickProvider(env, body) {
+  const want = body && String(body.provider || '').toLowerCase();
+  if (want === 'xai' && env.XAI_API_KEY) return 'xai';
+  if (want === 'gemini' && env.GEMINI_API_KEY) return 'gemini';
   if (env.GEMINI_API_KEY) return 'gemini';
   if (env.XAI_API_KEY) return 'xai';
   return null;
@@ -77,16 +136,18 @@ function defaultModel(env, provider) {
   return '';
 }
 
-async function askGemini(request, env, body, prompt) {
+async function askGemini(request, env, body, prompt, images) {
   const model = String(body.model || env.GEMINI_MODEL || 'gemini-2.5-flash');
   const baseUrl = String(env.GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta').replace(/\/+$/, '');
   const url = `${baseUrl}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(env.GEMINI_API_KEY)}`;
+  const parts = [{ text: prompt }];
+  for (const im of (images || [])) parts.push({ inline_data: { mime_type: im.mime, data: im.b64 } });
   const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      contents: [{ role: 'user', parts }],
       generationConfig: {
         temperature: Number.isFinite(Number(body.temperature)) ? Number(body.temperature) : 0.7,
         maxOutputTokens: Number.isFinite(Number(body.max_tokens)) ? Number(body.max_tokens) : 900,
@@ -104,8 +165,8 @@ async function askGemini(request, env, body, prompt) {
     });
   }
   const cand = data.candidates && data.candidates[0];
-  const parts = cand && cand.content && cand.content.parts;
-  const text = parts ? parts.map(p => String(p.text || '')).join('').trim() : '';
+  const respParts = cand && cand.content && cand.content.parts;
+  const text = respParts ? respParts.map(p => String(p.text || '')).join('').trim() : '';
   if (!text) {
     return jsonResponse(request, env, 200, {
       ok: false,
@@ -124,9 +185,19 @@ async function askGemini(request, env, body, prompt) {
   });
 }
 
-async function askXai(request, env, body, prompt) {
-  const model = String(body.model || env.XAI_MODEL || 'grok-4-latest');
+async function askXai(request, env, body, prompt, images) {
+  // Si llega imagen y el modelo configurado no es de visión, usa uno que sí lo sea.
+  let model = String(body.model || env.XAI_MODEL || 'grok-4-latest');
+  if ((images && images.length) && /grok-3|grok-2(?!-vision)|grok-beta/i.test(model)) {
+    model = env.XAI_VISION_MODEL || 'grok-4-latest';
+  }
   const baseUrl = String(env.XAI_BASE_URL || 'https://api.x.ai/v1').replace(/\/+$/, '');
+  const userContent = (images && images.length)
+    ? [
+        { type: 'text', text: prompt },
+        ...images.map(im => ({ type: 'image_url', image_url: { url: `data:${im.mime};base64,${im.b64}`, detail: 'high' } })),
+      ]
+    : prompt;
   const response = await fetch(`${baseUrl}/chat/completions`, {
     method: 'POST',
     headers: {
@@ -137,7 +208,7 @@ async function askXai(request, env, body, prompt) {
       model,
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: prompt },
+        { role: 'user', content: userContent },
       ],
       temperature: Number.isFinite(Number(body.temperature)) ? Number(body.temperature) : 0.7,
       max_tokens: Number.isFinite(Number(body.max_tokens)) ? Number(body.max_tokens) : 900,
@@ -165,7 +236,8 @@ async function askXai(request, env, body, prompt) {
 }
 
 async function askLLM(request, env) {
-  const provider = pickProvider(env);
+  const body = await readJson(request);
+  const provider = pickProvider(env, body);
   if (!provider) {
     return jsonResponse(request, env, 500, {
       ok: false,
@@ -173,17 +245,23 @@ async function askLLM(request, env) {
       message: 'Configura GEMINI_API_KEY (gratis) o XAI_API_KEY en Cloudflare Worker.',
     });
   }
-  const body = await readJson(request);
-  const prompt = normalizePrompt(body);
-  if (!prompt) {
+  let images = [];
+  try {
+    images = await collectImages(body);
+  } catch (error) {
     return jsonResponse(request, env, 400, {
       ok: false,
-      error: 'empty_prompt',
-      message: 'Falta prompt.',
+      error: 'image_error',
+      message: `No pude leer la imagen: ${error.message || error}`,
     });
   }
-  if (provider === 'gemini') return askGemini(request, env, body, prompt);
-  return askXai(request, env, body, prompt);
+  let prompt = normalizePrompt(body);
+  if (!prompt) {
+    if (images.length) prompt = 'Describe esta imagen con detalle: qué muestra, objetos y texto visibles.';
+    else return jsonResponse(request, env, 400, { ok: false, error: 'empty_prompt', message: 'Falta prompt.' });
+  }
+  if (provider === 'gemini') return askGemini(request, env, body, prompt, images);
+  return askXai(request, env, body, prompt, images);
 }
 
 export default {
