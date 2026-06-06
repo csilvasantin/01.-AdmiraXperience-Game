@@ -79,6 +79,14 @@ function bytesToBase64(bytes) {
   return btoa(bin);
 }
 
+function sniffImageMime(bytes) {
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return 'image/jpeg';
+  if (bytes.length >= 8 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return 'image/png';
+  if (bytes.length >= 4 && bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46) return 'image/gif';
+  if (bytes.length >= 12 && bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50) return 'image/webp';
+  return 'image/jpeg';
+}
+
 function parseDataUrl(s) {
   const m = /^data:([^;,]+);base64,([\s\S]*)$/.exec(String(s || ''));
   return m ? { mime: m[1], b64: m[2] } : null;
@@ -91,8 +99,11 @@ async function urlToImage(url) {
     headers: { 'User-Agent': 'Mozilla/5.0 (compatible; AdmiraXP-GrokProxy/1.0)', 'Accept': 'image/*' },
   });
   if (!r.ok) throw new Error(`image fetch HTTP ${r.status}`);
-  const mime = (r.headers.get('Content-Type') || 'image/jpeg').split(';')[0];
+  let mime = (r.headers.get('Content-Type') || 'image/jpeg').split(';')[0].trim().toLowerCase();
+  // Telegram y otros sirven imágenes como application/octet-stream → los modelos lo rechazan.
+  // Si no es un mime de imagen, lo deducimos de los magic bytes (o JPEG por defecto).
   const buf = new Uint8Array(await r.arrayBuffer());
+  if (!/^image\//.test(mime)) mime = sniffImageMime(buf);
   return { mime, b64: bytesToBase64(buf) };
 }
 
@@ -214,12 +225,14 @@ async function askXai(request, env, body, prompt, images) {
       max_tokens: Number.isFinite(Number(body.max_tokens)) ? Number(body.max_tokens) : 900,
     }),
   });
-  const data = await response.json().catch(() => ({}));
+  const rawXai = await response.text();
+  let data = {};
+  try { data = JSON.parse(rawXai); } catch { /* no-json */ }
   if (!response.ok) {
     return jsonResponse(request, env, response.status, {
       ok: false,
       error: data.error || 'xai_error',
-      message: data.error && data.error.message ? data.error.message : `xAI HTTP ${response.status}`,
+      message: (data.error && data.error.message) ? data.error.message : `xAI HTTP ${response.status}: ${rawXai.slice(0, 300)}`,
       provider: 'xai',
     });
   }
