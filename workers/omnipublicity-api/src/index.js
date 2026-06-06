@@ -10,6 +10,7 @@
 // Auth: header Authorization: Bearer <ADMIN_TOKEN secret>.
 
 const KV_KEY = 'locations.v1';
+const MAX_LOCATIONS = 1200;
 
 const DEFAULT_ALLOWED_ORIGINS = [
   'https://csilvasantin.github.io',
@@ -108,7 +109,7 @@ async function handlePutLocations(request, env) {
   const arr = Array.isArray(body) ? body : (Array.isArray(body && body.locations) ? body.locations : null);
   if (!arr) return json(request, env, 400, { error: 'expected_array_or_object_with_locations' });
   if (!arr.length) return json(request, env, 400, { error: 'empty_array' });
-  if (arr.length > 500) return json(request, env, 400, { error: 'too_many_locations', max: 500 });
+  if (arr.length > MAX_LOCATIONS) return json(request, env, 400, { error: 'too_many_locations', max: MAX_LOCATIONS });
 
   const ids = new Set();
   for (let i = 0; i < arr.length; i++) {
