@@ -10,7 +10,7 @@
 // Auth: header Authorization: Bearer <ADMIN_TOKEN secret>.
 
 const KV_KEY = 'locations.v1';
-const MAX_LOCATIONS = 1200;
+const MAX_LOCATIONS = 12000;
 
 const DEFAULT_ALLOWED_ORIGINS = [
   'https://csilvasantin.github.io',
