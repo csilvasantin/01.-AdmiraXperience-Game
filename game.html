@@ -23550,8 +23550,31 @@ window.xtAPI = (function(){
           const c=h.querySelector('#impClose'); if(c) c.onclick=()=>stopIMP(false);
         }
         h.style.display='block';
+        // MARCADOR en tiempo real (Carlos 2026-06-10): lo primero del panel son
+        // los dos contadores de audiencia publicitaria del día, en vivo (1s):
+        //   🏪 INTERIOR = gente que ENTRA en la tienda (G.custIn, ++ por entrada)
+        //   🚶 EXTERIOR = gente que PASA por la puerta (G.passersbyToday)
+        // (Siguiente pulido: separar quién MIRA la pantalla de quién no.)
+        let prevIn=-1, prevOut=-1;
         const render=()=>{
           const body=document.getElementById('impBody'); if(!body) return;
+          const entran=(typeof G!=='undefined'&&G)?(G.custIn|0):0;
+          const pasan=(typeof G!=='undefined'&&G)?(G.passersbyToday|0):0;
+          const dentro=(typeof G!=='undefined'&&G&&Array.isArray(G.custs))?G.custs.length:0;
+          const flashIn=(entran!==prevIn&&prevIn>=0), flashOut=(pasan!==prevOut&&prevOut>=0);
+          prevIn=entran; prevOut=pasan;
+          const big=(n,flash)=>'<div style="font-size:26px;font-weight:800;line-height:1.1;color:'+(flash?'#fff':'#ffe6a8')+';text-shadow:'+(flash?'0 0 14px rgba(255,230,150,.95)':'none')+'">'+n.toLocaleString('es')+'</div>';
+          const marcador=
+            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:9px">'+
+              '<div style="background:rgba(0,0,0,.35);border:1px solid rgba(158,255,160,.35);border-radius:8px;padding:8px 10px;text-align:center">'+
+                '<div style="font-size:9.5px;letter-spacing:.1em;color:#9effa0">🏪 INTERIOR</div>'+big(entran,flashIn)+
+                '<div style="font-size:9px;opacity:.65">entran hoy · dentro ahora: '+dentro+'</div>'+
+              '</div>'+
+              '<div style="background:rgba(0,0,0,.35);border:1px solid rgba(120,200,255,.35);border-radius:8px;padding:8px 10px;text-align:center">'+
+                '<div style="font-size:9.5px;letter-spacing:.1em;color:#8ed2ff">🚶 EXTERIOR</div>'+big(pasan,flashOut)+
+                '<div style="font-size:9px;opacity:.65">pasan por la puerta hoy</div>'+
+              '</div>'+
+            '</div>';
           let rows='';
           for(const s of IMPACTS.SCREENS){
             const d=IMPACTS.day[s.id]||{est:0,measured:false};
@@ -23559,16 +23582,16 @@ window.xtAPI = (function(){
             rows+='<div style="display:flex;justify-content:space-between"><span>'+badge+' '+s.label+'</span><b>'+Math.round(d.est).toLocaleString('es')+'</b></div>';
           }
           const t=impactsTotals();
-          body.innerHTML=rows+
+          body.innerHTML=marcador+rows+
             '<div style="border-top:1px dashed #8a6a2f;margin-top:6px;padding-top:6px;display:flex;justify-content:space-between"><span>TOTAL impactos</span><b>'+Math.round(t.imp).toLocaleString('es')+'</b></div>'+
             '<div style="display:flex;justify-content:space-between"><span>CPM ref</span><b>'+IMPACTS.cpm.toFixed(2)+' €</b></div>'+
             '<div style="display:flex;justify-content:space-between;color:#9effa0"><span>Ingreso estim.</span><b>'+t.revenue.toFixed(2)+' €</b></div>'+
-            '<div style="margin-top:5px;font-size:9.5px;opacity:.6">📷 medido por cámara · ~ estimado (aforo×visibilidad)<br>/impactos cpm &lt;n&gt; · /impactos reset</div>';
+            '<div style="margin-top:5px;font-size:9.5px;opacity:.6">📷 medido por cámara · ~ estimado (aforo×visibilidad)<br>/cpm cpm &lt;n&gt; · /cpm reset · /cpm off</div>';
         };
         render();
-        if(!IMPACTS.timer) IMPACTS.timer=setInterval(render,1500);
+        if(!IMPACTS.timer) IMPACTS.timer=setInterval(render,1000);
         IMPACTS.on=true;
-        return {ok:true,message:'Impactos ON · CPM '+IMPACTS.cpm+'€',data:{on:true}};
+        return {ok:true,message:'Impactos ON · marcador en vivo · CPM '+IMPACTS.cpm+'€',data:{on:true}};
       }
 
       // ── /targetPublicity — publicidad segmentada ──────────────────────
