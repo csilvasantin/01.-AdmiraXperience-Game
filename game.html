@@ -10293,7 +10293,7 @@ const IMPACTS = window.XPACE_IMPACTS = {
   ],
 };
 function impactsEnsureDay(){ for(const s of IMPACTS.SCREENS){ if(!IMPACTS.day[s.id]) IMPACTS.day[s.id]={est:0,measured:false,camFaces:0}; } }
-function impactsReset(){ IMPACTS.day=Object.create(null); IMPACTS._pPrev=undefined; impactsEnsureDay(); }
+function impactsReset(){ IMPACTS.day=Object.create(null); IMPACTS._pPrev=undefined; IMPACTS.aud={hours:Object.create(null),_gtPrev:undefined,_inPrev:undefined}; impactsEnsureDay(); }
 function impactsTick(){
   if(typeof G==='undefined'||!G) return;
   impactsEnsureDay();
@@ -10309,6 +10309,27 @@ function impactsTick(){
     if(s.cam && camFaces>0){ d.est+=camFaces; d.measured=true; d.camFaces=camFaces; }   // Opción 2: medido por cámara
     else { d.est+=((s.src==='ext')?passersDelta:inside)*s.vis; }                         // Opción 1: aforo × visibilidad
   }
+  // ── AUDIENCIA POR FRANJA (gestión de visitantes para vender publi) ──
+  // Acumula por hora del reloj de pared: cuánta gente ENTRA (interior) y
+  // cuánta PASA por la puerta (exterior/escaparate) en cada franja. Es el
+  // dato que pide un anunciante para elegir y pagar franjas (prime time).
+  const aud=(IMPACTS.aud=IMPACTS.aud||{hours:Object.create(null),_gtPrev:undefined,_inPrev:undefined});
+  const gt=G.gameTime||0;
+  if(Number.isFinite(aud._gtPrev)&&gt<aud._gtPrev-0.5){ aud.hours=Object.create(null); aud._inPrev=undefined; } // nueva jornada (el reloj salta atrás a openHour)
+  aud._gtPrev=gt;
+  const inNow=G.custIn|0;
+  const inDelta=Math.max(0,inNow-(Number.isFinite(aud._inPrev)?aud._inPrev:inNow));
+  aud._inPrev=inNow;
+  const h=Math.floor(gt)%24;
+  const b=(aud.hours[h]=aud.hours[h]||{int:0,ext:0});
+  b.int+=inDelta; b.ext+=passersDelta;
+}
+// Franja con más audiencia total del día (prime time) → {hour,int,ext,total} | null
+function impactsPrime(){
+  const aud=IMPACTS.aud; if(!aud) return null;
+  let best=null;
+  for(const k in aud.hours){ const b=aud.hours[k], t=b.int+b.ext; if(t>0&&(!best||t>best.total)) best={hour:+k,int:b.int,ext:b.ext,total:t}; }
+  return best;
 }
 function impactsTotals(){ let imp=0; for(const s of IMPACTS.SCREENS){ const d=IMPACTS.day[s.id]; if(d) imp+=d.est; } return {imp, revenue:imp/1000*IMPACTS.cpm}; }
 
@@ -23575,6 +23596,33 @@ window.xtAPI = (function(){
                 '<div style="font-size:9px;opacity:.65">pasan por la puerta hoy</div>'+
               '</div>'+
             '</div>';
+          // Franjas horarias: barras apiladas (verde=interior, azul=exterior)
+          // por hora del día → el anunciante ve CUÁNDO hay audiencia. ⭐ = prime.
+          let franjas='';
+          const aud=IMPACTS.aud&&IMPACTS.aud.hours||{};
+          const hrs=Object.keys(aud).map(Number).sort((a,b)=>a-b).filter(h=>(aud[h].int+aud[h].ext)>0);
+          if(hrs.length){
+            const prime=impactsPrime();
+            const maxT=Math.max.apply(null,hrs.map(h=>aud[h].int+aud[h].ext));
+            const H=34;
+            const bars=hrs.map(h=>{
+              const b=aud[h], t=b.int+b.ext;
+              const hInt=Math.max(t?2:0,Math.round(H*(b.int/maxT)));
+              const hExt=Math.max(b.ext?1:0,Math.round(H*(b.ext/maxT)));
+              const isP=prime&&prime.hour===h;
+              return '<div title="'+String(h).padStart(2,'0')+'h · entran '+b.int+' · pasan '+b.ext+'" style="display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:0;flex:1;min-width:7px">'+
+                '<div style="width:100%;height:'+hExt+'px;background:#8ed2ff;opacity:.85"></div>'+
+                '<div style="width:100%;height:'+hInt+'px;background:#9effa0"></div>'+
+                '<div style="font-size:7.5px;opacity:'+(isP?'1':'.5')+';margin-top:2px;color:'+(isP?'#ffd866':'inherit')+'">'+(isP?'⭐':String(h).padStart(2,'0'))+'</div>'+
+              '</div>';
+            }).join('');
+            franjas='<div style="background:rgba(0,0,0,.3);border:1px solid #3a4a2a;border-radius:8px;padding:7px 9px 5px;margin-bottom:9px">'+
+              '<div style="display:flex;justify-content:space-between;font-size:9px;letter-spacing:.08em;margin-bottom:5px"><span>AUDIENCIA POR FRANJA</span>'+
+              (prime?'<span style="color:#ffd866">⭐ prime '+String(prime.hour).padStart(2,'0')+'–'+String((prime.hour+1)%24).padStart(2,'0')+'h · '+prime.total+'</span>':'')+'</div>'+
+              '<div style="display:flex;align-items:flex-end;gap:2px;height:'+(H+12)+'px">'+bars+'</div>'+
+              '<div style="font-size:8px;opacity:.55;margin-top:2px"><span style="color:#9effa0">■</span> entran · <span style="color:#8ed2ff">■</span> pasan</div>'+
+            '</div>';
+          }
           let rows='';
           for(const s of IMPACTS.SCREENS){
             const d=IMPACTS.day[s.id]||{est:0,measured:false};
@@ -23582,7 +23630,7 @@ window.xtAPI = (function(){
             rows+='<div style="display:flex;justify-content:space-between"><span>'+badge+' '+s.label+'</span><b>'+Math.round(d.est).toLocaleString('es')+'</b></div>';
           }
           const t=impactsTotals();
-          body.innerHTML=marcador+rows+
+          body.innerHTML=marcador+franjas+rows+
             '<div style="border-top:1px dashed #8a6a2f;margin-top:6px;padding-top:6px;display:flex;justify-content:space-between"><span>TOTAL impactos</span><b>'+Math.round(t.imp).toLocaleString('es')+'</b></div>'+
             '<div style="display:flex;justify-content:space-between"><span>CPM ref</span><b>'+IMPACTS.cpm.toFixed(2)+' €</b></div>'+
             '<div style="display:flex;justify-content:space-between;color:#9effa0"><span>Ingreso estim.</span><b>'+t.revenue.toFixed(2)+' €</b></div>'+

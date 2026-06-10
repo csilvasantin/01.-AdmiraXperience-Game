@@ -4,8 +4,8 @@
   // YY is the year, DD.MM is the current day/month, R restarts at 1 each day.
   root.XTANCO_APP = Object.freeze({
     name: 'Admira XP // The Xpace OS',
-    version: 'AdmiraNext v26.06.10.3',
-    build: '20260610-0003',
-    cacheName: 'admiranext-v26-06-10-0003',
+    version: 'AdmiraNext v26.06.10.4',
+    build: '20260610-0004',
+    cacheName: 'admiranext-v26-06-10-0004',
   });
 })();
