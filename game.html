@@ -23703,9 +23703,43 @@ window.xtAPI = (function(){
         if(!h){
           h=document.createElement('div'); h.id='impactsHud';
           h.style.cssText='position:fixed;top:72px;right:16px;z-index:2147482000;min-width:248px;background:rgba(6,16,10,.94);border:1px solid #ffcc66;border-radius:10px;color:#ffe6a8;font-family:"JetBrains Mono",ui-monospace,monospace;font-size:11px;box-shadow:0 0 22px rgba(255,204,102,.25);overflow:hidden';
-          h.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 9px;border-bottom:1px dashed #8a6a2f;letter-spacing:.06em"><b>📊 IMPACTOS · CPM</b><span id="impClose" style="cursor:pointer;color:#999;padding:0 4px">×</span></div><div id="impBody" style="padding:8px 10px;line-height:1.6"></div>';
+          h.innerHTML='<div id="impHdr" style="display:flex;justify-content:space-between;align-items:center;padding:6px 9px;border-bottom:1px dashed #8a6a2f;letter-spacing:.06em;cursor:move;user-select:none;touch-action:none"><b>📊 IMPACTOS · CPM</b><span id="impClose" style="cursor:pointer;color:#999;padding:0 4px">×</span></div><div id="impBody" style="padding:8px 10px;line-height:1.6"></div>';
           document.body.appendChild(h);
-          const c=h.querySelector('#impClose'); if(c) c.onclick=()=>stopIMP(false);
+          const c=h.querySelector('#impClose'); if(c){ c.onclick=()=>stopIMP(false); c.onpointerdown=function(e){ e.stopPropagation(); }; }
+          // Restaurar última posición guardada (si no hay, queda arriba-derecha).
+          const hdr=h.querySelector('#impHdr');
+          try{
+            const _sp=JSON.parse(localStorage.getItem('admiraImpactsPos')||'null');
+            if(_sp && Number.isFinite(_sp.left) && Number.isFinite(_sp.top)){
+              const _mx=Math.max(0,window.innerWidth-h.offsetWidth), _my=Math.max(0,window.innerHeight-h.offsetHeight);
+              h.style.left=Math.max(0,Math.min(_sp.left,_mx))+'px';
+              h.style.top=Math.max(0,Math.min(_sp.top,_my))+'px';
+              h.style.right='auto';
+            }
+          }catch(_){}
+          // Arrastre por la cabecera (mismo patrón que el resto de paneles:
+          // pointer = ratón + táctil; setPointerCapture; posición persistida).
+          if(hdr){
+            let dragging=false,offX=0,offY=0;
+            hdr.addEventListener('pointerdown',function(e){
+              dragging=true;
+              const r=h.getBoundingClientRect();
+              h.style.left=r.left+'px'; h.style.top=r.top+'px'; h.style.right='auto';
+              offX=e.clientX-r.left; offY=e.clientY-r.top;
+              try{ hdr.setPointerCapture(e.pointerId); }catch(_){}
+            });
+            hdr.addEventListener('pointermove',function(e){
+              if(!dragging) return;
+              const pw=h.offsetWidth,ph=h.offsetHeight;
+              let nx=e.clientX-offX, ny=e.clientY-offY;
+              nx=Math.max(0,Math.min(nx,window.innerWidth-pw));
+              ny=Math.max(0,Math.min(ny,window.innerHeight-ph));
+              h.style.left=nx+'px'; h.style.top=ny+'px';
+            });
+            const endDrag=function(e){ dragging=false; try{ hdr.releasePointerCapture(e.pointerId); }catch(_){} try{ localStorage.setItem('admiraImpactsPos', JSON.stringify({left:h.offsetLeft, top:h.offsetTop})); }catch(_){} };
+            hdr.addEventListener('pointerup',endDrag);
+            hdr.addEventListener('pointercancel',endDrag);
+          }
         }
         h.style.display='block';
         // MARCADOR en tiempo real (Carlos 2026-06-10): lo primero del panel son
