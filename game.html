@@ -10292,15 +10292,20 @@ function recCloneEntity(o){
 // estimado = impactos/1000 × CPM.
 const IMPACTS = window.XPACE_IMPACTS = {
   on:false, cpm:8, day:Object.create(null), _pPrev:undefined, hud:null, timer:null,
+  // vis = OPORTUNIDAD DE VER (OTS): qué fracción del aforo PUDO ver la pantalla.
+  // att = ATENCIÓN: qué fracción la MIRA de verdad (siempre ≤ vis). Quien pasa
+  // por delante no siempre mira; el tótem con cámara MIDE las miradas (cara
+  // frontal detectada = está mirando). Carlos 2026-06-10: "separar quién mira
+  // de quién pasa por delante de las pantallas".
   SCREENS:[
-    {id:'escaparate', label:'Escaparate', vis:0.85, src:'ext'},
-    {id:'tft',        label:'TFT pared',  vis:0.55, src:'in'},
-    {id:'ds1',        label:'Monitor sup.',vis:0.45, src:'in'},
-    {id:'ds2',        label:'Monitor inf.',vis:0.40, src:'in'},
-    {id:'metahuman',  label:'Tótem AI',   vis:0.35, src:'in', cam:true},
+    {id:'escaparate', label:'Escaparate', vis:0.85, att:0.20, src:'ext'},
+    {id:'tft',        label:'TFT pared',  vis:0.55, att:0.30, src:'in'},
+    {id:'ds1',        label:'Monitor sup.',vis:0.45, att:0.22, src:'in'},
+    {id:'ds2',        label:'Monitor inf.',vis:0.40, att:0.18, src:'in'},
+    {id:'metahuman',  label:'Tótem AI',   vis:0.35, att:0.32, src:'in', cam:true},
   ],
 };
-function impactsEnsureDay(){ for(const s of IMPACTS.SCREENS){ if(!IMPACTS.day[s.id]) IMPACTS.day[s.id]={est:0,measured:false,camFaces:0}; } }
+function impactsEnsureDay(){ for(const s of IMPACTS.SCREENS){ if(!IMPACTS.day[s.id]) IMPACTS.day[s.id]={est:0,look:0,measured:false,camFaces:0}; } }
 function impactsReset(){ IMPACTS.day=Object.create(null); IMPACTS._pPrev=undefined; IMPACTS.aud={hours:Object.create(null),_gtPrev:undefined,_inPrev:undefined}; impactsEnsureDay(); }
 function impactsTick(){
   if(typeof G==='undefined'||!G) return;
@@ -10314,8 +10319,9 @@ function impactsTick(){
   const camFaces=(camOn&&lf&&lf.faces>0&&(performance.now()-lf.ts)<5000)?lf.faces:0;
   for(const s of IMPACTS.SCREENS){
     const d=IMPACTS.day[s.id];
-    if(s.cam && camFaces>0){ d.est+=camFaces; d.measured=true; d.camFaces=camFaces; }   // Opción 2: medido por cámara
-    else { d.est+=((s.src==='ext')?passersDelta:inside)*s.vis; }                         // Opción 1: aforo × visibilidad
+    const audience=(s.src==='ext')?passersDelta:inside;
+    if(s.cam && camFaces>0){ d.est+=camFaces; d.look+=camFaces; d.measured=true; d.camFaces=camFaces; }   // Opción 2: cámara — cara frontal = MIRA (medido)
+    else { d.est+=audience*s.vis; d.look+=audience*(s.att||0); }                                          // Opción 1: OTS (vis) + atención (att)
   }
   // ── AUDIENCIA POR FRANJA (gestión de visitantes para vender publi) ──
   // Acumula por hora del reloj de pared: cuánta gente ENTRA (interior) y
@@ -10339,7 +10345,7 @@ function impactsPrime(){
   for(const k in aud.hours){ const b=aud.hours[k], t=b.int+b.ext; if(t>0&&(!best||t>best.total)) best={hour:+k,int:b.int,ext:b.ext,total:t}; }
   return best;
 }
-function impactsTotals(){ let imp=0; for(const s of IMPACTS.SCREENS){ const d=IMPACTS.day[s.id]; if(d) imp+=d.est; } return {imp, revenue:imp/1000*IMPACTS.cpm}; }
+function impactsTotals(){ let imp=0, look=0; for(const s of IMPACTS.SCREENS){ const d=IMPACTS.day[s.id]; if(d){ imp+=d.est; look+=d.look||0; } } return {imp, look, att: imp>0?look/imp:0, revenue:imp/1000*IMPACTS.cpm, lookRevenue:look/1000*IMPACTS.cpm}; }
 
 function recSnapshot(){
   if(!G||state!==S.GAME||REC.replay.on) return;
@@ -17383,6 +17389,10 @@ function drawTftCPM(vW,vH){
   cx.font='6px monospace';cx.fillText('ENTRAN (interior)',vW*0.27,40);
   cx.fillStyle='#8ed2ff';cx.font='bold 16px monospace';cx.fillText(String(pasan),vW*0.73,32);
   cx.font='6px monospace';cx.fillText('PASAN (exterior)',vW*0.73,40);
+  // tasa de ATENCIÓN: quién MIRA la pantalla vs quién solo pasa por delante
+  const tA=(typeof impactsTotals==='function')?impactsTotals():{att:0,look:0};
+  cx.fillStyle='#9ad8ff';cx.font='bold 6px monospace';cx.textAlign='center';
+  cx.fillText('👁 '+Math.round(tA.att*100)+'% MIRAN · '+Math.round(tA.look).toLocaleString('es')+' miradas',vW/2,51);
   // barras por franja (mismas cifras que el HUD /cpm)
   const aud=(typeof IMPACTS!=='undefined'&&IMPACTS.aud&&IMPACTS.aud.hours)||{};
   const hrs=Object.keys(aud).map(Number).sort((a,b)=>a-b).filter(h=>(aud[h].int+aud[h].ext)>0);
@@ -23702,7 +23712,7 @@ window.xtAPI = (function(){
         // los dos contadores de audiencia publicitaria del día, en vivo (1s):
         //   🏪 INTERIOR = gente que ENTRA en la tienda (G.custIn, ++ por entrada)
         //   🚶 EXTERIOR = gente que PASA por la puerta (G.passersbyToday)
-        // (Siguiente pulido: separar quién MIRA la pantalla de quién no.)
+        // Debajo, por pantalla: impactos (OTS) + 👁 los que MIRAN (atención real).
         let prevIn=-1, prevOut=-1;
         const render=()=>{
           const body=document.getElementById('impBody'); if(!body) return;
@@ -23750,18 +23760,24 @@ window.xtAPI = (function(){
               '<div style="font-size:8px;opacity:.55;margin-top:2px"><span style="color:#9effa0">■</span> entran · <span style="color:#8ed2ff">■</span> pasan</div>'+
             '</div>';
           }
-          let rows='';
+          // Por pantalla: impactos (OTS) + 👁 los que MIRAN de verdad (atención).
+          // Quien PASA por delante tuvo oportunidad de ver; quien MIRA cuenta como
+          // atención real. El tótem con cámara lo MIDE (cara frontal = mira).
+          let rows='<div style="display:flex;justify-content:space-between;font-size:8.5px;opacity:.55;letter-spacing:.05em;margin-bottom:1px"><span>PANTALLA</span><span>impactos · 👁 miran</span></div>';
           for(const s of IMPACTS.SCREENS){
-            const d=IMPACTS.day[s.id]||{est:0,measured:false};
+            const d=IMPACTS.day[s.id]||{est:0,look:0,measured:false};
             const badge=d.measured?'<span title="medido por cámara">📷</span>':'<span title="estimado" style="opacity:.55">~</span>';
-            rows+='<div style="display:flex;justify-content:space-between"><span>'+badge+' '+s.label+'</span><b>'+Math.round(d.est).toLocaleString('es')+'</b></div>';
+            const lk=Math.round(d.look||0), pct=d.est>0?Math.round((d.look||0)/d.est*100):0;
+            rows+='<div style="display:flex;justify-content:space-between;align-items:baseline"><span>'+badge+' '+s.label+'</span><span><b>'+Math.round(d.est).toLocaleString('es')+'</b> <span style="color:#9ad8ff;font-size:9.5px" title="miradas — atención real">👁 '+lk.toLocaleString('es')+' ('+pct+'%)</span></span></div>';
           }
           const t=impactsTotals();
           body.innerHTML=marcador+franjas+rows+
             '<div style="border-top:1px dashed #8a6a2f;margin-top:6px;padding-top:6px;display:flex;justify-content:space-between"><span>TOTAL impactos</span><b>'+Math.round(t.imp).toLocaleString('es')+'</b></div>'+
+            '<div style="display:flex;justify-content:space-between;color:#9ad8ff"><span>👁 Atención (miran)</span><b>'+Math.round(t.look).toLocaleString('es')+' · '+Math.round(t.att*100)+'%</b></div>'+
             '<div style="display:flex;justify-content:space-between"><span>CPM ref</span><b>'+IMPACTS.cpm.toFixed(2)+' €</b></div>'+
             '<div style="display:flex;justify-content:space-between;color:#9effa0"><span>Ingreso estim.</span><b>'+t.revenue.toFixed(2)+' €</b></div>'+
-            '<div style="margin-top:5px;font-size:9.5px;opacity:.6">📷 medido por cámara · ~ estimado (aforo×visibilidad)<br>/cpm cpm &lt;n&gt; · /cpm reset · /cpm off</div>';
+            '<div style="display:flex;justify-content:space-between;font-size:9.5px;opacity:.7" title="lo que valdría pagando solo por atención real (modelo 3)"><span>↳ valor atención</span><b>'+t.lookRevenue.toFixed(2)+' €</b></div>'+
+            '<div style="margin-top:5px;font-size:9.5px;opacity:.6">📷 medido por cámara · ~ estimado · 👁 miran ≠ pasan<br>/cpm cpm &lt;n&gt; · /cpm reset · /cpm off</div>';
         };
         render();
         if(!IMPACTS.timer) IMPACTS.timer=setInterval(render,1000);
