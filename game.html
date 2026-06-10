@@ -10273,12 +10273,52 @@ function recCloneEntity(o){
   }
   return out;
 }
+// ── IMPACTOS / CPM por pantalla (modelos 1+2 combinados) ────────────
+// Opción 1 (base, TODAS las pantallas): impactos = audiencia presente ×
+// factor de visibilidad de la pantalla, acumulado 1×/min de juego (desde
+// recSnapshot). El escaparate cuenta transeúntes de la calle (delta de
+// G.passersbyToday); el resto, clientes dentro (G.custs).
+// Opción 2 (donde HAY cámara): con LiveCam on y caras recientes, la pantalla
+// del tótem usa el CONTEO REAL de caras (LIVE_FACE.faces) en vez de la
+// estimación y se marca como medida (📷). CPM de referencia → ingreso
+// estimado = impactos/1000 × CPM.
+const IMPACTS = window.XPACE_IMPACTS = {
+  on:false, cpm:8, day:Object.create(null), _pPrev:undefined, hud:null, timer:null,
+  SCREENS:[
+    {id:'escaparate', label:'Escaparate', vis:0.85, src:'ext'},
+    {id:'tft',        label:'TFT pared',  vis:0.55, src:'in'},
+    {id:'ds1',        label:'Monitor sup.',vis:0.45, src:'in'},
+    {id:'ds2',        label:'Monitor inf.',vis:0.40, src:'in'},
+    {id:'metahuman',  label:'Tótem AI',   vis:0.35, src:'in', cam:true},
+  ],
+};
+function impactsEnsureDay(){ for(const s of IMPACTS.SCREENS){ if(!IMPACTS.day[s.id]) IMPACTS.day[s.id]={est:0,measured:false,camFaces:0}; } }
+function impactsReset(){ IMPACTS.day=Object.create(null); IMPACTS._pPrev=undefined; impactsEnsureDay(); }
+function impactsTick(){
+  if(typeof G==='undefined'||!G) return;
+  impactsEnsureDay();
+  const inside=(Array.isArray(G.custs)?G.custs.length:0);
+  const pNow=G.passersbyToday|0;
+  const passersDelta=Math.max(0,pNow-(Number.isFinite(IMPACTS._pPrev)?IMPACTS._pPrev:pNow));
+  IMPACTS._pPrev=pNow;
+  const lf=(typeof LIVE_FACE!=='undefined')?LIVE_FACE:null;
+  const camOn=!!(typeof LIVE_CAM!=='undefined'&&LIVE_CAM&&LIVE_CAM.active);
+  const camFaces=(camOn&&lf&&lf.faces>0&&(performance.now()-lf.ts)<5000)?lf.faces:0;
+  for(const s of IMPACTS.SCREENS){
+    const d=IMPACTS.day[s.id];
+    if(s.cam && camFaces>0){ d.est+=camFaces; d.measured=true; d.camFaces=camFaces; }   // Opción 2: medido por cámara
+    else { d.est+=((s.src==='ext')?passersDelta:inside)*s.vis; }                         // Opción 1: aforo × visibilidad
+  }
+}
+function impactsTotals(){ let imp=0; for(const s of IMPACTS.SCREENS){ const d=IMPACTS.day[s.id]; if(d) imp+=d.est; } return {imp, revenue:imp/1000*IMPACTS.cpm}; }
+
 function recSnapshot(){
   if(!G||state!==S.GAME||REC.replay.on) return;
   const t=G.gameTime||0;
   const minute=Math.floor(t*60);
   if(minute===REC._lastMin) return;   // 1 snapshot por minuto de juego
   REC._lastMin=minute;
+  try{ impactsTick(); }catch(_){}     // acumula impactos/CPM por pantalla (1×/min)
   try{
     REC.recording.push({
       t, weekTimer:G.weekTimer,
@@ -23483,6 +23523,54 @@ window.xtAPI = (function(){
         }
       }
 
+      // ── /impactos — impactos y CPM por pantalla (aforo×visibilidad + cámara) ──
+      // Toggle. Muestra un HUD con los impactos acumulados del día por pantalla
+      // (📷 = medido por cámara, ~ = estimado por aforo×visibilidad), el CPM de
+      // referencia y el ingreso estimado. /impactos cpm <n> · /impactos reset.
+      if(['impactos','impacts','impresiones','cpm'].includes(cmd)){
+        const a=String(arg||'').trim().toLowerCase();
+        const stopIMP=(silent)=>{
+          if(IMPACTS.timer){ clearInterval(IMPACTS.timer); IMPACTS.timer=null; }
+          IMPACTS.on=false;
+          const h=document.getElementById('impactsHud'); if(h) h.style.display='none';
+          if(!silent && typeof showEv==='function') showEv('📊 Impactos OFF','#ffcc66');
+        };
+        if(['off','stop','cerrar','close','0','no','desactivar'].includes(a) || (!a && IMPACTS.on)){
+          stopIMP(false); return {ok:true,message:'Impactos desactivado',data:{on:false}};
+        }
+        if(a==='reset'){ impactsReset(); if(typeof showEv==='function') showEv('📊 Impactos reiniciados','#ffcc66'); }
+        const mCpm=a.match(/^cpm\s+([\d.]+)/); if(mCpm){ const v=parseFloat(mCpm[1]); if(v>0) IMPACTS.cpm=v; }
+        impactsEnsureDay();
+        let h=document.getElementById('impactsHud');
+        if(!h){
+          h=document.createElement('div'); h.id='impactsHud';
+          h.style.cssText='position:fixed;top:72px;right:16px;z-index:2147482000;min-width:248px;background:rgba(6,16,10,.94);border:1px solid #ffcc66;border-radius:10px;color:#ffe6a8;font-family:"JetBrains Mono",ui-monospace,monospace;font-size:11px;box-shadow:0 0 22px rgba(255,204,102,.25);overflow:hidden';
+          h.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 9px;border-bottom:1px dashed #8a6a2f;letter-spacing:.06em"><b>📊 IMPACTOS · CPM</b><span id="impClose" style="cursor:pointer;color:#999;padding:0 4px">×</span></div><div id="impBody" style="padding:8px 10px;line-height:1.6"></div>';
+          document.body.appendChild(h);
+          const c=h.querySelector('#impClose'); if(c) c.onclick=()=>stopIMP(false);
+        }
+        h.style.display='block';
+        const render=()=>{
+          const body=document.getElementById('impBody'); if(!body) return;
+          let rows='';
+          for(const s of IMPACTS.SCREENS){
+            const d=IMPACTS.day[s.id]||{est:0,measured:false};
+            const badge=d.measured?'<span title="medido por cámara">📷</span>':'<span title="estimado" style="opacity:.55">~</span>';
+            rows+='<div style="display:flex;justify-content:space-between"><span>'+badge+' '+s.label+'</span><b>'+Math.round(d.est).toLocaleString('es')+'</b></div>';
+          }
+          const t=impactsTotals();
+          body.innerHTML=rows+
+            '<div style="border-top:1px dashed #8a6a2f;margin-top:6px;padding-top:6px;display:flex;justify-content:space-between"><span>TOTAL impactos</span><b>'+Math.round(t.imp).toLocaleString('es')+'</b></div>'+
+            '<div style="display:flex;justify-content:space-between"><span>CPM ref</span><b>'+IMPACTS.cpm.toFixed(2)+' €</b></div>'+
+            '<div style="display:flex;justify-content:space-between;color:#9effa0"><span>Ingreso estim.</span><b>'+t.revenue.toFixed(2)+' €</b></div>'+
+            '<div style="margin-top:5px;font-size:9.5px;opacity:.6">📷 medido por cámara · ~ estimado (aforo×visibilidad)<br>/impactos cpm &lt;n&gt; · /impactos reset</div>';
+        };
+        render();
+        if(!IMPACTS.timer) IMPACTS.timer=setInterval(render,1500);
+        IMPACTS.on=true;
+        return {ok:true,message:'Impactos ON · CPM '+IMPACTS.cpm+'€',data:{on:true}};
+      }
+
       // ── /targetPublicity — publicidad segmentada ──────────────────────
       // Toggle como /subasta. Lee una señal de audiencia y empuja el creativo
       // adecuado a ESTA pantalla (reutiliza el targeting por screen del feed).
@@ -25359,7 +25447,7 @@ window.xtAPI = (function(){
       {title:'Tienda',items:['/ad 0','/ad 1','/ad 2','/upgrade','/aforo real','/aforo exacto','/aforo fake','/aforo','/visit com','/visit tec','/visit del','/visit gc','/save']},
       {title:'Look & feel',items:['/camiseta on','/camiseta off','/camiseta']},
       {title:'Tiempo y ambiente',items:['/reloj 14:30','/reloj 14 30','/time am','/time pm','/time night','/weather normal','/weather rain','/weather sun','/lamp','/lamp auto','/hue','/hue auto']},
-      {title:'Pantalla y directo',items:['/livecam','/mocap','/pixeria','/AdmiraLive texto','/comunicar texto','/comunicar texto --grok','/comunicar texto --elevenlabs','/AdmiraTube URL 2 audio','/say texto','/targetPublicity aforo','/targetPublicity genero','/targetPublicity off','/generovideo','/generovideo off']},
+      {title:'Pantalla y directo',items:['/livecam','/mocap','/pixeria','/AdmiraLive texto','/comunicar texto','/comunicar texto --grok','/comunicar texto --elevenlabs','/AdmiraTube URL 2 audio','/say texto','/targetPublicity aforo','/targetPublicity genero','/targetPublicity off','/generovideo','/generovideo off','/impactos','/impactos cpm 12','/impactos reset','/impactos off']},
       {title:'Escena en vivo',items:['/dj','/ladron','/guardiacivil','/opinador','/robot','/sponsor','/socio','/door open','/door close','/door auto','/subasta','/subasta off']},
       {title:'Notificaciones al personal',items:['/personal socio','/personal dashboard','/socios listado','/heatmap','/heatmap reset','/sponsor recurrente 120 10']},
       {title:'Atmósfera',items:['/ambiente','/ambiente vol 50','/voces']},
