@@ -9505,6 +9505,14 @@ function doAction(id){
     ]);
     return;
   }
+  if(id==='camCPMClick'){
+    // Cámara de seguridad → dashboard CPM/audiencia en la TFT de la pared
+    // larga (toggle). El canal cede prioridad al CCTV si hay ladrón.
+    G.tftCPM=!G.tftCPM;
+    if(typeof showEv==='function') showEv(G.tftCPM?'📊 CPM en pantalla principal — clic en la cámara para quitar':'📊 CPM fuera de la pantalla principal','#ffd866');
+    SFX.click&&SFX.click();
+    return;
+  }
   if(id==='specialClick_thief'&&G.thief&&G.thief.phase!=='idle'){
     openSpecialEditor('thief','LADRON',[
       'Fase: '+G.thief.phase,
@@ -17172,6 +17180,9 @@ function drawCornerSecurityCamera(){
   if(!G) return;
   const cp=toIso(0,0);
   const x=cp.x+8,y=cp.y-ISO.wallH+34;
+  // Clic en la cámara → muestra el dashboard de CPM/audiencia en la TFT de
+  // la pared larga (canal tftCPM). Otro clic lo quita. (Carlos 2026-06-10)
+  BTNS['camCPMClick']={x:x-14,y:y-14,w:32,h:18};
   cx.save();
   cx.strokeStyle='#3a3028';cx.lineWidth=2;
   cx.beginPath();cx.moveTo(x-12,y-8);cx.lineTo(x,y);cx.stroke();
@@ -17308,6 +17319,49 @@ function drawSecurityCCTV(vW,vH){
   cx.textAlign='left';
 }
 
+// ── CPM DASHBOARD en la TFT (clic en la cámara de seguridad) ──────
+// Pinta en el espacio 160×90 de la pantalla de la pared larga el resumen de
+// audiencia para vender publi: ENTRAN (interior) · PASAN (exterior), barras
+// por franja con ⭐ prime, y total impactos + CPM + ingreso estimado.
+function drawTftCPM(vW,vH){
+  cx.fillStyle='#0c0f08';cx.fillRect(0,0,vW,vH);
+  for(let y=0;y<vH;y+=3){cx.fillStyle='rgba(0,0,0,0.18)';cx.fillRect(0,y,vW,1);}
+  cx.strokeStyle='#ffcc66';cx.lineWidth=1;cx.strokeRect(2,2,vW-4,vH-4);
+  cx.fillStyle='#ffcc66';cx.font='bold 7px monospace';cx.textAlign='center';
+  cx.fillText('AUDIENCIA · CPM',vW/2,11);
+  const entran=(G&&G.custIn)|0, pasan=(G&&G.passersbyToday)|0;
+  // dos contadores grandes
+  cx.textAlign='center';
+  cx.fillStyle='#9effa0';cx.font='bold 16px monospace';cx.fillText(String(entran),vW*0.27,32);
+  cx.font='6px monospace';cx.fillText('ENTRAN (interior)',vW*0.27,40);
+  cx.fillStyle='#8ed2ff';cx.font='bold 16px monospace';cx.fillText(String(pasan),vW*0.73,32);
+  cx.font='6px monospace';cx.fillText('PASAN (exterior)',vW*0.73,40);
+  // barras por franja (mismas cifras que el HUD /cpm)
+  const aud=(typeof IMPACTS!=='undefined'&&IMPACTS.aud&&IMPACTS.aud.hours)||{};
+  const hrs=Object.keys(aud).map(Number).sort((a,b)=>a-b).filter(h=>(aud[h].int+aud[h].ext)>0);
+  if(hrs.length){
+    const prime=(typeof impactsPrime==='function')?impactsPrime():null;
+    const maxT=Math.max.apply(null,hrs.map(h=>aud[h].int+aud[h].ext));
+    const bw=Math.min(10,Math.floor((vW-20)/hrs.length)-1), bh=22, by=70;
+    let x0=(vW-(hrs.length*(bw+1)))/2;
+    for(const h of hrs){
+      const b=aud[h], hi=Math.max(1,Math.round(bh*(b.int/maxT))), he=Math.round(bh*(b.ext/maxT));
+      cx.fillStyle='#8ed2ff';cx.fillRect(x0,by-hi-he,bw,he);
+      cx.fillStyle='#9effa0';cx.fillRect(x0,by-hi,bw,hi);
+      if(prime&&prime.hour===h){cx.fillStyle='#ffd866';cx.font='7px monospace';cx.fillText('★',x0+bw/2,by-hi-he-2);}
+      cx.fillStyle='#ffffff66';cx.font='5px monospace';cx.fillText(String(h).padStart(2,'0'),x0+bw/2,by+6);
+      x0+=bw+1;
+    }
+  } else {
+    cx.fillStyle='#ffffff55';cx.font='6px monospace';cx.fillText('// acumulando audiencia por franja…',vW/2,62);
+  }
+  // pie: total + cpm + ingreso
+  const t=(typeof impactsTotals==='function')?impactsTotals():{imp:0,revenue:0};
+  cx.fillStyle='#ffe6a8';cx.font='bold 6px monospace';
+  cx.fillText('IMPACTOS '+Math.round(t.imp).toLocaleString('es')+'  ·  CPM '+((typeof IMPACTS!=='undefined'?IMPACTS.cpm:8).toFixed(2))+'€  ·  ING '+t.revenue.toFixed(2)+'€',vW/2,vH-7);
+  cx.textAlign='left';
+}
+
 // ── ALTADIS TFT (big screen below LED, centered on back wall) ─
 // centerCol opcional — si se pasa, el TFT se centra sobre esa columna
 // (item.col +0.5 en el iso). Default = 7 (Xtanco legacy: cols 5..9).
@@ -17394,6 +17448,8 @@ function drawAltadisTFT(centerCol, yPx, colsWide){
     drawLiveCamScreen(vW,vH);
   } else if(G&&G.thief&&G.thief.phase!=='idle'){
     drawSecurityCCTV(vW,vH);
+  } else if(G&&G.tftCPM){
+    drawTftCPM(vW,vH);
   } else if(G&&G.tftGrokArt){
     drawTftGrokArt(G.tftGrokArt,vW,vH);
   } else if(G&&G.tftParty>0){
@@ -23560,6 +23616,7 @@ window.xtAPI = (function(){
           stopIMP(false); return {ok:true,message:'Impactos desactivado',data:{on:false}};
         }
         if(a==='reset'){ impactsReset(); if(typeof showEv==='function') showEv('📊 Impactos reiniciados','#ffcc66'); }
+        if(a==='tft'||a==='pantalla'){ G.tftCPM=!G.tftCPM; if(typeof showEv==='function') showEv(G.tftCPM?'📊 CPM en la pantalla principal':'📊 CPM fuera de la pantalla','#ffd866'); return {ok:true,message:'CPM en TFT: '+(G.tftCPM?'ON':'OFF'),data:{tft:!!G.tftCPM}}; }
         const mCpm=a.match(/^cpm\s+([\d.]+)/); if(mCpm){ const v=parseFloat(mCpm[1]); if(v>0) IMPACTS.cpm=v; }
         impactsEnsureDay();
         let h=document.getElementById('impactsHud');
