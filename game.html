@@ -513,7 +513,7 @@
     .splash-overlay{position:relative;z-index:2;text-align:center;padding:24px;display:flex;flex-direction:column;align-items:center;gap:22px;max-width:92vw}
     .splash-banner{max-width:min(720px,90vw);height:auto;filter:drop-shadow(0 0 18px rgba(255,80,200,.55)) drop-shadow(0 0 36px rgba(80,200,255,.45));animation:splashPulse 3.6s ease-in-out infinite}
     .splash-tagline{color:#fff;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:14px;letter-spacing:.18em;text-shadow:0 0 12px rgba(170,136,255,.6),0 2px 4px rgba(0,0,0,.8);opacity:.9}
-    /* Grupo Admira · pill unificado para Pixer.IA · XpaceOS · Xbusiness */
+    /* Grupo Admira · pill unificado para PixerIA · XpaceOS · Xbusiness */
     .splash-group{display:inline-flex;flex-direction:column;align-items:center;gap:8px;padding:14px 32px 12px;border:1px solid rgba(170,136,255,.32);border-radius:14px;background:linear-gradient(180deg,rgba(170,136,255,.12) 0%,rgba(80,200,255,.06) 100%);box-shadow:0 0 24px rgba(170,136,255,.15),inset 0 0 18px rgba(170,136,255,.06);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);max-width:92vw}
     .splash-group-kicker{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:9px;letter-spacing:.42em;color:rgba(216,200,255,.8);text-transform:uppercase;text-shadow:0 0 12px rgba(170,136,255,.6);position:relative;padding:0 14px}
     .splash-group-kicker::before,.splash-group-kicker::after{content:"";position:absolute;top:50%;width:18px;height:1px;background:rgba(170,136,255,.5)}
@@ -541,7 +541,7 @@
     body:not(.splash-visible) .splash-intro{opacity:0;pointer-events:none}
     body.splash-visible .splash-intro{opacity:1;pointer-events:auto}
     body.splash-hiding .splash-intro{opacity:0;pointer-events:none;transition:opacity .55s ease-out}
-    /* Splash oculto: sus enlaces/botones del centro (Pixer.IA/XpaceOS/Xbusiness, JUGAR/DEMO)
+    /* Splash oculto: sus enlaces/botones del centro (PixerIA/XpaceOS/Xbusiness, JUGAR/DEMO)
        NO deben capturar clicks ni mostrar cursor de enlace — eran "enlaces sueltos" invisibles
        sobre el canvas transparente de la página 1 (Carlos 2026-05-20). */
     body:not(.splash-visible) #splashIntro a,
@@ -686,7 +686,7 @@
     <div class="splash-group">
       <div class="splash-group-kicker">Admira · Xperience</div>
       <div class="splash-group-row">
-        <a href="https://www.admira.studio" target="_blank" rel="noopener" class="splash-link">Pixer.IA</a>
+        <a href="https://www.admira.studio" target="_blank" rel="noopener" class="splash-link">PixerIA</a>
         <span class="splash-group-sep">·</span>
         <a href="https://www.xpaceos.com" target="_blank" rel="noopener" class="splash-link">XpaceOS</a>
         <span class="splash-group-sep">·</span>
@@ -821,7 +821,7 @@
 <div id="eraVerticalDock" aria-label="Selector inferior">
   <div class="evd-head">
     <div class="evd-head-left">
-      <a id="evdTitle" href="https://ainimation.studio/" target="_blank" rel="noopener" style="font-weight:bold;color:inherit;text-decoration:none;border-bottom:1px dashed rgba(120,243,255,.35);transition:border-color .15s,color .15s" title="Pixer.ia · ainimation.studio (última versión auto-redirect)">ADMIRANEXT XP</a>
+      <a id="evdTitle" href="https://ainimation.studio/" target="_blank" rel="noopener" style="font-weight:bold;color:inherit;text-decoration:none;border-bottom:1px dashed rgba(120,243,255,.35);transition:border-color .15s,color .15s" title="PixerIA · ainimation.studio (última versión auto-redirect)">ADMIRANEXT XP</a>
       <span id="evdHint"></span>
     </div>
     <div class="evd-head-right">
@@ -6053,7 +6053,7 @@ function updateEraVerticalDock(){
   const evdTitle=document.getElementById('evdTitle');
   if(evdTitle){
     // Quitar el prefijo "AdmiraNext " del APP_VERSION para no repetir.
-    // El conjunto entero es un enlace a la última versión de Pixer.ai.
+    // El conjunto entero es un enlace a la última versión de PixerIA.
     const ver=String(APP_VERSION||'').replace(/^AdmiraNext\s+/i,'');
     evdTitle.textContent='AdmiraNext XP · '+ver;
   }
@@ -24261,7 +24261,7 @@ window.xtAPI = (function(){
     ];
   }
 
-  // Pixer.IA → hub del grupo en www.admira.studio (motores generativos).
+  // PixerIA → hub del grupo en www.admira.studio (motores generativos).
   // Apertura síncrona en el click (sin await) para no disparar el popup blocker.
   // Botón "🎨 Pixeria": importa de un toque el ÚLTIMO mobiliario creado en
   // pixeria.com (type 'furni' del Stock) y lo coloca en el Xpacio del gemelo.
@@ -27786,7 +27786,7 @@ window.xtAPI = (function(){
   // Heartbeat — limitado a 60s entre POSTs para no agotar la cuota diaria
   // de KV writes del worker (Cloudflare free tier: 1000 puts/dia). Cada
   // game con tick a 5s antes consumia ~17k puts/dia y disparaba 500
-  // 'KV put() limit exceeded' cortando la deteccion online en Pixer.ai.
+  // 'KV put() limit exceeded' cortando la deteccion online en PixerIA.
   let lastHeartbeatAt=0, lastHeartbeatState='';
   async function sendHeartbeat(force){
     const now=Date.now();
@@ -27815,7 +27815,7 @@ window.xtAPI = (function(){
       // Primer poll tras arrancar el game: si ya hay un item en el feed (de
       // sesiones anteriores), SOLO recordamos su id como baseline — NO se
       // renderiza ni se muestra el overlay. El usuario solo quiere ver el
-      // Pixer Feed cuando Pixer.ia empuje contenido NUEVO durante la sesion.
+      // Pixer Feed cuando PixerIA empuje contenido NUEVO durante la sesion.
       if(!firstPollDone){
         firstPollDone=true;
         if(item) lastItemId=item.id;
@@ -27825,7 +27825,7 @@ window.xtAPI = (function(){
         lastItemId=item.id;
         renderItem(item);
         ackItem(item.id);
-        // Forzar heartbeat al cambiar de showing_id para que Pixer.ai vea live.
+        // Forzar heartbeat al cambiar de showing_id para que PixerIA vea live.
         sendHeartbeat(true);
       }
     }catch{}
@@ -28233,7 +28233,7 @@ window.xtAPI = (function(){
     if(jugarBtn && jugarBtn.contains(e.target)) return;
     if(demoBtn && demoBtn.contains(e.target)) return;
     // No cerrar splash si el click fue en un enlace de la tagline
-    // (Pixer.ia / XpaceOS abren en pestaña nueva y el splash debe seguir).
+    // (PixerIA / XpaceOS abren en pestaña nueva y el splash debe seguir).
     if(e.target.closest && e.target.closest('.splash-link')) return;
     chooseJugar();
   });
@@ -28328,7 +28328,7 @@ window.xtAPI = (function(){
       b:{es:'Una réplica isométrica del estanco o el stand corriendo en el navegador. Lo que cambias en el gemelo, cambia en el espacio físico.',en:'An isometric replica of the store or booth running in the browser. What you change in the twin changes the physical space.'} },
     { icon:'🧱', k:{es:'3 CAPAS · XPACEOS',en:'3 LAYERS · XPACEOS'},
       t:{es:'De la idea al anuncio, sin agencia',en:'From idea to ad, no agency'},
-      b:{es:'Pixer.ai crea el contenido con IA · Admira XP lo distribuye sobre el gemelo · OmniPublicity lo subasta en tiempo real (RTB &lt;200 ms).',en:'Pixer.ai creates content with AI · Admira XP distributes it on the twin · OmniPublicity auctions it in real time (RTB &lt;200 ms).'} },
+      b:{es:'PixerIA crea el contenido con IA · Admira XP lo distribuye sobre el gemelo · OmniPublicity lo subasta en tiempo real (RTB &lt;200 ms).',en:'PixerIA creates content with AI · Admira XP distributes it on the twin · OmniPublicity auctions it in real time (RTB &lt;200 ms).'} },
     { icon:'📺', k:{es:'PANTALLAS VIVAS',en:'LIVE SCREENS'},
       t:{es:'El gemelo controla pantallas reales',en:'The twin controls real screens'},
       b:{es:'El escaparate y el tótem del gemelo se reflejan en pantallas físicas en menos de 1,5 s. Cambia el contenido digital y la pantalla física obedece.',en:'The twin’s shop window and totem mirror onto physical screens in under 1.5 s. Change the digital content and the physical screen follows.'} },

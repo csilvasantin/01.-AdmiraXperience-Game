@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // suno-local · proxy minimo a la API privada de Suno usando cookie de sesion (Clerk).
-// Tres endpoints (los que consume Pixer.ai → playSunoLocal):
+// Tres endpoints (los que consume PixerIA → playSunoLocal):
 //   GET  /healthz           → { ok, total_credits_left, monthly_limit }
 //   POST /generate          → { clips: [...] }
 //   GET  /status?ids=a,b    → [ {id, status, audio_url, ...} ]
