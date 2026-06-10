@@ -11826,6 +11826,12 @@ function updatePassersby(){
   if(!Array.isArray(G.passersby)) G.passersby=[];
   if(!Number.isFinite(G.passerbySpawnCooldown)) scheduleNextPasserby();
   if(!G.dayEnded){
+    // Cola de /audienciaOUT: transeúntes forzados pendientes. Drenan al ritmo
+    // del cap de activos (PASSERBY_MAX_ACTIVE) → se les ve pasar por delante
+    // del escaparate uno tras otro, y cada uno cuenta en passersbyToday.
+    if((G.audOutQueue|0)>0 && G.passersby.length<PASSERBY_MAX_ACTIVE){
+      if(spawnPasserby()) G.audOutQueue=(G.audOutQueue|0)-1;
+    }
     if(G.passerbySpawnCooldown>0) G.passerbySpawnCooldown--;
     if(G.passerbySpawnCooldown<=0){
       spawnPasserby();
@@ -23600,6 +23606,29 @@ window.xtAPI = (function(){
         }
       }
 
+      // ── /audienciaIN /audienciaOUT — panel de control de flujos de público ──
+      // Gestión manual de audiencia para demos/venta (Carlos 2026-06-10):
+      //   /audienciaIN 8  → entran 8 clientes más por la puerta (publi interior)
+      //   /audienciaOUT 4 → pasan 4 transeúntes por delante del escaparate
+      //                     SIN entrar (publi exterior). Drenan en cola (cap
+      //                     de activos) para verse pasar uno tras otro.
+      // Ambos cuentan en el marcador /cpm y en las franjas (custIn/passersbyToday).
+      if(['audienciain','audin','publicoin','entran'].includes(cmd)){
+        if(!G||state!==S.GAME) return {ok:false,message:'Entra en una partida primero.'};
+        const n=Math.max(1,Math.min(20,parseInt(arg,10)||1));
+        let done=0;
+        for(let i=0;i<n;i++){ try{ if(spawnCust(false,false,true)) done++; }catch(e){} }
+        if(typeof showEv==='function') showEv('🏪 +'+done+' clientes entrando (audienciaIN)','#9effa0');
+        return {ok:true,message:'Entran '+done+' clientes · dentro ahora: '+(G.custs||[]).length+' · entradas hoy: '+(G.custIn|0),data:{in:done}};
+      }
+      if(['audienciaout','audout','publicoout','pasan'].includes(cmd)){
+        if(!G||state!==S.GAME) return {ok:false,message:'Entra en una partida primero.'};
+        const n=Math.max(1,Math.min(40,parseInt(arg,10)||1));
+        G.audOutQueue=(G.audOutQueue|0)+n;
+        if(typeof showEv==='function') showEv('🚶 +'+n+' transeúntes hacia el escaparate (audienciaOUT)','#8ed2ff');
+        return {ok:true,message:'Pasarán '+n+' transeúntes por delante del escaparate (en cola: '+(G.audOutQueue|0)+') · pasan hoy: '+(G.passersbyToday|0),data:{out:n,queue:G.audOutQueue|0}};
+      }
+
       // ── /impactos — impactos y CPM por pantalla (aforo×visibilidad + cámara) ──
       // Toggle. Muestra un HUD con los impactos acumulados del día por pantalla
       // (📷 = medido por cámara, ~ = estimado por aforo×visibilidad), el CPM de
@@ -25575,7 +25604,7 @@ window.xtAPI = (function(){
       {title:'Tienda',items:['/ad 0','/ad 1','/ad 2','/upgrade','/aforo real','/aforo exacto','/aforo fake','/aforo','/visit com','/visit tec','/visit del','/visit gc','/save']},
       {title:'Look & feel',items:['/camiseta on','/camiseta off','/camiseta']},
       {title:'Tiempo y ambiente',items:['/reloj 14:30','/reloj 14 30','/time am','/time pm','/time night','/weather normal','/weather rain','/weather sun','/lamp','/lamp auto','/hue','/hue auto']},
-      {title:'Pantalla y directo',items:['/livecam','/mocap','/pixeria','/AdmiraLive texto','/comunicar texto','/comunicar texto --grok','/comunicar texto --elevenlabs','/AdmiraTube URL 2 audio','/say texto','/targetPublicity aforo','/targetPublicity genero','/targetPublicity off','/generovideo','/generovideo off','/impactos','/impactos cpm 12','/impactos reset','/impactos off']},
+      {title:'Pantalla y directo',items:['/livecam','/mocap','/pixeria','/AdmiraLive texto','/comunicar texto','/comunicar texto --grok','/comunicar texto --elevenlabs','/AdmiraTube URL 2 audio','/say texto','/targetPublicity aforo','/targetPublicity genero','/targetPublicity off','/generovideo','/generovideo off','/impactos','/impactos cpm 12','/impactos tft','/impactos reset','/impactos off','/audienciaIN 8','/audienciaOUT 4']},
       {title:'Escena en vivo',items:['/dj','/ladron','/guardiacivil','/opinador','/robot','/sponsor','/socio','/door open','/door close','/door auto','/subasta','/subasta off']},
       {title:'Notificaciones al personal',items:['/personal socio','/personal dashboard','/socios listado','/heatmap','/heatmap reset','/sponsor recurrente 120 10']},
       {title:'Atmósfera',items:['/ambiente','/ambiente vol 50','/voces']},
