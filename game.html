@@ -10291,21 +10291,23 @@ function recCloneEntity(o){
 // estimación y se marca como medida (📷). CPM de referencia → ingreso
 // estimado = impactos/1000 × CPM.
 const IMPACTS = window.XPACE_IMPACTS = {
-  on:false, cpm:8, day:Object.create(null), _pPrev:undefined, hud:null, timer:null,
+  on:false, cpm:8, dwellRef:3, day:Object.create(null), _pPrev:undefined, hud:null, timer:null,
+  // Modelo 3 (CPM dinámico): dwell = segundos medios de ATENCIÓN sobre la pantalla.
+  // El tótem interactivo retiene mucho; el escaparate es un vistazo al pasar.
   // vis = OPORTUNIDAD DE VER (OTS): qué fracción del aforo PUDO ver la pantalla.
   // att = ATENCIÓN: qué fracción la MIRA de verdad (siempre ≤ vis). Quien pasa
   // por delante no siempre mira; el tótem con cámara MIDE las miradas (cara
   // frontal detectada = está mirando). Carlos 2026-06-10: "separar quién mira
   // de quién pasa por delante de las pantallas".
   SCREENS:[
-    {id:'escaparate', label:'Escaparate', vis:0.85, att:0.20, src:'ext'},
-    {id:'tft',        label:'TFT pared',  vis:0.55, att:0.30, src:'in'},
-    {id:'ds1',        label:'Monitor sup.',vis:0.45, att:0.22, src:'in'},
-    {id:'ds2',        label:'Monitor inf.',vis:0.40, att:0.18, src:'in'},
-    {id:'metahuman',  label:'Tótem AI',   vis:0.35, att:0.32, src:'in', cam:true},
+    {id:'escaparate', label:'Escaparate', vis:0.85, att:0.20, dwell:1.5, src:'ext'},
+    {id:'tft',        label:'TFT pared',  vis:0.55, att:0.30, dwell:4,   src:'in'},
+    {id:'ds1',        label:'Monitor sup.',vis:0.45, att:0.22, dwell:3,   src:'in'},
+    {id:'ds2',        label:'Monitor inf.',vis:0.40, att:0.18, dwell:2.5, src:'in'},
+    {id:'metahuman',  label:'Tótem AI',   vis:0.35, att:0.32, dwell:9,   src:'in', cam:true},
   ],
 };
-function impactsEnsureDay(){ for(const s of IMPACTS.SCREENS){ if(!IMPACTS.day[s.id]) IMPACTS.day[s.id]={est:0,look:0,measured:false,camFaces:0}; } }
+function impactsEnsureDay(){ for(const s of IMPACTS.SCREENS){ if(!IMPACTS.day[s.id]) IMPACTS.day[s.id]={est:0,look:0,qual:0,measured:false,camFaces:0}; } }
 function impactsReset(){ IMPACTS.day=Object.create(null); IMPACTS._pPrev=undefined; IMPACTS.aud={hours:Object.create(null),_gtPrev:undefined,_inPrev:undefined}; impactsEnsureDay(); }
 function impactsTick(){
   if(typeof G==='undefined'||!G) return;
@@ -10317,11 +10319,15 @@ function impactsTick(){
   const lf=(typeof LIVE_FACE!=='undefined')?LIVE_FACE:null;
   const camOn=!!(typeof LIVE_CAM!=='undefined'&&LIVE_CAM&&LIVE_CAM.active);
   const camFaces=(camOn&&lf&&lf.faces>0&&(performance.now()-lf.ts)<5000)?lf.faces:0;
+  const dRef=IMPACTS.dwellRef||3;
   for(const s of IMPACTS.SCREENS){
     const d=IMPACTS.day[s.id];
     const audience=(s.src==='ext')?passersDelta:inside;
-    if(s.cam && camFaces>0){ d.est+=camFaces; d.look+=camFaces; d.measured=true; d.camFaces=camFaces; }   // Opción 2: cámara — cara frontal = MIRA (medido)
-    else { d.est+=audience*s.vis; d.look+=audience*(s.att||0); }                                          // Opción 1: OTS (vis) + atención (att)
+    let lookAdd;
+    if(s.cam && camFaces>0){ d.est+=camFaces; lookAdd=camFaces; d.measured=true; d.camFaces=camFaces; }   // Opción 2: cámara — cara frontal = MIRA (medido)
+    else { d.est+=audience*s.vis; lookAdd=audience*(s.att||0); }                                          // Opción 1: OTS (vis) + atención (att)
+    d.look+=lookAdd;
+    d.qual=(d.qual||0)+lookAdd*((s.dwell||dRef)/dRef);                                                    // Modelo 3: miradas ponderadas por dwell
   }
   // ── AUDIENCIA POR FRANJA (gestión de visitantes para vender publi) ──
   // Acumula por hora del reloj de pared: cuánta gente ENTRA (interior) y
@@ -10346,6 +10352,35 @@ function impactsPrime(){
   return best;
 }
 function impactsTotals(){ let imp=0, look=0; for(const s of IMPACTS.SCREENS){ const d=IMPACTS.day[s.id]; if(d){ imp+=d.est; look+=d.look||0; } } return {imp, look, att: imp>0?look/imp:0, revenue:imp/1000*IMPACTS.cpm, lookRevenue:look/1000*IMPACTS.cpm}; }
+
+// ── MODELO 3 · CPM DINÁMICO ────────────────────────────────────
+// El CPM deja de ser fijo: CPM_dyn = base × demanda × calidad.
+//  · demanda  = señal RTB simulada: sube con la OCUPACIÓN de la tienda y en
+//               PRIME time (más audiencia compitiendo = más caro el slot).
+//  · calidad  = tasa de ATENCIÓN global (cuánta de la audiencia mira de verdad).
+// Y el ingreso pondera cada pantalla por su calidad real (atención × dwell):
+// el tótem (mucha atención, dwell alto) vale premium; el escaparate, descuento.
+function impactsDyn(){
+  const base=IMPACTS.cpm||8, dRef=IMPACTS.dwellRef||3;
+  const inside=(typeof G!=='undefined'&&G&&Array.isArray(G.custs))?G.custs.length:0;
+  let cap=10; try{ if(typeof getCurrentCustomerCap==='function'){ const c=getCurrentCustomerCap(); if(c>0) cap=c; } }catch(_){}
+  const occ=Math.max(0,Math.min(1, inside/cap));
+  const prime=(typeof impactsPrime==='function')?impactsPrime():null;
+  const hNow=(typeof G!=='undefined'&&G&&Number.isFinite(G.gameTime))?Math.floor(G.gameTime)%24:-1;
+  const isPrime=!!(prime&&prime.hour===hNow);
+  const demandMult=Math.max(0.6,Math.min(1.8, 0.8 + 0.6*occ + (isPrime?0.3:0)));
+  const t=impactsTotals();
+  const qualityMult=Math.max(0.6,Math.min(1.8, 0.7 + (t.att||0)));
+  const cpmDyn=base*demandMult*qualityMult;
+  let revDyn=0;
+  for(const s of IMPACTS.SCREENS){
+    const d=IMPACTS.day[s.id]; if(!d) continue;
+    const attRate=d.est>0?(d.look/d.est):0;
+    const qf=Math.max(0.3,Math.min(3, attRate*((s.dwell||dRef)/dRef)));   // factor calidad de la pantalla
+    revDyn += d.est/1000 * cpmDyn * qf;
+  }
+  return {cpmDyn, demandMult, qualityMult, occ, isPrime, revenueDyn:revDyn};
+}
 
 function recSnapshot(){
   if(!G||state!==S.GAME||REC.replay.on) return;
@@ -23805,13 +23840,17 @@ window.xtAPI = (function(){
             rows+='<div style="display:flex;justify-content:space-between;align-items:baseline"><span>'+badge+' '+s.label+'</span><span><b>'+Math.round(d.est).toLocaleString('es')+'</b> <span style="color:#9ad8ff;font-size:9.5px" title="miradas — atención real">👁 '+lk.toLocaleString('es')+' ('+pct+'%)</span></span></div>';
           }
           const t=impactsTotals();
+          const dyn=(typeof impactsDyn==='function')?impactsDyn():{cpmDyn:IMPACTS.cpm,demandMult:1,qualityMult:1,revenueDyn:t.revenue,isPrime:false};
           body.innerHTML=marcador+franjas+rows+
             '<div style="border-top:1px dashed #8a6a2f;margin-top:6px;padding-top:6px;display:flex;justify-content:space-between"><span>TOTAL impactos</span><b>'+Math.round(t.imp).toLocaleString('es')+'</b></div>'+
             '<div style="display:flex;justify-content:space-between;color:#9ad8ff"><span>👁 Atención (miran)</span><b>'+Math.round(t.look).toLocaleString('es')+' · '+Math.round(t.att*100)+'%</b></div>'+
             '<div style="display:flex;justify-content:space-between"><span>CPM ref</span><b>'+IMPACTS.cpm.toFixed(2)+' €</b></div>'+
             '<div style="display:flex;justify-content:space-between;color:#9effa0"><span>Ingreso estim.</span><b>'+t.revenue.toFixed(2)+' €</b></div>'+
-            '<div style="display:flex;justify-content:space-between;font-size:9.5px;opacity:.7" title="lo que valdría pagando solo por atención real (modelo 3)"><span>↳ valor atención</span><b>'+t.lookRevenue.toFixed(2)+' €</b></div>'+
-            '<div style="margin-top:5px;font-size:9.5px;opacity:.6">📷 medido por cámara · ~ estimado · 👁 miran ≠ pasan<br>/cpm cpm &lt;n&gt; · /cpm reset · /cpm off</div>';
+            '<div style="border-top:1px dashed #6a4a8a;margin-top:6px;padding-top:6px;font-size:9px;letter-spacing:.06em;color:#c9a8ff">⚡ MODELO 3 · CPM DINÁMICO'+(dyn.isPrime?' <span style="color:#ffd866">⭐ prime</span>':'')+'</div>'+
+            '<div style="display:flex;justify-content:space-between"><span>CPM dinámico</span><b style="color:#c9a8ff">'+dyn.cpmDyn.toFixed(2)+' €</b></div>'+
+            '<div style="display:flex;justify-content:space-between;font-size:9.5px;opacity:.75" title="demanda RTB (ocupación+prime) × calidad (atención)"><span>↳ demanda ×'+dyn.demandMult.toFixed(2)+' · calidad ×'+dyn.qualityMult.toFixed(2)+'</span></div>'+
+            '<div style="display:flex;justify-content:space-between;color:#c9a8ff"><span>Ingreso dinámico</span><b>'+dyn.revenueDyn.toFixed(2)+' €</b></div>'+
+            '<div style="margin-top:5px;font-size:9.5px;opacity:.6">📷 medido · ~ estimado · 👁 miran≠pasan · ⚡ CPM por demanda×calidad<br>/cpm cpm &lt;n&gt; · /cpm reset · /cpm off</div>';
         };
         render();
         if(!IMPACTS.timer) IMPACTS.timer=setInterval(render,1000);
