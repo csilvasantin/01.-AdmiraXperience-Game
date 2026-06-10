@@ -16953,6 +16953,26 @@ async function askMetahuman(text){
   // Mirror the question into the textarea so it reads exactly the same whether
   // the user typed it in directly or fired it from /metahuman in the CLI.
   if(els.prompt) els.prompt.value=clean;
+  // Comando CLI directo ("/cpm", "/audienciaIN 8"…): el metahuman lo EJECUTA
+  // sin pasar por Grok y muestra el resultado. Pedírselo al tótem = pedírselo
+  // al CLI (Carlos 2026-06-10).
+  if(clean.startsWith('/')){
+    let out='';
+    try{
+      const r=(window.xtAPI&&typeof window.xtAPI.command==='function')?window.xtAPI.command(clean):null;
+      const rr=(r&&typeof r.then==='function')?await r:r;
+      out=(rr&&(rr.message||rr.text))||'Hecho.';
+      if(rr&&rr.ok===false&&/no reconocido/i.test(out)&&typeof window.sendComposerText==='function'){
+        window.sendComposerText(clean); out='Comando enviado al CLI de la tienda.';
+      }
+    }catch(e){ out='Error ejecutando '+clean+': '+(e&&e.message||e); }
+    MH.lastAnswer=out;
+    MH.speaking=true; MH.speakUntil=Date.now()+2600;
+    if(els.status) els.status.textContent='listo';
+    if(els.answer){ els.answer.classList.remove('is-thinking','is-error'); els.answer.textContent=out; }
+    try{ if(typeof showEv==='function') showEv('🤖 '+clean,'#66ddaa'); }catch(e){}
+    return;
+  }
   // Acción de look&feel en lenguaje natural ("pon número a la camiseta",
   // "quita los dorsales"…): el metahuman la EJECUTA directamente, sin Grok.
   try{
@@ -16982,12 +17002,33 @@ async function askMetahuman(text){
     // Acciones de look&feel que el metahuman puede ejecutar (se aplican solas si la
     // orden es clara; si el usuario duda, explícale cómo).
     if(typeof LOOK!=='undefined') promptToSend+='\n\n[Acciones de look&feel disponibles: /camiseta on|off → números en la camiseta de los clientes (ahora '+(LOOK.shirtNum?'ON':'OFF')+'). Si te piden activarlas o quitarlas, ya se aplican automáticamente.]';
+    // El metahuman conoce TODOS los comandos del CLI y puede ejecutarlos: si el
+    // usuario pide una acción que mapea a uno, Grok añade una línea
+    // "EJECUTAR: /comando args" al final y el juego la ejecuta de verdad.
+    if(typeof window.xtCliCommandList==='function'){
+      const cat=window.xtCliCommandList();
+      if(cat) promptToSend+='\n\n[Eres también el operador del CLI de la tienda. Conoces TODOS estos comandos:\n'+cat+'\nSi el usuario te pide una acción que corresponde a un comando (p.ej. "que entren 8 personas" → /audienciaIN 8, "enseña los CPM en la pantalla" → /impactos tft, "abre el panel de impactos" → /impactos), responde brevemente y añade como ÚLTIMA línea exactamente: EJECUTAR: /comando argumentos — solo UNA y solo si la petición es clara. Si solo pregunta qué comandos hay, lístalos sin ejecutar nada.]';
+    }
     if(_mhDetectsLogQuery(clean)){
       const ctx=buildPeopleLogContext();
       if(ctx) promptToSend+='\n\n[Registro real de gente del día — usa estos datos para la respuesta]\n'+ctx;
     }
     const result=await ask(promptToSend);
-    const answerText=(result&&result.text)||(result&&result.message)||'(sin respuesta)';
+    let answerText=(result&&result.text)||(result&&result.message)||'(sin respuesta)';
+    // Protocolo EJECUTAR: si Grok decide lanzar un comando, lo ejecutamos de
+    // verdad vía xtAPI.command y mostramos el resultado junto a la respuesta.
+    try{
+      const m=answerText.match(/^\s*EJECUTAR:\s*(\/\S[^\n]*)\s*$/mi);
+      if(m&&window.xtAPI&&typeof window.xtAPI.command==='function'){
+        const cmdLine=m[1].trim();
+        answerText=answerText.replace(m[0],'').trim();
+        const r=window.xtAPI.command(cmdLine);
+        const rr=(r&&typeof r.then==='function')?await r:r;
+        const exec=(rr&&(rr.message||rr.text))||'hecho';
+        answerText+=(answerText?'\n\n':'')+'⚙ '+cmdLine+' → '+exec;
+        try{ if(typeof showEv==='function') showEv('🤖 metahuman → '+cmdLine,'#66ddaa'); }catch(e){}
+      }
+    }catch(e){}
     MH.lastAnswer=answerText;
     if(els.answer){ els.answer.classList.remove('is-thinking'); els.answer.classList.toggle('is-error',!result||!result.ok); els.answer.textContent=answerText; }
     if(els.status) els.status.textContent=(result&&result.ok)?'listo':'error';
@@ -25593,6 +25634,11 @@ window.xtAPI = (function(){
     return res.data.map(p=>'#'+p.slot+' '+p.name+': '+p.stock+'/'+p.max+' ('+p.pct+'%)').join('\n');
   }
 
+  // Catálogo de comandos como texto plano, expuesto en window para que el
+  // METAHUMAN del tótem los conozca TODOS en su contexto (y /debug los liste).
+  window.xtCliCommandList=function(){
+    try{ return helpSections().map(s=>s.title+': '+s.items.join(' · ')).join('\n'); }catch(e){ return ''; }
+  };
   function helpSections(){
     // Orden actual = orden alfabético/legado. Pendiente: reordenar por uso real.
     return [
@@ -26833,7 +26879,7 @@ window.xtAPI = (function(){
       // (CLI in-game) y aun no esta mapeado en este dispatcher de Telegram,
       // delegamos. Cubre /store, /people, /gente, /clientes, /personas y futuros
       // comandos sin necesidad de duplicar la logica.
-      if(['store','xtore','xtanco','tienda','people','gente','personas','clientes','staff','personal','subasta','subastar','auction','targetpublicity','targetpubliticy','targetpub','generovideo','genvideo','camgenero','sexovideo','videogenero','aforo','occupancy','camara','cámara','camiseta','camisetas','dorsal','dorsales'].includes(cmd)){
+      if(['store','xtore','xtanco','tienda','people','gente','personas','clientes','staff','personal','subasta','subastar','auction','targetpublicity','targetpubliticy','targetpub','generovideo','genvideo','camgenero','sexovideo','videogenero','aforo','occupancy','camara','cámara','camiseta','camisetas','dorsal','dorsales','impactos','impacts','impresiones','cpm','audienciain','audin','publicoin','entran','audienciaout','audout','publicoout','pasan'].includes(cmd)){
         try{
           const res=api.command('/'+cmd+(arg?' '+arg:''));
           return res && res.message ? res.message : 'OK';
