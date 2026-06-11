@@ -13,6 +13,9 @@
     html,body{width:100%;height:100%;overflow:hidden;background:radial-gradient(circle at 18% 12%,#132d35 0,#070a10 38%,#020305 100%);font-family:monospace}
     body{display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-start}
     canvas{image-rendering:pixelated;display:block;flex-shrink:1;filter:drop-shadow(0 26px 40px rgba(0,0,0,.42))}
+    /* Vista de distribución embebida (pixeria/assets → ?distro=<id>&preview=1): solo la escena iso, sin chrome */
+    body.distro-preview #topBar,body.distro-preview #characterDock,body.distro-preview #telegramDock,body.distro-preview .splash,body.distro-preview #splash{display:none !important}
+    body.distro-preview canvas{filter:none}
     #topBar{display:none;width:100%;max-width:100vw;height:36px;background:linear-gradient(90deg,rgba(5,12,18,.98),rgba(12,31,39,.98) 44%,rgba(28,18,10,.98));border-bottom:1px solid rgba(120,243,255,.36);box-shadow:0 10px 28px rgba(0,0,0,.42),inset 0 -1px 0 rgba(247,201,93,.22);flex-shrink:0;align-items:center;padding:0 8px;gap:7px;font-family:monospace;color:var(--xp-ink);font-size:11px;z-index:10;order:-1}
     body.is-xpace-creator #topBar{display:none !important}
     #topBar.show{display:flex}
@@ -22687,15 +22690,17 @@ try {
   const _sp=new URLSearchParams(location.search);
   const playParam=_sp.get('play');
   const locParam=_sp.get('loc');
+  const distroParam=_sp.get('distro');          // ?distro=<id> → entra y aplica esa distribución (vista iso de pixeria)
   const viewParam=(_sp.get('view')||'').toLowerCase();
   // Al entrar por URL hay que DESCARTAR el splash "DIGITAL TWIN" (página 0),
   // si no el usuario se queda ahí y tiene que pulsar JUGAR a mano.
   const _dismissSplash=()=>{ try{ document.body.classList.remove('entering-twin'); }catch(e){} try{ if(window.hideSplash) window.hideSplash(); }catch(e){} };
   // Entrada directa: oculta YA la pantalla de selección (el splash pasa a modo
   // "Cargando gemelo…") para que no se vea mientras carga la config del punto.
-  if(playParam||locParam||viewParam==='red'||viewParam==='network'||viewParam==='tiendas'||_sp.has('red')){
+  if(playParam||locParam||distroParam||viewParam==='red'||viewParam==='network'||viewParam==='tiendas'||_sp.has('red')){
     try{ document.body.classList.add('entering-twin'); }catch(e){}
   }
+  if(distroParam && (_sp.get('preview')==='1'||_sp.has('preview'))){ try{ document.body.classList.add('distro-preview'); }catch(e){} }
   if(viewParam==='red'||viewParam==='network'||viewParam==='tiendas'||_sp.has('red')){
     // ?view=red → abre la RED DE TIENDAS (vista mapa/red de todos los puntos).
     setTimeout(()=>{ _dismissSplash(); try{ openNetworkView(); }catch(e){ console.warn('openNetworkView failed:',e); } }, 60);
@@ -22719,6 +22724,23 @@ try {
       if(window.STORE_CFG_READY||_t++>50){ enterForLoc(); return; } // ~5s, cubre reintentos del fetch
       setTimeout(waitCfg,100);
     })();
+  } else if(distroParam){
+    // ?distro=<id> → entra al gemelo y APLICA esa distribución (la vista
+    // isométrica "exactamente igual que XpaceOS.com" que embebe pixeria/assets).
+    setTimeout(()=>{
+      _dismissSplash();
+      try{ autoEnterVertical('xtanco'); }catch(e){ console.warn('distro autoEnter failed:',e); }
+      let _td=0;
+      (function applyDistro(){
+        const ready=(typeof G!=='undefined'&&G&&typeof shopLayout!=='undefined'&&Array.isArray(shopLayout));
+        if(!ready && _td++<60){ setTimeout(applyDistro,100); return; }
+        // pequeño respiro para que el arranque del vertical no pise el apply
+        setTimeout(async()=>{
+          try{ const item=await distroGet(distroParam); distroApply(item); if(typeof showEv==='function') showEv('📐 Vista de distribución','#88ffcc'); }
+          catch(e){ console.warn('distro apply failed:',e); }
+        },350);
+      })();
+    },50);
   }
 } catch(_){}
 
