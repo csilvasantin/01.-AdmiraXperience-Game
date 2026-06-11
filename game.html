@@ -10486,11 +10486,16 @@ function openDVRPanel(){
   if(!enterReplay()) return 'No se pudo entrar en replay.';
   const e=_dvrEls(); if(e.panel){ e.panel.classList.add('show'); e.panel.setAttribute('aria-hidden','false'); }
   updateDVRPanel();
-  return '⏮ DVR abierto: arrastra la línea de tiempo o pulsa ▶. Pulsa "● EN VIVO" para volver.';
+  // DVR = panel de impactos/CPM en vivo + carrete de la cámara del MUPI (Carlos
+  // 2026-06-11: "cuando haga dvr que aparezca como ahora impactos cpm y las fotos").
+  try{ if(typeof IMPACTS!=='undefined' && !IMPACTS.on && window.xtAPI) window.xtAPI.command('cpm'); }catch(_){}
+  try{ if(typeof mupiCamOpenGallery==='function') mupiCamOpenGallery(); }catch(_){}
+  return '⏮ DVR abierto: línea de tiempo + impactos/CPM + 📷 cámara del MUPI. Pulsa "● EN VIVO" para volver.';
 }
 function closeDVRPanel(){
   exitReplay();
   const e=_dvrEls(); if(e.panel){ e.panel.classList.remove('show'); e.panel.setAttribute('aria-hidden','true'); }
+  try{ if(typeof mupiCamCloseGallery==='function') mupiCamCloseGallery(); }catch(_){}
 }
 window.openDVRPanel=openDVRPanel; window.closeDVRPanel=closeDVRPanel;
 (function wireDVR(){
@@ -10518,6 +10523,113 @@ window.openDVRPanel=openDVRPanel; window.closeDVRPanel=closeDVRPanel;
   }
   if(go) go.addEventListener('click',seek);
 })();
+
+// ── CÁMARA DE PUBLICIDAD EXTERIOR (sobre el MUPI) ───────────────────
+// Cámara discreta montada encima del escaparate/MUPI. Vigila la acera y
+// "fotografía" a cada viandante que pasa por delante: guarda una versión
+// NORMAL y otra PIXELADA + la HORA. En modo DVR el carrete aparece junto al
+// panel de impactos/CPM (Carlos 2026-06-11: "mejorar la gestión de publi
+// exterior — cámara sobre el mupi que se vea poco; fotos pixelada y normal").
+const MUPICAM = window.XPACE_MUPICAM = {
+  on:true,            // siempre vigilando (como una cámara de seguridad real)
+  pos:null,           // {x,y} de la lente en coords de canvas (lo fija drawEscaparate)
+  shots:[],           // carrete: {id,t,hhmm,persona,normal,pixel}
+  MAX:80,             // tope del carrete (ring buffer)
+  _mode:'normal',     // vista de la galería: 'normal' | 'pixel'
+  _timer:null,
+};
+function mupiCamTimeLabel(t){ try{ return dvrTimeLabel(t); }catch(_){ return '--:--'; } }
+// Dibuja la cámara encima del MUPI. La llama drawEscaparate con las dos esquinas
+// superiores del display (TL, TR). Pequeña y discreta — "que se vea poco".
+function mupiCamDraw(TL,TR){
+  if(!TL||!TR) return;
+  const mx=(TL.x+TR.x)/2, my=(TL.y+TR.y)/2;
+  MUPICAM.pos={x:mx, y:my};               // referencia para disparar la captura
+  const camY=my-7;                        // cuelga por encima del marco del mupi
+  cx.save();
+  cx.globalAlpha=0.92;
+  cx.strokeStyle='#23303a'; cx.lineWidth=1.2;                 // brazo de montaje
+  cx.beginPath(); cx.moveTo(mx, my-1); cx.lineTo(mx, camY+2); cx.stroke();
+  cx.fillStyle='#2b3640';                                     // carcasa (mira a la calle)
+  cx.beginPath();
+  cx.moveTo(mx-4, camY-3); cx.lineTo(mx+5, camY-3);
+  cx.lineTo(mx+7, camY+2); cx.lineTo(mx-2, camY+2);
+  cx.closePath(); cx.fill();
+  cx.fillStyle='#0a0e12'; cx.beginPath(); cx.arc(mx+5, camY, 1.6, 0, Math.PI*2); cx.fill();   // lente
+  cx.fillStyle='#3a6ea5'; cx.beginPath(); cx.arc(mx+5.4, camY-0.4, 0.6, 0, Math.PI*2); cx.fill();
+  if(MUPICAM.on && Math.sin(tt*0.12)>0.4){ cx.fillStyle='#ff3b3b'; cx.beginPath(); cx.arc(mx-3, camY-2, 0.8, 0, Math.PI*2); cx.fill(); } // LED REC sutil
+  cx.restore();
+}
+// "Fotografía" al viandante p recortando la región del canvas donde está.
+// Produce dataURL normal (ampliado, suavizado) y pixelado (baja-res reescalada).
+function mupiCamSnap(p){
+  if(!MUPICAM.on || !p || p._snapped) return;
+  if(typeof state!=='undefined' && typeof S!=='undefined' && state!==S.GAME) return;
+  if(typeof REC!=='undefined' && REC && REC.replay && REC.replay.on) return;   // no fotografiar el pasado
+  let src; try{ src=cx.canvas; }catch(_){ return; }
+  const cw=src.width, ch=src.height;
+  const sw=40, sh=52;                                  // recorte que encuadra al chibi (cabeza→pies)
+  let sx=Math.round((p.x|0)+7-sw/2), sy=Math.round((p.y|0)-28);
+  sx=Math.max(0,Math.min(cw-sw,sx)); sy=Math.max(0,Math.min(ch-sh,sy));
+  try{
+    const NW=Math.round(sw*1.6), NH=Math.round(sh*1.6);
+    const nC=document.createElement('canvas'); nC.width=NW; nC.height=NH;          // NORMAL
+    const nX=nC.getContext('2d'); nX.imageSmoothingEnabled=true;
+    nX.drawImage(src, sx,sy,sw,sh, 0,0,NW,NH);
+    const PW=18, PH=24;                                                            // PIXELADA
+    const tmp=document.createElement('canvas'); tmp.width=PW; tmp.height=PH;
+    const tX=tmp.getContext('2d'); tX.imageSmoothingEnabled=false;
+    tX.drawImage(src, sx,sy,sw,sh, 0,0,PW,PH);
+    const pC=document.createElement('canvas'); pC.width=NW; pC.height=NH;
+    const pX=pC.getContext('2d'); pX.imageSmoothingEnabled=false;
+    pX.drawImage(tmp, 0,0,PW,PH, 0,0,NW,NH);
+    MUPICAM.shots.push({ id:(p.id||tt), t:(typeof G!=='undefined'&&G?G.gameTime:0)||0,
+      hhmm:mupiCamTimeLabel((typeof G!=='undefined'&&G?G.gameTime:0)||0), persona:p.persona||'',
+      normal:nC.toDataURL('image/webp',0.7), pixel:pC.toDataURL('image/webp',0.6) });
+    if(MUPICAM.shots.length>MUPICAM.MAX) MUPICAM.shots.shift();
+    p._snapped=true;
+  }catch(_){}
+}
+// ── Galería / carrete de la cámara (panel arrastrable, estilo del HUD de impactos) ──
+function mupiCamGalleryEl(){ return document.getElementById('mupiCamPanel'); }
+function mupiCamRenderGallery(){
+  const p=mupiCamGalleryEl(); if(!p) return;
+  const body=p.querySelector('#mcBody'); if(!body) return;
+  const cnt=p.querySelector('#mcCount'); if(cnt) cnt.textContent=MUPICAM.shots.length;
+  const md=p.querySelector('#mcMode'); if(md) md.textContent=MUPICAM._mode;
+  const shots=MUPICAM.shots;
+  if(!shots.length){ body.innerHTML='<div style="opacity:.6;padding:14px;text-align:center;font-size:10px;line-height:1.5">Aún sin viandantes capturados.<br>Deja pasar gente por delante del MUPI (prueba <b>/audienciaOUT 6</b> o <b>/velocidad 8</b>).</div>'; return; }
+  const pix=(MUPICAM._mode==='pixel');
+  const cells=shots.slice().reverse().map(s=>{
+    const img=(pix?s.pixel:s.normal)||s.normal;
+    return '<div style="display:flex;flex-direction:column;align-items:center;gap:2px">'+
+      '<img src="'+img+'" alt="viandante '+s.hhmm+'" style="width:54px;height:auto;border:1px solid #2a3a30;border-radius:4px;background:#0a0e0c;image-rendering:'+(pix?'pixelated':'auto')+'">'+
+      '<span style="font-size:8px;opacity:.75">🕒 '+s.hhmm+'</span></div>';
+  }).join('');
+  body.innerHTML='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(56px,1fr));gap:7px">'+cells+'</div>';
+}
+function mupiCamOpenGallery(){
+  let p=mupiCamGalleryEl();
+  if(!p){
+    p=document.createElement('div'); p.id='mupiCamPanel';
+    p.style.cssText='position:fixed;top:72px;left:16px;z-index:2147482000;width:250px;max-height:72vh;display:flex;flex-direction:column;background:rgba(6,16,10,.94);border:1px solid #5fb0ff;border-radius:10px;color:#dbeaff;font-family:"JetBrains Mono",ui-monospace,monospace;font-size:11px;box-shadow:0 0 22px rgba(95,176,255,.25);overflow:hidden';
+    p.innerHTML='<div id="mcHdr" style="display:flex;justify-content:space-between;align-items:center;padding:6px 9px;border-bottom:1px dashed #2f6a8a;letter-spacing:.06em;cursor:move;user-select:none;touch-action:none"><b>📷 CÁMARA MUPI</b><span style="display:flex;gap:6px;align-items:center"><span id="mcMode" title="alternar normal / pixelada" style="cursor:pointer;font-size:9px;border:1px solid #5fb0ff;border-radius:5px;padding:1px 6px">normal</span><span id="mcClose" style="cursor:pointer;color:#999;padding:0 4px">×</span></span></div>'+
+      '<div style="padding:4px 9px;font-size:9px;opacity:.7;border-bottom:1px solid rgba(95,176,255,.15)">🚶 <span id="mcCount">0</span> viandantes · foto + hora al pasar</div>'+
+      '<div id="mcBody" style="padding:8px 9px;overflow:auto"></div>';
+    document.body.appendChild(p);
+    p.querySelector('#mcClose').onclick=()=>mupiCamCloseGallery();
+    const md=p.querySelector('#mcMode'); md.onclick=()=>{ MUPICAM._mode=(MUPICAM._mode==='pixel')?'normal':'pixel'; mupiCamRenderGallery(); };
+    const hdr=p.querySelector('#mcHdr'); let dg=false,oX=0,oY=0;
+    hdr.addEventListener('pointerdown',e=>{ if(e.target.id==='mcMode'||e.target.id==='mcClose')return; dg=true; const r=p.getBoundingClientRect(); p.style.left=r.left+'px'; p.style.top=r.top+'px'; oX=e.clientX-r.left; oY=e.clientY-r.top; try{hdr.setPointerCapture(e.pointerId);}catch(_){} });
+    hdr.addEventListener('pointermove',e=>{ if(!dg)return; const nx=Math.max(0,Math.min(e.clientX-oX,window.innerWidth-p.offsetWidth)), ny=Math.max(0,Math.min(e.clientY-oY,window.innerHeight-p.offsetHeight)); p.style.left=nx+'px'; p.style.top=ny+'px'; });
+    const ed=e=>{ dg=false; try{hdr.releasePointerCapture(e.pointerId);}catch(_){} }; hdr.addEventListener('pointerup',ed); hdr.addEventListener('pointercancel',ed);
+  }
+  p.style.display='flex';
+  mupiCamRenderGallery();
+  if(!MUPICAM._timer) MUPICAM._timer=setInterval(()=>{ const g=mupiCamGalleryEl(); if(g&&g.style.display!=='none') mupiCamRenderGallery(); else { clearInterval(MUPICAM._timer); MUPICAM._timer=null; } }, 1200);
+}
+function mupiCamCloseGallery(){ const p=mupiCamGalleryEl(); if(p) p.style.display='none'; if(MUPICAM._timer){ clearInterval(MUPICAM._timer); MUPICAM._timer=null; } }
+window.mupiCamOpenGallery=mupiCamOpenGallery; window.mupiCamCloseGallery=mupiCamCloseGallery;
 
 function updateGame(){
   tt++;
@@ -11897,6 +12009,19 @@ function updatePassersby(){
       p.x+=dx/d*spd;
       p.y+=dy/d*spd;
       p.dir=dx<0?-1:1;
+    }
+    // Cámara del MUPI: una sola foto cuando el viandante pasa por delante de la
+    // tienda (línea de la puerta), en su punto MÁS CERCANO y dentro del encuadre.
+    // Los viandantes andan en diagonal por la acera; la lente está sobre el mupi
+    // pero "fotografía" a quien cruza el frente, no la x alta del mupi.
+    if(MUPICAM.on && !p._snapped && !p._wantSnap && p.age>5){
+      let scanX=700; try{ scanX=rightWallFeatureIso(3).x; }catch(_){}
+      const fits=(p.x>46 && p.x<760 && p.y>44 && p.y<486);   // cabe el recorte sin tocar bordes
+      if(fits){
+        const d=Math.abs(p.x-scanX);
+        if(p._camMinD==null || d<p._camMinD) p._camMinD=d;
+        else if(d>p._camMinD+5){ p._wantSnap=true; }   // superó el punto más cercano → marcar
+      }
     }
   }
 }
@@ -16124,6 +16249,10 @@ function drawEscaparate(){
   cx.lineTo(BR.x-fw2,BR.y); cx.lineTo(TR.x-fw2,TR.y);
   cx.closePath(); cx.fill();
 
+  // ── CÁMARA DE PUBLICIDAD EXTERIOR — montada sobre el MUPI (discreta) ──
+  // Vigila la acera y fotografía a los viandantes (ver mupiCamDraw/mupiCamSnap).
+  try{ if(typeof mupiCamDraw==='function') mupiCamDraw(TL,TR); }catch(_){}
+
   // ── DISPLAY WINDOW (affine-mapped content inside parallelogram) ──
   // Inset margins (in screen px): 3px from edges
   const mg=3;
@@ -16369,6 +16498,11 @@ function drawDoorForegroundPeople(){
   // be cropped by the door frame.
   if(Array.isArray(G.passersby)){
     for(const p of G.passersby) try{ drawIsoCust(p); }catch(e){}
+    // Cámara del MUPI: la foto se toma AQUÍ, recién dibujado el viandante, para
+    // que el recorte del canvas lo contenga (en update sólo se marca _wantSnap;
+    // a velocidad alta el update corre varias veces por frame y el canvas iría
+    // desfasado). Lee el frame actual con el peatón ya pintado.
+    for(const p of G.passersby){ if(p._wantSnap && !p._snapped){ try{ mupiCamSnap(p); }catch(_){} p._wantSnap=false; } }
   }
   // Customers within ~NEAR px of the door X (or further out) are physically at
   // the threshold or on the sidewalk — re-paint them on top of the frame.
@@ -23858,6 +23992,18 @@ window.xtAPI = (function(){
         return {ok:true,message:'Impactos ON · marcador en vivo · CPM '+IMPACTS.cpm+'€',data:{on:true}};
       }
 
+      // ── /mupicam — carrete de la cámara de publicidad exterior del MUPI ──
+      // (camara/cámara ya las usan LiveCam y Aforo; usamos aliases propios)
+      if(['mupicam','fotos','viandantes','carrete','camaramupi'].includes(cmd)){
+        const a=String(arg||'').trim().toLowerCase();
+        if(['off','cerrar','close','0'].includes(a)){ try{ mupiCamCloseGallery(); }catch(_){} return {ok:true,message:'📷 Cámara MUPI: galería cerrada',data:{on:false}}; }
+        if(['reset','borrar','clear','vaciar'].includes(a)){ MUPICAM.shots.length=0; try{ mupiCamRenderGallery(); }catch(_){} return {ok:true,message:'📷 Carrete de la cámara MUPI vaciado',data:{shots:0}}; }
+        if(a==='pixel'||a==='pixelada'){ MUPICAM._mode='pixel'; }
+        if(a==='normal'){ MUPICAM._mode='normal'; }
+        try{ mupiCamOpenGallery(); }catch(_){}
+        return {ok:true,message:'📷 Cámara MUPI · '+MUPICAM.shots.length+' viandante(s) · vista '+MUPICAM._mode+' · /mupicam pixel|normal · /mupicam reset · /mupicam off',data:{shots:MUPICAM.shots.length,mode:MUPICAM._mode}};
+      }
+
       // ── /targetPublicity — publicidad segmentada ──────────────────────
       // Toggle como /subasta. Lee una señal de audiencia y empuja el creativo
       // adecuado a ESTA pantalla (reutiliza el targeting por screen del feed).
@@ -26968,7 +27114,7 @@ window.xtAPI = (function(){
       // (CLI in-game) y aun no esta mapeado en este dispatcher de Telegram,
       // delegamos. Cubre /store, /people, /gente, /clientes, /personas y futuros
       // comandos sin necesidad de duplicar la logica.
-      if(['store','xtore','xtanco','tienda','people','gente','personas','clientes','staff','personal','subasta','subastar','auction','targetpublicity','targetpubliticy','targetpub','generovideo','genvideo','camgenero','sexovideo','videogenero','aforo','occupancy','camara','cámara','camiseta','camisetas','dorsal','dorsales','impactos','impacts','impresiones','cpm','audienciain','audin','publicoin','entran','audienciaout','audout','publicoout','pasan'].includes(cmd)){
+      if(['store','xtore','xtanco','tienda','people','gente','personas','clientes','staff','personal','subasta','subastar','auction','targetpublicity','targetpubliticy','targetpub','generovideo','genvideo','camgenero','sexovideo','videogenero','aforo','occupancy','camara','cámara','mupicam','fotos','viandantes','carrete','camaramupi','camiseta','camisetas','dorsal','dorsales','impactos','impacts','impresiones','cpm','audienciain','audin','publicoin','entran','audienciaout','audout','publicoout','pasan'].includes(cmd)){
         try{
           const res=api.command('/'+cmd+(arg?' '+arg:''));
           return res && res.message ? res.message : 'OK';
