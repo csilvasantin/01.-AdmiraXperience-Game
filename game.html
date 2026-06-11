@@ -28323,7 +28323,8 @@ window.xtAPI = (function(){
       await fetch(PIXER_WORKER+'/signage/heartbeat',{
         method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({screen:screenId,role:'xtore-game',version:getVersion(),
-          feed_count:totalCount,showing_id:lastItemId}),
+          feed_count:totalCount,showing_id:lastItemId,
+          loc:(window.STORE_CFG&&window.STORE_CFG.id)||'',locName:(window.STORE_CFG&&window.STORE_CFG.name)||''}),
       });
     }catch{}
   }
