@@ -24163,8 +24163,12 @@ window.xtAPI = (function(){
           const sym=g==='F'?'♀':'♂';
           const ageTxt=age?(' ~'+age+'a'):'';
           const facesTxt=(real&&lf.faces>1)?(lf.faces+' caras · '):'';
+          // Franja horaria actual (daypart) del reloj del gemelo → casa la versión
+          // de campaña de esa franja (fase 3: matching versión↔público+momento).
+          const _h=(typeof G!=='undefined'&&G&&Number.isFinite(G.gameTime))?((Math.floor(G.gameTime)%24)+24)%24:-1;
+          const timeSlot=_h<0?'':(_h<12?'manana':_h<16?'mediodia':_h<20?'tarde':'noche');
           return {bucket:'gen-'+g+'-'+ageBucket, cat:genTxt+'-'+ageBucket, genTxt,
-            audience:g==='F'?'f':'m', ageBucket, real,
+            audience:g==='F'?'f':'m', ageBucket, timeSlot, real,
             label:(real?('👁 '+facesTxt):(lf&&lf.loading?'⏳ cargando IA · ':'(sim) '))+sym+' '+ageBucket+ageTxt};
         };
 
@@ -24189,8 +24193,13 @@ window.xtAPI = (function(){
               // Género (+edad): audience+edad → audience → 'all'.
               let p=items.filter(it=>it.audience===seg.audience);
               if(seg.ageBucket){
-                const withAge=p.filter(it=>it.ageBucket===seg.ageBucket||it.age===seg.ageBucket);
+                const withAge=p.filter(it=>it.ageBucket===seg.ageBucket||it.age===seg.ageBucket||(it.segmentation&&Array.isArray(it.segmentation.ageBuckets)&&it.segmentation.ageBuckets.includes(seg.ageBucket)));
                 if(withAge.length) p=withAge;
+              }
+              if(seg.timeSlot){
+                // Afina por FRANJA: si hay versiones de la franja actual, úsalas.
+                const withTs=p.filter(it=>it.timeSlot===seg.timeSlot||(it.segmentation&&Array.isArray(it.segmentation.timeSlots)&&it.segmentation.timeSlots.includes(seg.timeSlot)));
+                if(withTs.length) p=withTs;
               }
               pool=p.length?p:items.filter(it=>it.audience==='all');
             }else if(seg.cat){
