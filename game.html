@@ -10631,6 +10631,70 @@ function mupiCamOpenGallery(){
 function mupiCamCloseGallery(){ const p=mupiCamGalleryEl(); if(p) p.style.display='none'; if(MUPICAM._timer){ clearInterval(MUPICAM._timer); MUPICAM._timer=null; } }
 window.mupiCamOpenGallery=mupiCamOpenGallery; window.mupiCamCloseGallery=mupiCamCloseGallery;
 
+// ── DISTRIBUCIONES (sync de la sala entera con pixeria.com vía worker) ──
+// Una "distribución" = config de sala (cols/rows/colores) + mobiliario
+// (shopLayout) + staff + zonas. Canal compartido: worker pixer-eleven
+// /layout/* (KV). El gemelo PUBLICA su distribución actual y APLICA una de la
+// librería; pixeria.com/assets hace lo mismo → back-and-forth. (Carlos 2026-06-11)
+function distroBase(){ try{ return window.LAYOUT_BASE || PIXERIA_STOCK_BASE; }catch(_){ return 'https://pixer-eleven.csilvasantin.workers.dev'; } }
+function distroCleanFurniture(){
+  return (typeof shopLayout!=='undefined'?shopLayout:[]||[]).map(it=>{
+    const o={ id:it.id, type:it.type, col:it.col, row:it.row, sx:it.sx||1, sy:it.sy||1 };
+    if(it.label) o.label=it.label;
+    if(it.rot) o.rot=it.rot;
+    if(it.flipX) o.flipX=true;
+    if(it.custom){ o.custom=true; if(it.img) o.img=it.img; if(it.fp) o.fp=it.fp; if(it.ph) o.ph=it.ph; }
+    return o;
+  });
+}
+function distroSnapshot(name){
+  const cfg=(typeof xpaceCreatorConfig==='object'&&xpaceCreatorConfig)?xpaceCreatorConfig:{};
+  const client=(typeof getActiveModelKey==='function')?getActiveModelKey():null;
+  return {
+    name: (name||('Distribución '+(client||''))).trim(),
+    client, source:'gemelo',
+    config:{ cols:cfg.cols, rows:cfg.rows, wallHeightTiles:cfg.wallHeightTiles,
+      longWallColor:cfg.longWallColor, shortWallColor:cfg.shortWallColor, floorColor:cfg.floorColor,
+      exteriorFloorColor:cfg.exteriorFloorColor, backgroundColor:cfg.backgroundColor },
+    furniture: distroCleanFurniture(),
+    staff: (typeof shopStaffPos!=='undefined'&&Array.isArray(shopStaffPos))?shopStaffPos:[],
+    zones: (typeof shopStaffZones!=='undefined'&&Array.isArray(shopStaffZones))?shopStaffZones:[],
+  };
+}
+async function distroPublish(name){
+  const snap=distroSnapshot(name);
+  const r=await fetch(distroBase()+'/layout/publish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(snap)});
+  if(!r.ok) throw new Error('HTTP '+r.status);
+  return await r.json();
+}
+async function distroList(){
+  const r=await fetch(distroBase()+'/layout/list?ts='+Date.now(),{cache:'no-store'});
+  if(!r.ok) throw new Error('HTTP '+r.status);
+  const d=await r.json(); return Array.isArray(d.items)?d.items:[];
+}
+async function distroGet(id){
+  const r=await fetch(distroBase()+'/layout/get?id='+encodeURIComponent(id)+'&ts='+Date.now(),{cache:'no-store'});
+  if(!r.ok) throw new Error('HTTP '+r.status);
+  return await r.json();
+}
+function distroApply(item){
+  if(!item||!Array.isArray(item.furniture)) throw new Error('distribución vacía');
+  if(item.config && typeof item.config==='object' && typeof xpaceCreatorConfig==='object'){
+    for(const k of ['cols','rows','wallHeightTiles','longWallColor','shortWallColor','floorColor','exteriorFloorColor','backgroundColor']){
+      if(item.config[k]!=null) xpaceCreatorConfig[k]=item.config[k];
+    }
+    try{ if(typeof applyXpaceCreatorGrid==='function') applyXpaceCreatorGrid(); }catch(_){}
+  }
+  shopLayout = item.furniture.map(it=>Object.assign({},it));
+  if(Array.isArray(item.staff)){ try{ shopStaffPos=item.staff.map(s=>Object.assign({},s)); }catch(_){} }
+  if(Array.isArray(item.zones)){ try{ shopStaffZones=item.zones.map(z=>Object.assign({},z)); }catch(_){} }
+  try{ shopFurnitureVisible=true; edSelIdx=-1; }catch(_){}
+  try{ saveLayout(); }catch(_){}
+  try{ if(typeof buildWalkGrid==='function') buildWalkGrid(); }catch(_){}
+  return item.furniture.length;
+}
+window.XPACE_DISTRO={ snapshot:distroSnapshot, publish:distroPublish, list:distroList, get:distroGet, apply:distroApply };
+
 function updateGame(){
   tt++;
   // ── PEOPLE LOG ── observation-based: every tick, see who is around and
@@ -26883,6 +26947,27 @@ window.xtAPI = (function(){
       }
       if(cmd==='admiralive'||cmd==='live'||cmd==='led') return setAdmiraLive(arg);
       if(cmd==='comunicar'||cmd==='comunicado'||cmd==='announce'||cmd==='megafonia'||cmd==='megafonía') return await setComunicado(arg);
+      if(['distribucion','distribución','distro','distrib','distribuciones'].includes(cmd)){
+        const errD=needsGame();if(errD)return errD;
+        const dParts=String(arg||'').trim().split(/\s+/).filter(Boolean);
+        const dSub=(dParts.shift()||'').toLowerCase();
+        if(['publicar','publish','subir','sube'].includes(dSub)){
+          const nm=dParts.join(' ')||('Distribución '+((typeof getActiveModelKey==='function')?getActiveModelKey():''));
+          try{ const r=await distroPublish(nm); if(typeof showEv==='function') showEv('📐 Distribución publicada','#88ffcc'); return '📐 Distribución «'+r.name+'» publicada a la librería (id <code>'+r.id+'</code>). Ya está disponible en pixeria.com/assets.'; }
+          catch(e){ return '❌ No se pudo publicar: '+e.message; }
+        }
+        if(['lista','list','listar','ls'].includes(dSub)){
+          try{ const items=await distroList(); if(!items.length) return '📐 No hay distribuciones todavía. Crea una en pixeria.com/assets o publica la actual con /distribucion publicar.';
+            return '📐 Distribuciones ('+items.length+'):\n'+items.map(x=>'• <code>'+x.id+'</code> — '+x.name+' ['+(x.counts?x.counts.furniture:'?')+' muebles'+(x.client?' · '+x.client:'')+' · '+x.source+']').join('\n')+'\n\nAplica con /distribucion aplicar &lt;id&gt;.'; }
+          catch(e){ return '❌ No se pudo listar: '+e.message; }
+        }
+        if(['aplicar','apply','cargar','usar'].includes(dSub)){
+          const id=dParts[0]; if(!id) return 'Indica el id: /distribucion aplicar &lt;id&gt; (mira /distribucion lista).';
+          try{ const item=await distroGet(id); const n=distroApply(item); if(typeof showEv==='function') showEv('📐 Distribución aplicada','#88ffcc'); return '📐 Distribución «'+item.name+'» aplicada: '+n+' muebles'+(item.config&&item.config.cols?' · sala '+item.config.cols+'×'+item.config.rows:'')+'.'; }
+          catch(e){ return '❌ No se pudo aplicar: '+e.message; }
+        }
+        return '📐 <b>Distribuciones</b> (la sala entera ⇄ pixeria.com/assets):\n/distribucion publicar [nombre] — sube la distribución actual a la librería\n/distribucion lista — ver la librería compartida\n/distribucion aplicar &lt;id&gt; — aplicar una al gemelo';
+      }
       if(cmd==='layout'||cmd==='ordena'||cmd==='ordenar'||cmd==='resetlayout'){
         const errL=needsGame();if(errL)return errL;
         const sub=String(arg||'').trim().toLowerCase();
