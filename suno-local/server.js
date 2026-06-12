@@ -517,20 +517,9 @@ async function uiGenerate(pg, { prompt, lyrics, title, instrumental, model }) {
 
   const before = new Set(await getFeedIds(pg));
 
-  // 1) Si se pide instrumental, activar el toggle (sin cambiar de modo: el campo
-  //    de descripción de canción de Custom es el que habilita Create).
-  if (instrumental) {
-    await pg.evaluate(() => {
-      const inst = [...document.querySelectorAll('button')].find(b => /^instrumental$/i.test((b.innerText||'').trim()));
-      if (inst && inst.getAttribute('aria-pressed') !== 'true' && !/on|active/i.test(inst.getAttribute('data-state')||'')) inst.click();
-    });
-    await sleep(300);
-  }
-
   // Helper de relleno que React registra (valueTracker) → habilita Create.
-  // Relleno por _valueTracker de React (NO depende del foco de la ventana, a
-  // diferencia del tecleo CDP que no aterriza si el Chrome del proxy está en 2º
-  // plano). Para que Suno USE la letra, hay que estar en modo Advanced + Lyrics.
+  // (NO depende del foco de la ventana, a diferencia del tecleo CDP, que no
+  // aterriza si el Chrome del proxy está en 2º plano.)
   const fillField = (s, txt) => pg.evaluate((sel, t) => {
     const el = document.querySelector(sel); if (!el) return; el.focus();
     const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value').set;
@@ -540,48 +529,63 @@ async function uiGenerate(pg, { prompt, lyrics, title, instrumental, model }) {
     el.dispatchEvent(new Event('change', { bubbles: true }));
   }, s, txt);
 
-  if (lyrics) {
-    // ── Modo LETRA: activar Advanced + Lyrics (no Instrumental) para que Suno USE
-    //    la letra, luego rellenar Lyrics + Estilos. ──
-    await pg.evaluate(() => {
-      const byText = (re) => [...document.querySelectorAll('button')].find(b => re.test((b.innerText || '').trim()));
-      const adv = byText(/^advanced$|^custom$|^avanzado$/i); if (adv) adv.click();
-      const lyr = byText(/^lyrics$|^letra$/i);
-      if (lyr) { const pressed = lyr.getAttribute('aria-pressed') === 'true' || /active|on/i.test(lyr.getAttribute('data-state') || '') || lyr.className.includes('active'); if (!pressed) lyr.click(); }
-    });
+  // ── Estado DETERMINISTA por EFECTO (no por atributo: el toggle Instrumental
+  //    de Suno no expone un estado fiable). NO confiar en lo que dejó la
+  //    generación anterior: si quedó Instrumental ON, Suno OCULTA el campo
+  //    Lyrics y la siguiente canción con letra falla. Estrategia: forzar
+  //    Advanced y luego clicar Instrumental HASTA que la presencia del campo
+  //    Lyrics coincida con lo pedido (visible para canción, oculto para
+  //    instrumental). ──
+  await pg.evaluate(() => { const adv = [...document.querySelectorAll('button')].find(b => /^advanced$|^custom$|^avanzado$/i.test((b.innerText || '').trim())); if (adv) adv.click(); });
+  await sleep(500);
+  const hasLyricsField = () => pg.evaluate(() => [...document.querySelectorAll('textarea')].some(x => x.offsetParent !== null && /\[|verse|chorus|estrofa|lyric|letra/i.test(x.placeholder || '')));
+  for (let k = 0; k < 3; k++) {
+    if ((await hasLyricsField()) === !instrumental) break;   // estado correcto ya
+    await pg.evaluate(() => { const inst = [...document.querySelectorAll('button')].find(b => /^instrumental$/i.test((b.innerText || '').trim())); if (inst) inst.click(); });
     await sleep(700);
+  }
+
+  // Styles (lista por comas): el prompt SIEMPRE va aquí, sea canción o
+  // instrumental. En Advanced, Create se habilita cuando Styles tiene contenido.
+  const fillStyles = async (txt) => {
+    if (!txt) return;
+    const styleSel = await pg.evaluate(() => {
+      const tas = [...document.querySelectorAll('textarea')].filter(x => x.offsetParent !== null && x.id !== '__suno_lyrics');
+      const t = tas.find(x => { const p = (x.placeholder || '').trim(); return p.includes(',') && !/describe the sound|^una |^canci|^a |^an |^epic|^épica/i.test(p); })
+             || tas.find(x => { const p = (x.placeholder || '').trim(); return /style|estilo|genre|género|sound|percusion|raga/i.test(p); });
+      if (!t) return null; if (!t.id) t.id = '__suno_styles'; return '#' + t.id;
+    });
+    if (styleSel) await fillField(styleSel, String(txt).slice(0, 200));
+  };
+
+  if (lyrics) {
+    // Canción: Instrumental ya quedó OFF arriba → la sección Lyrics está visible.
+    // El cuadro de Letra tiene un sub-modo "Write | Prompt": en "Prompt" Suno
+    // trata el texto como DESCRIPCIÓN y reescribe la letra; para letra LITERAL
+    // ([Verse]…) hay que estar en "Write". Lo forzamos.
+    await pg.evaluate(() => { const w = [...document.querySelectorAll('button')].find(b => /^write$|^escribir$/i.test((b.innerText || '').trim())); if (w) w.click(); });
+    await sleep(500);
     const lyrSel = await pg.evaluate(() => {
-      const t = [...document.querySelectorAll('textarea')].filter(x => x.offsetParent !== null)
-        .find(x => /\[|verse|chorus|estrofa|lyric|letra/i.test(x.placeholder || ''));
+      const tas = [...document.querySelectorAll('textarea')].filter(x => x.offsetParent !== null);
+      // 1º el que parece letra por placeholder; si no, el que NO es Styles (sin
+      // comas) ni "Describe the sound".
+      let t = tas.find(x => /\[|verse|chorus|estrofa|lyric|letra|escribe/i.test(x.placeholder || ''));
+      if (!t) t = tas.find(x => { const p = (x.placeholder || '').trim(); return !p.includes(',') && !/describe the sound/i.test(p); });
       if (!t) return null; if (!t.id) t.id = '__suno_lyrics'; return '#' + t.id;
     });
-    if (!lyrSel) throw new Error('no encuentro el campo de Letra en suno/create');
-    await fillField(lyrSel, String(lyrics).slice(0, 2900));
-    if (prompt) {
-      const styleSel = await pg.evaluate(() => {
-        // EXCLUIR el campo de letra (#__suno_lyrics): su placeholder menciona "tags",
-        // lo que confundía al selector. Estilos = lista corta separada por comas,
-        // NO una frase descriptiva ("Una…/Canción…/A …") ni "Describe the sound".
-        const tas = [...document.querySelectorAll('textarea')].filter(x => x.offsetParent !== null && x.id !== '__suno_lyrics');
-        const t = tas.find(x => { const p = (x.placeholder || '').trim(); return p.includes(',') && !/describe the sound|^una |^canci|^a |^an |^epic|^épica/i.test(p); });
-        if (!t) return null; if (!t.id) t.id = '__suno_styles'; return '#' + t.id;
-      });
-      if (styleSel) await fillField(styleSel, String(prompt).slice(0, 200));
+    if (!lyrSel) {
+      const dom = await pg.evaluate(() => ({
+        tas: [...document.querySelectorAll('textarea')].map(t => ({ ph: (t.placeholder || '').slice(0, 50), vis: t.offsetParent !== null })),
+        btns: [...document.querySelectorAll('button')].map(b => (b.innerText || '').trim()).filter(t => t && t.length < 22).slice(0, 40),
+      }));
+      throw new Error('no encuentro el campo de Letra · dom=' + JSON.stringify(dom));
     }
+    await fillField(lyrSel, String(lyrics).slice(0, 2900));
+    await fillStyles(prompt);
     await sleep(800);
   } else {
-    // ── Modo AUTO: descripción de canción (la que habilita Create). ──
-    const sel = await pg.evaluate(() => {
-      const tas = [...document.querySelectorAll('textarea')].filter(t => t.offsetParent !== null);
-      const isLyrics = t => /\[|verse|chorus|estrofa/i.test(t.placeholder || '');
-      const ta = tas.find(t => !isLyrics(t) && /song|canci|about|sobre|singer|expressive|deep house|story|historia|describe the sound/i.test(t.placeholder || ''))
-              || tas.find(t => !isLyrics(t) && (t.placeholder || '').length > 25);
-      if (!ta) return null;
-      if (!ta.id) ta.id = '__suno_desc';
-      return '#' + ta.id;
-    });
-    if (!sel) throw new Error('no encuentro el campo de descripción en suno/create');
-    await fillField(sel, String(prompt || 'instrumental ambient bed').slice(0, 400));
+    // Instrumental: Styles obligatorio para habilitar Create.
+    await fillStyles(prompt || 'instrumental ambient bed, calm, soft');
     await sleep(700);
   }
 
