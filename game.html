@@ -12493,6 +12493,7 @@ function drawIsoFloorTile(col,row,color,strokeColor='#aab4be44'){
 }
 // Draw a 3D isometric block (box)
 function drawIsoBlock(col,row,bw,bd,bh,topCol,leftCol,rightCol,neonCol){
+  if(renderMode==='habbo'){drawIsoBlockHabbo(col,row,bw,bd,bh,topCol,leftCol,rightCol,neonCol);return;}
   if(renderMode==='16bit'){drawIsoBlock16(col,row,bw,bd,bh,topCol,leftCol,rightCol,neonCol);return;}
   // bw=width in tiles, bd=depth in tiles, bh=height in px
   const p=toIso(col,row);
@@ -12570,6 +12571,52 @@ function drawIsoBlock16(col,row,bw,bd,bh,topCol,leftCol,rightCol,neonCol){
   cx.globalAlpha=0.2;cx.strokeStyle='#fff';cx.lineWidth=1;
   cx.beginPath();cx.moveTo(p.x,p.y-bh);cx.lineTo(p.x-d,p.y+dh-bh);cx.stroke();
   cx.globalAlpha=1;
+  if(neonCol){
+    glow(neonCol,6);cx.strokeStyle=neonCol;cx.lineWidth=1.5;
+    cx.beginPath();cx.moveTo(p.x,p.y-bh);cx.lineTo(p.x+w,p.y+wh-bh);
+    cx.moveTo(p.x,p.y-bh);cx.lineTo(p.x-d,p.y+dh-bh);
+    cx.stroke();nog();
+  }
+}
+// HABBO TIER — isometric block with FLAT banded faces (no gradients) and a bold
+// dark "grout" outline on every visible edge, plus a 1px bevel highlight on the
+// two back/top edges. Same geometry as drawIsoBlock16, so every piece of
+// furniture built on drawIsoBlock (counter, shelves, vending, lottery…) inherits
+// the Habbo look automatically. Original art — style only, no Habbo assets.
+function drawIsoBlockHabbo(col,row,bw,bd,bh,topCol,leftCol,rightCol,neonCol){
+  const p=toIso(col,row);
+  const hw=ISO.tileW/2, hh=ISO.tileH/2;
+  const w=bw*hw, d=bd*hw, wh=bw*hh, dh=bd*hh;
+  // Flat banded shades: top brightest, left mid, right darkest. No fills/blends.
+  const topF=cLight(topCol,12), leftF=cDark(leftCol,4), rightF=cDark(rightCol,18);
+  // Grout — a single bold dark edge derived from the piece so it sits in-palette.
+  const grout=cDark(topCol,58);
+  // Top face
+  cx.beginPath();
+  cx.moveTo(p.x,p.y-bh);cx.lineTo(p.x+w,p.y+wh-bh);cx.lineTo(p.x+w-d,p.y+wh+dh-bh);cx.lineTo(p.x-d,p.y+dh-bh);
+  cx.closePath();cx.fillStyle=topF;cx.fill();
+  // Left face
+  cx.beginPath();
+  cx.moveTo(p.x-d,p.y+dh-bh);cx.lineTo(p.x+w-d,p.y+wh+dh-bh);cx.lineTo(p.x+w-d,p.y+wh+dh);cx.lineTo(p.x-d,p.y+dh);
+  cx.closePath();cx.fillStyle=leftF;cx.fill();
+  // Right face
+  cx.beginPath();
+  cx.moveTo(p.x+w-d,p.y+wh+dh-bh);cx.lineTo(p.x+w,p.y+wh-bh);cx.lineTo(p.x+w,p.y+wh);cx.lineTo(p.x+w-d,p.y+wh+dh);
+  cx.closePath();cx.fillStyle=rightF;cx.fill();
+  // Grout outline — the silhouette plus the two interior seams between faces.
+  cx.strokeStyle=grout;cx.lineWidth=1.5;cx.lineJoin='round';
+  cx.beginPath();
+  // outer silhouette
+  cx.moveTo(p.x,p.y-bh);cx.lineTo(p.x+w,p.y+wh-bh);cx.lineTo(p.x+w,p.y+wh);
+  cx.lineTo(p.x+w-d,p.y+wh+dh);cx.lineTo(p.x-d,p.y+dh);cx.lineTo(p.x-d,p.y+dh-bh);cx.closePath();
+  // interior seams: top-front vertical + top diamond front edges
+  cx.moveTo(p.x+w-d,p.y+wh+dh-bh);cx.lineTo(p.x+w-d,p.y+wh+dh);
+  cx.moveTo(p.x-d,p.y+dh-bh);cx.lineTo(p.x+w-d,p.y+wh+dh-bh);cx.lineTo(p.x+w,p.y+wh-bh);
+  cx.stroke();
+  // Bevel highlight on the two back/top edges.
+  cx.strokeStyle=cLight(topF,24);cx.lineWidth=1;
+  cx.beginPath();cx.moveTo(p.x-d,p.y+dh-bh);cx.lineTo(p.x,p.y-bh);cx.lineTo(p.x+w,p.y+wh-bh);cx.stroke();
+  cx.lineJoin='miter';
   if(neonCol){
     glow(neonCol,6);cx.strokeStyle=neonCol;cx.lineWidth=1.5;
     cx.beginPath();cx.moveTo(p.x,p.y-bh);cx.lineTo(p.x+w,p.y+wh-bh);
@@ -22736,8 +22783,11 @@ try {
         if(!ready && _td++<60){ setTimeout(applyDistro,100); return; }
         // pequeño respiro para que el arranque del vertical no pise el apply
         setTimeout(async()=>{
-          try{ const item=await distroGet(distroParam); distroApply(item); if(typeof showEv==='function') showEv('📐 Vista de distribución','#88ffcc'); }
-          catch(e){ console.warn('distro apply failed:',e); }
+          // Confirma al iframe padre (pixeria) el resultado del embed para que
+          // sepa que la sala renderizó (o falló) y pueda quitar su spinner.
+          const tellParent=(ok,extra)=>{ try{ if(window.parent&&window.parent!==window) window.parent.postMessage(Object.assign({type:'xpace:distro',id:distroParam,ok:!!ok},extra||{}),'*'); }catch(_){} };
+          try{ const item=await distroGet(distroParam); const n=distroApply(item); if(typeof showEv==='function') showEv('📐 Vista de distribución','#88ffcc'); tellParent(true,{furniture:n,name:item&&item.name||null}); }
+          catch(e){ console.warn('distro apply failed:',e); tellParent(false,{error:String(e&&e.message||e)}); }
         },350);
       })();
     },50);
@@ -24726,6 +24776,15 @@ window.xtAPI = (function(){
         label:'☰ Menu',
         status:isEs?'panel':'panel',
         customAction:'menu'
+      },
+      {
+        // Debajo de DVR / a la derecha de Menu (8º slot, fila 2 col 4). Mismo que /impactos.
+        label:'📊 Audiencia',
+        status:(typeof IMPACTS!=='undefined'&&IMPACTS.on)
+          ?(isEs?'en vivo':'live')
+          :(isEs?'impactos·CPM':'impacts·CPM'),
+        command:(typeof IMPACTS!=='undefined'&&IMPACTS.on)?'/impactos off':'/impactos',
+        active:!!(typeof IMPACTS!=='undefined'&&IMPACTS.on)
       }
     ];
   }
