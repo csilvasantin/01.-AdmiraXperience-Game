@@ -539,9 +539,11 @@ async function uiGenerate(pg, { prompt, lyrics, title, instrumental, model }) {
     await fillField(lyrSel, String(lyrics).slice(0, 2900));
     if (prompt) {
       const styleSel = await pg.evaluate(() => {
-        const tas = [...document.querySelectorAll('textarea')].filter(x => x.offsetParent !== null);
-        const t = tas.find(x => /style|genre|estilo|g[eé]nero|tags?/i.test(x.placeholder || ''))
-          || tas.find(x => !/\[|verse|chorus|song|canci|about|describe/i.test(x.placeholder || '') && (x.placeholder || '').length < 70 && (x.placeholder || '').includes(','));
+        // EXCLUIR el campo de letra (#__suno_lyrics): su placeholder menciona "tags",
+        // lo que confundía al selector. Estilos = lista corta separada por comas,
+        // NO una frase descriptiva ("Una…/Canción…/A …") ni "Describe the sound".
+        const tas = [...document.querySelectorAll('textarea')].filter(x => x.offsetParent !== null && x.id !== '__suno_lyrics');
+        const t = tas.find(x => { const p = (x.placeholder || '').trim(); return p.includes(',') && !/describe the sound|^una |^canci|^a |^an |^epic|^épica/i.test(p); });
         if (!t) return null; if (!t.id) t.id = '__suno_styles'; return '#' + t.id;
       });
       if (styleSel) await fillField(styleSel, String(prompt).slice(0, 200));
