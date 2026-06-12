@@ -346,7 +346,9 @@ async function ensurePage() {
       browser = await puppeteer.launch({
         headless,
         userDataDir: profileDir,
-        args: ['--no-sandbox','--disable-blink-features=AutomationControlled','--disable-features=IsolateOrigins,site-per-process'],
+        // Lens*/ContextMenuSearch* OFF: el overlay "Buscar imagen con Google Lens"
+        // saltaba ENCIMA de la página y tapaba el botón Create → 502 intermitente.
+        args: ['--no-sandbox','--disable-blink-features=AutomationControlled','--disable-features=IsolateOrigins,site-per-process,LensOverlay,LensStandalone,LensImageTranslate,ContextMenuSearchByImage,ContextMenuGoogleLensChip'],
         defaultViewport: null,
       });
       console.log(`✓ Chrome puppeteer ${headless?'headless':'headful'} · perfil ${profileDir}`);
@@ -484,6 +486,24 @@ async function selectSunoModel(pg, model) {
   } catch (e) { try { await pg.keyboard.press('Escape'); } catch (_) {} return false; }
 }
 
+// Cierra cualquier overlay que se cuele ENCIMA de la UI (Google Lens "Buscar
+// imagen", hints de Suno, diálogos sueltos). Si tapa el botón Create, el click
+// falla y la generación devuelve 502. Estrategia: pulsar Escape un par de veces
+// y, si hay un botón tipo "Omitir/Skip/Dismiss/Cerrar", clicarlo. Nunca rompe.
+async function dismissOverlays(pg) {
+  try {
+    for (let k = 0; k < 2; k++) { await pg.keyboard.press('Escape'); await sleep(120); }
+    await pg.evaluate(() => {
+      const RE = /^(omitir|skip|dismiss|cerrar|close|no gracias|no, thanks|got it|entendido|x)$/i;
+      const b = [...document.querySelectorAll('button,[role="button"],a')]
+        .filter(el => el.offsetParent !== null)
+        .find(el => RE.test((el.innerText || el.getAttribute('aria-label') || '').trim()));
+      if (b) b.click();
+    });
+    await sleep(150);
+  } catch (_) {}
+}
+
 async function uiGenerate(pg, { prompt, lyrics, title, instrumental, model }) {
   if (!pg.url().includes('suno.com/create')) {
     await pg.goto('https://suno.com/create', { waitUntil: 'networkidle2', timeout: 60000 });
@@ -570,6 +590,10 @@ async function uiGenerate(pg, { prompt, lyrics, title, instrumental, model }) {
   if (model) { try { await selectSunoModel(pg, model); } catch(_) {} }
   await sleep(300);
 
+  // Espanta-overlays: cualquier popup (Google Lens, hints, dialog) que se cuele
+  // ENCIMA tapa el botón Create y rompe el click → 502. Lo cerramos antes.
+  await dismissOverlays(pg);
+
   const clicked = await pg.evaluate(() => {
     const b = [...document.querySelectorAll('button')].find(x => {
       const t = (x.innerText || '').trim().toLowerCase();
@@ -598,6 +622,7 @@ async function uiGenerate(pg, { prompt, lyrics, title, instrumental, model }) {
     if (fresh.length) break;
     if (i === 8 && !reclicked) {
       reclicked = true;
+      await dismissOverlays(pg);   // por si un overlay tapó el 1er click
       await pg.evaluate(() => { const b = [...document.querySelectorAll('button')].find(x => { const t = (x.innerText || '').trim().toLowerCase(); return (t === 'create' || t === 'crear') && !x.disabled; }); if (b) b.click(); });
     }
   }
