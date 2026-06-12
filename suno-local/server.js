@@ -150,9 +150,12 @@ function refreshCookieFromChrome() {
 if (refreshCookieFromChrome()) {
   console.log('✓ Cookie de Suno leída de Chrome (auto-refresh activado)');
 } else if (!SUNO_COOKIE) {
-  console.error('✗ SUNO_COOKIE no esta definido en .env y no se pudo leer de Chrome');
-  console.error('  Opciones: (a) loguéate en suno.com en Chrome, (b) pega cookie en .env');
-  process.exit(1);
+  // SIN salir: el proxy tiene su PROPIO Chrome headful persistente
+  // (.suno-chrome-profile); el usuario inicia sesión en suno.com EN ESA ventana
+  // una sola vez y la sesión persiste (la página refresca el JWT sola). No
+  // dependemos de leer las cookies de los perfiles de Chrome del usuario.
+  console.log('ℹ Sin cookies de Chrome/.env — usa la sesión del Chrome propio del proxy.');
+  console.log('  Inicia sesión en suno.com en la ventana de Chrome que abre el proxy (una vez).');
 }
 
 // Reintento periódico cada 10 min: Chrome actualiza __session cada
@@ -351,6 +354,7 @@ async function ensurePage() {
     }
     const pages = await browser.pages();
     const p = pages.find(pg => { try { return pg.url().includes('suno.com'); } catch(_) { return false; } }) || await browser.newPage();
+    try { await p.bringToFront(); } catch(_) {}   // para que el usuario vea la ventana y pueda loguearse
     await p.setUserAgent(UA);
     const cookies = buildPuppeteerCookies();
     if (cookies.length) { try { await p.setCookie(...cookies); } catch(_) {} }
@@ -454,10 +458,12 @@ async function getFeedClips(pg, ids) {
 async function selectSunoModel(pg, model) {
   // BEST-EFFORT y NO bloqueante: si no consigue cambiar el modelo, deja el actual
   // y sigue (nunca rompe la generación). Cierra el dropdown con Escape al acabar.
-  // Better(chirp-v4-5)→"v4.5-all" (único que da temas COMPLETOS sin suscripción Pro;
-  // v4.5/v5 Pro requieren plan Pro o solo dan preview/Create deshabilitado).
-  // Best(chirp-v5)→"v5" (preview salvo Pro). Verificado 2026-06-12.
-  const want = (/v5/i.test(String(model || '')) && !/v4/i.test(String(model || ''))) ? 'v5' : 'v4.5-all';
+  // Mapeo de 3 niveles (cuenta Pro csilva@admira.com): Good→"v4.5", Better→"v5",
+  // Best→"v5.5". El frontend manda chirp-v4-5 / chirp-v5 / chirp-v5-5.
+  const m = String(model || '');
+  let want = 'v4.5';
+  if (/v5-?5|v5\.5/i.test(m)) want = 'v5.5';
+  else if (/v5/i.test(m) && !/v4/i.test(m)) want = 'v5';
   const trigger = () => pg.evaluate(() => {
     const b = [...document.querySelectorAll('button')].find(x => /^v\d/i.test((x.innerText || '').trim().split('\n')[0]) && (x.innerText || '').trim().length < 16);
     return b ? (b.innerText || '').trim().split('\n')[0].trim().toLowerCase() : null;
@@ -619,20 +625,23 @@ function readBody(req) {
 
 // ─── Handlers ──────────────────────────────────────────────────────
 async function handleHealthz(req, res) {
+  // Usa la sesión de la PROPIA página del proxy (window.Clerk), no cookies del
+  // servidor. Si no hay sesión → avisa de que hay que loguearse en su ventana.
   try {
-    const r = await sunoFetch('/api/billing/info/');
-    if (!r.ok) {
-      const txt = (await r.text()).slice(0, 300);
-      sendJson(res, 200, { ok: false, error: `billing http ${r.status}`, hint: txt });
-      return;
-    }
-    const data = await r.json();
-    sendJson(res, 200, {
-      ok: true,
-      total_credits_left: data.total_credits_left ?? data.credits_left ?? 0,
-      monthly_limit: data.monthly_limit ?? null,
-      monthly_usage: data.monthly_usage ?? null,
+    const pg = await ensurePage();
+    const info = await pg.evaluate(async () => {
+      try {
+        if (!(window.Clerk && window.Clerk.session)) return { ok: false, error: 'sin sesión · inicia sesión en suno.com en la ventana de Chrome del proxy' };
+        const u = window.Clerk.user;
+        const email = u ? ((u.primaryEmailAddress && u.primaryEmailAddress.emailAddress) || (u.emailAddresses && u.emailAddresses[0] && u.emailAddresses[0].emailAddress) || null) : null;
+        const jwt = await window.Clerk.session.getToken();
+        const r = await fetch('https://studio-api-prod.suno.com/api/billing/info/', { headers: { Authorization: 'Bearer ' + jwt }, credentials: 'include' });
+        if (!r.ok) return { ok: false, account: email, error: 'billing http ' + r.status };
+        const d = await r.json();
+        return { ok: true, account: email, total_credits_left: d.total_credits_left ?? d.credits_left ?? 0, monthly_limit: d.monthly_limit ?? null, monthly_usage: d.monthly_usage ?? null };
+      } catch (e) { return { ok: false, error: String((e && e.message) || e) }; }
     });
+    sendJson(res, 200, info);
   } catch (e) {
     sendJson(res, 200, { ok: false, error: String(e.message || e) });
   }
