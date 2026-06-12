@@ -447,7 +447,7 @@ async function getFeedClips(pg, ids) {
       return (Array.isArray(clips) ? clips : []).filter(c => want.has(c.id)).map(c => ({
         id: c.id, title: c.title, status: c.status,
         audio_url: c.audio_url, video_url: c.video_url, image_url: c.image_url,
-        metadata: { duration: c.metadata && c.metadata.duration },
+        metadata: { duration: c.metadata && c.metadata.duration, prompt: (c.metadata && c.metadata.prompt) ? String(c.metadata.prompt).slice(0, 120) : '', tags: (c.metadata && c.metadata.tags) ? String(c.metadata.tags).slice(0, 80) : '' },
       }));
     } catch (e) { return []; }
   }, ids);
@@ -511,14 +511,23 @@ async function uiGenerate(pg, { prompt, lyrics, title, instrumental, model }) {
   }
 
   // Helper de relleno que React registra (valueTracker) → habilita Create.
-  const fillField = (s, txt) => pg.evaluate((sel, t) => {
-    const el = document.querySelector(sel); if (!el) return; el.focus();
-    const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value').set;
-    const last = el.value; setter.call(el, t);
-    if (el._valueTracker) el._valueTracker.setValue(last);
-    el.dispatchEvent(new Event('input', { bubbles: true }));
-    el.dispatchEvent(new Event('change', { bubbles: true }));
-  }, s, txt);
+  // Relleno con tecleo CONFIABLE (isTrusted): coords + mouse.click + keyboard.type.
+  // Más fiable que el setter JS (que React/Suno a veces ignora, sobre todo en el
+  // campo de Letra). Limpia el contenido previo con Cmd+A + Backspace.
+  const fillField = async (s, txt) => {
+    const box = await pg.evaluate((sel) => {
+      const el = document.querySelector(sel); if (!el) return null;
+      el.scrollIntoView({ block: 'center' });
+      const r = el.getBoundingClientRect();
+      return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+    }, s);
+    if (!box) return false;
+    await pg.mouse.click(box.x, box.y);
+    await pg.keyboard.down('Meta'); await pg.keyboard.press('KeyA'); await pg.keyboard.up('Meta');
+    await pg.keyboard.press('Backspace');
+    await pg.keyboard.type(String(txt || ''), { delay: 3 });
+    return true;
+  };
 
   if (lyrics) {
     // ── Modo LETRA (Custom): rellenar Lyrics + Estilos (prompt como tags). ──
