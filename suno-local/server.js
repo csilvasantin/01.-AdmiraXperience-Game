@@ -454,6 +454,9 @@ async function getFeedClips(pg, ids) {
 async function selectSunoModel(pg, model) {
   // BEST-EFFORT y NO bloqueante: si no consigue cambiar el modelo, deja el actual
   // y sigue (nunca rompe la generación). Cierra el dropdown con Escape al acabar.
+  // Better(chirp-v4-5)→"v4.5-all" (único que da temas COMPLETOS sin suscripción Pro;
+  // v4.5/v5 Pro requieren plan Pro o solo dan preview/Create deshabilitado).
+  // Best(chirp-v5)→"v5" (preview salvo Pro). Verificado 2026-06-12.
   const want = (/v5/i.test(String(model || '')) && !/v4/i.test(String(model || ''))) ? 'v5' : 'v4.5-all';
   const trigger = () => pg.evaluate(() => {
     const b = [...document.querySelectorAll('button')].find(x => /^v\d/i.test((x.innerText || '').trim().split('\n')[0]) && (x.innerText || '').trim().length < 16);
