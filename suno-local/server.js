@@ -497,9 +497,6 @@ async function uiGenerate(pg, { prompt, lyrics, title, instrumental, model }) {
 
   const before = new Set(await getFeedIds(pg));
 
-  // 0) Seleccionar la versión del modelo (Best→v5, Better/Gemini→v4.5).
-  if (model) { try { await selectSunoModel(pg, model); } catch(_) {} }
-
   // 1) Si se pide instrumental, activar el toggle (sin cambiar de modo: el campo
   //    de descripción de canción de Custom es el que habilita Create).
   if (instrumental) {
@@ -511,26 +508,28 @@ async function uiGenerate(pg, { prompt, lyrics, title, instrumental, model }) {
   }
 
   // Helper de relleno que React registra (valueTracker) → habilita Create.
-  // Relleno con tecleo CONFIABLE (isTrusted): coords + mouse.click + keyboard.type.
-  // Más fiable que el setter JS (que React/Suno a veces ignora, sobre todo en el
-  // campo de Letra). Limpia el contenido previo con Cmd+A + Backspace.
-  const fillField = async (s, txt) => {
-    const box = await pg.evaluate((sel) => {
-      const el = document.querySelector(sel); if (!el) return null;
-      el.scrollIntoView({ block: 'center' });
-      const r = el.getBoundingClientRect();
-      return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
-    }, s);
-    if (!box) return false;
-    await pg.mouse.click(box.x, box.y);
-    await pg.keyboard.down('Meta'); await pg.keyboard.press('KeyA'); await pg.keyboard.up('Meta');
-    await pg.keyboard.press('Backspace');
-    await pg.keyboard.type(String(txt || ''), { delay: 3 });
-    return true;
-  };
+  // Relleno por _valueTracker de React (NO depende del foco de la ventana, a
+  // diferencia del tecleo CDP que no aterriza si el Chrome del proxy está en 2º
+  // plano). Para que Suno USE la letra, hay que estar en modo Advanced + Lyrics.
+  const fillField = (s, txt) => pg.evaluate((sel, t) => {
+    const el = document.querySelector(sel); if (!el) return; el.focus();
+    const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value').set;
+    const last = el.value; setter.call(el, t);
+    if (el._valueTracker) el._valueTracker.setValue(last);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  }, s, txt);
 
   if (lyrics) {
-    // ── Modo LETRA (Custom): rellenar Lyrics + Estilos (prompt como tags). ──
+    // ── Modo LETRA: activar Advanced + Lyrics (no Instrumental) para que Suno USE
+    //    la letra, luego rellenar Lyrics + Estilos. ──
+    await pg.evaluate(() => {
+      const byText = (re) => [...document.querySelectorAll('button')].find(b => re.test((b.innerText || '').trim()));
+      const adv = byText(/^advanced$|^custom$|^avanzado$/i); if (adv) adv.click();
+      const lyr = byText(/^lyrics$|^letra$/i);
+      if (lyr) { const pressed = lyr.getAttribute('aria-pressed') === 'true' || /active|on/i.test(lyr.getAttribute('data-state') || '') || lyr.className.includes('active'); if (!pressed) lyr.click(); }
+    });
+    await sleep(700);
     const lyrSel = await pg.evaluate(() => {
       const t = [...document.querySelectorAll('textarea')].filter(x => x.offsetParent !== null)
         .find(x => /\[|verse|chorus|estrofa|lyric|letra/i.test(x.placeholder || ''));
@@ -564,6 +563,11 @@ async function uiGenerate(pg, { prompt, lyrics, title, instrumental, model }) {
     await sleep(700);
   }
 
+  // Seleccionar el modelo AHORA (con los campos ya rellenos): abre/cierra el
+  // dropdown sin estorbar al relleno con tecleo confiable de arriba.
+  if (model) { try { await selectSunoModel(pg, model); } catch(_) {} }
+  await sleep(300);
+
   const clicked = await pg.evaluate(() => {
     const b = [...document.querySelectorAll('button')].find(x => {
       const t = (x.innerText || '').trim().toLowerCase();
@@ -572,7 +576,14 @@ async function uiGenerate(pg, { prompt, lyrics, title, instrumental, model }) {
     if (b) { b.click(); return true; }
     return false;
   });
-  if (!clicked) throw new Error('botón Create no disponible tras teclear la descripción');
+  if (!clicked) {
+    const diag = await pg.evaluate(() => ({
+      textareas: [...document.querySelectorAll('textarea')].filter(t => t.offsetParent !== null).map(t => ({ ph: (t.placeholder || '').slice(0, 28), val: (t.value || '').slice(0, 40), len: (t.value || '').length })),
+      createBtns: [...document.querySelectorAll('button')].filter(b => /create|crear/i.test((b.innerText || '').trim())).map(b => ({ t: (b.innerText || '').trim().slice(0, 20), dis: b.disabled })),
+      toggles: [...document.querySelectorAll('button')].map(b => (b.innerText || '').trim()).filter(t => /simple|advanced|custom|lyrics|instrumental|auto|write/i.test(t)).slice(0, 12),
+    }));
+    throw new Error('Create no disponible · diag=' + JSON.stringify(diag));
+  }
 
   // Poll del feed hasta que aparezcan clips nuevos (la request tarda en registrar).
   let fresh = [];
