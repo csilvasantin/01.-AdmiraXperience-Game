@@ -449,7 +449,33 @@ async function getFeedClips(pg, ids) {
   }, ids);
 }
 
-async function uiGenerate(pg, { prompt, lyrics, title, instrumental }) {
+// Selecciona la versión del modelo en el dropdown de Suno: chirp-v5 → "v5",
+// el resto → "v4.5-all". Best=Suno5.0, Better/Gemini=Suno4.5.
+async function selectSunoModel(pg, model) {
+  // BEST-EFFORT y NO bloqueante: si no consigue cambiar el modelo, deja el actual
+  // y sigue (nunca rompe la generación). Cierra el dropdown con Escape al acabar.
+  const want = (/v5/i.test(String(model || '')) && !/v4/i.test(String(model || ''))) ? 'v5' : 'v4.5-all';
+  const trigger = () => pg.evaluate(() => {
+    const b = [...document.querySelectorAll('button')].find(x => /^v\d/i.test((x.innerText || '').trim().split('\n')[0]) && (x.innerText || '').trim().length < 16);
+    return b ? (b.innerText || '').trim().split('\n')[0].trim().toLowerCase() : null;
+  });
+  try {
+    if ((await trigger()) === want) return want;                 // ya está
+    await pg.evaluate(() => { const b = [...document.querySelectorAll('button')].find(x => /^v\d/i.test((x.innerText || '').trim().split('\n')[0]) && (x.innerText || '').trim().length < 16); if (b) b.click(); });
+    await sleep(900);
+    await pg.evaluate((w) => {
+      const norm = s => (s || '').trim().split('\n')[0].trim().toLowerCase();
+      const t = [...document.querySelectorAll('button,[role=menuitem],div.context-menu-item')].find(e => norm(e.innerText) === w);
+      if (t) t.click();
+    }, want);
+    await sleep(500);
+    try { await pg.keyboard.press('Escape'); } catch (_) {}       // cerrar el menú si quedó abierto
+    await sleep(200);
+    return await trigger();
+  } catch (e) { try { await pg.keyboard.press('Escape'); } catch (_) {} return false; }
+}
+
+async function uiGenerate(pg, { prompt, lyrics, title, instrumental, model }) {
   if (!pg.url().includes('suno.com/create')) {
     await pg.goto('https://suno.com/create', { waitUntil: 'networkidle2', timeout: 60000 });
   }
@@ -461,6 +487,9 @@ async function uiGenerate(pg, { prompt, lyrics, title, instrumental }) {
   if (!logged) { promptUserToReauth('puppeteer page sin sesión Clerk'); throw new Error('no logueado en suno.com en el Chrome del proxy'); }
 
   const before = new Set(await getFeedIds(pg));
+
+  // 0) Seleccionar la versión del modelo (Best→v5, Better/Gemini→v4.5).
+  if (model) { try { await selectSunoModel(pg, model); } catch(_) {} }
 
   // 1) Si se pide instrumental, activar el toggle (sin cambiar de modo: el campo
   //    de descripción de canción de Custom es el que habilita Create).
@@ -627,7 +656,7 @@ async function handleGenerate(req, res) {
     // el Turnstile/browser-token de Suno. Devolvemos los ids de los clips nuevos;
     // el frontend hace polling a /status para recoger audio_url cuando estén listos.
     const pg = await ensurePage();
-    const newIds = await uiGenerate(pg, { prompt, lyrics, title, instrumental: !!body.instrumental });
+    const newIds = await uiGenerate(pg, { prompt, lyrics, title, instrumental: !!body.instrumental, model: String(body.model || '') });
     const clips = newIds.map(id => ({ id, title: title || '', status: 'submitted' }));
     sendJson(res, 200, { clips, ids: newIds, mode: lyrics ? 'custom' : 'auto' });
   } catch (e) {
