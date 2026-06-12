@@ -587,15 +587,28 @@ async function uiGenerate(pg, { prompt, lyrics, title, instrumental, model }) {
     throw new Error('Create no disponible · diag=' + JSON.stringify(diag));
   }
 
-  // Poll del feed hasta que aparezcan clips nuevos (la request tarda en registrar).
-  let fresh = [];
-  for (let i = 0; i < 20; i++) {
+  // Poll del feed (hasta ~60s). Si a los ~16s no hay clips, reintenta Create UNA
+  // vez: si el primer click hubiera enviado, los clips ya habrían aparecido, así
+  // que reintentar NO duplica (cubre el caso de que el 1er click no enviara).
+  let fresh = [], reclicked = false;
+  for (let i = 0; i < 30; i++) {
     await sleep(2000);
     const ids = await getFeedIds(pg);
     fresh = ids.filter(id => !before.has(id));
     if (fresh.length) break;
+    if (i === 8 && !reclicked) {
+      reclicked = true;
+      await pg.evaluate(() => { const b = [...document.querySelectorAll('button')].find(x => { const t = (x.innerText || '').trim().toLowerCase(); return (t === 'create' || t === 'crear') && !x.disabled; }); if (b) b.click(); });
+    }
   }
-  if (!fresh.length) throw new Error('no aparecieron clips nuevos tras Create (¿Turnstile bloqueó la generación?)');
+  if (!fresh.length) {
+    const diag = await pg.evaluate(() => ({
+      turnstile: [...document.querySelectorAll('iframe')].some(f => /turnstile|challenges\.cloudflare/.test(f.src || '')),
+      logged: !!(window.Clerk && window.Clerk.session),
+      bodyHint: (document.body.innerText || '').replace(/\s+/g, ' ').slice(0, 140),
+    }));
+    throw new Error('no aparecieron clips nuevos tras Create · ' + JSON.stringify(diag));
+  }
   return fresh.slice(0, 4);
 }
 
