@@ -334,18 +334,33 @@ async function ensurePage() {
   if (!puppeteer) throw new Error('puppeteer no instalado');
   pageReadyPromise = (async () => {
     if (!browser) {
+      // HEADFUL + perfil PERSISTENTE: Suno protege /generate con Turnstile/browser-token
+      // que solo produce su JS en un navegador "real". Un Chromium headless efímero
+      // choca (422). Headful + userDataDir persistente conserva cf_clearance y el
+      // reto Turnstile entre arranques (se resuelve, como mucho, una vez a mano).
+      const profileDir = process.env.SUNO_BROWSER_PROFILE_DIR || path.join(__dirname, '.suno-chrome-profile');
+      const headless = process.env.SUNO_HEADLESS === '1';
       browser = await puppeteer.launch({
-        headless: true,
-        args: ['--no-sandbox','--disable-blink-features=AutomationControlled'],
+        headless,
+        userDataDir: profileDir,
+        args: ['--no-sandbox','--disable-blink-features=AutomationControlled','--disable-features=IsolateOrigins,site-per-process'],
+        defaultViewport: null,
       });
+      console.log(`✓ Chrome puppeteer ${headless?'headless':'headful'} · perfil ${profileDir}`);
       browser.on('disconnected', () => { browser = null; page = null; pageReadyPromise = null; });
     }
-    const p = await browser.newPage();
+    const pages = await browser.pages();
+    const p = pages.find(pg => { try { return pg.url().includes('suno.com'); } catch(_) { return false; } }) || await browser.newPage();
     await p.setUserAgent(UA);
     const cookies = buildPuppeteerCookies();
-    if (cookies.length) await p.setCookie(...cookies);
-    console.log(`↻ Puppeteer: navegando a suno.com/create (${cookies.length} cookies inyectadas)…`);
-    await p.goto('https://suno.com/create', {waitUntil:'networkidle2', timeout:60000});
+    if (cookies.length) { try { await p.setCookie(...cookies); } catch(_) {} }
+    if (!p.url().includes('suno.com/create')) {
+      console.log(`↻ Puppeteer: navegando a suno.com/create (${cookies.length} cookies inyectadas)…`);
+      await p.goto('https://suno.com/create', {waitUntil:'networkidle2', timeout:60000});
+    }
+    // Esperar a que el composer (textareas de React) renderice de verdad —
+    // sin esto, /generate y /dryrun a veces ven el DOM vacío (timing).
+    try { await p.waitForFunction(() => document.querySelectorAll('textarea').length >= 2, { timeout: 25000 }); } catch(_) {}
     console.log('✓ Puppeteer: página suno.com lista');
     page = p;
     return p;
@@ -393,6 +408,135 @@ async function sunoFetch(p, opts = {}) {
     text: async () => result.text,
     json: async () => JSON.parse(result.text),
   };
+}
+
+// ─── Generación CONDUCIENDO LA UI real (esquiva Turnstile) ───────────
+// Suno valida /api/generate con un browser-token que solo produce su JS al
+// pulsar Create de verdad. En vez de fabricarlo (imposible), tecleamos la
+// descripción y pulsamos Create en la página real; luego recogemos los clips
+// nuevos del feed (que SÍ se lee solo con el JWT).
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+async function getFeedIds(pg) {
+  return pg.evaluate(async () => {
+    try {
+      const jwt = await window.Clerk.session.getToken();
+      const r = await fetch('https://studio-api-prod.suno.com/api/feed/v2?page=0',
+        { headers: { Authorization: 'Bearer ' + jwt }, credentials: 'include' });
+      const d = await r.json();
+      const clips = d.clips || d || [];
+      return (Array.isArray(clips) ? clips : []).map(c => c.id);
+    } catch (e) { return []; }
+  });
+}
+
+async function getFeedClips(pg, ids) {
+  return pg.evaluate(async (wantIds) => {
+    try {
+      const jwt = await window.Clerk.session.getToken();
+      const want = new Set(wantIds);
+      // El feed devuelve los más recientes; basta page 0 para clips recién creados.
+      const r = await fetch('https://studio-api-prod.suno.com/api/feed/v2?page=0',
+        { headers: { Authorization: 'Bearer ' + jwt }, credentials: 'include' });
+      const d = await r.json();
+      const clips = d.clips || d || [];
+      return (Array.isArray(clips) ? clips : []).filter(c => want.has(c.id)).map(c => ({
+        id: c.id, title: c.title, status: c.status,
+        audio_url: c.audio_url, video_url: c.video_url, image_url: c.image_url,
+        metadata: { duration: c.metadata && c.metadata.duration },
+      }));
+    } catch (e) { return []; }
+  }, ids);
+}
+
+async function uiGenerate(pg, { prompt, lyrics, title, instrumental }) {
+  if (!pg.url().includes('suno.com/create')) {
+    await pg.goto('https://suno.com/create', { waitUntil: 'networkidle2', timeout: 60000 });
+  }
+  // Confirmar sesión — Clerk hidrata async tras cargar la página, así que esperamos.
+  const logged = await pg.evaluate(async () => {
+    for (let i = 0; i < 24; i++) { if (window.Clerk && window.Clerk.session) return true; await new Promise(r => setTimeout(r, 500)); }
+    return false;
+  });
+  if (!logged) { promptUserToReauth('puppeteer page sin sesión Clerk'); throw new Error('no logueado en suno.com en el Chrome del proxy'); }
+
+  const before = new Set(await getFeedIds(pg));
+
+  // 1) Si se pide instrumental, activar el toggle (sin cambiar de modo: el campo
+  //    de descripción de canción de Custom es el que habilita Create).
+  if (instrumental) {
+    await pg.evaluate(() => {
+      const inst = [...document.querySelectorAll('button')].find(b => /^instrumental$/i.test((b.innerText||'').trim()));
+      if (inst && inst.getAttribute('aria-pressed') !== 'true' && !/on|active/i.test(inst.getAttribute('data-state')||'')) inst.click();
+    });
+    await sleep(300);
+  }
+
+  // Helper de relleno que React registra (valueTracker) → habilita Create.
+  const fillField = (s, txt) => pg.evaluate((sel, t) => {
+    const el = document.querySelector(sel); if (!el) return; el.focus();
+    const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value').set;
+    const last = el.value; setter.call(el, t);
+    if (el._valueTracker) el._valueTracker.setValue(last);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  }, s, txt);
+
+  if (lyrics) {
+    // ── Modo LETRA (Custom): rellenar Lyrics + Estilos (prompt como tags). ──
+    const lyrSel = await pg.evaluate(() => {
+      const t = [...document.querySelectorAll('textarea')].filter(x => x.offsetParent !== null)
+        .find(x => /\[|verse|chorus|estrofa|lyric|letra/i.test(x.placeholder || ''));
+      if (!t) return null; if (!t.id) t.id = '__suno_lyrics'; return '#' + t.id;
+    });
+    if (!lyrSel) throw new Error('no encuentro el campo de Letra en suno/create');
+    await fillField(lyrSel, String(lyrics).slice(0, 2900));
+    if (prompt) {
+      const styleSel = await pg.evaluate(() => {
+        const tas = [...document.querySelectorAll('textarea')].filter(x => x.offsetParent !== null);
+        const t = tas.find(x => /style|genre|estilo|g[eé]nero|tags?/i.test(x.placeholder || ''))
+          || tas.find(x => !/\[|verse|chorus|song|canci|about|describe/i.test(x.placeholder || '') && (x.placeholder || '').length < 70 && (x.placeholder || '').includes(','));
+        if (!t) return null; if (!t.id) t.id = '__suno_styles'; return '#' + t.id;
+      });
+      if (styleSel) await fillField(styleSel, String(prompt).slice(0, 200));
+    }
+    await sleep(800);
+  } else {
+    // ── Modo AUTO: descripción de canción (la que habilita Create). ──
+    const sel = await pg.evaluate(() => {
+      const tas = [...document.querySelectorAll('textarea')].filter(t => t.offsetParent !== null);
+      const isLyrics = t => /\[|verse|chorus|estrofa/i.test(t.placeholder || '');
+      const ta = tas.find(t => !isLyrics(t) && /song|canci|about|sobre|singer|expressive|deep house|story|historia|describe the sound/i.test(t.placeholder || ''))
+              || tas.find(t => !isLyrics(t) && (t.placeholder || '').length > 25);
+      if (!ta) return null;
+      if (!ta.id) ta.id = '__suno_desc';
+      return '#' + ta.id;
+    });
+    if (!sel) throw new Error('no encuentro el campo de descripción en suno/create');
+    await fillField(sel, String(prompt || 'instrumental ambient bed').slice(0, 400));
+    await sleep(700);
+  }
+
+  const clicked = await pg.evaluate(() => {
+    const b = [...document.querySelectorAll('button')].find(x => {
+      const t = (x.innerText || '').trim().toLowerCase();
+      return (t === 'create' || t === 'crear') && !x.disabled;
+    });
+    if (b) { b.click(); return true; }
+    return false;
+  });
+  if (!clicked) throw new Error('botón Create no disponible tras teclear la descripción');
+
+  // Poll del feed hasta que aparezcan clips nuevos (la request tarda en registrar).
+  let fresh = [];
+  for (let i = 0; i < 20; i++) {
+    await sleep(2000);
+    const ids = await getFeedIds(pg);
+    fresh = ids.filter(id => !before.has(id));
+    if (fresh.length) break;
+  }
+  if (!fresh.length) throw new Error('no aparecieron clips nuevos tras Create (¿Turnstile bloqueó la generación?)');
+  return fresh.slice(0, 4);
 }
 
 // ─── Helpers HTTP ──────────────────────────────────────────────────
@@ -479,46 +623,15 @@ async function handleGenerate(req, res) {
     const lyrics = String(body.lyrics || '').slice(0, 3000).trim();
     const title = String(body.title || '').slice(0, 80).trim();
     if (!prompt && !lyrics) { sendJson(res, 400, { error: 'missing prompt or lyrics' }); return; }
-    // Modelos permitidos. chirp-v4 / chirp-v4-5 piden plan; chirp-v3-5 es el
-    // fallback más universal (incluido en planes gratuitos).
-    const ALLOWED_MV = ['chirp-v3-5','chirp-v4','chirp-v4-5'];
-    const model = ALLOWED_MV.includes(body.model) ? body.model : (body.model ? 'chirp-v3-5' : 'chirp-v4');
-
-    // Dos modos:
-    //   - Custom mode (lyrics presente) → Suno espera prompt=<letra>, tags=<estilo>, make_instrumental:false.
-    //   - Auto mode (sin lyrics) → Suno usa gpt_description_prompt para inventar todo (estilo + letra
-    //     o instrumental segun make_instrumental).
-    let sunoPayload;
-    if (lyrics) {
-      sunoPayload = {
-        prompt: lyrics,
-        tags: prompt.slice(0, 200),
-        title: title || '',
-        make_instrumental: false,
-        mv: model,
-      };
-    } else {
-      const instrumental = !!body.instrumental;
-      sunoPayload = {
-        gpt_description_prompt: prompt,
-        make_instrumental: instrumental,
-        mv: model,
-        prompt: '',
-      };
-    }
-
-    const r = await sunoFetch('/api/generate/v2/', {
-      method: 'POST',
-      body: JSON.stringify(sunoPayload),
-    });
-    const txt = await r.text();
-    let data; try { data = JSON.parse(txt); } catch { data = { raw: txt.slice(0, 400) }; }
-    if (!r.ok) { sendJson(res, r.status, { error: `admira-dj generate ${r.status}`, data, mode: lyrics ? 'custom' : 'auto' }); return; }
-    // Suno puede responder con array directo o con {clips:[...]}
-    const clips = Array.isArray(data) ? data : (data.clips || []);
-    sendJson(res, 200, { clips, mode: lyrics ? 'custom' : 'auto' });
+    // Generamos CONDUCIENDO la UI real (no raw API): es la única forma que pasa
+    // el Turnstile/browser-token de Suno. Devolvemos los ids de los clips nuevos;
+    // el frontend hace polling a /status para recoger audio_url cuando estén listos.
+    const pg = await ensurePage();
+    const newIds = await uiGenerate(pg, { prompt, lyrics, title, instrumental: !!body.instrumental });
+    const clips = newIds.map(id => ({ id, title: title || '', status: 'submitted' }));
+    sendJson(res, 200, { clips, ids: newIds, mode: lyrics ? 'custom' : 'auto' });
   } catch (e) {
-    sendJson(res, 500, { error: String(e.message || e) });
+    sendJson(res, 502, { error: String(e.message || e), hint: 'driveUI' });
   }
 }
 
@@ -531,11 +644,9 @@ async function handleStatus(req, res, query) {
   const ids = String(query.ids || '').split(',').map(s => s.trim()).filter(Boolean).slice(0, 10);
   if (!ids.length) { sendJson(res, 400, { error: 'missing ids' }); return; }
   try {
-    const r = await sunoFetch(`/api/feed/?ids=${encodeURIComponent(ids.join(','))}`);
-    const txt = await r.text();
-    let data; try { data = JSON.parse(txt); } catch { data = { raw: txt.slice(0, 400) }; }
-    if (!r.ok) { sendJson(res, r.status, { error: `admira-dj feed ${r.status}`, data }); return; }
-    const clips = Array.isArray(data) ? data : (data.clips || []);
+    // Leemos el feed DENTRO de la página real con el JWT (no necesita Turnstile).
+    const pg = await ensurePage();
+    const clips = await getFeedClips(pg, ids);
     sendJson(res, 200, clips);
   } catch (e) {
     sendJson(res, 500, { error: String(e.message || e) });

@@ -14,11 +14,20 @@ if [ ! -f .env ]; then
   echo "✗ .env no existe. Crea uno desde .env.example y pega la cookie." >&2
   exit 1
 fi
-if ! grep -qE '^SUNO_COOKIE=.+' .env; then
-  echo "✗ SUNO_COOKIE vacia en .env. Pega la cookie completa de clerk.suno.com." >&2
+# Modo Chrome (recomendado): si hay un perfil de Chrome configurado o cookies de
+# Chrome en disco, el server lee la sesión de Suno viva de Chrome (auto-refresh).
+# Solo exigimos SUNO_COOKIE pegada a mano si NO hay Chrome disponible.
+CHROME_PROFILE_CFG="$(grep -E '^SUNO_CHROME_PROFILE=' .env | head -1 | cut -d= -f2- | tr -d ' ')"
+CHROME_COOKIES="$HOME/Library/Application Support/Google/Chrome/${CHROME_PROFILE_CFG:-Default}/Cookies"
+if grep -qE '^SUNO_COOKIE=.+' .env; then
+  echo "✓ .env con SUNO_COOKIE (modo cookie manual)"
+elif [ -f "$CHROME_COOKIES" ]; then
+  echo "✓ modo Chrome: leeré la sesión de Suno del perfil '${CHROME_PROFILE_CFG:-Default}'"
+else
+  echo "✗ Ni SUNO_COOKIE en .env ni cookies de Chrome en '$CHROME_COOKIES'." >&2
+  echo "  Loguéate en suno.com en Chrome, o pega SUNO_COOKIE en .env." >&2
   exit 1
 fi
-echo "✓ .env presente con SUNO_COOKIE"
 
 # 2. Liberar el puerto si esta ocupado por una instancia antigua
 if lsof -nP -i ":$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
