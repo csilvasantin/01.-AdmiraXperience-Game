@@ -660,6 +660,15 @@ async function handleGenerate(req, res) {
   }
   try {
     const body = await readBody(req);
+    // Token compartido = password PRO de pixeria, validado por su SHA-256 (el
+    // secreto NO viaja en el JS público, solo su hash). Evita que el endpoint
+    // público se abuse desde clientes no-navegador y gaste créditos.
+    const expHash = process.env.SUNO_GEN_HASH || '';
+    if (expHash) {
+      const tok = String(body.token || '');
+      const h = crypto.createHash('sha256').update(tok).digest('hex');
+      if (h !== expHash) { sendJson(res, 403, { error: 'token inválido · desbloquea PRO en pixeria' }); return; }
+    }
     const prompt = String(body.prompt || '').slice(0, 1500);
     const lyrics = String(body.lyrics || '').slice(0, 3000).trim();
     const title = String(body.title || '').slice(0, 80).trim();
