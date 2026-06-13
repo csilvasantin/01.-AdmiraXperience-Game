@@ -10650,11 +10650,15 @@ function distroCleanFurniture(){
     return o;
   });
 }
+// Nombre legible del Xpacio: el de admira.app (?loc) si existe; si no, el gemelo
+// por defecto se llama "Xtanco Gran de Gràcia" (referencia fija, no "genérico").
+function xpacioName(){ return (window.STORE_CFG && window.STORE_CFG.name) || 'Xtanco Gran de Gràcia'; }
+window.xpacioName=xpacioName;
 function distroSnapshot(name){
   const cfg=(typeof xpaceCreatorConfig==='object'&&xpaceCreatorConfig)?xpaceCreatorConfig:{};
   const client=(typeof getActiveModelKey==='function')?getActiveModelKey():null;
   return {
-    name: (name||('Distribución '+(client||''))).trim(),
+    name: (name||xpacioName()).trim(),
     client, source:'gemelo',
     config:{ cols:cfg.cols, rows:cfg.rows, wallHeightTiles:cfg.wallHeightTiles,
       longWallColor:cfg.longWallColor, shortWallColor:cfg.shortWallColor, floorColor:cfg.floorColor,
@@ -27093,7 +27097,7 @@ window.xtAPI = (function(){
         const cfg=window.STORE_CFG||null;
         let scr=''; try{ scr=localStorage.getItem('pixer-xtore-screen-id')||''; }catch(_){}
         const client=(typeof getActiveModelKey==='function')?(getActiveModelKey()||'generic'):'generic';
-        const name=cfg&&cfg.name?cfg.name:'Xtanco genérico (sin ubicación de admira.app)';
+        const name=(typeof xpacioName==='function')?xpacioName():(cfg&&cfg.name?cfg.name:'Xtanco Gran de Gràcia');
         const addr=cfg&&cfg.addr?(' · '+cfg.addr):'';
         return '🏪 Xpacio actual\n'
           +'🖥️ Pantalla: '+(scr||'—')+'   ← pega este id en pixeria\n'
