@@ -7699,7 +7699,7 @@ function saveLayout(){
 let __liveRepT=null;
 function reportLayoutLiveDebounced(){
   if(__liveRepT) clearTimeout(__liveRepT);
-  __liveRepT=setTimeout(()=>{ try{ if(window.__reportLayoutLive) window.__reportLayoutLive(); }catch(e){} },1200);
+  __liveRepT=setTimeout(()=>{ try{ if(window.__applyingRemoteLayout) return; if(window.__reportLayoutLive) window.__reportLayoutLive(); }catch(e){} },1200);
 }
 // Devuelve la plantilla del Creator si existe. La usan los Xpacios en
 // blanco (Shoptalk) como fallback cuando no tienen layout propio.
@@ -28550,10 +28550,30 @@ window.xtAPI = (function(){
       if(!window.XPACE_DISTRO) return;
       const snap=window.XPACE_DISTRO.snapshot();
       await fetch(PIXER_WORKER+'/layout/report',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({screen:screenId, client:snap.client||null, snapshot:snap})});
+        body:JSON.stringify({screen:screenId, client:snap.client||null, origin:'gemelo', snapshot:snap})});
     }catch(e){}
   }
   window.__reportLayoutLive=reportCurrentLayout;   // lo usa saveLayout (mirror EN VIVO)
+  // SYNC EN VIVO bidireccional: aplica lo que se edita en pixeria (origin!=='gemelo').
+  // Solo sondea cuando la sala está a la vista (S.GAME/S.EDITOR) para no agotar la
+  // cuota KV. Anti-bucle: al aplicar marca __applyingRemoteLayout (saveLayout no
+  // re-reporta) e ignora sus propios cambios por origin.
+  let __liveSeen=0;
+  async function pollLayoutLive(){
+    try{
+      if(typeof state==='undefined'||typeof S==='undefined') return;
+      if(state!==S.GAME && state!==S.EDITOR) return;
+      const r=await fetch(PIXER_WORKER+'/layout/current?screen='+encodeURIComponent(screenId)+'&ts='+Date.now(),{cache:'no-store'});
+      if(!r.ok) return;
+      const d=await r.json(); const cur=d&&d.current;
+      if(cur && cur.ts && cur.ts>__liveSeen && cur.origin && cur.origin!=='gemelo' && Array.isArray(cur.furniture)){
+        __liveSeen=cur.ts;
+        window.__applyingRemoteLayout=true;
+        try{ window.XPACE_DISTRO.apply(cur); }catch(e){}
+        setTimeout(()=>{ window.__applyingRemoteLayout=false; }, 2500);
+      }
+    }catch(e){}
+  }
   async function pollFeed(){
     try{
       const r=await fetch(PIXER_WORKER+'/signage/feed?limit=1&screen='+encodeURIComponent(screenId));
@@ -28591,6 +28611,7 @@ window.xtAPI = (function(){
     setTimeout(reportCurrentLayout,3500);   // reporta el estado actual al arrancar
     setInterval(pollFeed,5000);
     setInterval(pollMudanza,8000);
+    setInterval(pollLayoutLive,3000);       // sync EN VIVO bidireccional (solo en sala visible)
     setInterval(()=>sendHeartbeat(false),300000);
   },3000);
 })();
