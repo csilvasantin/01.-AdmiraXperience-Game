@@ -28490,6 +28490,32 @@ window.xtAPI = (function(){
       });
     }catch{}
   }
+  // ── MUDANZA: aplicar la distribución que pixeria asigne a esta pantalla ──
+  // Sondea /layout/pending?screen=; si hay un puntero nuevo, baja la distribución
+  // y la aplica sola (re-coloca toda la sala). Aviso flotante al hacerlo.
+  let lastMudanzaTs=0;
+  function mudanzaToast(msg){
+    let t=document.getElementById('mudanzaToast'); if(t) t.remove();
+    t=document.createElement('div'); t.id='mudanzaToast';
+    t.style.cssText='position:fixed;top:18px;left:50%;transform:translateX(-50%);z-index:2147483647;background:#04140a;border:2px solid #2ee06a;border-radius:10px;padding:10px 16px;color:#9effa0;font:700 14px monospace;box-shadow:0 0 24px rgba(46,224,106,.5);';
+    t.textContent=msg; document.body.appendChild(t);
+    setTimeout(()=>{ try{t.remove();}catch(e){} },6000);
+  }
+  async function pollMudanza(){
+    try{
+      const r=await fetch(PIXER_WORKER+'/layout/pending?screen='+encodeURIComponent(screenId)+'&ts='+Date.now(),{cache:'no-store'});
+      if(!r.ok) return;
+      const d=await r.json(); const p=d&&d.pending;
+      if(p&&p.id&&p.ts>lastMudanzaTs){
+        lastMudanzaTs=p.ts;
+        if(window.XPACE_DISTRO){
+          const item=await window.XPACE_DISTRO.get(p.id);
+          const n=window.XPACE_DISTRO.apply(item);
+          mudanzaToast('🚚 Mudanza aplicada · '+(p.name||item.name||'')+' · '+n+' muebles');
+        }
+      }
+    }catch(e){}
+  }
   async function pollFeed(){
     try{
       const r=await fetch(PIXER_WORKER+'/signage/feed?limit=1&screen='+encodeURIComponent(screenId));
@@ -28523,7 +28549,9 @@ window.xtAPI = (function(){
   setTimeout(()=>{
     sendHeartbeat(true);
     pollFeed();
+    pollMudanza();
     setInterval(pollFeed,5000);
+    setInterval(pollMudanza,8000);
     setInterval(()=>sendHeartbeat(false),300000);
   },3000);
 })();
