@@ -7691,6 +7691,15 @@ function saveLayout(){
     }catch(tplErr){console.warn('[Layout] Template save error:',tplErr);}
     console.log('[Layout] ✓ Saved current layout ('+shopLayout.length+' items)');
   }catch(e){console.warn('[Layout] Save error:',e);}
+  reportLayoutLiveDebounced();   // mirror EN VIVO a pixeria (debounced para no agotar KV)
+}
+// Reporta la distribución a pixeria tras editar, con anti-rebote: mientras
+// arrastras/colocas no spamea; ~1.2s después del último cambio sube el estado
+// → pixeria.com/crear (modo EN VIVO) lo repinta en el plano cenital.
+let __liveRepT=null;
+function reportLayoutLiveDebounced(){
+  if(__liveRepT) clearTimeout(__liveRepT);
+  __liveRepT=setTimeout(()=>{ try{ if(window.__reportLayoutLive) window.__reportLayoutLive(); }catch(e){} },1200);
 }
 // Devuelve la plantilla del Creator si existe. La usan los Xpacios en
 // blanco (Shoptalk) como fallback cuando no tienen layout propio.
@@ -28544,6 +28553,7 @@ window.xtAPI = (function(){
         body:JSON.stringify({screen:screenId, client:snap.client||null, snapshot:snap})});
     }catch(e){}
   }
+  window.__reportLayoutLive=reportCurrentLayout;   // lo usa saveLayout (mirror EN VIVO)
   async function pollFeed(){
     try{
       const r=await fetch(PIXER_WORKER+'/signage/feed?limit=1&screen='+encodeURIComponent(screenId));
