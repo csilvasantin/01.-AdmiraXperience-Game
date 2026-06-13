@@ -28388,7 +28388,28 @@ window.xtAPI = (function(){
   }
   setInterval(syncPixerVisibility,500);
 
+  // ⚠ PRIORIDAD 0 (interrupt): toma TODA la pantalla por encima de todo lo que
+  // se esté emitiendo (juego, escaparate, menú). Se va solo al terminar el
+  // vídeo/audio (imágenes: 12s) y vuelve lo de antes. Ignora el estado del juego.
+  function showPriorityInterrupt(item){
+    let el=document.getElementById('pixerPrio0');
+    if(!el){ el=document.createElement('div'); el.id='pixerPrio0';
+      el.style.cssText='position:fixed;inset:0;z-index:2147483647;background:#000;display:flex;align-items:center;justify-content:center;'; }
+    document.body.appendChild(el);
+    let inner='';
+    if(item.kind==='image') inner=`<img src="${item.url}" style="max-width:100%;max-height:100%;object-fit:contain;">`;
+    else if(item.kind==='video') inner=`<video src="${item.url}" autoplay playsinline style="max-width:100%;max-height:100%;object-fit:contain;"></video>`;
+    else if(item.kind==='audio') inner=`<audio src="${item.url}" autoplay controls></audio>`;
+    el.innerHTML='<div style="position:absolute;top:14px;left:18px;color:#ff6644;font:700 14px monospace;letter-spacing:.05em;z-index:2;">⚠ PRIORIDAD 0'+(item.title?' · '+String(item.title).replace(/</g,'&lt;'):'')+'</div>'+inner;
+    const dismiss=()=>{ try{ el.remove(); }catch(e){} };
+    const m=el.querySelector('video,audio');
+    if(m){ try{ m.muted=false; }catch(e){} if(m.play) m.play().catch(()=>{ try{ m.muted=true; m.play(); }catch(e){} }); m.addEventListener('ended',dismiss); }
+    else { setTimeout(dismiss, 12000); }
+  }
+
   function renderItem(item){
+    // Prioridad 0 → interrumpe a pantalla completa (no la ventanita del feed).
+    if(item && (item.priority===0 || item.interrupt)){ showPriorityInterrupt(item); return; }
     currentPixerItem=item;
     const body=overlay.querySelector('.pix-body');
     if(item.kind==='image'){
