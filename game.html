@@ -28512,8 +28512,20 @@ window.xtAPI = (function(){
           const item=await window.XPACE_DISTRO.get(p.id);
           const n=window.XPACE_DISTRO.apply(item);
           mudanzaToast('🚚 Mudanza aplicada · '+(p.name||item.name||'')+' · '+n+' muebles');
+          reportCurrentLayout();   // el estado actual cambió → repórtalo a pixeria
         }
       }
+    }catch(e){}
+  }
+  // ESTADO ACTUAL: reporta la distribución viva de esta tienda para que pixeria
+  // pueda "Cargar distribución actual" y representarla en la rejilla. Solo en
+  // momentos puntuales (carga + tras una Mudanza) para no agotar la cuota KV.
+  async function reportCurrentLayout(){
+    try{
+      if(!window.XPACE_DISTRO) return;
+      const snap=window.XPACE_DISTRO.snapshot();
+      await fetch(PIXER_WORKER+'/layout/report',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({screen:screenId, client:snap.client||null, snapshot:snap})});
     }catch(e){}
   }
   async function pollFeed(){
@@ -28550,6 +28562,7 @@ window.xtAPI = (function(){
     sendHeartbeat(true);
     pollFeed();
     pollMudanza();
+    setTimeout(reportCurrentLayout,3500);   // reporta el estado actual al arrancar
     setInterval(pollFeed,5000);
     setInterval(pollMudanza,8000);
     setInterval(()=>sendHeartbeat(false),300000);
