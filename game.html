@@ -27092,16 +27092,14 @@ window.xtAPI = (function(){
       if(['xpacio','xpace','donde','dónde','identidad','whoami','quien','quién','tienda'].includes(cmd)){
         const cfg=window.STORE_CFG||null;
         let scr=''; try{ scr=localStorage.getItem('pixer-xtore-screen-id')||''; }catch(_){}
-        const client=(typeof getActiveModelKey==='function')?(getActiveModelKey()||'—'):'—';
-        const name=cfg&&cfg.name?cfg.name:'Xtanco genérico (sin ?loc — no es un punto real de admira.app)';
-        const locId=cfg&&cfg.id?cfg.id:'—';
+        const client=(typeof getActiveModelKey==='function')?(getActiveModelKey()||'generic'):'generic';
+        const name=cfg&&cfg.name?cfg.name:'Xtanco genérico (sin ubicación de admira.app)';
         const addr=cfg&&cfg.addr?(' · '+cfg.addr):'';
-        return '🏪 <b>Este Xpacio</b>\n'
-          +'• Nombre: <b>'+name+'</b>'+addr+'\n'
-          +'• Ubicación (admira.app): <code>'+locId+'</code>\n'
-          +'• Cliente/modelo: <code>'+client+'</code>\n'
-          +'• Pantalla (id): <code>'+(scr||'—')+'</code>\n\n'
-          +'En pixeria.com/crear → Redistribución: pulsa <b>📥 Estado actual</b> y pega este id de pantalla (<code>'+(scr||'—')+'</code>) para cargar SU distribución.';
+        return '🏪 Xpacio actual\n'
+          +'🖥️ Pantalla: '+(scr||'—')+'   ← pega este id en pixeria\n'
+          +'🏷️ '+name+addr+'\n'
+          +'👤 Cliente: '+client+'\n\n'
+          +'pixeria.com/crear → Redistribución → 📥 Estado actual → pega '+(scr||'—');
       }
       if(cmd==='admiralive'||cmd==='live'||cmd==='led') return setAdmiraLive(arg);
       if(cmd==='comunicar'||cmd==='comunicado'||cmd==='announce'||cmd==='megafonia'||cmd==='megafonía') return await setComunicado(arg);
