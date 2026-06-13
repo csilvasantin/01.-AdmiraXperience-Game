@@ -26103,7 +26103,7 @@ window.xtAPI = (function(){
       {title:'Ajustes rápidos',items:['/money 12000','/sat 90','/fame 80','/set week 12','/set year 2','/set revenue 5000','/set storeLevel 2','/set customers 30']},
       {title:'Musica y layout',items:['/song 1','/song bad bunny','/music','/next','/prev','/seoul2026','/seul','/seultrap','/seultecno','/equipo inicio ana 3 4','/equipo zona dj 12 2 2','/catalogo','/catalogo pared','/importar catalogo','/importar 1','/importar lista','/importar quitar 1','/mobiliario','/mobiliario inicio','/layout','/layout save','/layout factory','/layout xpacio','/layout xpacio load']},
       {title:'Estilo visual',items:['/16bits','/8bits','/render habbo','/render 16bit']},
-      {title:'Mapa de navegacion',items:['/mapa','/map','/red','/sd list','/streamdeck','/help','/debug']},
+      {title:'Mapa de navegacion',items:['/xpacio','/mapa','/map','/red','/sd list','/streamdeck','/help','/debug']},
     ];
   }
 
@@ -27088,6 +27088,20 @@ window.xtAPI = (function(){
         showEv('🦆 Sponsor en la tienda','#ffd700');
         addFloat(last.x+7,last.y-30,'$$$','#ffd700');
         return '🦆 Tio Gilito ha entrado a la tienda. Ticket esperado ~'+last.avgTicket+'€.';
+      }
+      if(['xpacio','xpace','donde','dónde','identidad','whoami','quien','quién','tienda'].includes(cmd)){
+        const cfg=window.STORE_CFG||null;
+        let scr=''; try{ scr=localStorage.getItem('pixer-xtore-screen-id')||''; }catch(_){}
+        const client=(typeof getActiveModelKey==='function')?(getActiveModelKey()||'—'):'—';
+        const name=cfg&&cfg.name?cfg.name:'Xtanco genérico (sin ?loc — no es un punto real de admira.app)';
+        const locId=cfg&&cfg.id?cfg.id:'—';
+        const addr=cfg&&cfg.addr?(' · '+cfg.addr):'';
+        return '🏪 <b>Este Xpacio</b>\n'
+          +'• Nombre: <b>'+name+'</b>'+addr+'\n'
+          +'• Ubicación (admira.app): <code>'+locId+'</code>\n'
+          +'• Cliente/modelo: <code>'+client+'</code>\n'
+          +'• Pantalla (id): <code>'+(scr||'—')+'</code>\n\n'
+          +'En pixeria.com/crear → Redistribución: pulsa <b>📥 Estado actual</b> y pega este id de pantalla (<code>'+(scr||'—')+'</code>) para cargar SU distribución.';
       }
       if(cmd==='admiralive'||cmd==='live'||cmd==='led') return setAdmiraLive(arg);
       if(cmd==='comunicar'||cmd==='comunicado'||cmd==='announce'||cmd==='megafonia'||cmd==='megafonía') return await setComunicado(arg);
