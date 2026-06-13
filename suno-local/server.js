@@ -504,7 +504,30 @@ async function dismissOverlays(pg) {
   } catch (_) {}
 }
 
+// Pulsa el botón Create REAL (el CTA grande del compositor), NO el ítem "Create"
+// del menú lateral de Suno (que solo navega → 0 clips → 502). Estrategia: entre
+// los botones habilitados con texto create/crear, descartar los que están en
+// nav/aside/header y quedarse con el de mayor ancho (el CTA naranja). Devuelve
+// {ok, n, w, txt} para diagnóstico.
+async function clickCreate(pg) {
+  return pg.evaluate(() => {
+    let cands = [...document.querySelectorAll('button')].filter(b => {
+      const t = (b.innerText || '').trim().toLowerCase();
+      return (t === 'create' || t === 'crear') && !b.disabled && b.offsetParent !== null;
+    });
+    cands = cands.filter(b => !b.closest('nav,aside,header')); // fuera el menú lateral
+    if (!cands.length) return { ok: false, n: 0 };
+    cands.sort((a, b) => b.getBoundingClientRect().width - a.getBoundingClientRect().width);
+    const b = cands[0], r = b.getBoundingClientRect();
+    b.click();
+    return { ok: true, n: cands.length, w: Math.round(r.width), txt: (b.innerText || '').trim().slice(0, 20) };
+  });
+}
+
 async function uiGenerate(pg, { prompt, lyrics, title, instrumental, model }) {
+  // Una canción CON letra nunca es instrumental: resuelve el conflicto cuando la
+  // UI manda instrumental=true (p.ej. versión "Loop") pero hay letra escrita.
+  if (lyrics && String(lyrics).trim()) instrumental = false;
   if (!pg.url().includes('suno.com/create')) {
     await pg.goto('https://suno.com/create', { waitUntil: 'networkidle2', timeout: 60000 });
   }
@@ -598,15 +621,8 @@ async function uiGenerate(pg, { prompt, lyrics, title, instrumental, model }) {
   // ENCIMA tapa el botón Create y rompe el click → 502. Lo cerramos antes.
   await dismissOverlays(pg);
 
-  const clicked = await pg.evaluate(() => {
-    const b = [...document.querySelectorAll('button')].find(x => {
-      const t = (x.innerText || '').trim().toLowerCase();
-      return (t === 'create' || t === 'crear') && !x.disabled;
-    });
-    if (b) { b.click(); return true; }
-    return false;
-  });
-  if (!clicked) {
+  const clk = await clickCreate(pg);
+  if (!clk.ok) {
     const diag = await pg.evaluate(() => ({
       textareas: [...document.querySelectorAll('textarea')].filter(t => t.offsetParent !== null).map(t => ({ ph: (t.placeholder || '').slice(0, 28), val: (t.value || '').slice(0, 40), len: (t.value || '').length })),
       createBtns: [...document.querySelectorAll('button')].filter(b => /create|crear/i.test((b.innerText || '').trim())).map(b => ({ t: (b.innerText || '').trim().slice(0, 20), dis: b.disabled })),
@@ -615,11 +631,11 @@ async function uiGenerate(pg, { prompt, lyrics, title, instrumental, model }) {
     throw new Error('Create no disponible · diag=' + JSON.stringify(diag));
   }
 
-  // Poll del feed (hasta ~60s). Si a los ~16s no hay clips, reintenta Create UNA
-  // vez: si el primer click hubiera enviado, los clips ya habrían aparecido, así
-  // que reintentar NO duplica (cubre el caso de que el 1er click no enviara).
+  // Poll del feed (hasta ~90s). Si a los ~16s no hay clips, reintenta Create UNA
+  // vez con clickCreate (CTA correcto): si el 1er click hubiera enviado, los clips
+  // ya habrían aparecido, así que reintentar NO duplica (cubre el 1er click fallido).
   let fresh = [], reclicked = false;
-  for (let i = 0; i < 30; i++) {
+  for (let i = 0; i < 45; i++) {
     await sleep(2000);
     const ids = await getFeedIds(pg);
     fresh = ids.filter(id => !before.has(id));
@@ -627,16 +643,18 @@ async function uiGenerate(pg, { prompt, lyrics, title, instrumental, model }) {
     if (i === 8 && !reclicked) {
       reclicked = true;
       await dismissOverlays(pg);   // por si un overlay tapó el 1er click
-      await pg.evaluate(() => { const b = [...document.querySelectorAll('button')].find(x => { const t = (x.innerText || '').trim().toLowerCase(); return (t === 'create' || t === 'crear') && !x.disabled; }); if (b) b.click(); });
+      await clickCreate(pg);
     }
   }
   if (!fresh.length) {
     const diag = await pg.evaluate(() => ({
       turnstile: [...document.querySelectorAll('iframe')].some(f => /turnstile|challenges\.cloudflare/.test(f.src || '')),
       logged: !!(window.Clerk && window.Clerk.session),
+      url: location.pathname,
+      createBtns: [...document.querySelectorAll('button')].filter(b => { const t = (b.innerText || '').trim().toLowerCase(); return t === 'create' || t === 'crear'; }).map(b => ({ w: Math.round(b.getBoundingClientRect().width), dis: b.disabled, nav: !!b.closest('nav,aside,header') })),
       bodyHint: (document.body.innerText || '').replace(/\s+/g, ' ').slice(0, 140),
     }));
-    throw new Error('no aparecieron clips nuevos tras Create · ' + JSON.stringify(diag));
+    throw new Error('no aparecieron clips nuevos tras Create · clic=' + JSON.stringify(clk) + ' · ' + JSON.stringify(diag));
   }
   return fresh.slice(0, 4);
 }
