@@ -82,5 +82,28 @@ abiertas. Carlos da la señal de "grabando" y Morfeo ejecuta el guion paso a pas
   gemelo `?loc=demo-live` y, en admira.app, selecciona/usa ese mismo punto.
 - Para forzar audiencia rápido en el gemelo: `/velocidad 8`.
 
-*Builds de referencia: gemelo `20260614-0037`; admira.app con CPM editable, compra
-de campaña + creatividad PixerIA y presupuesto multi-día.*
+## Hallazgos del ENSAYO (14-jun, importantes para que salga perfecta)
+
+1. **La pestaña del gemelo debe estar EN PRIMER PLANO mientras grabas.** El navegador
+   *throttlea* `requestAnimationFrame` cuando la pestaña está en segundo plano → los
+   viandantes se congelan y no se acumulan impactos. Con la pestaña visible (grabando)
+   corre normal. (Por eso conviene grabar el gemelo a pantalla y cambiar de capa con
+   Cmd+Tab, no dejarlo detrás.)
+2. **Presupuesto pequeño para que se vea AGOTAR.** El CPM es €/1000 impactos: con
+   presupuestos grandes (500€) la barra no se mueve a ojo. Para la demo usa **2–5 €**:
+   p.ej. ♀ Joven a 11€ CPM con ~300 impactos = 3,30€ → **AGOTADA** (validado por API).
+3. **Generar audiencia exterior:** `/velocidad 8` + repetir **`/audienciaOUT 14`** un
+   par de veces (el cap de viandantes activos es 2, drena poco a poco). Cuantos más
+   pasen, más impactos por segmento.
+4. **Re-enfocar el cuadro de comandos** del gemelo antes de cada `/comando` (tras
+   enviar uno, vuelve a hacer click en el textarea).
+5. **Bug corregido en el ensayo (build 0038):** la clave de segmento de los impactos
+   exteriores se generaba `gender_age` en el gemelo y `age_gender` en el resto →
+   ahora ambos `age_gender` (`joven_f`). Sin esto el CPM por segmento y el consumo de
+   presupuesto NO casaban. **Ya arreglado y validado** (300 imp × 11€ = AGOTADA).
+6. **loc limpio para la demo:** `xtanco-bcn` arrastra datos de pruebas; para empezar
+   de cero usa **`?loc=demo-live`** en el gemelo y el mismo punto en admira.app.
+
+*Builds de referencia: gemelo `20260614-0038`; admira.app con CPM editable, compra
+de campaña + creatividad PixerIA, presupuesto multi-día y claves de segmento
+alineadas. Ensayo realizado vía extensión Chrome el 14-jun.*
