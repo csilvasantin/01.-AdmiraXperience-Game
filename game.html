@@ -10639,13 +10639,32 @@ function mupiCamSnap(p){
 }
 // ── Galería / carrete de la cámara (panel arrastrable, estilo del HUD de impactos) ──
 function mupiCamGalleryEl(){ return document.getElementById('mupiCamPanel'); }
+// Ventana (en minutos de juego) hacia atrás desde el cursor del DVR: en replay
+// solo se ven los viandantes que pasaron "en ese momento", no todo el carrete.
+const MUPICAM_DVR_WINDOW=12;
 function mupiCamRenderGallery(){
   const p=mupiCamGalleryEl(); if(!p) return;
   const body=p.querySelector('#mcBody'); if(!body) return;
-  const cnt=p.querySelector('#mcCount'); if(cnt) cnt.textContent=MUPICAM.shots.length;
   const md=p.querySelector('#mcMode'); if(md) md.textContent=MUPICAM._mode;
-  const shots=MUPICAM.shots;
-  if(!shots.length){ body.innerHTML='<div style="opacity:.6;padding:14px;text-align:center;font-size:10px;line-height:1.5">Aún sin viandantes capturados.<br>Deja pasar gente por delante del MUPI (prueba <b>/audienciaOUT 6</b> o <b>/velocidad 8</b>).</div>'; return; }
+  // En modo DVR (replay) filtramos el carrete a la franja del momento que se está
+  // revisando: solo los capturados entre (cursor - ventana) y el cursor.
+  const replayOn=(typeof REC!=='undefined'&&REC&&REC.replay&&REC.replay.on);
+  const nowT=(replayOn&&typeof G!=='undefined'&&G&&typeof G.gameTime==='number')?G.gameTime:null;
+  let shots=MUPICAM.shots;
+  if(replayOn&&nowT!=null){
+    shots=shots.filter(s=>typeof s.t==='number'&&s.t<=nowT+1&&s.t>=nowT-MUPICAM_DVR_WINDOW);
+  }
+  // Cabecera contextual (incluye el contador): en DVR indica la hora del cursor.
+  const sub=p.querySelector('#mcSub');
+  if(sub){ sub.innerHTML=replayOn&&nowT!=null
+      ? ('⏪ DVR · <b>'+shots.length+'</b> viandantes en torno a <b>'+mupiCamTimeLabel(nowT)+'</b>')
+      : ('🚶 <b>'+shots.length+'</b> viandantes · foto + hora al pasar'); }
+  if(!shots.length){
+    body.innerHTML=replayOn
+      ? '<div style="opacity:.6;padding:14px;text-align:center;font-size:10px;line-height:1.5">Nadie pasó por el MUPI en ese momento.<br>Mueve la línea de tiempo del DVR a otra hora.</div>'
+      : '<div style="opacity:.6;padding:14px;text-align:center;font-size:10px;line-height:1.5">Aún sin viandantes capturados.<br>Deja pasar gente por delante del MUPI (prueba <b>/audienciaOUT 6</b> o <b>/velocidad 8</b>).</div>';
+    return;
+  }
   const pix=(MUPICAM._mode==='pixel');
   const cells=shots.slice().reverse().map(s=>{
     const img=(pix?s.pixel:s.normal)||s.normal;
@@ -10661,7 +10680,7 @@ function mupiCamOpenGallery(){
     p=document.createElement('div'); p.id='mupiCamPanel';
     p.style.cssText='position:fixed;top:72px;left:16px;z-index:2147482000;width:250px;max-height:72vh;display:flex;flex-direction:column;background:rgba(6,16,10,.94);border:1px solid #5fb0ff;border-radius:10px;color:#dbeaff;font-family:"JetBrains Mono",ui-monospace,monospace;font-size:11px;box-shadow:0 0 22px rgba(95,176,255,.25);overflow:hidden';
     p.innerHTML='<div id="mcHdr" style="display:flex;justify-content:space-between;align-items:center;padding:6px 9px;border-bottom:1px dashed #2f6a8a;letter-spacing:.06em;cursor:move;user-select:none;touch-action:none"><b>📷 CÁMARA MUPI</b><span style="display:flex;gap:6px;align-items:center"><span id="mcMode" title="alternar normal / pixelada" style="cursor:pointer;font-size:9px;border:1px solid #5fb0ff;border-radius:5px;padding:1px 6px">normal</span><span id="mcClose" style="cursor:pointer;color:#999;padding:0 4px">×</span></span></div>'+
-      '<div style="padding:4px 9px;font-size:9px;opacity:.7;border-bottom:1px solid rgba(95,176,255,.15)">🚶 <span id="mcCount">0</span> viandantes · foto + hora al pasar</div>'+
+      '<div id="mcSub" style="padding:4px 9px;font-size:9px;opacity:.7;border-bottom:1px solid rgba(95,176,255,.15)">🚶 <b>0</b> viandantes · foto + hora al pasar</div>'+
       '<div id="mcBody" style="padding:8px 9px;overflow:auto"></div>';
     document.body.appendChild(p);
     p.querySelector('#mcClose').onclick=()=>mupiCamCloseGallery();
@@ -28716,19 +28735,24 @@ window.xtAPI = (function(){
     <div class="pix-foot">screen: ${screenId}</div>`;
   document.body.appendChild(overlay);
   let userClosedItemId=null;
+  // OCULTO POR DEFECTO: el feed solo aparece si el usuario lo activa (× o /pixeria on).
+  let pixerUserEnabled=false;
   overlay.querySelector('.pix-close').onclick=()=>{
     overlay.classList.remove('visible');
+    pixerUserEnabled=false;
     userClosedItemId=lastItemId;
   };
 
   // Expose visibility controls so /pixeria (CLI Telegram) pueda alternar el overlay
   window.isPixerFeedVisible=function(){ return overlay.classList.contains('visible'); };
   window.setPixerFeedVisible=function(on){
+    pixerUserEnabled=!!on;
     if(on){ overlay.classList.add('visible'); }
     else { overlay.classList.remove('visible'); }
     return overlay.classList.contains('visible');
   };
   window.togglePixerFeed=function(){
+    pixerUserEnabled=!overlay.classList.contains('visible');
     overlay.classList.toggle('visible');
     return overlay.classList.contains('visible');
   };
@@ -28871,14 +28895,13 @@ window.xtAPI = (function(){
   }
   function syncPixerVisibility(){
     const eligible=isPixerEligibleState();
-    if(!eligible){
+    // Oculto por defecto: solo se muestra si el usuario lo activó (/pixeria on) Y
+    // estamos en la vista de la tienda. Ya no se auto-muestra al llegar contenido.
+    if(!eligible || !pixerUserEnabled){
       if(overlay.classList.contains('visible')) overlay.classList.remove('visible');
       return;
     }
-    if(currentPixerItem && userClosedItemId!==lastItemId
-       && !overlay.classList.contains('visible')){
-      overlay.classList.add('visible');
-    }
+    if(!overlay.classList.contains('visible')) overlay.classList.add('visible');
   }
   setInterval(syncPixerVisibility,500);
 
