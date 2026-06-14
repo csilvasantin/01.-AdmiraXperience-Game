@@ -331,6 +331,16 @@ function buildPuppeteerCookies() {
   }
 }
 
+// Mata los Chrome que tengan tomado este perfil y borra los ficheros Singleton*
+// (el lock que provoca "browser is already running"). Best-effort, síncrono.
+function cleanProfileLocks(profileDir) {
+  try { execSync(`pkill -9 -f '${profileDir}' 2>/dev/null || true`); } catch (_) {}
+  try { execSync('sleep 1'); } catch (_) {}
+  for (const f of ['SingletonLock', 'SingletonCookie', 'SingletonSocket']) {
+    try { fs.unlinkSync(path.join(profileDir, f)); } catch (_) {}
+  }
+}
+
 async function ensurePage() {
   if (page && !page.isClosed()) return page;
   if (pageReadyPromise) return pageReadyPromise;
@@ -343,14 +353,26 @@ async function ensurePage() {
       // reto Turnstile entre arranques (se resuelve, como mucho, una vez a mano).
       const profileDir = process.env.SUNO_BROWSER_PROFILE_DIR || path.join(__dirname, '.suno-chrome-profile');
       const headless = process.env.SUNO_HEADLESS === '1';
-      browser = await puppeteer.launch({
+      const launchOpts = {
         headless,
         userDataDir: profileDir,
         // Lens*/ContextMenuSearch* OFF: el overlay "Buscar imagen con Google Lens"
         // saltaba ENCIMA de la página y tapaba el botón Create → 502 intermitente.
         args: ['--no-sandbox','--disable-blink-features=AutomationControlled','--disable-features=IsolateOrigins,site-per-process,LensOverlay,LensStandalone,LensImageTranslate,ContextMenuSearchByImage,ContextMenuGoogleLensChip'],
         defaultViewport: null,
-      });
+      };
+      try {
+        browser = await puppeteer.launch(launchOpts);
+      } catch (e) {
+        // Bug recurrente: un Chrome huérfano de un arranque anterior mantiene el
+        // SingletonLock del perfil → "browser is already running / Use a different
+        // userDataDir". Auto-cura: matar esos Chrome, borrar el lock y reintentar.
+        if (/already running|SingletonLock|ProcessSingleton|user data dir/i.test(String(e && e.message))) {
+          console.log('⚠ perfil bloqueado por Chrome huérfano — limpiando lock y reintentando…');
+          cleanProfileLocks(profileDir);
+          browser = await puppeteer.launch(launchOpts);
+        } else throw e;
+      }
       console.log(`✓ Chrome puppeteer ${headless?'headless':'headful'} · perfil ${profileDir}`);
       browser.on('disconnected', () => { browser = null; page = null; pageReadyPromise = null; });
     }

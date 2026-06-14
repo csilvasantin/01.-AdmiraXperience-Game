@@ -36,6 +36,16 @@ if lsof -nP -i ":$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
   sleep 1
 fi
 
+# 2b. Matar Chrome huérfanos del perfil + borrar el lock (si no, el nuevo arranque
+#     choca con "browser is already running / Use a different userDataDir").
+PROFILE_DIR="$(pwd)/.suno-chrome-profile"
+if pgrep -f "$PROFILE_DIR" >/dev/null 2>&1; then
+  echo "ℹ Killing orphan Chrome holding the suno profile"
+  pkill -9 -f "$PROFILE_DIR" 2>/dev/null || true
+  sleep 1
+fi
+rm -f "$PROFILE_DIR/SingletonLock" "$PROFILE_DIR/SingletonCookie" "$PROFILE_DIR/SingletonSocket" 2>/dev/null || true
+
 # 3. Arrancar server
 nohup node server.js > "$LOG" 2>&1 &
 PID=$!
