@@ -10653,6 +10653,8 @@ function mupiCamSnap(p, cam){
       normal:nC.toDataURL('image/webp',0.7), pixel:pC.toDataURL('image/webp',0.6),
       human:null, _gen:false, _err:null });
     if(MUPICAM.shots.length>MUPICAM.MAX) MUPICAM.shots.shift();
+    // Cap por cámara: que una no se coma el carrete de la otra (máx 90 c/u).
+    let nCam=0; for(let i=MUPICAM.shots.length-1;i>=0;i--){ if((((MUPICAM.shots[i].cam==='int')?'int':'ext')===cam) && (++nCam>90)) MUPICAM.shots.splice(i,1); }
     if(cam==='ext') p._snapped=true; else p._snappedInt=true;
   }catch(_){}
 }
@@ -10713,7 +10715,13 @@ function mupiCamRenderGallery(){
   const cells=shots.slice().reverse().map(s=>{
     let img, rendering='auto', overlay='';
     if(pix){ img=s.pixel||s.normal; rendering='pixelated'; }      // NPC pixelado
-    else if(s.human){ img=s.human; }                              // humano IA generado
+    else if(s.human){ img=s.human;                                // humano IA generado
+      overlay = s._pubOk
+        ? '<div title="En el Stock de PixerIA" style="position:absolute;right:2px;bottom:2px;background:rgba(0,0,0,.7);border:1px solid #7dff9e;border-radius:5px;font-size:10px;line-height:1;padding:2px 3px">✅</div>'
+        : (s._pub
+          ? '<div style="position:absolute;right:2px;bottom:2px;background:rgba(0,0,0,.7);border-radius:5px;font-size:10px;line-height:1;padding:2px 3px">⏳</div>'
+          : '<div data-act="pub" data-uid="'+s._uid+'" title="Guardar este humano en el Stock de PixerIA" style="position:absolute;right:2px;bottom:2px;background:rgba(0,0,0,.7);border:1px solid #aa66ff;border-radius:5px;font-size:10px;line-height:1;padding:2px 3px;cursor:pointer">📌</div>');
+    }
     else {                                                        // muñeco + botón para humanizar
       img=s.normal;
       overlay=s._gen
@@ -10753,6 +10761,30 @@ async function mupiCamHumanize(uid){
   shot._gen=false; try{ mupiCamRenderGallery(); }catch(e){}
 }
 window.mupiCamHumanize=mupiCamHumanize;
+// Publica el humano IA en el Stock de PixerIA (type image), reusable como contenido.
+async function mupiCamPublish(uid){
+  const shot=MUPICAM.shots.find(s=>s._uid===uid);
+  if(!shot||!shot.human||shot._pub||shot._pubOk) return;
+  const m=/^data:([^;]+);base64,(.*)$/s.exec(shot.human); if(!m) return;
+  shot._pub=true; shot._err=null; try{ mupiCamRenderGallery(); }catch(e){}
+  try{ if(typeof showEv==='function') showEv('📌 Publicando humano en Stock…','#aa66ff'); }catch(e){}
+  try{
+    const camTag=(shot.cam==='int')?'tienda':'calle';
+    const r=await fetch('https://pixer-eleven.csilvasantin.workers.dev/stock/publish',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({ type:'image', motor:'nano-banana', mime:m[1], base64:m[2],
+        title:'Audiencia '+camTag+' · '+(shot.hhmm||''),
+        prompt:'Humano IA generado desde un NPC de la cámara MUPI '+camTag+' del gemelo Admira XP',
+        tags:['mupi','audiencia',camTag], quality:'good',
+        comment:'Generado en el gemelo desde la cámara MUPI '+camTag }),
+    });
+    const d=await r.json().catch(()=>({}));
+    if(d&&d.ok){ shot._pubOk=true; shot._pubUrl=d.url||''; try{ if(typeof showEv==='function') showEv('✅ Humano guardado en Stock de PixerIA','#5fd0ff'); }catch(e){} }
+    else { shot._pub=false; shot._err=(d&&(d.error||d.detail))||('HTTP '+r.status); try{ if(typeof showEv==='function') showEv('⚠️ '+shot._err,'#ff8866'); }catch(e){} }
+  }catch(e){ shot._pub=false; shot._err=String((e&&e.message)||e); }
+  try{ mupiCamRenderGallery(); }catch(e){}
+}
+window.mupiCamPublish=mupiCamPublish;
 function mupiCamOpenGallery(){
   let p=mupiCamGalleryEl();
   if(!p){
@@ -10765,8 +10797,11 @@ function mupiCamOpenGallery(){
     p.querySelector('#mcClose').onclick=()=>mupiCamCloseGallery();
     const md=p.querySelector('#mcMode'); md.onclick=()=>{ MUPICAM._mode=(MUPICAM._mode==='pixel')?'normal':'pixel'; mupiCamRenderGallery(); };
     const cm=p.querySelector('#mcCam'); if(cm) cm.onclick=()=>{ MUPICAM._cam=(MUPICAM._cam==='int')?'ext':'int'; mupiCamRenderGallery(); };
-    // Delegado en el panel (sobrevive al re-render del body): pulsar ✨/muñeco → humanizar.
-    p.addEventListener('click',ev=>{ const g=ev.target.closest('[data-act="gen"]'); if(!g) return; const uid=+g.getAttribute('data-uid'); if(uid) mupiCamHumanize(uid); });
+    // Delegado en el panel (sobrevive al re-render del body): ✨/muñeco → humanizar, 📌 → Stock.
+    p.addEventListener('click',ev=>{
+      const g=ev.target.closest('[data-act="gen"]'); if(g){ const uid=+g.getAttribute('data-uid'); if(uid) mupiCamHumanize(uid); return; }
+      const pb=ev.target.closest('[data-act="pub"]'); if(pb){ const uid=+pb.getAttribute('data-uid'); if(uid) mupiCamPublish(uid); return; }
+    });
     const hdr=p.querySelector('#mcHdr'); let dg=false,oX=0,oY=0;
     hdr.addEventListener('pointerdown',e=>{ if(e.target.id==='mcMode'||e.target.id==='mcClose')return; dg=true; const r=p.getBoundingClientRect(); p.style.left=r.left+'px'; p.style.top=r.top+'px'; oX=e.clientX-r.left; oY=e.clientY-r.top; try{hdr.setPointerCapture(e.pointerId);}catch(_){} });
     hdr.addEventListener('pointermove',e=>{ if(!dg)return; const nx=Math.max(0,Math.min(e.clientX-oX,window.innerWidth-p.offsetWidth)), ny=Math.max(0,Math.min(e.clientY-oY,window.innerHeight-p.offsetHeight)); p.style.left=nx+'px'; p.style.top=ny+'px'; });
