@@ -2801,6 +2801,8 @@ let _totemNowSig='';
 function totemNowItem(){
   const pin=(DS_PIN&&typeof DS_PIN==='object')?DS_PIN['metahuman']:null;
   if(!pin) return {kind:'idle',name:'',src:null};
+  // Pin 'web' (avatar 3D de DigitalAvatar.ai): el tótem renderiza la URL en iframe.
+  if(pin.kind==='web'&&pin.src) return {kind:'web',name:pin.name||'DigitalAvatar.ai',src:pin.src};
   const name=pin.name, kind=pin.kind;
   const file = VIDEO_FILES_VERTICAL[name] || (name?VIDEO_FILES[name]:null);
   if(!file) return {kind:'idle',name:name||'',src:null};
@@ -17434,7 +17436,23 @@ const AVATAR3D_CFG=(typeof RUNTIME_CONFIG!=='undefined'&&RUNTIME_CONFIG.avatar3d
 const AVATAR3D={
   url:(typeof AVATAR3D_CFG.url==='string'&&AVATAR3D_CFG.url)?AVATAR3D_CFG.url.replace(/\/+$/,''):'https://omnipublicity-api.csilvasantin.workers.dev',
   loc:(typeof AVATAR3D_CFG.loc==='string'&&AVATAR3D_CFG.loc)?AVATAR3D_CFG.loc:'',
+  totemUrl:(typeof AVATAR3D_CFG.totemUrl==='string'&&AVATAR3D_CFG.totemUrl)?AVATAR3D_CFG.totemUrl:'https://digitalavatar.ai/3d/',
 };
+// Enciende/apaga el avatar 3D en la pantalla VERTICAL del tótem: pone un pin
+// 'web' en la superficie metahuman → emitTotemNow lo empuja a screen 'totem' →
+// pantalla.html (la pantalla física) lo muestra en iframe.
+function setAvatar3dTotem(on){
+  if(typeof DS_PIN!=='object'||DS_PIN===null) return false;
+  if(on){
+    const loc=avatar3dLoc();
+    const url=AVATAR3D.totemUrl+(AVATAR3D.totemUrl.indexOf('?')>=0?'&':'?')+'loc='+encodeURIComponent(loc);
+    DS_PIN['metahuman']={kind:'web',name:'DigitalAvatar.ai',src:url};
+  } else {
+    try{ delete DS_PIN['metahuman']; }catch(_){ DS_PIN['metahuman']=null; }
+  }
+  try{ if(typeof emitTotemNow==='function') emitTotemNow(true); }catch(_){}
+  return true;
+}
 function avatar3dLoc(){
   const c=(typeof window!=='undefined'&&window.STORE_CFG)?window.STORE_CFG:{};
   return AVATAR3D.loc||c.loc||c.locationId||c.client||c.id||'xtanco-generic';
@@ -17481,6 +17499,17 @@ window.askAvatar3d=askAvatar3d;
     const els=_mhEls(); if(!els.panel) return;
     if(els.askBtn) els.askBtn.addEventListener('click',()=>askMetahuman(els.prompt&&els.prompt.value||''));
     if(els.closeBtn) els.closeBtn.addEventListener('click',closeMetahumanPanel);
+    // Caja Metahuman arrastrable por su cabecera (ratón + táctil).
+    const mhHdr=els.panel.querySelector('.mh-head');
+    if(mhHdr && !mhHdr.dataset.dragWired){
+      mhHdr.dataset.dragWired='1';
+      mhHdr.style.cursor='move'; mhHdr.style.touchAction='none';
+      let dg=false,oX=0,oY=0;
+      mhHdr.addEventListener('pointerdown',e=>{ if(e.target===els.closeBtn)return; dg=true; const r=els.panel.getBoundingClientRect(); els.panel.style.left=r.left+'px'; els.panel.style.top=r.top+'px'; els.panel.style.right='auto'; els.panel.style.bottom='auto'; oX=e.clientX-r.left; oY=e.clientY-r.top; try{mhHdr.setPointerCapture(e.pointerId);}catch(_){} });
+      mhHdr.addEventListener('pointermove',e=>{ if(!dg)return; const nx=Math.max(0,Math.min(e.clientX-oX,window.innerWidth-els.panel.offsetWidth)), ny=Math.max(0,Math.min(e.clientY-oY,window.innerHeight-els.panel.offsetHeight)); els.panel.style.left=nx+'px'; els.panel.style.top=ny+'px'; });
+      const endDrag=e=>{ dg=false; try{mhHdr.releasePointerCapture(e.pointerId);}catch(_){} };
+      mhHdr.addEventListener('pointerup',endDrag); mhHdr.addEventListener('pointercancel',endDrag);
+    }
     const clubToggle=document.getElementById('mhClubToggle');
     const clubBody=document.getElementById('mhClubBody');
     const clubQr=document.getElementById('mhClubQr');
@@ -24486,6 +24515,26 @@ window.xtAPI = (function(){
         return {ok:true,message:'Género→vídeo activado · 👨 hombre→Money For Nothing · 👩 mujer→Take On Me'+(camOn?'':' · ⚠ LiveCam off (enciéndela para que detecte)'),data:{on:true,camOn}};
       }
 
+      // ── /avatar3d on|off|<pregunta> — avatar 3D de DigitalAvatar.ai ─────────
+      //   on (o sin args): enciende el avatar en la pantalla VERTICAL del tótem.
+      //   off: lo apaga. <pregunta>: responde por texto + voz en el panel.
+      if(cmd==='avatar3d'||cmd==='avatar-3d'||cmd==='digitalavatar'||cmd==='avatarhd'){
+        const a=String(arg||'').trim().toLowerCase();
+        if(a===''||a==='on'||a==='totem'||a==='start'||a==='play'){
+          if(typeof setAvatar3dTotem==='function'&&setAvatar3dTotem(true)){
+            if(typeof showEv==='function') showEv('🧑‍💻 Avatar 3D ON · tótem','#5fd0ff');
+            return {ok:true,message:'🧑‍💻 Avatar 3D ENCENDIDO en la pantalla del tótem (DigitalAvatar.ai). Pregúntale con /avatar3d <pregunta>. Apágalo con /avatar3d off.'};
+          }
+          return {ok:false,message:'Avatar3D no disponible.'};
+        }
+        if(a==='off'||a==='stop'||a==='idle'){
+          if(typeof setAvatar3dTotem==='function') setAvatar3dTotem(false);
+          return {ok:true,message:'Avatar 3D apagado en el tótem (vuelve la cara AI).'};
+        }
+        if(typeof askAvatar3d==='function') return askAvatar3d(arg);
+        return {ok:false,message:'Avatar3D no disponible.'};
+      }
+
       return {ok:false,message:'Comando no reconocido: '+raw};
     },
 
@@ -26190,7 +26239,7 @@ window.xtAPI = (function(){
       {title:'Atmósfera',items:['/ambiente','/ambiente vol 50','/voces']},
       {title:'Operativa real',items:['/devolucion','/pedido']},
       {title:'Integración AdmiraNext',items:['/socios export']},
-      {title:'IA y contenido',items:['/grok pregunta','/draw dibujo','/metahuman pregunta','/avatar3d pregunta','/log','/log thief','/log customer','/import','/import list','/import remove 1','/importTube https://youtu.be/...']},
+      {title:'IA y contenido',items:['/grok pregunta','/draw dibujo','/metahuman pregunta','/avatar3d on|off','/avatar3d pregunta','/log','/log thief','/log customer','/import','/import list','/import remove 1','/importTube https://youtu.be/...']},
       {title:'Ajustes rápidos',items:['/money 12000','/sat 90','/fame 80','/set week 12','/set year 2','/set revenue 5000','/set storeLevel 2','/set customers 30']},
       {title:'Musica y layout',items:['/song 1','/song bad bunny','/music','/next','/prev','/seoul2026','/seul','/seultrap','/seultecno','/equipo inicio ana 3 4','/equipo zona dj 12 2 2','/catalogo','/catalogo pared','/importar catalogo','/importar 1','/importar lista','/importar quitar 1','/mobiliario','/mobiliario inicio','/layout','/layout save','/layout factory','/layout xpacio','/layout xpacio load']},
       {title:'Estilo visual',items:['/16bits','/8bits','/render habbo','/render 16bit']},
@@ -27339,7 +27388,18 @@ window.xtAPI = (function(){
       }
       if(cmd==='avatar3d'||cmd==='avatar-3d'||cmd==='digitalavatar'||cmd==='avatarhd'){
         const en=(typeof lang!=='undefined'&&lang==='en');
-        if(!arg) return en?'Usage: /avatar3d <question> — asks the DigitalAvatar.ai MetaHuman (Grok brain + ElevenLabs voice, with audio).':'Uso: /avatar3d <pregunta> — pregunta al MetaHuman de DigitalAvatar.ai (cerebro Grok + voz ElevenLabs, con audio).';
+        const a=(arg||'').trim().toLowerCase();
+        // Sin args o "on": enciende el avatar 3D en la pantalla VERTICAL del tótem.
+        if(a===''||a==='on'||a==='totem'||a==='start'||a==='play'){
+          if(typeof setAvatar3dTotem==='function'&&setAvatar3dTotem(true))
+            return en?'🧑‍💻 Avatar 3D ON on the totem screen (DigitalAvatar.ai). Ask it: /avatar3d <question>. Turn off: /avatar3d off.':'🧑‍💻 Avatar 3D ENCENDIDO en la pantalla del tótem (DigitalAvatar.ai). Pregúntale: /avatar3d <pregunta>. Apágalo: /avatar3d off.';
+          return en?'Avatar3D not available.':'Avatar3D no disponible.';
+        }
+        if(a==='off'||a==='stop'||a==='idle'){
+          if(typeof setAvatar3dTotem==='function') setAvatar3dTotem(false);
+          return en?'Avatar 3D off on the totem (back to the AI face).':'Avatar 3D apagado en el tótem (vuelve la cara AI).';
+        }
+        // Con pregunta: responde por texto + voz en el panel.
         if(typeof askAvatar3d==='function') return await askAvatar3d(arg);
         return en?'Avatar3D not available.':'Avatar3D no disponible.';
       }
