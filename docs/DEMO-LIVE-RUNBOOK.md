@@ -4,7 +4,27 @@ Guion para operar **las 3 capas en vivo** y grabar la pantalla. Todo contra el
 **mismo punto**: `loc = xtanco-bcn` (Xtanco Barcelona). Si los `loc` no coinciden,
 la campaña no aparece en el gemelo y el presupuesto no baja.
 
-## Setup (antes de grabar) — UNA CAPA POR MONITOR
+## ✨ Opción TOP: 3 ORDENADORES (una capa por máquina)
+
+Lo más espectacular: cada capa en **su propio ordenador**. La extensión Chrome
+conecta **varios navegadores a la misma cuenta** Anthropic; Morfeo controla los 3
+saltando con `select_browser` (uno cada vez, salto instantáneo; el bucle es
+secuencial igual). Ventajas: vista simultánea en 3 máquinas + **sin throttling**.
+
+Cada PC: Chrome con extensión **Claude in Chrome** + **misma cuenta** (csilva@admira.com)
++ **Connect** (ponle nombre: `PixerIA-PC` / `Gemelo-PC` / `Admira-PC`). Mismo
+`loc=xtanco-bcn`. Morfeo: `list_connected_browsers` → `select_browser` por máquina.
+
+**Burn en vivo (build 0039):** el gemelo empuja sus impactos exteriores al KV cada
+45 s, así en la máquina de admira.app se ve el **presupuesto bajar en tiempo real**
+mientras el gemelo mide en otra máquina.
+
+---
+
+## Alternativa: UNA CAPA POR MONITOR (1 ordenador, 3 monitores)
+*(Aviso: la extensión solo conduce UNA ventana a la vez. Con 3 ventanas en 3
+monitores, Morfeo conduce admira.app y Carlos teclea 2-3 comandos en el gemelo;
+o todo en 1 ventana con pestañas y Morfeo conduce el 100%.)*
 
 Tenemos 3 monitores → **una ventana de Chrome por monitor**, así se ve el bucle
 agéntico **en directo y simultáneo** entre las 3 pantallas (sin cambiar de pestaña).
