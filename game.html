@@ -17570,15 +17570,21 @@ function positionWallAvatar(){
   const fresh=!!q && (typeof tt==='undefined' || (typeof window.__tftQuadFrame==='number' && (tt-window.__tftQuadFrame)<=2));
   if(!(avatar3dWall && fresh)){ if(el.style.display!=='none'){ el.style.display='none'; el.src='about:blank'; } return; }
   try{
-    const canvasRect=cv.getBoundingClientRect();
-    const scaleX=canvasRect.width/W, scaleY=canvasRect.height/H;
-    const xs=[q.tl.x,q.tr.x,q.bl.x,q.br.x], ys=[q.tl.y,q.tr.y,q.bl.y,q.br.y];
-    const minX=Math.min.apply(null,xs), maxX=Math.max.apply(null,xs);
-    const minY=Math.min.apply(null,ys), maxY=Math.max.apply(null,ys);
-    el.style.left=(canvasRect.left+minX*scaleX)+'px';
-    el.style.top=(canvasRect.top+minY*scaleY)+'px';
-    el.style.width=Math.max(60,(maxX-minX)*scaleX)+'px';
-    el.style.height=Math.max(40,(maxY-minY)*scaleY)+'px';
+    // La pantalla de la pared larga es un PARALELOGRAMO inclinado (perspectiva de
+    // la pared), no un rectángulo. Mapeamos el iframe al paralelogramo con un
+    // transform:matrix (origen tl, base u=tr-tl, v=bl-tl) para que encaje exacto.
+    const r=cv.getBoundingClientRect();
+    const sx=r.width/W, sy=r.height/H;   // W===cv.width, H===cv.height
+    const C=p=>({x:r.left+p.x*sx, y:r.top+p.y*sy});
+    const tl=C(q.tl), tr=C(q.tr), bl=C(q.bl);
+    const ux=tr.x-tl.x, uy=tr.y-tl.y;    // borde superior (eje X de la pantalla)
+    const vx=bl.x-tl.x, vy=bl.y-tl.y;    // borde izquierdo (eje Y de la pantalla)
+    const w0=Math.max(60,Math.hypot(ux,uy));   // tamaño base del iframe (px)
+    const h0=Math.max(40,Math.hypot(vx,vy));
+    el.style.left='0px'; el.style.top='0px';
+    el.style.width=w0+'px'; el.style.height=h0+'px';
+    el.style.transformOrigin='0 0';
+    el.style.transform='matrix('+(ux/w0)+','+(uy/w0)+','+(vx/h0)+','+(vy/h0)+','+tl.x+','+tl.y+')';
     if((el.src||'').indexOf('best.html')<0) el.src=wallAvatarUrl();   // monta una vez (URL fresca)
     el.style.display='block';
   }catch(e){}
@@ -24676,11 +24682,14 @@ window.xtAPI = (function(){
           if(typeof setAvatar3dTotem==='function') setAvatar3dTotem(false);
           return {ok:true,message:'Avatar 3D apagado en el tótem (vuelve la cara AI).'};
         }
-        if(a==='ds on'||a==='pared on'||a==='wall on'||a==='ds'){
+        if(a==='ds on'||a==='pared on'||a==='wall on'){
           if(typeof setAvatar3dWall==='function') return setAvatar3dWall(true);
         }
         if(a==='ds off'||a==='pared off'||a==='wall off'){
           if(typeof setAvatar3dWall==='function') return setAvatar3dWall(false);
+        }
+        if(a==='ds'||a==='wall'||a==='pared'){   // bare → toggle on/off
+          if(typeof setAvatar3dWall==='function') return setAvatar3dWall(!avatar3dWall);
         }
         if(a==='audio off'||a==='mute'||a==='silencio'||a==='muda'){
           if(typeof setAvatar3dAudio==='function') return setAvatar3dAudio(false);
@@ -27561,11 +27570,14 @@ window.xtAPI = (function(){
           if(typeof setAvatar3dTotem==='function') setAvatar3dTotem(false);
           return en?'Avatar 3D off on the totem (back to the AI face).':'Avatar 3D apagado en el tótem (vuelve la cara AI).';
         }
-        if(a==='ds on'||a==='pared on'||a==='wall on'||a==='ds'){
+        if(a==='ds on'||a==='pared on'||a==='wall on'){
           if(typeof setAvatar3dWall==='function'){ const r=setAvatar3dWall(true); return r&&r.message?r.message:''; }
         }
         if(a==='ds off'||a==='pared off'||a==='wall off'){
           if(typeof setAvatar3dWall==='function'){ const r=setAvatar3dWall(false); return r&&r.message?r.message:''; }
+        }
+        if(a==='ds'||a==='wall'||a==='pared'){   // bare → toggle on/off
+          if(typeof setAvatar3dWall==='function'){ const r=setAvatar3dWall(!avatar3dWall); return r&&r.message?r.message:''; }
         }
         if(a==='audio off'||a==='mute'||a==='silencio'||a==='muda'){
           if(typeof setAvatar3dAudio==='function'){ const r=setAvatar3dAudio(false); return r&&r.message?r.message:''; }
