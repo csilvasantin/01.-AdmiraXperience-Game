@@ -10559,6 +10559,141 @@ function closeDVRPanel(){
   }catch(_){}
 }
 window.openDVRPanel=openDVRPanel; window.closeDVRPanel=closeDVRPanel;
+
+// ══ CALENDARIO HISTÓRICO ════════════════════════════════════════════════════
+// Días pasados desde el 1-ene-2026 hasta HOY: cuánta gente entró, qué hicieron y
+// un "DVR del día" (línea de tiempo por horas). Los días que no se jugaron se
+// INVENTAN de forma DETERMINISTA (seed = fecha) → un día siempre muestra lo mismo.
+// El rango llega siempre hasta la fecha real (new Date()) y se amplía solo.
+const XCAL=(function(){
+  const START=new Date(2026,0,1);
+  const MES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const DOW=['L','M','X','J','V','S','D'];
+  function today(){ const n=new Date(); return new Date(n.getFullYear(),n.getMonth(),n.getDate()); }
+  function key(d){ return d.getFullYear()*10000+(d.getMonth()+1)*100+d.getDate(); }
+  function mulberry(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+  function fmt(d){ return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear(); }
+  // Estadística determinista (inventada) de un día.
+  function stats(d){
+    const r=mulberry(key(d)); const dow=d.getDay(), mon=d.getMonth();
+    const weekend=(dow===6||dow===0)?1:(dow===5?0.6:0);
+    const season=[0.7,0.75,0.9,1.0,1.05,1.15,1.25,1.2,1.05,1.0,0.95,1.12][mon];
+    const entran=Math.max(8,Math.round((68+r()*72)*season*(1+weekend*0.35)));
+    const pasan=Math.round(entran*(3.2+r()*2.8));
+    const ventas=Math.round(entran*(7+r()*11));
+    const beneficio=Math.round(ventas*(0.22+r()*0.16));
+    const sat=Math.round(67+r()*31);
+    const socios=Math.round(entran*(0.02+r()*0.05));
+    const incidencias=(r()<0.16)?(1+Math.floor(r()*2)):0;
+    const ladron=(r()<0.06)?1:0;
+    const prods=['Tabaco','Vapeadores','Prensa','Lotería','Souvenirs','Bebidas'];
+    const w=prods.map(()=>0.5+r()), ws=w.reduce((a,b)=>a+b,0);
+    const compras=prods.map((p,i)=>({name:p,n:Math.max(1,Math.round(entran*0.6*w[i]/ws))})).sort((a,b)=>b.n-a.n);
+    const curve=[.3,.6,.8,1,.9,.7,.6,.7,.85,1,.95,.6,.4]; const raw=[];
+    for(let i=0;i<13;i++) raw.push(curve[i]*(0.6+r()*0.8));
+    const rs=raw.reduce((a,b)=>a+b,0); const hours=[];
+    for(let i=0;i<13;i++){ const inH=Math.round(entran*raw[i]/rs); hours.push({h:9+i,in:inH,pass:Math.round(inH*(3+r()*2))}); }
+    return {entran,pasan,ventas,beneficio,sat,socios,incidencias,ladron,compras,hours};
+  }
+  let viewY,viewM,el,dayCur=0;
+  function ensure(){
+    if(el) return el;
+    el=document.createElement('div'); el.id='xcalPanel';
+    el.style.cssText='position:fixed;top:54px;left:50%;transform:translateX(-50%);z-index:2147482500;width:min(560px,94vw);max-height:84vh;display:none;flex-direction:column;background:rgba(6,14,22,.97);border:1px solid #5fb0ff;border-radius:12px;color:#dbeaff;font-family:"JetBrains Mono",ui-monospace,monospace;font-size:12px;box-shadow:0 14px 40px rgba(0,0,0,.55);overflow:hidden';
+    document.body.appendChild(el);
+    el.addEventListener('click',ev=>{
+      const b=ev.target.closest('[data-xc]'); if(!b) return; const a=b.getAttribute('data-xc');
+      if(a==='close') close();
+      else if(a==='prev'){ prevMonth(); }
+      else if(a==='next'){ nextMonth(); }
+      else if(a==='back'){ renderMonth(); }
+      else if(a==='day'){ openDay(new Date(+b.getAttribute('data-y'),+b.getAttribute('data-m'),+b.getAttribute('data-d'))); }
+      else if(a==='dvr'){ close(); try{ const m=(typeof openDVRPanel==='function')?openDVRPanel():null; if(m&&typeof showEv==='function') showEv(String(m).slice(0,80),'#78f3ff'); }catch(_){} }
+      else if(a==='play'){ playDay(); }
+    });
+    el.addEventListener('input',ev=>{ const s=ev.target.closest('#xcScrub'); if(s){ dayCur=+s.value||0; paintScrub(); } });
+    return el;
+  }
+  function open(){ ensure(); const t=today(); viewY=t.getFullYear(); viewM=t.getMonth(); el.style.display='flex'; renderMonth(); }
+  function close(){ if(el){ el.style.display='none'; if(XCAL._pl){ clearInterval(XCAL._pl); XCAL._pl=null; } } }
+  function prevMonth(){ if(viewY===2026&&viewM===0) return; viewM--; if(viewM<0){viewM=11;viewY--;} renderMonth(); }
+  function nextMonth(){ const t=today(); if(viewY===t.getFullYear()&&viewM===t.getMonth()) return; viewM++; if(viewM>11){viewM=0;viewY++;} renderMonth(); }
+  function heat(n){ if(n>=170)return'#1b7a3a'; if(n>=120)return'#2f8d3f'; if(n>=80)return'#5a7d2a'; if(n>=45)return'#7d6a1f'; return'#5a3a1f'; }
+  function renderMonth(){
+    ensure(); const t=today();
+    const first=new Date(viewY,viewM,1); let lead=(first.getDay()+6)%7; // L=0
+    const dim=new Date(viewY,viewM+1,0).getDate();
+    const canPrev=!(viewY===2026&&viewM===0), canNext=!(viewY===t.getFullYear()&&viewM===t.getMonth());
+    let cells='';
+    for(let i=0;i<lead;i++) cells+='<div></div>';
+    for(let d=1;d<=dim;d++){
+      const dt=new Date(viewY,viewM,d);
+      const future=dt>t, before=dt<START;
+      if(future||before){ cells+='<div style="opacity:.18;padding:6px 0;text-align:center;border:1px solid #16303f;border-radius:6px">'+d+'</div>'; continue; }
+      const st=stats(dt); const isToday=(key(dt)===key(t));
+      cells+='<div data-xc="day" data-y="'+viewY+'" data-m="'+viewM+'" data-d="'+d+'" title="'+fmt(dt)+' · '+st.entran+' entran" '+
+        'style="cursor:pointer;padding:5px 0 4px;text-align:center;border:1px solid '+(isToday?'#ffd866':'#1f4357')+';border-radius:6px;background:'+heat(st.entran)+'22">'+
+        '<div style="font-weight:bold;color:'+(isToday?'#ffd866':'#dbeaff')+'">'+d+'</div>'+
+        '<div style="font-size:8px;color:'+heat(st.entran)+';font-weight:bold">'+st.entran+'</div></div>';
+    }
+    const hdr=DOW.map(x=>'<div style="text-align:center;font-size:9px;opacity:.6">'+x+'</div>').join('');
+    el.innerHTML=
+      '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 11px;border-bottom:1px dashed #2f6a8a"><b>📅 CALENDARIO · Xtanco</b><span data-xc="close" style="cursor:pointer;color:#999;padding:0 4px">×</span></div>'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 11px"><span data-xc="prev" style="cursor:'+(canPrev?'pointer':'default')+';opacity:'+(canPrev?1:.3)+';padding:2px 8px;border:1px solid #2f6a8a;border-radius:6px">‹</span><b style="font-size:13px">'+MES[viewM]+' '+viewY+'</b><span data-xc="next" style="cursor:'+(canNext?'pointer':'default')+';opacity:'+(canNext?1:.3)+';padding:2px 8px;border:1px solid #2f6a8a;border-radius:6px">›</span></div>'+
+      '<div style="padding:0 11px 12px;overflow:auto"><div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:4px">'+hdr+'</div>'+
+      '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">'+cells+'</div>'+
+      '<div style="font-size:9px;opacity:.55;margin-top:9px;text-align:center">Pulsa un día para ver entradas, actividad y el DVR del día. Días sin jugar = estimación.</div></div>';
+  }
+  let dayDate=null,dayData=null;
+  function openDay(dt){
+    if(XCAL._pl){ clearInterval(XCAL._pl); XCAL._pl=null; }
+    dayDate=dt; dayData=stats(dt); dayCur=0;
+    const t=today(); const isToday=(key(dt)===key(t));
+    const dname=['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'][dt.getDay()];
+    const s=dayData;
+    const top=s.compras.slice(0,4).map(c=>'<span style="display:inline-block;background:#0e2233;border:1px solid #235;border-radius:5px;padding:1px 6px;margin:2px 3px 0 0">'+c.name+' <b>'+c.n+'</b></span>').join('');
+    const big=(lbl,val,col)=>'<div style="flex:1;min-width:74px;background:#08151f;border:1px solid #1f4357;border-radius:8px;padding:7px 8px"><div style="font-size:8px;opacity:.6;text-transform:uppercase;letter-spacing:.05em">'+lbl+'</div><div style="font-size:16px;font-weight:bold;color:'+col+'">'+val+'</div></div>';
+    el.innerHTML=
+      '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 11px;border-bottom:1px dashed #2f6a8a"><b>📅 '+dname+' '+fmt(dt)+(isToday?' · <span style="color:#ffd866">hoy</span>':'')+'</b><span style="display:flex;gap:8px"><span data-xc="back" style="cursor:pointer;font-size:10px;border:1px solid #2f6a8a;border-radius:6px;padding:2px 7px">‹ calendario</span><span data-xc="close" style="cursor:pointer;color:#999;padding:0 4px">×</span></span></div>'+
+      '<div style="padding:11px;overflow:auto">'+
+        '<div style="display:flex;flex-wrap:wrap;gap:7px">'+
+          big('🏪 Entraron',s.entran,'#7dff9e')+big('🚶 Pasaron',s.pasan,'#9fd0ff')+big('💶 Ventas',s.ventas+'€','#ffd866')+big('📈 Beneficio',s.beneficio+'€','#ffd866')+big('😊 Satisf.',s.sat+'%','#7dff9e')+big('🪪 Socios',s.socios,'#c9a0ff')+
+        '</div>'+
+        '<div style="margin-top:10px;font-size:10px;opacity:.75">🛒 Qué compraron</div><div style="margin-top:2px">'+top+'</div>'+
+        '<div style="margin-top:8px;font-size:10px">'+(s.incidencias?('⚠️ '+s.incidencias+' incidencia(s)'):'✅ Sin incidencias')+(s.ladron?'  ·  🚨 1 intento de hurto':'')+'</div>'+
+        '<div style="margin-top:12px;display:flex;justify-content:space-between;align-items:center"><b style="font-size:11px">⏮ DVR del día — por horas</b>'+
+          (isToday?'<span data-xc="dvr" style="cursor:pointer;font-size:10px;border:1px solid #78f3ff;color:#78f3ff;border-radius:6px;padding:3px 8px">▶ DVR visual de hoy</span>':'<span data-xc="play" style="cursor:pointer;font-size:10px;border:1px solid #78f3ff;color:#78f3ff;border-radius:6px;padding:3px 8px">▶ Reproducir día</span>')+'</div>'+
+        '<div id="xcChart" style="display:flex;align-items:flex-end;gap:3px;height:74px;margin-top:8px;padding:6px;background:#04101a;border:1px solid #16303f;border-radius:8px"></div>'+
+        '<input id="xcScrub" type="range" min="0" max="12" value="0" step="1" style="width:100%;accent-color:#78f3ff;margin-top:7px">'+
+        '<div id="xcScrubInfo" style="font-size:11px;color:#ffd866;margin-top:3px;text-align:center"></div>'+
+      '</div>';
+    paintChart(); paintScrub();
+  }
+  function paintChart(){
+    const c=el.querySelector('#xcChart'); if(!c||!dayData) return;
+    const mx=Math.max(1,...dayData.hours.map(h=>h.in));
+    c.innerHTML=dayData.hours.map((h,i)=>'<div title="'+h.h+':00 · '+h.in+'" style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%">'+
+      '<div style="width:100%;background:'+(i===dayCur?'#ffd866':'#2f8d8d')+';height:'+Math.round(h.in/mx*100)+'%;border-radius:2px 2px 0 0;min-height:2px"></div>'+
+      '<div style="font-size:7px;opacity:.55;margin-top:1px">'+h.h+'</div></div>').join('');
+  }
+  function paintScrub(){
+    const info=el.querySelector('#xcScrubInfo'); if(!info||!dayData) return;
+    const h=dayData.hours[dayCur]||{h:9,in:0,pass:0};
+    info.innerHTML='🕒 <b>'+String(h.h).padStart(2,'0')+':00</b> · entraron <b>'+h.in+'</b> · pasaron <b>'+h.pass+'</b>';
+    paintChart();
+  }
+  function playDay(){
+    if(XCAL._pl){ clearInterval(XCAL._pl); XCAL._pl=null; return; }
+    dayCur=0; const s=el.querySelector('#xcScrub');
+    XCAL._pl=setInterval(()=>{ dayCur++; if(dayCur>12){ clearInterval(XCAL._pl); XCAL._pl=null; dayCur=12; } if(s) s.value=dayCur; paintScrub(); },420);
+  }
+  return {open,close,stats};
+})();
+window.XCAL=XCAL;
+// La fecha del topbar abre el calendario.
+(function(){ const wire=()=>{ const d=document.getElementById('bbDate'), c=document.getElementById('bbClock');
+  [d,c].forEach(elx=>{ if(elx&&!elx.__xcal){ elx.__xcal=1; elx.style.cursor='pointer'; elx.title='Abrir calendario histórico'; elx.addEventListener('click',()=>{ try{XCAL.open();}catch(e){} }); } }); };
+  if(document.readyState!=='loading') wire(); else document.addEventListener('DOMContentLoaded',wire); })();
 (function wireDVR(){
   const e=_dvrEls(); if(!e.panel) return;
   const setIdx=v=>{ REC.replay.playing=false; REC.replay._fidx=Math.max(0,Math.min(REC.recording.length-1,v)); REC.replay.idx=Math.round(REC.replay._fidx); updateDVRPanel(); };
@@ -24963,6 +25098,10 @@ window.xtAPI = (function(){
         if(typeof askAvatar3d==='function') return askAvatar3d(arg);
         return {ok:false,message:'Avatar3D no disponible.'};
       }
+      if(['calendario','calendar','historico','histórico'].includes(cmd)){
+        if(typeof XCAL!=='undefined' && XCAL.open){ XCAL.open(); return {ok:true,message:'📅 Calendario abierto: pulsa un día para ver entradas, actividad y el DVR del día.'}; }
+        return {ok:false,message:'Calendario no disponible'};
+      }
 
       return {ok:false,message:'Comando no reconocido: '+raw};
     },
@@ -26665,7 +26804,7 @@ window.xtAPI = (function(){
       {title:'Consulta',items:['/status','/staff','/stock','/turno','/turno 12']},
       {title:'Equipo y stock',items:['/hire 1','/hire dj','/hire all','/train 1','/train all','/restock 2','/restock all','/restock prensa']},
       {title:'Equipo del punto (gemelo)',items:['/nuevoMiembro Laura azafata','/nuevoMiembro Pedro cajero','/echarMiembro Laura','/report Marta']},
-      {title:'DVR del Xpacio (grabar/velocidad/replay)',items:['/velocidad 1','/velocidad 2','/velocidad 4','/velocidad 8','/dvr','/envivo']},
+      {title:'DVR del Xpacio (grabar/velocidad/replay)',items:['/velocidad 1','/velocidad 2','/velocidad 4','/velocidad 8','/dvr','/envivo','/calendario']},
       {title:'Personal (panel /staff)',items:['/staff','/staff bonus 0 100','/staff eotm 0','/staff eotm ana','/staff train 1','/staff hire 2','/staff fire 1']},
       {title:'Tienda',items:['/ad 0','/ad 1','/ad 2','/upgrade','/aforo real','/aforo exacto','/aforo fake','/aforo','/visit com','/visit tec','/visit del','/visit gc','/save']},
       {title:'Look & feel',items:['/camiseta on','/camiseta off','/camiseta']},
@@ -27237,6 +27376,10 @@ window.xtAPI = (function(){
       if(['envivo','live','enviva','directo'].includes(cmd)){
         if(typeof closeDVRPanel==='function') closeDVRPanel();
         return '● EN VIVO — replay cerrado.';
+      }
+      if(['calendario','calendar','historico','histórico','dias','días'].includes(cmd)){
+        if(typeof XCAL!=='undefined' && XCAL.open){ XCAL.open(); return '📅 Calendario abierto: pulsa un día para ver entradas, actividad y el DVR del día.'; }
+        return 'Calendario no disponible';
       }
       if(cmd==='status') return formatStatus();
       if(cmd==='stock') return formatStock();
