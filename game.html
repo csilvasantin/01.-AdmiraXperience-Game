@@ -11419,7 +11419,7 @@ function updateGame(){
         if(G.rush.active) addFloat(s.x+7,s.y-16,'x'+CFG.RUSH_MULT.toFixed(1),P.rushGlow);
         G.satisfaction=Math.min(100,G.satisfaction+0.3);
         // TPV: registro real por producto (para el calendario "qué compraron").
-        try{ const nm=(typeof prodName==='function')?prodName(pi):('Prod '+pi); G.dayProductSales=G.dayProductSales||{}; G.dayProductSales[nm]=(G.dayProductSales[nm]||0)+units; G.lastSold={name:nm,rev:rev,units:units,ts:tt}; }catch(e){}
+        try{ const nm=(typeof prodName==='function')?prodName(pi):('Prod '+pi); G.dayProductSales=G.dayProductSales||{}; G.dayProductSales[nm]=(G.dayProductSales[nm]||0)+units; G.lastSold={name:nm,idx:pi,rev:rev,units:units,ts:tt}; }catch(e){}
         // Cross-selling en la pantalla de la pared larga (throttled ~6s).
         try{
           if((G._xsellCD|0)<=0 && typeof XSELL_RULES_ES!=='undefined'){
@@ -19040,27 +19040,23 @@ function drawTurnManager(){
   cx.strokeStyle='#1e6a72';cx.lineWidth=1;
   for(let gy=8;gy<vH;gy+=8){cx.beginPath();cx.moveTo(5,gy);cx.lineTo(vW-5,gy);cx.stroke();}
   cx.globalAlpha=1;
-  cx.textAlign='center';
-  // ── Mitad izquierda: TURNO ──
-  const cxL=24;
-  cx.fillStyle='#8defff';cx.font='bold 7px monospace';cx.fillText('TURNO',cxL,12);
-  cx.fillStyle='#ffd86b';cx.font='bold 20px monospace';cx.fillText(num,cxL,35);
-  cx.fillStyle='#8defff';cx.font='bold 6px monospace';cx.fillText('CAJA',cxL,48);
-  // ── Separador central ──
-  cx.strokeStyle='#1e6a72';cx.globalAlpha=0.6;cx.lineWidth=1;cx.beginPath();cx.moveTo(47,7);cx.lineTo(47,vH-5);cx.stroke();cx.globalAlpha=1;
-  // ── Mitad derecha: TPV en tiempo real (qué compran) ──
-  const cxR=70;
+  cx.textAlign='center'; const cX=vW/2;
   const trunc=(s,n)=>{ s=String(s||''); return s.length>n?s.slice(0,n-1)+'…':s; };
-  cx.fillStyle='#7dff9e';cx.font='bold 7px monospace';cx.fillText('TPV',cxR,12);
+  // ── ARRIBA: imagen de lo que se compra (TPV en tiempo real) ──
+  const EMO=['🚬','💨','🎟️','📰','🍬','🔋','🍷','🧰'];
   const last=(typeof G!=='undefined'&&G&&G.lastSold)?G.lastSold:null;
   if(last){
-    cx.fillStyle='#ffffff';cx.font='bold 8px monospace';cx.fillText(trunc(last.name,10),cxR,26);
-    cx.fillStyle='#ffd86b';cx.font='bold 12px monospace';cx.fillText('+'+(last.rev|0)+'€',cxR,40);
+    cx.font='16px monospace'; cx.fillText(EMO[last.idx|0]||'🛍️',cX,19);
+    cx.fillStyle='#ffffff';cx.font='bold 7px monospace'; cx.fillText(trunc(last.name,13),cX,29);
+    cx.fillStyle='#ffd86b';cx.font='bold 6px monospace'; cx.fillText('+'+(last.rev|0)+'€',cX,35);
   } else {
-    cx.fillStyle='#557';cx.font='7px monospace';cx.fillText('en espera',cxR,30);
+    cx.fillStyle='#557';cx.font='7px monospace'; cx.fillText(lang==='en'?'waiting sale':'en espera',cX,22);
   }
-  let topName='',best=-1; try{ const ps=(G&&G.dayProductSales)||{}; for(const k in ps){ if(ps[k]>best){best=ps[k];topName=k;} } }catch(e){}
-  if(topName){ cx.fillStyle='#8aa';cx.font='6px monospace';cx.fillText('TOP: '+trunc(topName,8),cxR,50); }
+  // ── Separador horizontal ──
+  cx.strokeStyle='#1e6a72';cx.globalAlpha=0.6;cx.lineWidth=1;cx.beginPath();cx.moveTo(6,38);cx.lineTo(vW-6,38);cx.stroke();cx.globalAlpha=1;
+  // ── ABAJO: gestor de turnos ──
+  cx.fillStyle='#8defff';cx.font='bold 6px monospace';cx.fillText('TURNO · CAJA',cX,46);
+  cx.fillStyle='#ffd86b';cx.font='bold 13px monospace';cx.fillText(num,cX,vH-2);
   cx.setTransform(1,0,0,1,0,0);
   cx.restore();
   cx.restore();
@@ -25001,14 +24997,14 @@ window.xtAPI = (function(){
           const entran=(typeof G!=='undefined'&&G)?(G.custIn|0):0;
           const pasan=(typeof G!=='undefined'&&G)?(G.passersbyToday|0):0;
           const dentro=(typeof G!=='undefined'&&G&&Array.isArray(G.custs))?G.custs.length:0;
-          const flashIn=(entran!==prevIn&&prevIn>=0), flashOut=(pasan!==prevOut&&prevOut>=0);
-          prevIn=entran; prevOut=pasan;
+          const flashIn=(dentro!==prevIn&&prevIn>=0), flashOut=(pasan!==prevOut&&prevOut>=0);
+          prevIn=dentro; prevOut=pasan;
           const big=(n,flash)=>'<div style="font-size:26px;font-weight:800;line-height:1.1;color:'+(flash?'#fff':'#ffe6a8')+';text-shadow:'+(flash?'0 0 14px rgba(255,230,150,.95)':'none')+'">'+n.toLocaleString('es')+'</div>';
           const marcador=
             '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:9px">'+
               '<div style="background:rgba(0,0,0,.35);border:1px solid rgba(158,255,160,.35);border-radius:8px;padding:8px 10px;text-align:center">'+
-                '<div style="font-size:9.5px;letter-spacing:.1em;color:#9effa0">🏪 INTERIOR</div>'+big(entran,flashIn)+
-                '<div style="font-size:9px;opacity:.65">entran hoy · dentro ahora: '+dentro+'</div>'+
+                '<div style="font-size:9.5px;letter-spacing:.1em;color:#9effa0">🏪 EN TIENDA AHORA</div>'+big(dentro,flashIn)+
+                '<div style="font-size:9px;opacity:.65">'+entran+' entran hoy (acumulado)</div>'+
               '</div>'+
               '<div style="background:rgba(0,0,0,.35);border:1px solid rgba(120,200,255,.35);border-radius:8px;padding:8px 10px;text-align:center">'+
                 '<div style="font-size:9.5px;letter-spacing:.1em;color:#8ed2ff">🚶 EXTERIOR</div>'+big(pasan,flashOut)+
