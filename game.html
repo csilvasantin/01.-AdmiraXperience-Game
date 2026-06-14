@@ -857,7 +857,7 @@
 <div id="telegramDock" aria-label="Telegram AdmiraXPBot">
   <div class="dock-resize-handle" data-dock-resize aria-hidden="true"></div>
   <div class="tg-pane send">
-    <div class="tg-head"><span>Control de la Store desde Telegram / WhatsApp</span><a class="tg-site-link" id="dockSiteLink" href="https://csilvasantin.github.io/omnipublicity/" target="_blank" rel="noopener" title="Abrir OmniPublicity — modulo programatico del Xpace OS">↗ SITE <span class="tg-site-ver" id="dockSiteVer">v—</span></a><span class="tg-status" id="telegramSendStatus" style="display:none">AdmiraXPBot</span></div>
+    <div class="tg-head"><span>Store control from Telegram / WhatsApp</span><a class="tg-site-link" id="dockSiteLink" href="https://csilvasantin.github.io/omnipublicity/" target="_blank" rel="noopener" title="Abrir OmniPublicity — modulo programatico del Xpace OS">↗ SITE <span class="tg-site-ver" id="dockSiteVer">v—</span></a><span class="tg-status" id="telegramSendStatus" style="display:none">AdmiraXPBot</span></div>
     <div id="telegramHelpPanel" aria-label="Comandos disponibles"></div>
     <div id="telegramSignagePanel" aria-label="Playlist Digital Signage"></div>
     <textarea id="telegramComposer" placeholder="Write to @AdmiraXPBot... Enter sends, Shift+Enter newline"></textarea>
@@ -1000,7 +1000,7 @@ window.STORE_CFG=null; window.STORE_CFG_READY=false;
 (function loadStoreCfg(){
   let loc=''; try{ loc=(new URLSearchParams(window.location.search).get('loc')||'').trim().toLowerCase(); }catch(e){}
   if(!loc){ window.STORE_CFG_READY=true; return; }
-  const API='https://omnipublicity-api.csilvasantin.workers.dev/locations';
+  const API='https://pixer-eleven.csilvasantin.workers.dev/da/locations';
   // Reintentos: el worker omnipublicity puede estar "frío" y fallar el primer
   // fetch → sin reintento el twin se quedaba sin config (sin pantallas/nombre).
   const MAX=4;
@@ -6027,6 +6027,10 @@ function setLanguage(nextLang){
   document.documentElement.lang=lang;
   try{localStorage.setItem('xtanco_lang',lang);}catch(e){}
   try{if(typeof applyHtmlLang==='function')applyHtmlLang(lang);}catch(e){}
+  // El dock de Telegram (Enviar/Ocultar, cabeceras, placeholder, estados) NO está
+  // en la tabla I18N: lo traduce syncDockLanguage(). Sin esta llamada los botones
+  // se quedaban con el idioma anterior → incoherencia (UI en inglés, botón "Enviar").
+  try{if(typeof syncDockLanguage==='function')syncDockLanguage();}catch(e){}
   try{document.querySelectorAll('#splashLang .splash-lang-btn').forEach(function(b){b.classList.toggle('is-active',b.dataset.lang===lang);});}catch(e){}
 }
 
@@ -15329,7 +15333,7 @@ function openNetworkView(){
   state = S.NETWORK; netSel = 0;
   if(!Array.isArray(window.STORE_LIST) || !window.STORE_LIST.length){
     netLoading = true;
-    fetch('https://omnipublicity-api.csilvasantin.workers.dev/locations',{cache:'no-store'})
+    fetch('https://pixer-eleven.csilvasantin.workers.dev/da/locations',{cache:'no-store'})
       .then(rs=>rs.json()).then(d=>{ window.STORE_LIST=(d&&Array.isArray(d.locations))?d.locations:[]; netLoading=false; netSel=0; })
       .catch(()=>{ netLoading=false; });
   }
@@ -17440,7 +17444,7 @@ async function askMetahuman(text){
 // A diferencia del Grok-proxy (solo texto), ESTE además devuelve y reproduce la VOZ.
 const AVATAR3D_CFG=(typeof RUNTIME_CONFIG!=='undefined'&&RUNTIME_CONFIG.avatar3d&&typeof RUNTIME_CONFIG.avatar3d==='object')?RUNTIME_CONFIG.avatar3d:{};
 const AVATAR3D={
-  url:(typeof AVATAR3D_CFG.url==='string'&&AVATAR3D_CFG.url)?AVATAR3D_CFG.url.replace(/\/+$/,''):'https://omnipublicity-api.csilvasantin.workers.dev',
+  url:(typeof AVATAR3D_CFG.url==='string'&&AVATAR3D_CFG.url)?AVATAR3D_CFG.url.replace(/\/+$/,''):'https://pixer-eleven.csilvasantin.workers.dev/da',
   loc:(typeof AVATAR3D_CFG.loc==='string'&&AVATAR3D_CFG.loc)?AVATAR3D_CFG.loc:'',
   totemUrl:(typeof AVATAR3D_CFG.totemUrl==='string'&&AVATAR3D_CFG.totemUrl)?AVATAR3D_CFG.totemUrl:'https://digitalavatar.ai/best.html?kiosk=1',
 };
