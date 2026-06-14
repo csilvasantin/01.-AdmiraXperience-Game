@@ -777,7 +777,8 @@
   <textarea id="mhPrompt" maxlength="500" placeholder="Pregunta a tu agente Metahuman... (Ctrl/⌘+Enter envía)"></textarea>
   <div class="mh-actions">
     <button type="button" id="mhAskBtn" class="mh-primary">Preguntar</button>
-    <span class="mh-hint">Ctrl/⌘ + Enter</span>
+    <button type="button" id="mhMicBtn" class="mh-primary" title="Preguntar hablando (voz)" aria-label="Hablar">🎙️</button>
+    <span class="mh-hint">Ctrl/⌘ + Enter · 🎙️ voz</span>
   </div>
   <div id="mhAnswer">Toca el tótem para empezar. El agente piensa con Grok mientras anima la onda de voz.</div>
   <div id="mhClubBlock">
@@ -17526,6 +17527,27 @@ window.askAvatar3d=askAvatar3d;
     const els=_mhEls(); if(!els.panel) return;
     if(els.askBtn) els.askBtn.addEventListener('click',()=>askMetahuman(els.prompt&&els.prompt.value||''));
     if(els.closeBtn) els.closeBtn.addEventListener('click',closeMetahumanPanel);
+    // 🎙️ Pregunta hablada: dicta por voz al cuadro y lanza la pregunta sola.
+    const micBtn=document.getElementById('mhMicBtn');
+    if(micBtn && !micBtn.dataset.wired){
+      micBtn.dataset.wired='1';
+      const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+      if(!SR){ micBtn.title='Voz no soportada en este navegador'; micBtn.style.opacity='.5'; }
+      else{
+        let rec=null, listening=false;
+        micBtn.addEventListener('click',()=>{
+          if(listening){ try{ rec&&rec.stop(); }catch(_){} return; }
+          try{
+            rec=new SR(); rec.lang=(typeof lang!=='undefined'&&lang==='en')?'en-US':'es-ES'; rec.interimResults=false; rec.maxAlternatives=1;
+            listening=true; micBtn.textContent='🔴'; if(els.status) els.status.textContent='escuchando…';
+            rec.onresult=(e)=>{ const t=(e.results&&e.results[0]&&e.results[0][0]&&e.results[0][0].transcript||'').trim(); if(t){ if(els.prompt) els.prompt.value=t; askMetahuman(t); } };
+            rec.onerror=()=>{ if(els.status) els.status.textContent='voz: error'; };
+            rec.onend=()=>{ listening=false; micBtn.textContent='🎙️'; };
+            rec.start();
+          }catch(e){ listening=false; micBtn.textContent='🎙️'; if(els.status) els.status.textContent='voz no disponible'; }
+        });
+      }
+    }
     // Caja Metahuman arrastrable por su cabecera (ratón + táctil).
     const mhHdr=els.panel.querySelector('.mh-head');
     if(mhHdr && !mhHdr.dataset.dragWired){
