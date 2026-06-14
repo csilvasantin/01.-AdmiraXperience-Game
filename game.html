@@ -17888,6 +17888,17 @@ function mhFaceOff(){
   e.wrap.classList.add('mh-face-off');
   if(e.frame) e.frame.removeAttribute('src'); // corta la conexión WebRTC al cerrar
 }
+// Publica la respuesta en el worker; el avatar UE la sondea (/metahuman/next) y la HABLA.
+window.MH_SAY_URL = window.MH_SAY_URL || 'https://omnipublicity-api.csilvasantin.workers.dev/metahuman/say';
+window.MH_ROOM = window.MH_ROOM || 'xtanco';
+function mhSayToFace(text){
+  try{
+    if(!window.MH_FACE_ENABLED) return;            // sólo si la cara está activa
+    const t=String(text||'').trim(); if(!t) return;
+    fetch(window.MH_SAY_URL,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({room:window.MH_ROOM,text:t})}).catch(()=>{});
+  }catch(e){}
+}
 function openMetahumanPanel(){
   const els=_mhEls(); if(!els.panel) return;
   els.panel.classList.add('show');
@@ -18024,6 +18035,8 @@ async function askMetahuman(text){
     MH.lastAnswer=answerText;
     if(els.answer){ els.answer.classList.remove('is-thinking'); els.answer.classList.toggle('is-error',!result||!result.ok); els.answer.textContent=answerText; }
     if(els.status) els.status.textContent=(result&&result.ok)?'listo':'error';
+    // La CARA viva (avatar UE) dice la respuesta: la publicamos en el canal say.
+    if(result&&result.ok) mhSayToFace(answerText);
     // Keep speaking animation for a bit so the avatar "reads" the answer
     MH.speakUntil=Date.now()+Math.min(8000,Math.max(2000,answerText.length*40));
   } catch(e){
