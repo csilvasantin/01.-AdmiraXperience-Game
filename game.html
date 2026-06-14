@@ -10475,6 +10475,25 @@ function loadCampaigns(){
   }catch(e){}
 }
 setTimeout(loadCampaigns,3000); setInterval(loadCampaigns,45000);
+// BURN EN VIVO: empuja al KV el resumen del día EN CURSO (con impactos exteriores
+// por segmento) cada ~45s → admira.app ve el presupuesto de campaña consumirse en
+// tiempo real (no solo al cerrar el día). Dedupe por extAds para no gastar cuota KV.
+function pushLiveDay(){
+  try{
+    if(typeof state==='undefined'||typeof S==='undefined'||state!==S.GAME) return;
+    if(typeof G==='undefined'||!G||!G.extAdImpacts||!Object.keys(G.extAdImpacts).length) return;
+    const sig=JSON.stringify(G.extAdImpacts); if(sig===pushLiveDay._last) return; pushLiveDay._last=sig;
+    const summary={ entran:Math.max(G.custIn|0,G.customersToday|0), pasan:G.passersbyToday|0,
+      ventas:G.weekRevenue|0, beneficio:(G.weekRevenue|0)-(G.weekExpenses|0),
+      sat:Math.round(G.satisfaction||0), fama:Math.round(G.fame||0), extAds:G.extAdImpacts };
+    try{ const rev={}; let tot=0; for(const k in G.extAdImpacts){ const r=G.extAdImpacts[k]/1000*segCpm(k); rev[k]=+r.toFixed(2); tot+=r; } summary.extAdsRev=rev; summary.extAdsRevTotal=+tot.toFixed(2); }catch(e){}
+    try{ const ah=(typeof IMPACTS!=='undefined'&&IMPACTS.aud&&IMPACTS.aud.hours)?IMPACTS.aud.hours:null; if(ah){ const hrs=Object.keys(ah).map(h=>({h:+h,in:Math.round(ah[h].int||0),pass:Math.round(ah[h].ext||0)})).sort((a,b)=>a.h-b.h); if(hrs.length) summary.hours=hrs; } }catch(e){}
+    const loc=(typeof avatar3dLoc==='function')?avatar3dLoc():((typeof window!=='undefined'&&window.STORE_CFG&&window.STORE_CFG.id)||'xtanco-generic');
+    const nd=new Date(); const dstr=''+nd.getFullYear()+String(nd.getMonth()+1).padStart(2,'0')+String(nd.getDate()).padStart(2,'0');
+    fetch('https://pixer-eleven.csilvasantin.workers.dev/day/save',{method:'POST',headers:{'Content-Type':'application/json'},keepalive:true,body:JSON.stringify({loc,date:dstr,summary})}).catch(()=>{});
+  }catch(e){}
+}
+setInterval(pushLiveDay,45000);
 function impactsReset(){ IMPACTS.day=Object.create(null); IMPACTS._pPrev=undefined; IMPACTS.aud={hours:Object.create(null),_gtPrev:undefined,_inPrev:undefined}; impactsEnsureDay(); }
 function impactsTick(){
   if(typeof G==='undefined'||!G) return;
