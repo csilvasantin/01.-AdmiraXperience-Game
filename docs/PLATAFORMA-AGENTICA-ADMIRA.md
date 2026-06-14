@@ -138,11 +138,14 @@ resúmenes, `segcpm:<loc>` para los precios, `signage` para empujar creatividade
 **R2** (Stock de assets). El gemelo lee el CPM cada 60 s, así un cambio de precio en
 admira.app se aplica casi al instante.
 
-> **Próximo cierre del bucle (en construcción):** comprar una campaña en admira.app
-> (segmento + fechas + presupuesto) → PixerIA genera la creatividad → se empuja al
-> gemelo por `/signage` → el presupuesto se descuenta según los impactos por
-> segmento reales hasta agotarse. La medición y el precio por segmento ya están; lo
-> que falta es el **ledger de presupuesto** y el push automático de la campaña.
+> **Compra de campaña (MVP operativo):** en admira.app, panel **"🛒 Comprar campaña
+> (RTB por segmento)"** → eliges segmento + presupuesto → se crea la campaña
+> (`POST /campaign` → KV `camp:<loc>:<id>`) con su CPM. El gemelo ya muestra la
+> creatividad de ese segmento a quien pasa, mide los impactos y los reporta; el
+> monitor de campañas **consume el presupuesto** con los impactos reales por
+> segmento (impactos×CPM) y marca la campaña como **AGOTADA** al llegar al tope.
+> *(MVP: el consumo se calcula sobre los impactos del día; pendiente: presupuesto
+> multi-día acumulado y push de creatividad recién generada por campaña.)*
 
 ---
 
