@@ -10582,8 +10582,9 @@ const MUPICAM = window.XPACE_MUPICAM = {
   pos:null,           // {x,y} de la lente en coords de canvas (lo fija drawEscaparate)
   shots:[],           // carrete: {id,t,hhmm,persona,normal,pixel}
   MAX:80,             // tope del carrete (ring buffer)
-  _mode:'normal',     // vista de la galería: 'normal' | 'pixel'
+  _mode:'normal',     // vista de la galería: 'normal' (humano IA) | 'pixel' (NPC pixelado)
   _timer:null,
+  _uid:0,             // id estable por foto (para humanizar sin que el ring buffer lo confunda)
 };
 function mupiCamTimeLabel(t){ try{ return dvrTimeLabel(t); }catch(_){ return '--:--'; } }
 // Dibuja la cámara encima del MUPI. La llama drawEscaparate con las dos esquinas
@@ -10630,9 +10631,10 @@ function mupiCamSnap(p){
     const pC=document.createElement('canvas'); pC.width=NW; pC.height=NH;
     const pX=pC.getContext('2d'); pX.imageSmoothingEnabled=false;
     pX.drawImage(tmp, 0,0,PW,PH, 0,0,NW,NH);
-    MUPICAM.shots.push({ id:(p.id||tt), t:(typeof G!=='undefined'&&G?G.gameTime:0)||0,
+    MUPICAM.shots.push({ id:(p.id||tt), _uid:(++MUPICAM._uid), t:(typeof G!=='undefined'&&G?G.gameTime:0)||0,
       hhmm:mupiCamTimeLabel((typeof G!=='undefined'&&G?G.gameTime:0)||0), persona:p.persona||'',
-      normal:nC.toDataURL('image/webp',0.7), pixel:pC.toDataURL('image/webp',0.6) });
+      normal:nC.toDataURL('image/webp',0.7), pixel:pC.toDataURL('image/webp',0.6),
+      human:null, _gen:false, _err:null });
     if(MUPICAM.shots.length>MUPICAM.MAX) MUPICAM.shots.shift();
     p._snapped=true;
   }catch(_){}
@@ -10645,7 +10647,7 @@ const MUPICAM_DVR_WINDOW=12;
 function mupiCamRenderGallery(){
   const p=mupiCamGalleryEl(); if(!p) return;
   const body=p.querySelector('#mcBody'); if(!body) return;
-  const md=p.querySelector('#mcMode'); if(md) md.textContent=MUPICAM._mode;
+  const md=p.querySelector('#mcMode'); if(md) md.textContent=(MUPICAM._mode==='pixel')?'🟦 NPC':'🧑 humano';
   // En modo DVR (replay) filtramos el carrete a la franja del momento que se está
   // revisando: solo los capturados entre (cursor - ventana) y el cursor.
   const replayOn=(typeof REC!=='undefined'&&REC&&REC.replay&&REC.replay.on);
@@ -10667,13 +10669,48 @@ function mupiCamRenderGallery(){
   }
   const pix=(MUPICAM._mode==='pixel');
   const cells=shots.slice().reverse().map(s=>{
-    const img=(pix?s.pixel:s.normal)||s.normal;
+    let img, rendering='auto', overlay='';
+    if(pix){ img=s.pixel||s.normal; rendering='pixelated'; }      // NPC pixelado
+    else if(s.human){ img=s.human; }                              // humano IA generado
+    else {                                                        // muñeco + botón para humanizar
+      img=s.normal;
+      overlay=s._gen
+        ? '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.5);border-radius:4px;font-size:14px">⏳</div>'
+        : '<div data-act="gen" data-uid="'+s._uid+'" title="Crear humano IA con PixerIA" style="position:absolute;right:2px;bottom:2px;background:rgba(0,0,0,.7);border:1px solid #5fb0ff;border-radius:5px;font-size:10px;line-height:1;padding:2px 3px;cursor:pointer">✨</div>';
+    }
+    const errMark=s._err?' <span style="color:#ff8866" title="'+String(s._err).replace(/"/g,'')+'">⚠</span>':'';
+    const clickGen=(!pix&&!s.human&&!s._gen)?(' data-act="gen" data-uid="'+s._uid+'" style="cursor:pointer;width:54px;height:auto;border:1px solid #2a3a30;border-radius:4px;background:#0a0e0c;image-rendering:'+rendering+'"'):(' style="width:54px;height:auto;border:1px solid #2a3a30;border-radius:4px;background:#0a0e0c;image-rendering:'+rendering+'"');
     return '<div style="display:flex;flex-direction:column;align-items:center;gap:2px">'+
-      '<img src="'+img+'" alt="viandante '+s.hhmm+'" style="width:54px;height:auto;border:1px solid #2a3a30;border-radius:4px;background:#0a0e0c;image-rendering:'+(pix?'pixelated':'auto')+'">'+
-      '<span style="font-size:8px;opacity:.75">🕒 '+s.hhmm+'</span></div>';
+      '<div style="position:relative">'+
+        '<img src="'+img+'" alt="viandante '+s.hhmm+'"'+clickGen+'>'+overlay+
+      '</div>'+
+      '<span style="font-size:8px;opacity:.75">🕒 '+s.hhmm+errMark+'</span></div>';
   }).join('');
   body.innerHTML='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(56px,1fr));gap:7px">'+cells+'</div>';
 }
+// Sincronización con PixerIA: convierte el muñeco (NPC) capturado en una PERSONA
+// REAL hecha con IA (img2img Gemini vía pixer-eleven /image/edit), con el mismo
+// encuadre, colores y complexión. Se guarda en shot.human y se ve en la vista
+// "🧑 humano"; la vista "🟦 NPC" sigue mostrando el pixelado.
+const MUPI_HUMAN_SYS='Eres un fotógrafo de calle. A partir de la figura/sprite dada, genera una FOTO REALISTA de una persona real con el MISMO encuadre y pose, los MISMOS colores de ropa, el mismo color y corte de pelo y una complexión parecida. NADA de estilo pixel, dibujo ni 3D de juego: piel, tela y luz realistas. Cuerpo entero, vertical, fondo neutro o calle desenfocada. Persona anónima, sin texto ni marcas.';
+async function mupiCamHumanize(uid){
+  const shot=MUPICAM.shots.find(s=>s._uid===uid);
+  if(!shot||shot._gen||shot.human) return;
+  shot._gen=true; shot._err=null; try{ mupiCamRenderGallery(); }catch(e){}
+  try{ if(typeof showEv==='function') showEv('✨ PixerIA generando humano…','#aa66ff'); }catch(e){}
+  try{
+    const r=await fetch('https://pixer-eleven.csilvasantin.workers.dev/image/edit',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({image:shot.normal,sys:MUPI_HUMAN_SYS,
+        prompt:'Conviértelo en una persona real que se parezca a este personaje, como si hubiera pasado por delante de la tienda.'}),
+    });
+    const d=await r.json().catch(()=>({}));
+    if(d&&d.ok&&d.image){ shot.human=d.image; MUPICAM._mode='normal'; try{ if(typeof showEv==='function') showEv('🧑 Humano IA listo','#5fd0ff'); }catch(e){} }
+    else { shot._err=(d&&(d.error||d.detail))||('HTTP '+r.status); try{ if(typeof showEv==='function') showEv('⚠️ '+shot._err,'#ff8866'); }catch(e){} }
+  }catch(e){ shot._err=String((e&&e.message)||e); }
+  shot._gen=false; try{ mupiCamRenderGallery(); }catch(e){}
+}
+window.mupiCamHumanize=mupiCamHumanize;
 function mupiCamOpenGallery(){
   let p=mupiCamGalleryEl();
   if(!p){
@@ -10685,6 +10722,8 @@ function mupiCamOpenGallery(){
     document.body.appendChild(p);
     p.querySelector('#mcClose').onclick=()=>mupiCamCloseGallery();
     const md=p.querySelector('#mcMode'); md.onclick=()=>{ MUPICAM._mode=(MUPICAM._mode==='pixel')?'normal':'pixel'; mupiCamRenderGallery(); };
+    // Delegado en el panel (sobrevive al re-render del body): pulsar ✨/muñeco → humanizar.
+    p.addEventListener('click',ev=>{ const g=ev.target.closest('[data-act="gen"]'); if(!g) return; const uid=+g.getAttribute('data-uid'); if(uid) mupiCamHumanize(uid); });
     const hdr=p.querySelector('#mcHdr'); let dg=false,oX=0,oY=0;
     hdr.addEventListener('pointerdown',e=>{ if(e.target.id==='mcMode'||e.target.id==='mcClose')return; dg=true; const r=p.getBoundingClientRect(); p.style.left=r.left+'px'; p.style.top=r.top+'px'; oX=e.clientX-r.left; oY=e.clientY-r.top; try{hdr.setPointerCapture(e.pointerId);}catch(_){} });
     hdr.addEventListener('pointermove',e=>{ if(!dg)return; const nx=Math.max(0,Math.min(e.clientX-oX,window.innerWidth-p.offsetWidth)), ny=Math.max(0,Math.min(e.clientY-oY,window.innerHeight-p.offsetHeight)); p.style.left=nx+'px'; p.style.top=ny+'px'; });
