@@ -12680,7 +12680,7 @@ function updatePassersby(){
           try{ const g=(p.look&&p.look.gender)==='f'?'f':'m'; const ag=(p.look&&p.look.age)||'adulto';
             G.exteriorAd={gender:g, age:ag, until:tt+260};
             // Impacto de publi exterior por segmento (género_edad) → CPM segmentado.
-            const segK=g+'_'+ag; G.extAdImpacts=G.extAdImpacts||{}; G.extAdImpacts[segK]=(G.extAdImpacts[segK]||0)+1;
+            const segK=ag+'_'+g; G.extAdImpacts=G.extAdImpacts||{}; G.extAdImpacts[segK]=(G.extAdImpacts[segK]||0)+1;
           }catch(_){}
         }
       }
@@ -25256,7 +25256,7 @@ window.xtAPI = (function(){
             if(ks.length){ const AGEL={nino:'Niño',joven:'Joven',adulto:'Adulto',senior:'Senior'};
               const all=ks.map(k=>{const cpm=segCpm(k); return {k,n:ea[k],cpm,rev:ea[k]/1000*cpm};});
               const extTot=all.reduce((s,r)=>s+r.rev,0);
-              const r2=all.map(r=>{const p=r.k.split('_'); return Object.assign({lbl:(p[0]==='f'?'♀':'♂')+' '+(AGEL[p[1]]||p[1])},r);}).sort((a,b)=>b.rev-a.rev).slice(0,8);
+              const r2=all.map(r=>{const p=r.k.split('_'); return Object.assign({lbl:(p[1]==='f'?'♀':'♂')+' '+(AGEL[p[0]]||p[0])},r);}).sort((a,b)=>b.rev-a.rev).slice(0,8);
               segHtml='<div style="border-top:1px dashed #2f6a8a;margin-top:6px;padding-top:6px;font-size:9px;letter-spacing:.05em;color:#8ed2ff">📣 PUBLI EXTERIOR · impactos × CPM por segmento (RTB · admira.app)</div>'+
                 r2.map(r=>'<div style="display:flex;justify-content:space-between"><span>'+r.lbl+' <span style="opacity:.5;font-size:8.5px">@'+r.cpm.toFixed(1)+'€</span></span><span><b>'+r.n+'</b> <span style="color:#9effa0">'+r.rev.toFixed(2)+'€</span></span></div>').join('')+
                 '<div style="display:flex;justify-content:space-between;color:#9effa0;margin-top:2px"><span>Ingreso publi exterior</span><b>'+extTot.toFixed(2)+'€</b></div>';
