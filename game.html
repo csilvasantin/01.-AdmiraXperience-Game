@@ -10537,12 +10537,26 @@ function openDVRPanel(){
   // 2026-06-11: "cuando haga dvr que aparezca como ahora impactos cpm y las fotos").
   try{ if(typeof IMPACTS!=='undefined' && !IMPACTS.on && window.xtAPI) window.xtAPI.command('cpm'); }catch(_){}
   try{ if(typeof mupiCamOpenGallery==='function') mupiCamOpenGallery(); }catch(_){}
-  return '⏮ DVR abierto: línea de tiempo + impactos/CPM + 📷 cámara del MUPI. Pulsa "● EN VIVO" para volver.';
+  // En DVR el avatar 3D (tótem/pared) habla y molesta → apagarlo. Recordamos su
+  // estado para restaurarlo al salir del replay.
+  try{
+    window.__dvrAvatarTotem=!!(typeof DS_PIN!=='undefined'&&DS_PIN&&DS_PIN.metahuman&&DS_PIN.metahuman.kind==='web');
+    window.__dvrAvatarWall=!!(typeof avatar3dWall!=='undefined'&&avatar3dWall);
+    if(typeof setAvatar3dTotem==='function') setAvatar3dTotem(false);
+    if(typeof setAvatar3dWall==='function') setAvatar3dWall(false);
+  }catch(_){}
+  return '⏮ DVR abierto: línea de tiempo + impactos/CPM + 📷 cámara del MUPI. (Avatar 3D en pausa). Pulsa "● EN VIVO" para volver.';
 }
 function closeDVRPanel(){
   exitReplay();
   const e=_dvrEls(); if(e.panel){ e.panel.classList.remove('show'); e.panel.setAttribute('aria-hidden','true'); }
   try{ if(typeof mupiCamCloseGallery==='function') mupiCamCloseGallery(); }catch(_){}
+  // Restaura el avatar 3D que apagamos al entrar en DVR.
+  try{
+    if(window.__dvrAvatarTotem && typeof setAvatar3dTotem==='function') setAvatar3dTotem(true);
+    if(window.__dvrAvatarWall && typeof setAvatar3dWall==='function') setAvatar3dWall(true);
+    window.__dvrAvatarTotem=false; window.__dvrAvatarWall=false;
+  }catch(_){}
 }
 window.openDVRPanel=openDVRPanel; window.closeDVRPanel=closeDVRPanel;
 (function wireDVR(){
@@ -17556,6 +17570,7 @@ let avatar3dAskPending=0;
 // pantalla.html (la pantalla física) lo muestra en iframe.
 function setAvatar3dTotem(on){
   if(typeof DS_PIN!=='object'||DS_PIN===null) return false;
+  if(on && typeof REC!=='undefined' && REC && REC.replay && REC.replay.on) return false;   // en DVR el avatar está en pausa
   if(on){
     const loc=avatar3dLoc();
     const lg=(typeof lang!=='undefined'&&lang==='en')?'en':'es';  // idioma de la plataforma
@@ -17688,6 +17703,7 @@ function positionWallAvatar(){
 // /avatar3d ds on|off — muestra/oculta el avatar en la pantalla de la pared larga.
 function setAvatar3dWall(on){
   const en=(typeof lang!=='undefined'&&lang==='en');
+  if(on && typeof REC!=='undefined' && REC && REC.replay && REC.replay.on) return {ok:false,message:en?'Avatar paused during DVR.':'En DVR el avatar está en pausa.'};
   avatar3dWall=!!on;
   const el=document.getElementById('wallAvatar');
   if(!on){ if(el){ el.style.display='none'; el.src='about:blank'; } return {ok:true,message:en?'Avatar 3D off on the long-wall screen.':'Avatar 3D apagado en la pantalla de la pared larga.'}; }
