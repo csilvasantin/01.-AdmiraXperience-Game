@@ -10447,6 +10447,14 @@ function segCpm(segKey){
   return (SEG_CPM_DEFAULT[segKey]!=null)?SEG_CPM_DEFAULT[segKey]:((typeof IMPACTS!=='undefined'&&IMPACTS.cpm)||8);
 }
 window.segCpm=segCpm; window.SEG_CPM_DEFAULT=SEG_CPM_DEFAULT;
+// Lee la tabla CPM por segmento que fija admira.app (KV) y la aplica en vivo.
+function loadSegCpm(){
+  try{ const loc=(typeof avatar3dLoc==='function')?avatar3dLoc():((typeof window!=='undefined'&&window.STORE_CFG&&window.STORE_CFG.id)||'xtanco-generic');
+    fetch('https://pixer-eleven.csilvasantin.workers.dev/segcpm?loc='+encodeURIComponent(loc),{cache:'no-store'})
+      .then(r=>r.json()).then(d=>{ if(d&&d.cpm&&Object.keys(d.cpm).length){ window.STORE_CFG=window.STORE_CFG||{}; window.STORE_CFG.segCpm=d.cpm; } }).catch(()=>{});
+  }catch(e){}
+}
+setTimeout(loadSegCpm,2500); setInterval(loadSegCpm,60000);
 function impactsReset(){ IMPACTS.day=Object.create(null); IMPACTS._pPrev=undefined; IMPACTS.aud={hours:Object.create(null),_gtPrev:undefined,_inPrev:undefined}; impactsEnsureDay(); }
 function impactsTick(){
   if(typeof G==='undefined'||!G) return;
