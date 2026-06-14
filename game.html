@@ -17603,11 +17603,28 @@ function setAvatar3dWall(on){
   return {ok:true,message:en?'🧑‍💻 Avatar 3D ON on the long-wall screen (DigitalAvatar.ai).':'🧑‍💻 Avatar 3D ENCENDIDO en la pantalla de la pared larga (DigitalAvatar.ai).'};
 }
 window.setAvatar3dWall=setAvatar3dWall;
-// /avatar3d model <id|url RPM> — cambia el avatar en tótem + pared (en vivo y para
-// montajes nuevos vía &avatar=). Sin argumento, vuelve al avatar por defecto.
+// Presets de avatar con nombre (los da de alta el usuario con su URL real de RPM,
+// porque no se pueden inventar ids). Persisten en localStorage. 'default' = el
+// avatar local por defecto de best.html (valor vacío).
+function avatar3dPresets(){
+  let o={}; try{ o=JSON.parse(localStorage.getItem('xtanco_avatar_presets')||'{}')||{}; }catch(e){ o={}; }
+  if(typeof o!=='object'||!o) o={};
+  if(!('default' in o)) o['default']='';
+  return o;
+}
+function avatar3dPresetsSave(o){ try{ localStorage.setItem('xtanco_avatar_presets',JSON.stringify(o)); }catch(e){} }
+// Resuelve un nombre de preset a su id/url; si no es un preset, lo devuelve tal cual.
+function avatar3dResolve(x){
+  const key=String(x||'').trim(); if(!key) return '';
+  const p=avatar3dPresets(); const lk=key.toLowerCase();
+  return Object.prototype.hasOwnProperty.call(p,lk)?p[lk]:key;
+}
+window.avatar3dPresets=avatar3dPresets;
+// /avatar3d model <nombre-preset|id|url RPM> — cambia el avatar en tótem + pared
+// (en vivo y para montajes nuevos vía &avatar=). Sin argumento, vuelve al de por defecto.
 function setAvatar3dModel(idOrUrl){
   const en=(typeof lang!=='undefined'&&lang==='en');
-  avatar3dModel=String(idOrUrl||'').trim();
+  avatar3dModel=avatar3dResolve(idOrUrl);
   // En vivo a los avatares ya montados
   if(typeof postTotemAvatar==='function') postTotemAvatar({type:'da-model',avatar:avatar3dModel}, false);
   // Y fuerza remontaje con la nueva URL en los que estén visibles
@@ -17618,6 +17635,28 @@ function setAvatar3dModel(idOrUrl){
   return {ok:true,message:en?('🎭 Avatar changed: '+avatar3dModel):('🎭 Avatar cambiado: '+avatar3dModel)};
 }
 window.setAvatar3dModel=setAvatar3dModel;
+// /avatar3d models — lista los presets disponibles.
+function listAvatar3dModels(){
+  const en=(typeof lang!=='undefined'&&lang==='en');
+  const p=avatar3dPresets();
+  const lines=Object.keys(p).map(k=>'• '+k+(p[k]?' → '+p[k]:(en?' (default)':' (por defecto)')));
+  const hdr=en?'🎭 Avatar presets — switch with /avatar3d model <name>:':'🎭 Presets de avatar — cambia con /avatar3d model <nombre>:';
+  const tip=en?'\nRegister: /avatar3d preset <name> <RPM .glb url or id>':'\nDar de alta: /avatar3d preset <nombre> <url .glb o id de RPM>';
+  return {ok:true,message:hdr+'\n'+lines.join('\n')+tip};
+}
+// /avatar3d preset <nombre> <id|url> — registra un preset. Sin valor: lo borra.
+function saveAvatar3dPreset(rest){
+  const en=(typeof lang!=='undefined'&&lang==='en');
+  const m=String(rest||'').trim().match(/^(\S+)\s*(.*)$/);
+  if(!m) return {ok:false,message:en?'Usage: /avatar3d preset <name> <url|id>':'Uso: /avatar3d preset <nombre> <url|id>'};
+  const name=m[1].toLowerCase(), val=(m[2]||'').trim();
+  const p=avatar3dPresets();
+  if(name==='default') return {ok:false,message:en?'"default" is reserved.':'"default" está reservado.'};
+  if(!val){ if(name in p){ delete p[name]; avatar3dPresetsSave(p); return {ok:true,message:en?('🗑️ Preset removed: '+name):('🗑️ Preset borrado: '+name)}; } return {ok:false,message:en?('No such preset: '+name):('No existe el preset: '+name)}; }
+  p[name]=val; avatar3dPresetsSave(p);
+  return {ok:true,message:en?('✅ Preset saved: '+name+' → '+val+'. Use: /avatar3d model '+name):('✅ Preset guardado: '+name+' → '+val+'. Úsalo: /avatar3d model '+name)};
+}
+window.listAvatar3dModels=listAvatar3dModels; window.saveAvatar3dPreset=saveAvatar3dPreset;
 function askTotemAvatar(question){
   const en=(typeof lang!=='undefined'&&lang==='en');
   const clean=String(question||'').trim();
@@ -24715,6 +24754,13 @@ window.xtAPI = (function(){
         if(a==='audio on'||a==='unmute'||a==='voz'||a==='audio'){
           if(typeof setAvatar3dAudio==='function') return setAvatar3dAudio(true);
         }
+        if(a==='models'||a==='list'){
+          if(typeof listAvatar3dModels==='function') return listAvatar3dModels();
+        }
+        if(a==='preset'||a.indexOf('preset ')===0){
+          const rest=String(arg||'').replace(/^\s*preset\s*/i,'').trim();
+          if(typeof saveAvatar3dPreset==='function') return saveAvatar3dPreset(rest);
+        }
         if(a==='model'||a.indexOf('model ')===0){
           const val=String(arg||'').replace(/^\s*model\s*/i,'').trim();
           if(typeof setAvatar3dModel==='function') return setAvatar3dModel(val);
@@ -26432,7 +26478,7 @@ window.xtAPI = (function(){
       {title:'Atmósfera',items:['/ambiente','/ambiente vol 50','/voces']},
       {title:'Operativa real',items:['/devolucion','/pedido']},
       {title:'Integración AdmiraNext',items:['/socios export']},
-      {title:'IA y contenido',items:['/grok pregunta','/draw dibujo','/metahuman pregunta','/avatar3d on|off','/avatar3d ds on|off','/avatar3d audio on|off','/avatar3d model <id RPM>','/avatar3d pregunta','/log','/log thief','/log customer','/import','/import list','/import remove 1','/importTube https://youtu.be/...']},
+      {title:'IA y contenido',items:['/grok pregunta','/draw dibujo','/metahuman pregunta','/avatar3d on|off','/avatar3d ds on|off','/avatar3d audio on|off','/avatar3d models','/avatar3d preset <nombre> <url RPM>','/avatar3d model <nombre|id>','/avatar3d pregunta','/log','/log thief','/log customer','/import','/import list','/import remove 1','/importTube https://youtu.be/...']},
       {title:'Ajustes rápidos',items:['/money 12000','/sat 90','/fame 80','/set week 12','/set year 2','/set revenue 5000','/set storeLevel 2','/set customers 30']},
       {title:'Musica y layout',items:['/song 1','/song bad bunny','/music','/next','/prev','/seoul2026','/seul','/seultrap','/seultecno','/equipo inicio ana 3 4','/equipo zona dj 12 2 2','/catalogo','/catalogo pared','/importar catalogo','/importar 1','/importar lista','/importar quitar 1','/mobiliario','/mobiliario inicio','/layout','/layout save','/layout factory','/layout xpacio','/layout xpacio load']},
       {title:'Estilo visual',items:['/16bits','/8bits','/render habbo','/render 16bit']},
@@ -27606,6 +27652,13 @@ window.xtAPI = (function(){
         }
         if(a==='audio on'||a==='unmute'||a==='voz'||a==='audio'){
           if(typeof setAvatar3dAudio==='function'){ const r=setAvatar3dAudio(true); return r&&r.message?r.message:''; }
+        }
+        if(a==='models'||a==='list'){
+          if(typeof listAvatar3dModels==='function'){ const r=listAvatar3dModels(); return r&&r.message?r.message:''; }
+        }
+        if(a==='preset'||a.indexOf('preset ')===0){
+          const rest=String(arg||'').replace(/^\s*preset\s*/i,'').trim();
+          if(typeof saveAvatar3dPreset==='function'){ const r=saveAvatar3dPreset(rest); return r&&r.message?r.message:''; }
         }
         if(a==='model'||a.indexOf('model ')===0){
           const val=String(arg||'').replace(/^\s*model\s*/i,'').trim();
