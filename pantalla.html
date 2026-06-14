@@ -18,6 +18,7 @@
   #rotor.land.ccw{ transform:translate(-50%,-50%) rotate(-90deg); }
   #stage{ position:fixed; top:0; right:0; bottom:0; left:0; display:flex; align-items:center; justify-content:center; background:#000; }
   #vid,#pic{ position:absolute; top:0; right:0; bottom:0; left:0; width:100%; height:100%; object-fit:cover; background:#000; display:none; }
+  #web{ position:absolute; top:0; right:0; bottom:0; left:0; width:100%; height:100%; border:0; background:#000; display:none; }
   /* Idle / esperando */
   #idle{ position:absolute; top:0; right:0; bottom:0; left:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px;
          background:radial-gradient(circle at 50% 35%,rgba(120,243,255,.10),transparent 60%),#04101a; }
@@ -50,6 +51,7 @@
     <div id="stage">
       <video id="vid" muted loop playsinline></video>
       <img id="pic" alt="">
+      <iframe id="web" allow="microphone; autoplay; camera; fullscreen" referrerpolicy="no-referrer-when-downgrade"></iframe>
       <div id="idle">
         <div class="logo">ADMIRA <b>XP</b></div>
         <div class="clock" id="clock">--:--</div>
@@ -91,6 +93,7 @@
   const tap = document.getElementById('tap');
   const label = document.getElementById('label');
   const idlemsg = document.getElementById('idlemsg');
+  const web = document.getElementById('web');
 
   // Rotación forzada por software (paneles signage clavados en vertical):
   // ?rotate=90 (horario) o ?rotate=270 (antihorario). El contenedor con
@@ -131,8 +134,18 @@
     try { vid.pause(); vid.removeAttribute('src'); vid.load(); } catch (e) {}
     revokeObj();
     pic.removeAttribute('src');
+    web.style.display = 'none'; web.src = 'about:blank';   // descarga el avatar al quedar idle
     lastShowingName = '';
     if (msg) idlemsg.textContent = msg;
+  }
+
+  // Item tipo "web": el tótem renderiza una URL (p.ej. el avatar foto-real) en
+  // iframe a pantalla completa. Solo recarga si cambia la URL (no parpadea).
+  function showWeb(src) {
+    idle.style.display = 'none'; vid.style.display = 'none'; pic.style.display = 'none';
+    try { vid.pause(); } catch (e) {}
+    web.style.display = 'block';
+    if (web.getAttribute('data-src') !== src) { web.setAttribute('data-src', src); web.src = src; }
   }
 
   // Descarga el vídeo a caché local (Cache API) una vez y devuelve un blob: URL
@@ -155,7 +168,7 @@
   }
 
   async function showVideo(src) {
-    idle.style.display = 'none'; pic.style.display = 'none';
+    idle.style.display = 'none'; pic.style.display = 'none'; web.style.display = 'none';
     const playUrl = await localBlobUrl(src);
     // Si el contenido cambió mientras descargaba, abortar (no pisar lo nuevo).
     if (curSig !== 'video|' + src) {
@@ -172,7 +185,7 @@
   }
 
   function showImage(src) {
-    idle.style.display = 'none'; vid.style.display = 'none';
+    idle.style.display = 'none'; vid.style.display = 'none'; web.style.display = 'none';
     try { vid.pause(); } catch (e) {}
     pic.style.display = 'block';
     pic.src = src;
@@ -211,9 +224,10 @@
     if (sig === curSig) { if (item.kind === 'video') vid.muted = !wantSound; return; }
     curSig = sig;
     lastShowingName = item.name || '';
-    if (item.kind === 'image') showImage(src);
+    if (item.kind === 'web') showWeb(src);
+    else if (item.kind === 'image') showImage(src);
     else showVideo(src);
-    if (item.name) showLabel((item.kind === 'image' ? '🖼 ' : '📺 ') + item.name);
+    if (item.name) showLabel((item.kind === 'web' ? '🤖 ' : item.kind === 'image' ? '🖼 ' : '📺 ') + item.name);
   }
 
   // Canal limpio: /signage/now (puntero por pantalla). Devuelve el item, null si
