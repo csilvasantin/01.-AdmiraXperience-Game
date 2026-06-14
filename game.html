@@ -17448,6 +17448,9 @@ const AVATAR3D={
   loc:(typeof AVATAR3D_CFG.loc==='string'&&AVATAR3D_CFG.loc)?AVATAR3D_CFG.loc:'',
   totemUrl:(typeof AVATAR3D_CFG.totemUrl==='string'&&AVATAR3D_CFG.totemUrl)?AVATAR3D_CFG.totemUrl:'https://digitalavatar.ai/best.html?kiosk=1',
 };
+// Silencio del avatar del tótem (/avatar3d audio off|on). Se aplica en vivo por
+// postMessage y se añade a la URL (&audio=off) para que un montaje nuevo nazca mudo.
+let avatar3dMuted=false;
 // Enciende/apaga el avatar 3D en la pantalla VERTICAL del tótem: pone un pin
 // 'web' en la superficie metahuman → emitTotemNow lo empuja a screen 'totem' →
 // pantalla.html (la pantalla física) lo muestra en iframe.
@@ -17456,7 +17459,7 @@ function setAvatar3dTotem(on){
   if(on){
     const loc=avatar3dLoc();
     const lg=(typeof lang!=='undefined'&&lang==='en')?'en':'es';  // idioma de la plataforma
-    const url=AVATAR3D.totemUrl+(AVATAR3D.totemUrl.indexOf('?')>=0?'&':'?')+'loc='+encodeURIComponent(loc)+'&lang='+lg;
+    const url=AVATAR3D.totemUrl+(AVATAR3D.totemUrl.indexOf('?')>=0?'&':'?')+'loc='+encodeURIComponent(loc)+'&lang='+lg+(avatar3dMuted?'&audio=off':'');
     DS_PIN['metahuman']={kind:'web',name:'DigitalAvatar.ai',src:url};
   } else {
     try{ delete DS_PIN['metahuman']; }catch(_){ DS_PIN['metahuman']=null; }
@@ -17530,20 +17533,36 @@ window.askAvatar3d=askAvatar3d;
 // /avatar3d <pregunta> → habla con ELLA (el avatar foto-real del tótem): enciende
 // el avatar si hace falta y le empuja la pregunta por postMessage para que responda
 // con voz + lip-sync en la propia pantalla del tótem (no solo texto en el panel).
+// Empuja un mensaje al iframe del avatar del tótem; opcionalmente lo enciende antes
+// (esperando a que cargue el listener si se acaba de montar).
+function postTotemAvatar(msg, ensureOn){
+  const onAlready=(typeof DS_PIN==='object'&&DS_PIN&&DS_PIN.metahuman&&DS_PIN.metahuman.kind==='web');
+  if(!onAlready && ensureOn && typeof setAvatar3dTotem==='function') setAvatar3dTotem(true);
+  const send=()=>{ try{ const el=document.getElementById('totemAvatar'); if(el&&el.contentWindow) el.contentWindow.postMessage(msg,'*'); }catch(e){} };
+  if(onAlready||!ensureOn) send(); else setTimeout(send,1300);
+  return onAlready;
+}
 function askTotemAvatar(question){
   const en=(typeof lang!=='undefined'&&lang==='en');
   const clean=String(question||'').trim();
   if(!clean) return {ok:false,message:en?'Usage: /avatar3d <question>':'Uso: /avatar3d <pregunta>'};
-  const onAlready=(typeof DS_PIN==='object'&&DS_PIN&&DS_PIN.metahuman&&DS_PIN.metahuman.kind==='web');
-  if(!onAlready && typeof setAvatar3dTotem==='function') setAvatar3dTotem(true);
   const lg=en?'en':'es';
-  const send=()=>{ try{ const el=document.getElementById('totemAvatar'); if(el&&el.contentWindow) el.contentWindow.postMessage({type:'da-ask',question:clean,lang:lg},'*'); }catch(e){} };
-  if(onAlready) send(); else setTimeout(send,1300);   // recién montado: espera a que cargue el listener del iframe
+  postTotemAvatar({type:'da-ask',question:clean,lang:lg}, true);
   try{ if(typeof rememberMemory==='function') rememberMemory('dialog','Avatar3D Q: '+clean); }catch(e){}
   try{ if(typeof showEv==='function') showEv('🧑‍💻 Avatar3D · '+clean.slice(0,40),'#5fd0ff'); }catch(e){}
   return {ok:true,message:en?('🗣️ Sent to the totem avatar: "'+clean+'"'):('🗣️ Pregunta enviada al avatar del tótem: "'+clean+'"')};
 }
 window.askTotemAvatar=askTotemAvatar;
+// /avatar3d audio on|off → voz del avatar del tótem (off = solo subtítulos, sin
+// voz de atracción ni respuestas habladas). Persiste vía &audio=off en la URL.
+function setAvatar3dAudio(on){
+  const en=(typeof lang!=='undefined'&&lang==='en');
+  avatar3dMuted=!on;
+  postTotemAvatar({type:'da-audio',on:!!on}, false);
+  if(on) return {ok:true,message:en?'🔊 Totem avatar voice ON.':'🔊 Voz del avatar del tótem ACTIVADA.'};
+  return {ok:true,message:en?'🔇 Totem avatar muted (subtitles only).':'🔇 Avatar del tótem en SILENCIO (solo subtítulos).'};
+}
+window.setAvatar3dAudio=setAvatar3dAudio;
 (function setupMetahumanPanel(){
   const wire=()=>{
     const els=_mhEls(); if(!els.panel) return;
@@ -24602,6 +24621,12 @@ window.xtAPI = (function(){
           if(typeof setAvatar3dTotem==='function') setAvatar3dTotem(false);
           return {ok:true,message:'Avatar 3D apagado en el tótem (vuelve la cara AI).'};
         }
+        if(a==='audio off'||a==='mute'||a==='silencio'||a==='muda'){
+          if(typeof setAvatar3dAudio==='function') return setAvatar3dAudio(false);
+        }
+        if(a==='audio on'||a==='unmute'||a==='voz'||a==='audio'){
+          if(typeof setAvatar3dAudio==='function') return setAvatar3dAudio(true);
+        }
         if(typeof askTotemAvatar==='function') return askTotemAvatar(arg);
         if(typeof askAvatar3d==='function') return askAvatar3d(arg);
         return {ok:false,message:'Avatar3D no disponible.'};
@@ -26315,7 +26340,7 @@ window.xtAPI = (function(){
       {title:'Atmósfera',items:['/ambiente','/ambiente vol 50','/voces']},
       {title:'Operativa real',items:['/devolucion','/pedido']},
       {title:'Integración AdmiraNext',items:['/socios export']},
-      {title:'IA y contenido',items:['/grok pregunta','/draw dibujo','/metahuman pregunta','/avatar3d on|off','/avatar3d pregunta','/log','/log thief','/log customer','/import','/import list','/import remove 1','/importTube https://youtu.be/...']},
+      {title:'IA y contenido',items:['/grok pregunta','/draw dibujo','/metahuman pregunta','/avatar3d on|off','/avatar3d audio on|off','/avatar3d pregunta','/log','/log thief','/log customer','/import','/import list','/import remove 1','/importTube https://youtu.be/...']},
       {title:'Ajustes rápidos',items:['/money 12000','/sat 90','/fame 80','/set week 12','/set year 2','/set revenue 5000','/set storeLevel 2','/set customers 30']},
       {title:'Musica y layout',items:['/song 1','/song bad bunny','/music','/next','/prev','/seoul2026','/seul','/seultrap','/seultecno','/equipo inicio ana 3 4','/equipo zona dj 12 2 2','/catalogo','/catalogo pared','/importar catalogo','/importar 1','/importar lista','/importar quitar 1','/mobiliario','/mobiliario inicio','/layout','/layout save','/layout factory','/layout xpacio','/layout xpacio load']},
       {title:'Estilo visual',items:['/16bits','/8bits','/render habbo','/render 16bit']},
@@ -27474,6 +27499,12 @@ window.xtAPI = (function(){
         if(a==='off'||a==='stop'||a==='idle'){
           if(typeof setAvatar3dTotem==='function') setAvatar3dTotem(false);
           return en?'Avatar 3D off on the totem (back to the AI face).':'Avatar 3D apagado en el tótem (vuelve la cara AI).';
+        }
+        if(a==='audio off'||a==='mute'||a==='silencio'||a==='muda'){
+          if(typeof setAvatar3dAudio==='function'){ const r=setAvatar3dAudio(false); return r&&r.message?r.message:''; }
+        }
+        if(a==='audio on'||a==='unmute'||a==='voz'||a==='audio'){
+          if(typeof setAvatar3dAudio==='function'){ const r=setAvatar3dAudio(true); return r&&r.message?r.message:''; }
         }
         // Con pregunta: se la lanza al avatar del tótem (voz + lip-sync en ELLA).
         if(typeof askTotemAvatar==='function'){ const r=askTotemAvatar(arg); return r&&r.message?r.message:''; }
