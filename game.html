@@ -10475,6 +10475,9 @@ function exitReplay(){
     G.custIn=b.custIn; G.custOut=b.custOut; G.passersbyToday=b.passers;
     if(G.weather) G.weather.type=b.weather; if(G.thief) G.thief.phase=b.thief; }
   REC.replay.on=false; REC._liveBackup=null;
+  // Si veníamos de un DVR de día PASADO (grabación sintética), restauramos la
+  // grabación viva de hoy que habíamos guardado.
+  if(REC._liveRecBackup){ REC.recording=REC._liveRecBackup; REC._liveRecBackup=null; REC._synthDay=null; }
 }
 // Aplica el snapshot actual a G para que el render dibuje el pasado (la sim
 // está pausada en replay, no se corrompe nada; se restaura al salir).
@@ -10617,6 +10620,7 @@ const XCAL=(function(){
       else if(a==='kpi'){ kpi=b.getAttribute('data-k')||'aud'; renderMonth(); }
       else if(a==='day'){ openDay(new Date(+b.getAttribute('data-y'),+b.getAttribute('data-m'),+b.getAttribute('data-d'))); }
       else if(a==='dvr'){ close(); try{ const m=(typeof openDVRPanel==='function')?openDVRPanel():null; if(m&&typeof showEv==='function') showEv(String(m).slice(0,80),'#78f3ff'); }catch(_){} }
+      else if(a==='vdvr'){ const dt=dayDate; close(); try{ if(enterDayReplay(dt)){ if(typeof showEv==='function') showEv('⏮ DVR del '+fmt(dt)+' — reproduciendo el día','#78f3ff'); } else if(typeof showEv==='function') showEv('Abre el gemelo (en juego) para el DVR del día','#ff8866'); }catch(_){} }
       else if(a==='play'){ playDay(); }
     });
     el.addEventListener('input',ev=>{ const s=ev.target.closest('#xcScrub'); if(s){ dayCur=+s.value||0; paintScrub(); } });
@@ -10688,8 +10692,12 @@ const XCAL=(function(){
         '</div>'+
         '<div style="margin-top:10px;font-size:10px;opacity:.75">🛒 Qué compraron</div><div style="margin-top:2px">'+top+'</div>'+
         '<div style="margin-top:8px;font-size:10px">'+(s.incidencias?('⚠️ '+s.incidencias+' incidencia(s)'):'✅ Sin incidencias')+(s.ladron?'  ·  🚨 1 intento de hurto':'')+'</div>'+
-        '<div style="margin-top:12px;display:flex;justify-content:space-between;align-items:center"><b style="font-size:11px">⏮ DVR del día — por horas</b>'+
-          (isToday?'<span data-xc="dvr" style="cursor:pointer;font-size:10px;border:1px solid #78f3ff;color:#78f3ff;border-radius:6px;padding:3px 8px">▶ DVR visual de hoy</span>':'<span data-xc="play" style="cursor:pointer;font-size:10px;border:1px solid #78f3ff;color:#78f3ff;border-radius:6px;padding:3px 8px">▶ Reproducir día</span>')+'</div>'+
+        '<div style="margin-top:12px;display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap"><b style="font-size:11px">⏮ DVR del día</b><span style="display:flex;gap:6px">'+
+          (isToday
+            ? '<span data-xc="dvr" style="cursor:pointer;font-size:10px;border:1px solid #78f3ff;color:#78f3ff;border-radius:6px;padding:3px 8px">▶ DVR visual de hoy</span>'
+            : '<span data-xc="vdvr" title="Ver el día en la cámara (anónimo)" style="cursor:pointer;font-size:10px;border:1px solid #78f3ff;color:#78f3ff;border-radius:6px;padding:3px 8px">▶ DVR visual del día</span>')+
+          '<span data-xc="play" title="Recorrer las horas en el gráfico" style="cursor:pointer;font-size:10px;border:1px solid #2f6a8a;color:#9fd0ff;border-radius:6px;padding:3px 8px">barras</span>'+
+        '</span></div>'+
         '<div id="xcChart" style="display:flex;align-items:flex-end;gap:3px;height:74px;margin-top:8px;padding:6px;background:#04101a;border:1px solid #16303f;border-radius:8px"></div>'+
         '<input id="xcScrub" type="range" min="0" max="12" value="0" step="1" style="width:100%;accent-color:#78f3ff;margin-top:7px">'+
         '<div id="xcScrubInfo" style="font-size:11px;color:#ffd866;margin-top:3px;text-align:center"></div>'+
@@ -10714,7 +10722,68 @@ const XCAL=(function(){
     dayCur=0; const s=el.querySelector('#xcScrub');
     XCAL._pl=setInterval(()=>{ dayCur++; if(dayCur>12){ clearInterval(XCAL._pl); XCAL._pl=null; dayCur=12; } if(s) s.value=dayCur; paintScrub(); },420);
   }
-  return {open,close,stats};
+  // Sintetiza una GRABACIÓN VISUAL del día (compatible con el DVR real): clientes
+  // entrando/saliendo a lo largo de la jornada, anónimos (chibis). Determinista.
+  function synthDayRecording(dt){
+    if(typeof toIso!=='function'||typeof ISO==='undefined') return [];
+    const r=mulberry(key(dt)*7+101); const s=stats(dt);
+    const look=()=> (typeof makePasserbyLook==='function')?makePasserbyLook():{hair:1};
+    const ARCH=(typeof CUSTOMER_ARCHETYPES!=='undefined'&&CUSTOMER_ARCHETYPES.length)?CUSTOMER_ARCHETYPES:['curious'];
+    const cols=Math.max(2,ISO.cols|0), rows=Math.max(2,ISO.rows|0);
+    // Visitantes: llegada repartida por la curva horaria, estancia 2-8 min.
+    const visitors=[];
+    for(const hr of s.hours){
+      const n=Math.max(0,Math.round(hr.in*0.5));
+      for(let i=0;i<n;i++){
+        const arrive=hr.h + r();
+        const dwell=(2+r()*7)/60;
+        visitors.push({ arrive, leave:arrive+dwell,
+          col:1+Math.floor(r()*(cols-2)), row:1+Math.floor(r()*(rows-2)),
+          look:look(), persona:ARCH[Math.floor(r()*ARCH.length)]||'curious' });
+      }
+    }
+    const rec=[]; const STEP=3/60; let salesCum=0;
+    const frames=Math.max(1,Math.round((21-9)/STEP));
+    const perFrame=s.ventas/frames;
+    const baseMoney=Math.round((typeof G!=='undefined'&&G&&G.money)||0);
+    for(let T=9; T<=21.0001; T+=STEP){
+      salesCum+=perFrame;
+      const custs=[]; let idx=0;
+      for(const v of visitors){
+        if(T>=v.arrive && T<v.leave){
+          const pp=toIso(v.col+0.5, v.row+0.5);
+          const j=Math.sin(T*60 + v.col*3.1 + v.row*1.7)*3;
+          custs.push({ id:9000+(idx++), x:pp.x+j, y:pp.y, dir:(j<0?-1:1), fr:0,
+            hair:(v.look&&v.look.hair)||1, look:v.look, persona:v.persona, bTimer:0, bMsg:'', age:50, outside:false });
+          if(custs.length>=10) break;
+        }
+      }
+      rec.push({ t:T, weekTimer:0, money:baseMoney+Math.round(salesCum*0.3),
+        sales:Math.round(salesCum), sat:s.sat, fame:50, custIn:0, custOut:0,
+        passers:Math.round(s.pasan*Math.max(0,(T-9))/12), weather:null, thiefPhase:'idle',
+        custs, staff:[], ev:'' });
+    }
+    return rec;
+  }
+  // Abre el DVR reproduciendo la grabación sintética de un día pasado.
+  function enterDayReplay(dt){
+    if(typeof REC==='undefined'||!REC) return false;
+    if(typeof state==='undefined'||typeof S==='undefined'||state!==S.GAME) return false;
+    const rec=synthDayRecording(dt); if(!rec.length) return false;
+    if(REC.replay.on && typeof exitReplay==='function') exitReplay();   // sal de cualquier replay previo
+    REC._liveRecBackup=REC.recording;                                   // guarda la grabación viva de hoy
+    REC.recording=rec; REC._synthDay=key(dt);
+    if(typeof enterReplay==='function' && !enterReplay()) { REC.recording=REC._liveRecBackup; REC._liveRecBackup=null; return false; }
+    REC.replay._fidx=0; REC.replay.idx=0; REC.replay.playing=true;
+    // El avatar 3D no debe hablar durante el DVR (igual que en openDVRPanel).
+    try{ window.__dvrAvatarTotem=!!(typeof DS_PIN!=='undefined'&&DS_PIN&&DS_PIN.metahuman&&DS_PIN.metahuman.kind==='web');
+      window.__dvrAvatarWall=!!(typeof avatar3dWall!=='undefined'&&avatar3dWall);
+      if(typeof setAvatar3dTotem==='function') setAvatar3dTotem(false);
+      if(typeof setAvatar3dWall==='function') setAvatar3dWall(false); }catch(_){}
+    try{ const e=(typeof _dvrEls==='function')?_dvrEls():null; if(e&&e.panel){ e.panel.classList.add('show'); e.panel.setAttribute('aria-hidden','false'); } if(typeof updateDVRPanel==='function') updateDVRPanel(); }catch(_){}
+    return true;
+  }
+  return {open,close,stats,enterDayReplay};
 })();
 window.XCAL=XCAL;
 // La fecha del topbar abre el calendario.
