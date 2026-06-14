@@ -17665,6 +17665,28 @@ window.addEventListener('message',function(ev){
   if(d.type==='da-tap'){
     try{ if(typeof openMetahumanPanel==='function') openMetahumanPanel(); }catch(e){}
     try{ const els=(typeof _mhEls==='function')?_mhEls():null; if(els&&els.prompt) els.prompt.focus(); }catch(e){}
+  } else if(d.type==='da-answer'){
+    // La avatar (tótem/pared) devuelve su respuesta → la mostramos aquí, en el panel.
+    const en=(typeof lang!=='undefined'&&lang==='en');
+    try{ if(typeof openMetahumanPanel==='function') openMetahumanPanel(); }catch(e){}
+    const els=(typeof _mhEls==='function')?_mhEls():null;
+    if(d.error){
+      if(els&&els.status) els.status.textContent='error';
+      if(els&&els.answer){ els.answer.classList.remove('is-thinking'); els.answer.classList.add('is-error'); els.answer.textContent=(en?'Error: ':'Error: ')+d.error; }
+      try{ if(typeof showEv==='function') showEv('🧑‍💻 Avatar3D · '+(en?'error':'error'),'#ff6b6b'); }catch(e){}
+    } else {
+      const ans=String(d.answer||'').trim();
+      if(els&&els.status) els.status.textContent=en?'live':'listo';
+      if(els&&els.answer){ els.answer.classList.remove('is-thinking','is-error'); els.answer.textContent=ans||(en?'(no answer)':'(sin respuesta)'); }
+      const icon=d.muted?'🔇':(d.spoke?'🔊':'🔈');
+      try{ if(typeof showEv==='function') showEv('🧑‍💻 '+icon+' '+ans.slice(0,60),'#5fd0ff'); }catch(e){}
+      // Pista útil: respondió pero no sonó (ni muda) = autoplay bloqueado → un toque la desbloquea.
+      if(els&&els.answer && !d.muted && d.spoke===false){
+        const tip=en?' · (tap the avatar once to enable sound)':' · (toca el avatar una vez para activar el sonido)';
+        els.answer.textContent=(ans||'')+tip;
+      }
+      if(d.muted){ try{ if(typeof showEv==='function') showEv(en?'🔇 Avatar audio is OFF (/avatar3d audio on)':'🔇 Audio del avatar APAGADO (/avatar3d audio on)','#ffd166'); }catch(e){} }
+    }
   }
 });
 function askTotemAvatar(question){
@@ -17672,6 +17694,12 @@ function askTotemAvatar(question){
   const clean=String(question||'').trim();
   if(!clean) return {ok:false,message:en?'Usage: /avatar3d <question>':'Uso: /avatar3d <pregunta>'};
   const lg=en?'en':'es';
+  // Abre el panel con estado "pensando": la respuesta llega luego por da-answer.
+  try{ if(typeof openMetahumanPanel==='function') openMetahumanPanel();
+    const els=(typeof _mhEls==='function')?_mhEls():null;
+    if(els){ if(els.prompt) els.prompt.value=clean; if(els.status) els.status.textContent=en?'avatar thinking…':'avatar pensando…';
+      if(els.answer){ els.answer.classList.add('is-thinking'); els.answer.classList.remove('is-error'); els.answer.textContent=en?'Thinking…':'Pensando…'; } }
+  }catch(e){}
   postTotemAvatar({type:'da-ask',question:clean,lang:lg}, true);
   try{ if(typeof rememberMemory==='function') rememberMemory('dialog','Avatar3D Q: '+clean); }catch(e){}
   try{ if(typeof showEv==='function') showEv('🧑‍💻 Avatar3D · '+clean.slice(0,40),'#5fd0ff'); }catch(e){}
