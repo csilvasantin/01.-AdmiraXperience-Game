@@ -10118,6 +10118,18 @@ function showDayEndResults(){
   const sat=Math.round(G.satisfaction||0);
   const fama=Math.round(G.fame||0);
   const dia=(G.week|0)||1, anio=(G.year|0)||1;
+  // Persistir el resumen REAL del día en KV (calendario histórico) — keyed por la
+  // fecha REAL del calendario. Fire-and-forget; si falla, el calendario estima.
+  try{
+    let hours=null;
+    const ah=(typeof IMPACTS!=='undefined'&&IMPACTS.aud&&IMPACTS.aud.hours)?IMPACTS.aud.hours:null;
+    if(ah){ hours=Object.keys(ah).map(h=>({h:+h,in:Math.round(ah[h].int||0),pass:Math.round(ah[h].ext||0)})).sort((a,b)=>a.h-b.h); if(!hours.length) hours=null; }
+    const loc=(typeof avatar3dLoc==='function')?avatar3dLoc():((window.STORE_CFG&&window.STORE_CFG.id)||'xtanco-generic');
+    const nd=new Date(); const dstr=''+nd.getFullYear()+String(nd.getMonth()+1).padStart(2,'0')+String(nd.getDate()).padStart(2,'0');
+    const summary={entran:clientes,pasan:pasaron,ventas:ingresos,beneficio,sat,fama};
+    if(hours) summary.hours=hours;
+    fetch('https://pixer-eleven.csilvasantin.workers.dev/day/save',{method:'POST',headers:{'Content-Type':'application/json'},keepalive:true,body:JSON.stringify({loc,date:dstr,summary})}).catch(()=>{});
+  }catch(e){}
   let ov=document.getElementById('dayEndOverlay');
   if(!ov){
     ov=document.createElement('div'); ov.id='dayEndOverlay';
@@ -10625,8 +10637,28 @@ const XCAL=(function(){
   function key(d){ return d.getFullYear()*10000+(d.getMonth()+1)*100+d.getDate(); }
   function mulberry(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
   function fmt(d){ return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear(); }
-  // Estadística determinista (inventada) de un día.
+  // Datos reales por día cargados de KV (day:<loc>:<YYYYMMDD>) y mes ya pedido.
+  let realMap={}, realLoadedMonth=null;
+  function dayLoc(){ try{ return (typeof avatar3dLoc==='function')?avatar3dLoc():((typeof window!=='undefined'&&window.STORE_CFG&&window.STORE_CFG.id)||'xtanco-generic'); }catch(e){ return 'xtanco-generic'; } }
+  function loadMonthReal(){
+    const mk=viewY*100+viewM; if(realLoadedMonth===mk) return; realLoadedMonth=mk;
+    const from=''+viewY+String(viewM+1).padStart(2,'0')+'01', to=''+viewY+String(viewM+1).padStart(2,'0')+'31';
+    fetch('https://pixer-eleven.csilvasantin.workers.dev/day/range?loc='+encodeURIComponent(dayLoc())+'&from='+from+'&to='+to,{cache:'no-store'})
+      .then(r=>r.json()).then(d=>{ if(d&&d.days&&Object.keys(d.days).length){ Object.assign(realMap,d.days); renderMonth(); } }).catch(()=>{});
+  }
+  // Estadística mostrada = síntesis determinista con los datos REALES superpuestos
+  // si ese día se guardó (lo que falte —p.ej. compras— se rellena con la estimación).
   function stats(d){
+    const base=synthStats(d); const r=realMap[key(d)];
+    if(!r) return base;
+    const m=Object.assign({},base);
+    ['entran','pasan','ventas','beneficio','sat','fama','socios','incidencias','ladron'].forEach(k=>{ if(typeof r[k]==='number') m[k]=r[k]; });
+    if(Array.isArray(r.hours)&&r.hours.length) m.hours=r.hours;
+    if(Array.isArray(r.compras)&&r.compras.length) m.compras=r.compras;
+    m._real=true; return m;
+  }
+  // Estadística determinista (inventada) de un día.
+  function synthStats(d){
     const r=mulberry(key(d)); const dow=d.getDay(), mon=d.getMonth();
     const weekend=(dow===6||dow===0)?1:(dow===5?0.6:0);
     const season=[0.7,0.75,0.9,1.0,1.05,1.15,1.25,1.2,1.05,1.0,0.95,1.12][mon];
@@ -10699,7 +10731,7 @@ const XCAL=(function(){
     return {val:st.entran, col:heatFrac(st.entran/220)};   // audiencia
   }
   function renderMonth(){
-    ensure(); const t=today();
+    ensure(); loadMonthReal(); const t=today();
     const first=new Date(viewY,viewM,1); let lead=(first.getDay()+6)%7; // L=0
     const dim=new Date(viewY,viewM+1,0).getDate();
     const canPrev=!(viewY===2026&&viewM===0), canNext=!(viewY===t.getFullYear()&&viewM===t.getMonth());
@@ -10710,8 +10742,9 @@ const XCAL=(function(){
       const future=dt>t, before=dt<START;
       if(future||before){ cells+='<div style="opacity:.18;padding:6px 0;text-align:center;border:1px solid #16303f;border-radius:6px">'+d+'</div>'; continue; }
       const st=stats(dt); const isToday=(key(dt)===key(t)); const kc=kpiCell(st);
-      cells+='<div data-xc="day" data-y="'+viewY+'" data-m="'+viewM+'" data-d="'+d+'" title="'+fmt(dt)+(kc.t?(' · '+kc.t):'')+'" '+
-        'style="cursor:pointer;padding:5px 0 4px;text-align:center;border:1px solid '+(isToday?'#ffd866':'#1f4357')+';border-radius:6px;background:'+kc.col+'22">'+
+      const realDot=st._real?'<span title="datos reales" style="position:absolute;top:2px;right:3px;width:5px;height:5px;border-radius:50%;background:#2ee06a"></span>':'';
+      cells+='<div data-xc="day" data-y="'+viewY+'" data-m="'+viewM+'" data-d="'+d+'" title="'+fmt(dt)+(st._real?' · real':' · estimación')+(kc.t?(' · '+kc.t):'')+'" '+
+        'style="position:relative;cursor:pointer;padding:5px 0 4px;text-align:center;border:1px solid '+(isToday?'#ffd866':'#1f4357')+';border-radius:6px;background:'+kc.col+'22">'+realDot+
         '<div style="font-weight:bold;color:'+(isToday?'#ffd866':'#dbeaff')+'">'+d+'</div>'+
         '<div style="font-size:'+(kpi==='prod'?'12px':'8px')+';color:'+kc.col+';font-weight:bold">'+kc.val+'</div></div>';
     }
@@ -10734,7 +10767,7 @@ const XCAL=(function(){
     const top=s.compras.slice(0,4).map(c=>'<span style="display:inline-block;background:#0e2233;border:1px solid #235;border-radius:5px;padding:1px 6px;margin:2px 3px 0 0">'+c.name+' <b>'+c.n+'</b></span>').join('');
     const big=(lbl,val,col)=>'<div style="flex:1;min-width:74px;background:#08151f;border:1px solid #1f4357;border-radius:8px;padding:7px 8px"><div style="font-size:8px;opacity:.6;text-transform:uppercase;letter-spacing:.05em">'+lbl+'</div><div style="font-size:16px;font-weight:bold;color:'+col+'">'+val+'</div></div>';
     body.innerHTML=
-      '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 11px;border-bottom:1px dashed #16303f"><b style="font-size:12px">'+dname+' '+fmt(dt)+(isToday?' · <span style="color:#ffd866">hoy</span>':'')+'</b><span data-xc="back" style="cursor:pointer;font-size:10px;border:1px solid #2f6a8a;border-radius:6px;padding:2px 7px">‹ calendario</span></div>'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 11px;border-bottom:1px dashed #16303f"><b style="font-size:12px">'+dname+' '+fmt(dt)+(isToday?' · <span style="color:#ffd866">hoy</span>':'')+(s._real?' <span style="color:#2ee06a;font-size:9px">● real</span>':' <span style="opacity:.5;font-size:9px">≈ estimación</span>')+'</b><span data-xc="back" style="cursor:pointer;font-size:10px;border:1px solid #2f6a8a;border-radius:6px;padding:2px 7px">‹ calendario</span></div>'+
       '<div style="padding:11px">'+
         '<div style="display:flex;flex-wrap:wrap;gap:7px">'+
           big('🏪 Entraron',s.entran,'#7dff9e')+big('🚶 Pasaron',s.pasan,'#9fd0ff')+big('💶 Ventas',s.ventas+'€','#ffd866')+big('📈 Beneficio',s.beneficio+'€','#ffd866')+big('😊 Satisf.',s.sat+'%','#7dff9e')+big('🪪 Socios',s.socios,'#c9a0ff')+
