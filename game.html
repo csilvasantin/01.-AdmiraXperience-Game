@@ -11424,9 +11424,9 @@ function updateGame(){
         try{
           if((G._xsellCD|0)<=0 && typeof XSELL_RULES_ES!=='undefined'){
             const rule=XSELL_RULES_ES[pi]||{};
-            G.tftCrosssell={ base:prodName(pi),
+            G.tftCrosssell={ base:prodName(pi), baseIdx:pi,
               up:(rule.upsell!=null?prodName(rule.upsell):''),
-              cross:(rule.cross!=null?prodName(rule.cross):''), timer:280 };
+              cross:(rule.cross!=null?prodName(rule.cross):''), crossIdx:(rule.cross!=null?rule.cross:-1), timer:280 };
             G._xsellCD=360;
           }
         }catch(e){}
@@ -18574,10 +18574,17 @@ function drawTftCrosssell(xs,vW,vH){
   cx.textAlign='center';
   cx.fillStyle='#ffcf33';cx.font='bold 9px monospace'; cx.fillText('ADMIRA',cX,13);
   cx.fillStyle='#ffffff';cx.font='bold 11px monospace';
-  cx.fillText(en?'YOU MIGHT ALSO LIKE':'¿TE LLEVAS TAMBIÉN?',cX,29);
-  if(xs.cross&&xs.cross!=='—'){ cx.fillStyle='#7dff9e';cx.font='bold 15px monospace'; cx.fillText('+ '+xs.cross,cX,51); }
-  if(xs.up&&xs.up!=='—'){ cx.fillStyle='#9fd0ff';cx.font='bold 12px monospace'; cx.fillText('★ '+xs.up,cX,69); }
-  if(xs.base){ cx.fillStyle='#8899bb';cx.font='8px monospace'; cx.fillText((en?'with your ':'con tu ')+xs.base,cX,84); }
+  cx.fillText(en?'YOU MIGHT ALSO LIKE':'¿TE LLEVAS TAMBIÉN?',cX,28);
+  // Imagen del producto sugerido (cross) generada por PixerIA, si ya cargó.
+  let imgX=cX, txtAlign='center';
+  if(typeof prodImg==='function'){
+    const im=prodImg(xs.crossIdx!=null?xs.crossIdx:-1);
+    if(im){ try{ cx.drawImage(im, 14, 36, 40, 40); imgX=cX+18; }catch(_){} }
+  }
+  cx.textAlign='center';
+  if(xs.cross&&xs.cross!=='—'){ cx.fillStyle='#7dff9e';cx.font='bold 15px monospace'; cx.fillText('+ '+xs.cross,imgX,52); }
+  if(xs.up&&xs.up!=='—'){ cx.fillStyle='#9fd0ff';cx.font='bold 12px monospace'; cx.fillText('★ '+xs.up,imgX,70); }
+  if(xs.base){ cx.fillStyle='#8899bb';cx.font='8px monospace'; cx.fillText((en?'with your ':'con tu ')+xs.base,cX,86); }
   cx.textAlign='left';
 }
 function drawTftCPM(vW,vH){
@@ -19001,6 +19008,26 @@ function drawAltadisTFT(centerCol, yPx, colsWide){
   cx.restore();
 }
 
+// ── Imágenes de producto generadas con PixerIA (Grok) y publicadas en Stock ──
+// Se usan en el gestor de turnos y en el cross-sell de la pared. Carga perezosa
+// con CORS (Stock devuelve ACAO:* → no contamina el canvas para los recortes MUPI).
+const PROD_IMG_URLS=[
+  'https://pixer-eleven.csilvasantin.workers.dev/stock/asset/1781456721736-xh2wdf', // 0 Tabaco
+  'https://pixer-eleven.csilvasantin.workers.dev/stock/asset/1781456736385-ffnzsv', // 1 Vapeadores
+  'https://pixer-eleven.csilvasantin.workers.dev/stock/asset/1781456752716-ykstvn', // 2 Lotería
+  'https://pixer-eleven.csilvasantin.workers.dev/stock/asset/1781456770044-55bsze', // 3 Prensa
+  'https://pixer-eleven.csilvasantin.workers.dev/stock/asset/1781456787273-o3aiq5', // 4 Chuches
+  'https://pixer-eleven.csilvasantin.workers.dev/stock/asset/1781456804126-z6nveh', // 5 Recarga
+  'https://pixer-eleven.csilvasantin.workers.dev/stock/asset/1781456817146-fyprdp', // 6 Premium
+  'https://pixer-eleven.csilvasantin.workers.dev/stock/asset/1781456830612-cxn4rl', // 7 Accesorios
+];
+const PROD_IMG=[];
+function prodImg(idx){
+  idx=idx|0; if(idx<0||!PROD_IMG_URLS[idx]) return null;
+  let im=PROD_IMG[idx];
+  if(!im){ im=new Image(); im.crossOrigin='anonymous'; im.src=PROD_IMG_URLS[idx]; PROD_IMG[idx]=im; return null; }
+  return (im.complete&&im.naturalWidth>0)?im:null;
+}
 function drawTurnManager(){
   const left=toIso(3.25,0);
   const right=toIso(4.95,0);
@@ -19046,9 +19073,10 @@ function drawTurnManager(){
   const EMO=['🚬','💨','🎟️','📰','🍬','🔋','🍷','🧰'];
   const last=(typeof G!=='undefined'&&G&&G.lastSold)?G.lastSold:null;
   if(last){
-    cx.font='16px monospace'; cx.fillText(EMO[last.idx|0]||'🛍️',cX,19);
-    cx.fillStyle='#ffffff';cx.font='bold 7px monospace'; cx.fillText(trunc(last.name,13),cX,29);
-    cx.fillStyle='#ffd86b';cx.font='bold 6px monospace'; cx.fillText('+'+(last.rev|0)+'€',cX,35);
+    const im=prodImg(last.idx);
+    if(im){ try{ cx.drawImage(im, cX-12, 1, 24, 24); }catch(_){ cx.font='16px monospace'; cx.fillText(EMO[last.idx|0]||'🛍️',cX,19); } }
+    else { cx.font='16px monospace'; cx.fillText(EMO[last.idx|0]||'🛍️',cX,19); }
+    cx.fillStyle='#ffffff';cx.font='bold 7px monospace'; cx.fillText(trunc(last.name,12)+'  +'+(last.rev|0)+'€',cX,33);
   } else {
     cx.fillStyle='#557';cx.font='7px monospace'; cx.fillText(lang==='en'?'waiting sale':'en espera',cX,22);
   }
