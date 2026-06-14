@@ -5645,6 +5645,10 @@ function chibiSkirt(x,y,col,skinCol){
   }catch(e){}
 }
 function isFemaleLook(look){ return !!(look&&(look.gender==='f'||look.skirt)); }
+// Edad de los NPCs: niño (más bajito), joven, adulto, senior (encogido + cano + bastón).
+function ageBucketRandom(){ const r=Math.random(); return r<0.12?'nino':r<0.45?'joven':r<0.80?'adulto':'senior'; }
+function ageScale(look){ const a=look&&look.age; return a==='nino'?0.72:a==='senior'?0.9:1; }
+function chibiCane(x,y){ try{ cx.strokeStyle='#7a5a2a'; cx.lineWidth=1.3; cx.beginPath(); cx.moveTo(x+13.5,y+12); cx.lineTo(x+15,y+27); cx.stroke(); cx.fillStyle='#caa05a'; cx.fillRect(x+12.5,y+10.5,3,2.2); }catch(e){} }
 
 const P={
   bg:'#4a7a38',wall:'#e8dcc0',floor1:'#c8bb98',floor2:'#bfb28a',
@@ -12427,6 +12431,7 @@ function spawnCust(isVip,isSponsor,force){
   // Género marcado también en clientes (falda en ellas).
   if(cLook.gender!=='m'&&cLook.gender!=='f') cLook.gender=Math.random()<0.5?'f':'m';
   cLook.skirt=(cLook.gender==='f');
+  if(!cLook.age) cLook.age=ageBucketRandom();
   const personaTicketBoost=persona==='impulsive'?1.35:persona==='loyal'?1.12:1;
   const stayBase=Math.round((60+Math.random()*240)*60);
   const stayTargetTicks=persona==='impatient'?Math.round(stayBase*0.58)
@@ -12527,6 +12532,7 @@ function makePasserbyLook(){
   // Género marcado: ~50/50. Las mujeres llevan falda (la pinta chibiSkirt).
   if(lk.gender!=='m'&&lk.gender!=='f') lk.gender=Math.random()<0.5?'f':'m';
   lk.skirt=(lk.gender==='f');
+  if(!lk.age) lk.age=ageBucketRandom();
   return lk;
 }
 
@@ -12630,7 +12636,7 @@ function updatePassersby(){
         else if(d>p._camMinD+5){ p._wantSnap=true;   // superó el punto más cercano → marcar
           // PUBLI EXTERIOR SEGMENTADA: el escaparate muestra perfume del género del
           // viandante que pasa por delante (hombre→perfume hombre, mujer→mujer).
-          try{ const g=(p.look&&p.look.gender)||'m'; G.exteriorAd={gender:(g==='f'?'f':'m'), until:tt+260}; }catch(_){}
+          try{ const g=(p.look&&p.look.gender)||'m'; G.exteriorAd={gender:(g==='f'?'f':'m'), age:((p.look&&p.look.age)||'adulto'), until:tt+260}; }catch(_){}
         }
       }
     }
@@ -13254,6 +13260,7 @@ function chibi(x,y,dir,shirt,hair,frame,busy,tick,scale=1,isDJ=false,look=null){
   const sCol8=isDJ?'#ddaa22':P.shirts[shirt%P.shirts.length];
   r(x+1,y+8,12,11,sCol8);
   if(isFemaleLook(look)) chibiSkirt(x,y,sCol8,skinCol);   // falda (variante outline)
+  if(look&&look.age==='senior') chibiCane(x,y);
   // Shirt highlight
   r(x+4,y+10,5,3,'#ffffff18');
   // X logo on blue Altadis shirt — or "54" in black for DJ
@@ -13328,12 +13335,13 @@ function chibiHabbo(x,y,dir,shirt,hair,frame,busy,tick,scale=1,isDJ=false,look=n
   ro(x+1,y+8,12,11,sCol);
   r(x+1,y+15,12,4,cDark(sCol,12));
   if(isFemaleLook(look)) chibiSkirt(x,y,sCol,skinCol);   // falda (variante 3)
+  if(look&&look.age==='senior') chibiCane(x,y);
   if(isDJ){ cx.font='bold 5px monospace';cx.textAlign='center';cx.fillStyle='#1a1a1a';cx.fillText('54',x+7,y+17); }
   else if(shirt===0){ cx.strokeStyle='#fff';cx.lineWidth=1.2;cx.beginPath();cx.moveTo(x+4,y+10);cx.lineTo(x+10,y+16);cx.moveTo(x+10,y+10);cx.lineTo(x+4,y+16);cx.stroke(); }
   // Cabeza
   ro(x+1,y-1,12,12,skinCol);
   // Pelo / gorra
-  const hairCol=P.hair[hair%P.hair.length];
+  const hairCol=(look&&look.age==='senior')?'#cfcfcf':P.hair[hair%P.hair.length];
   if(isDJ){
     r(x-1,y-6,16,6,OL); r(x+0,y-5,14,5,'#1a1a3a');
     r(x+0,y-1,14,2,'#222244'); r(x-3,y-1,5,2,'#0d0d1a'); r(x+6,y-6,2,2,'#dd2233');
@@ -13393,6 +13401,7 @@ function chibi16(x,y,dir,shirt,hair,frame,busy,tick,scale=1,isDJ=false,look=null
   bg.addColorStop(0,cLight(sCol16,28));bg.addColorStop(0.5,sCol16);bg.addColorStop(1,cDark(sCol16,22));
   cx.fillStyle=bg;cx.fillRect(x+1,y+8,12,11);
   if(isFemaleLook(look)) chibiSkirt(x,y,sCol16,skinCol);   // falda: marca el género femenino
+  if(look&&look.age==='senior') chibiCane(x,y);
   // Shirt highlight crease
   cx.globalAlpha=0.22;cx.fillStyle='#fff';cx.fillRect(x+4,y+9,4,3);cx.globalAlpha=1;
   // Collar
@@ -13416,7 +13425,7 @@ function chibi16(x,y,dir,shirt,hair,frame,busy,tick,scale=1,isDJ=false,look=null
   // Cheek blush
   cx.globalAlpha=0.13;cx.fillStyle='#ff8888';cx.fillRect(x+1,y+5,3,3);cx.fillRect(x+10,y+5,3,3);cx.globalAlpha=1;
   // Hair with gradient + sheen — or snapback cap for DJ
-  const hairCol=P.hair[hair%P.hair.length];
+  const hairCol=(look&&look.age==='senior')?'#cfcfcf':P.hair[hair%P.hair.length];
   if(isDJ){
     cx.fillStyle=hairCol;cx.fillRect(x+0,y-4,14,4);cx.fillRect(x-1,y-3,2,6);cx.fillRect(x+13,y-3,2,6);
     const capG=cx.createLinearGradient(x,y-5,x+14,y);
@@ -17033,7 +17042,7 @@ function drawEscaparate(){
     cx.moveTo(iTL.x,iTL.y); cx.lineTo(iTR.x,iTR.y); cx.lineTo(iBR.x,iBR.y); cx.lineTo(iBL.x,iBL.y);
     cx.closePath(); cx.clip();
     cx.setTransform(ax,ay,bx,by,iTL.x,iTL.y);
-    drawExteriorAd(G.exteriorAd.gender, vW, vH);
+    drawExteriorAd(G.exteriorAd.gender, G.exteriorAd.age, vW, vH);
     cx.setTransform(1,0,0,1,0,0);
     cx.restore();
     cx.strokeStyle='#5a3a18'; cx.lineWidth=2;
@@ -19082,7 +19091,7 @@ const PERFUME_IMG_URLS={
 };
 const PERFUME_IMG={};
 function perfumeImg(g){ g=(g==='f')?'f':'m'; let im=PERFUME_IMG[g]; if(!im){ const u=PERFUME_IMG_URLS[g]; if(!u) return null; im=new Image(); im.crossOrigin='anonymous'; im.src=u; PERFUME_IMG[g]=im; return null; } return (im.complete&&im.naturalWidth>0)?im:null; }
-function drawExteriorAd(g,vW,vH){
+function drawExteriorAd(g,age,vW,vH){
   const fem=(g==='f');
   cx.fillStyle=fem?'#2a0f1e':'#0c1430'; cx.fillRect(0,0,vW,vH);
   const im=perfumeImg(g);
@@ -19091,7 +19100,10 @@ function drawExteriorAd(g,vW,vH){
   cx.fillStyle=fem?'#ff9ecf':'#9ec3ff'; cx.font='bold 8px sans-serif'; cx.fillText('ADMIRA',vW/2,11);
   cx.fillStyle='#ffffff'; cx.font='bold 12px sans-serif'; cx.fillText(fem?'PERFUME MUJER':'PERFUME HOMBRE',vW/2,vH-15);
   cx.fillStyle='#ffd866'; cx.font='bold 9px sans-serif'; cx.fillText('· OFERTA ·',vW/2,vH-4);
-  cx.textAlign='left';
+  // Etiqueta de segmento (género + edad): la publi va dirigida.
+  const AGE={nino:'NIÑO',joven:'JOVEN',adulto:'ADULTO',senior:'SENIOR'};
+  cx.textAlign='right'; cx.fillStyle='rgba(255,255,255,.85)'; cx.font='bold 7px sans-serif';
+  cx.fillText((fem?'♀':'♂')+' '+(AGE[age]||'ADULTO'),vW-3,11); cx.textAlign='left';
 }
 function drawTurnManager(){
   const left=toIso(3.25,0);
@@ -20547,7 +20559,7 @@ function drawIsoCust(c){
   if(djHired){
     const bob=Math.sin(tt*0.2+c.x*0.1)*3;
     renderY=c.y+bob;
-    chibi(c.x,renderY,c.dir||1,shirtIdx,hairIdx,Math.floor(tt/6)%2,true,tt,1,false,cLook);
+    chibi(c.x,renderY,c.dir||1,shirtIdx,hairIdx,Math.floor(tt/6)%2,true,tt,ageScale(cLook),false,cLook);
     // Musical notes floating
     if(tt%30<2){
       const noteX=c.x+Math.random()*12-6;
@@ -20555,7 +20567,7 @@ function drawIsoCust(c){
       cx.font='8px monospace';cx.fillText('♪',noteX,c.y-20-Math.random()*10);
     }
   } else {
-    chibi(c.x,c.y,c.dir||1,shirtIdx,hairIdx,c.fr,false,tt,1,false,cLook);
+    chibi(c.x,c.y,c.dir||1,shirtIdx,hairIdx,c.fr,false,tt,ageScale(cLook),false,cLook);
   }
   // Número identificador en la camiseta — coincide con la lista CLIENTES y con
   // la ficha al pulsar el cliente. Asignación perezosa para los ya en sala.
