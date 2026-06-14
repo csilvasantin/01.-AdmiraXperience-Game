@@ -17451,7 +17451,8 @@ function setAvatar3dTotem(on){
   if(typeof DS_PIN!=='object'||DS_PIN===null) return false;
   if(on){
     const loc=avatar3dLoc();
-    const url=AVATAR3D.totemUrl+(AVATAR3D.totemUrl.indexOf('?')>=0?'&':'?')+'loc='+encodeURIComponent(loc);
+    const lg=(typeof lang!=='undefined'&&lang==='en')?'en':'es';  // idioma de la plataforma
+    const url=AVATAR3D.totemUrl+(AVATAR3D.totemUrl.indexOf('?')>=0?'&':'?')+'loc='+encodeURIComponent(loc)+'&lang='+lg;
     DS_PIN['metahuman']={kind:'web',name:'DigitalAvatar.ai',src:url};
   } else {
     try{ delete DS_PIN['metahuman']; }catch(_){ DS_PIN['metahuman']=null; }
@@ -17501,7 +17502,7 @@ async function askAvatar3d(question){
   if(els.answer){ els.answer.classList.add('is-thinking'); els.answer.classList.remove('is-error'); els.answer.textContent=en?'Thinking…':'Pensando…'; }
   if(typeof MH!=='undefined'){ MH.speaking=true; MH.speakUntil=Date.now()+30000; }
   try{
-    const r=await fetch(AVATAR3D.url+'/metahuman/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({loc:avatar3dLoc(),question:clean})});
+    const r=await fetch(AVATAR3D.url+'/metahuman/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({loc:avatar3dLoc(),question:clean,lang:(en?'en':'es')})});
     const d=await r.json().catch(()=>({}));
     if(!r.ok||d.ok===false||!d.answer) throw new Error(d.error||d.message||('HTTP '+r.status));
     const answer=String(d.answer||'').trim();
@@ -25016,9 +25017,13 @@ window.xtAPI = (function(){
         customAction:'editor'
       },
       {
-        label:'☰ Menu',
-        status:isEs?'panel':'panel',
-        customAction:'menu'
+        // Avatar 3D en el tótem (= /avatar3d on|off). Sustituye al antiguo «Menu».
+        label:'🧑‍💻 Avatar3D',
+        status:((typeof DS_PIN!=='undefined'&&DS_PIN&&DS_PIN.metahuman&&DS_PIN.metahuman.kind==='web'))
+          ?(isEs?'en vivo':'live')
+          :(isEs?'tótem':'totem'),
+        command:((typeof DS_PIN!=='undefined'&&DS_PIN&&DS_PIN.metahuman&&DS_PIN.metahuman.kind==='web'))?'/avatar3d off':'/avatar3d on',
+        active:!!((typeof DS_PIN!=='undefined'&&DS_PIN&&DS_PIN.metahuman&&DS_PIN.metahuman.kind==='web'))
       },
       {
         // Debajo de DVR / a la derecha de Menu (8º slot, fila 2 col 4). Mismo que /impactos.
