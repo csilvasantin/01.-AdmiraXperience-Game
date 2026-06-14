@@ -901,6 +901,8 @@
   <canvas id="dsCanvas2" width="160" height="90" style="display:block;width:100%;height:100%"></canvas>
   <iframe id="admiraTube2" title="AdmiraTube 2" allow="autoplay; encrypted-media; picture-in-picture" referrerpolicy="strict-origin-when-cross-origin" style="display:none;position:absolute;inset:0;width:100%;height:100%;border:0"></iframe>
 </div>
+<!-- Avatar 3D (DigitalAvatar.ai) montado sobre la pantalla del tótem en la vista 2D cuando /avatar3d on -->
+<iframe id="totemAvatar" title="Avatar 3D · DigitalAvatar.ai" allow="microphone; autoplay; camera; fullscreen" referrerpolicy="no-referrer-when-downgrade" style="display:none;position:absolute;overflow:hidden;border:0;background:#000;z-index:6"></iframe>
 <script>
 // ── Kill-switch ────────────────────────────────────────────────
 // Comprueba kill-switch.json y, si enabled:true, bloquea el juego
@@ -16338,6 +16340,9 @@ function drawShop(){
     if(isEditorFurniture) cx.restore();
   }
 
+  // Avatar 3D sobre el tótem (vista 2D) cuando está encendido (/avatar3d on).
+  try{ positionTotemAvatar(); }catch(_){}
+
   // ── ESCAPARATE — right wall rows 0-2, above glass door ──
   if(!editorSceneActive) drawEscaparate();
 
@@ -17451,7 +17456,29 @@ function setAvatar3dTotem(on){
     try{ delete DS_PIN['metahuman']; }catch(_){ DS_PIN['metahuman']=null; }
   }
   try{ if(typeof emitTotemNow==='function') emitTotemNow(true); }catch(_){}
+  try{ if(typeof positionTotemAvatar==='function') positionTotemAvatar(); }catch(_){}
   return true;
+}
+// Monta el iframe del avatar 3D sobre la pantalla del tótem en la VISTA 2D del
+// gemelo (no solo en la pantalla física), usando el quad cacheado del tótem.
+function positionTotemAvatar(){
+  const el=document.getElementById('totemAvatar'); if(!el) return;
+  const pin=(typeof DS_PIN==='object'&&DS_PIN)?DS_PIN['metahuman']:null;
+  const q=(typeof DS_SURFACE_QUADS==='object'&&DS_SURFACE_QUADS)?DS_SURFACE_QUADS.metahuman:null;
+  // Mostrar siempre que haya pin web + quad del tótem (vale en juego Y en demo).
+  const on=pin&&pin.kind==='web'&&pin.src&&q;
+  if(!on){ if(el.style.display!=='none'){ el.style.display='none'; el.src='about:blank'; } return; }
+  try{
+    const canvasRect=cv.getBoundingClientRect();
+    const scaleX=canvasRect.width/W, scaleY=canvasRect.height/H;
+    const x=q[0].x, y=q[0].y, w=q[1].x-q[0].x, h=q[2].y-q[1].y;
+    el.style.left=(canvasRect.left+x*scaleX)+'px';
+    el.style.top=(canvasRect.top+y*scaleY)+'px';
+    el.style.width=Math.max(40,w*scaleX)+'px';
+    el.style.height=Math.max(60,h*scaleY)+'px';
+    if((el.src||'').indexOf(pin.src)<0) el.src=pin.src;
+    el.style.display='block';
+  }catch(e){}
 }
 function avatar3dLoc(){
   const c=(typeof window!=='undefined'&&window.STORE_CFG)?window.STORE_CFG:{};
