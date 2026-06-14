@@ -17527,6 +17527,23 @@ async function askAvatar3d(question){
   }
 }
 window.askAvatar3d=askAvatar3d;
+// /avatar3d <pregunta> → habla con ELLA (el avatar foto-real del tótem): enciende
+// el avatar si hace falta y le empuja la pregunta por postMessage para que responda
+// con voz + lip-sync en la propia pantalla del tótem (no solo texto en el panel).
+function askTotemAvatar(question){
+  const en=(typeof lang!=='undefined'&&lang==='en');
+  const clean=String(question||'').trim();
+  if(!clean) return {ok:false,message:en?'Usage: /avatar3d <question>':'Uso: /avatar3d <pregunta>'};
+  const onAlready=(typeof DS_PIN==='object'&&DS_PIN&&DS_PIN.metahuman&&DS_PIN.metahuman.kind==='web');
+  if(!onAlready && typeof setAvatar3dTotem==='function') setAvatar3dTotem(true);
+  const lg=en?'en':'es';
+  const send=()=>{ try{ const el=document.getElementById('totemAvatar'); if(el&&el.contentWindow) el.contentWindow.postMessage({type:'da-ask',question:clean,lang:lg},'*'); }catch(e){} };
+  if(onAlready) send(); else setTimeout(send,1300);   // recién montado: espera a que cargue el listener del iframe
+  try{ if(typeof rememberMemory==='function') rememberMemory('dialog','Avatar3D Q: '+clean); }catch(e){}
+  try{ if(typeof showEv==='function') showEv('🧑‍💻 Avatar3D · '+clean.slice(0,40),'#5fd0ff'); }catch(e){}
+  return {ok:true,message:en?('🗣️ Sent to the totem avatar: "'+clean+'"'):('🗣️ Pregunta enviada al avatar del tótem: "'+clean+'"')};
+}
+window.askTotemAvatar=askTotemAvatar;
 (function setupMetahumanPanel(){
   const wire=()=>{
     const els=_mhEls(); if(!els.panel) return;
@@ -24585,6 +24602,7 @@ window.xtAPI = (function(){
           if(typeof setAvatar3dTotem==='function') setAvatar3dTotem(false);
           return {ok:true,message:'Avatar 3D apagado en el tótem (vuelve la cara AI).'};
         }
+        if(typeof askTotemAvatar==='function') return askTotemAvatar(arg);
         if(typeof askAvatar3d==='function') return askAvatar3d(arg);
         return {ok:false,message:'Avatar3D no disponible.'};
       }
@@ -27457,7 +27475,8 @@ window.xtAPI = (function(){
           if(typeof setAvatar3dTotem==='function') setAvatar3dTotem(false);
           return en?'Avatar 3D off on the totem (back to the AI face).':'Avatar 3D apagado en el tótem (vuelve la cara AI).';
         }
-        // Con pregunta: responde por texto + voz en el panel.
+        // Con pregunta: se la lanza al avatar del tótem (voz + lip-sync en ELLA).
+        if(typeof askTotemAvatar==='function'){ const r=askTotemAvatar(arg); return r&&r.message?r.message:''; }
         if(typeof askAvatar3d==='function') return await askAvatar3d(arg);
         return en?'Avatar3D not available.':'Avatar3D no disponible.';
       }
