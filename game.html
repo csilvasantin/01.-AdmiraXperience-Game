@@ -10580,9 +10580,10 @@ window.openDVRPanel=openDVRPanel; window.closeDVRPanel=closeDVRPanel;
 const MUPICAM = window.XPACE_MUPICAM = {
   on:true,            // siempre vigilando (como una cámara de seguridad real)
   pos:null,           // {x,y} de la lente en coords de canvas (lo fija drawEscaparate)
-  shots:[],           // carrete: {id,t,hhmm,persona,normal,pixel}
-  MAX:80,             // tope del carrete (ring buffer)
+  shots:[],           // carrete: {id,t,hhmm,persona,normal,pixel,cam:'ext'|'int'}
+  MAX:160,            // tope del carrete (ring buffer; compartido exterior+interior)
   _mode:'normal',     // vista de la galería: 'normal' (humano IA) | 'pixel' (NPC pixelado)
+  _cam:'ext',         // cámara activa en la galería: 'ext' (calle) | 'int' (tienda)
   _timer:null,
   _uid:0,             // id estable por foto (para humanizar sin que el ring buffer lo confunda)
 };
@@ -10610,8 +10611,10 @@ function mupiCamDraw(TL,TR){
 }
 // "Fotografía" al viandante p recortando la región del canvas donde está.
 // Produce dataURL normal (ampliado, suavizado) y pixelado (baja-res reescalada).
-function mupiCamSnap(p){
-  if(!MUPICAM.on || !p || p._snapped) return;
+function mupiCamSnap(p, cam){
+  cam=(cam==='int')?'int':'ext';
+  if(!MUPICAM.on || !p) return;
+  if(cam==='ext' && p._snapped) return;
   if(typeof state!=='undefined' && typeof S!=='undefined' && state!==S.GAME) return;
   if(typeof REC!=='undefined' && REC && REC.replay && REC.replay.on) return;   // no fotografiar el pasado
   let src; try{ src=cx.canvas; }catch(_){ return; }
@@ -10631,13 +10634,30 @@ function mupiCamSnap(p){
     const pC=document.createElement('canvas'); pC.width=NW; pC.height=NH;
     const pX=pC.getContext('2d'); pX.imageSmoothingEnabled=false;
     pX.drawImage(tmp, 0,0,PW,PH, 0,0,NW,NH);
-    MUPICAM.shots.push({ id:(p.id||tt), _uid:(++MUPICAM._uid), t:(typeof G!=='undefined'&&G?G.gameTime:0)||0,
+    MUPICAM.shots.push({ id:(p.id||tt), _uid:(++MUPICAM._uid), cam:cam, t:(typeof G!=='undefined'&&G?G.gameTime:0)||0,
       hhmm:mupiCamTimeLabel((typeof G!=='undefined'&&G?G.gameTime:0)||0), persona:p.persona||'',
       normal:nC.toDataURL('image/webp',0.7), pixel:pC.toDataURL('image/webp',0.6),
       human:null, _gen:false, _err:null });
     if(MUPICAM.shots.length>MUPICAM.MAX) MUPICAM.shots.shift();
-    p._snapped=true;
+    if(cam==='ext') p._snapped=true; else p._snappedInt=true;
   }catch(_){}
+}
+// Cámara MUPI INTERIOR: fotografía a los CLIENTES dentro de la tienda (impactos de
+// tienda). Se llama desde el render, ya dibujados los clientes; una sola foto por
+// cliente, poco después de que entre y esté en un sitio encuadrable.
+function mupiCamScanInterior(){
+  if(!MUPICAM.on || !G || !Array.isArray(G.custs)) return;
+  if(typeof state!=='undefined' && typeof S!=='undefined' && state!==S.GAME) return;
+  if(typeof REC!=='undefined' && REC && REC.replay && REC.replay.on) return;   // no fotografiar el pasado
+  for(const c of G.custs){
+    if(!c || c.x==null || c._snappedInt) continue;
+    if(c._intSeen==null) c._intSeen=0;
+    c._intSeen++;
+    if(c._intSeen<8) continue;                                  // deja que entre y se coloque
+    const fits=(c.x>46 && c.x<760 && c.y>44 && c.y<486);        // cabe el recorte sin tocar bordes
+    if(!fits) continue;
+    try{ mupiCamSnap(c,'int'); }catch(_){}
+  }
 }
 // ── Galería / carrete de la cámara (panel arrastrable, estilo del HUD de impactos) ──
 function mupiCamGalleryEl(){ return document.getElementById('mupiCamPanel'); }
@@ -10652,19 +10672,27 @@ function mupiCamRenderGallery(){
   // revisando: solo los capturados entre (cursor - ventana) y el cursor.
   const replayOn=(typeof REC!=='undefined'&&REC&&REC.replay&&REC.replay.on);
   const nowT=(replayOn&&typeof G!=='undefined'&&G&&typeof G.gameTime==='number')?G.gameTime:null;
-  let shots=MUPICAM.shots;
+  // Cámara activa: exterior (calle) o interior (tienda).
+  const cam=(MUPICAM._cam==='int')?'int':'ext';
+  const camEl=p.querySelector('#mcCam'); if(camEl) camEl.textContent=(cam==='int')?'🏪 Interior':'🌐 Exterior';
+  let shots=MUPICAM.shots.filter(s=>((s.cam==='int')?'int':'ext')===cam);
   if(replayOn&&nowT!=null){
     shots=shots.filter(s=>typeof s.t==='number'&&s.t<=nowT+1&&s.t>=nowT-MUPICAM_DVR_WINDOW);
   }
   // Cabecera contextual (incluye el contador): en DVR indica la hora del cursor.
+  const who=(cam==='int')?'clientes':'viandantes';
+  const icon=(cam==='int')?'🏪':'🚶';
   const sub=p.querySelector('#mcSub');
   if(sub){ sub.innerHTML=replayOn&&nowT!=null
-      ? ('⏪ DVR · <b>'+shots.length+'</b> viandantes en torno a <b>'+mupiCamTimeLabel(nowT)+'</b>')
-      : ('🚶 <b>'+shots.length+'</b> viandantes · foto + hora al pasar'); }
+      ? ('⏪ DVR · <b>'+shots.length+'</b> '+who+' en torno a <b>'+mupiCamTimeLabel(nowT)+'</b>')
+      : (icon+' <b>'+shots.length+'</b> '+who+' · foto + hora al pasar'); }
   if(!shots.length){
+    const emptyLive=(cam==='int')
+      ? 'Aún sin clientes capturados.<br>Deja entrar gente a la tienda (prueba <b>/audiencia 6</b> o <b>/velocidad 8</b>).'
+      : 'Aún sin viandantes capturados.<br>Deja pasar gente por delante del MUPI (prueba <b>/audienciaOUT 6</b> o <b>/velocidad 8</b>).';
     body.innerHTML=replayOn
-      ? '<div style="opacity:.6;padding:14px;text-align:center;font-size:10px;line-height:1.5">Nadie pasó por el MUPI en ese momento.<br>Mueve la línea de tiempo del DVR a otra hora.</div>'
-      : '<div style="opacity:.6;padding:14px;text-align:center;font-size:10px;line-height:1.5">Aún sin viandantes capturados.<br>Deja pasar gente por delante del MUPI (prueba <b>/audienciaOUT 6</b> o <b>/velocidad 8</b>).</div>';
+      ? ('<div style="opacity:.6;padding:14px;text-align:center;font-size:10px;line-height:1.5">Nadie en '+(cam==='int'?'la tienda':'la calle')+' en ese momento.<br>Mueve la línea de tiempo del DVR a otra hora.</div>')
+      : ('<div style="opacity:.6;padding:14px;text-align:center;font-size:10px;line-height:1.5">'+emptyLive+'</div>');
     return;
   }
   const pix=(MUPICAM._mode==='pixel');
@@ -10716,12 +10744,13 @@ function mupiCamOpenGallery(){
   if(!p){
     p=document.createElement('div'); p.id='mupiCamPanel';
     p.style.cssText='position:fixed;top:72px;left:16px;z-index:2147482000;width:250px;max-height:72vh;display:flex;flex-direction:column;background:rgba(6,16,10,.94);border:1px solid #5fb0ff;border-radius:10px;color:#dbeaff;font-family:"JetBrains Mono",ui-monospace,monospace;font-size:11px;box-shadow:0 0 22px rgba(95,176,255,.25);overflow:hidden';
-    p.innerHTML='<div id="mcHdr" style="display:flex;justify-content:space-between;align-items:center;padding:6px 9px;border-bottom:1px dashed #2f6a8a;letter-spacing:.06em;cursor:move;user-select:none;touch-action:none"><b>📷 CÁMARA MUPI</b><span style="display:flex;gap:6px;align-items:center"><span id="mcMode" title="alternar normal / pixelada" style="cursor:pointer;font-size:9px;border:1px solid #5fb0ff;border-radius:5px;padding:1px 6px">normal</span><span id="mcClose" style="cursor:pointer;color:#999;padding:0 4px">×</span></span></div>'+
+    p.innerHTML='<div id="mcHdr" style="display:flex;justify-content:space-between;align-items:center;padding:6px 9px;border-bottom:1px dashed #2f6a8a;letter-spacing:.06em;cursor:move;user-select:none;touch-action:none"><b>📷 CÁMARA MUPI</b><span style="display:flex;gap:6px;align-items:center"><span id="mcCam" title="alternar cámara exterior (calle) / interior (tienda)" style="cursor:pointer;font-size:9px;border:1px solid #7dff9e;color:#7dff9e;border-radius:5px;padding:1px 6px">🌐 Exterior</span><span id="mcMode" title="alternar humano IA / NPC pixelado" style="cursor:pointer;font-size:9px;border:1px solid #5fb0ff;border-radius:5px;padding:1px 6px">🧑 humano</span><span id="mcClose" style="cursor:pointer;color:#999;padding:0 4px">×</span></span></div>'+
       '<div id="mcSub" style="padding:4px 9px;font-size:9px;opacity:.7;border-bottom:1px solid rgba(95,176,255,.15)">🚶 <b>0</b> viandantes · foto + hora al pasar</div>'+
       '<div id="mcBody" style="padding:8px 9px;overflow:auto"></div>';
     document.body.appendChild(p);
     p.querySelector('#mcClose').onclick=()=>mupiCamCloseGallery();
     const md=p.querySelector('#mcMode'); md.onclick=()=>{ MUPICAM._mode=(MUPICAM._mode==='pixel')?'normal':'pixel'; mupiCamRenderGallery(); };
+    const cm=p.querySelector('#mcCam'); if(cm) cm.onclick=()=>{ MUPICAM._cam=(MUPICAM._cam==='int')?'ext':'int'; mupiCamRenderGallery(); };
     // Delegado en el panel (sobrevive al re-render del body): pulsar ✨/muñeco → humanizar.
     p.addEventListener('click',ev=>{ const g=ev.target.closest('[data-act="gen"]'); if(!g) return; const uid=+g.getAttribute('data-uid'); if(uid) mupiCamHumanize(uid); });
     const hdr=p.querySelector('#mcHdr'); let dg=false,oX=0,oY=0;
@@ -16788,6 +16817,8 @@ function drawDoorForegroundPeople(){
     // desfasado). Lee el frame actual con el peatón ya pintado.
     for(const p of G.passersby){ if(p._wantSnap && !p._snapped){ try{ mupiCamSnap(p); }catch(_){} p._wantSnap=false; } }
   }
+  // Cámara MUPI INTERIOR: foto a los clientes dentro de la tienda (ya dibujados).
+  try{ mupiCamScanInterior(); }catch(_){}
   // Customers within ~NEAR px of the door X (or further out) are physically at
   // the threshold or on the sidewalk — re-paint them on top of the frame.
   if(Array.isArray(G.custs)){
