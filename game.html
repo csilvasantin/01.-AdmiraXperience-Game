@@ -61,6 +61,13 @@
     .mh-head #mhStatus{color:#9ec7d0;font-size:8px;font-weight:normal;text-transform:none;white-space:nowrap}
     .mh-close{margin-left:auto;border:none;background:transparent;color:#9ec7d0;font-size:18px;line-height:1;cursor:pointer;padding:0 4px}
     .mh-close:hover{color:#fff}
+    /* Cara viva del MetaHuman (Pixel Streaming UE5 vía Tailscale funnel) */
+    #mhFaceWrap{position:relative;flex:0 0 auto;width:100%;aspect-ratio:1/1;border-radius:8px;overflow:hidden;background:#05080f;border:1px solid rgba(120,243,255,.30)}
+    #mhFace{position:absolute;inset:0;width:100%;height:100%;border:0;background:#05080f}
+    #mhFaceWrap .mh-face-badge{position:absolute;top:6px;left:6px;z-index:2;display:flex;align-items:center;gap:5px;font-size:8px;font-weight:bold;letter-spacing:.05em;color:#6ce6a2;background:rgba(3,8,18,.6);border-radius:999px;padding:2px 7px;backdrop-filter:blur(4px)}
+    #mhFaceWrap .mh-face-badge .dot{width:6px;height:6px;border-radius:50%;background:#6ce6a2;box-shadow:0 0 8px #6ce6a2;animation:mhPulse 1.3s infinite}
+    @keyframes mhPulse{50%{opacity:.3}}
+    #mhFaceWrap.mh-face-off{display:none}
     #mhPrompt{flex:0 0 auto;min-height:54px;border:1px solid rgba(120,243,255,.30);border-radius:6px;background:rgba(2,8,13,.82);color:#f4fbff;padding:6px 7px;font-family:monospace;font-size:11px;resize:vertical;outline:none}
     #mhPrompt:focus{border-color:#78f3ff}
     .mh-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
@@ -774,6 +781,7 @@
 <div id="speechOverlay" aria-hidden="true"></div>
 <div id="metahumanPanel" aria-label="Metahuman AI Assistant" aria-hidden="true">
   <div class="mh-head"><span>🤖 Metahuman · AI Assistant</span><span id="mhStatus">listo</span><button type="button" id="mhClose" class="mh-close" aria-label="Cerrar">×</button></div>
+  <div id="mhFaceWrap" class="mh-face-off"><span class="mh-face-badge"><span class="dot"></span>EN VIVO</span><iframe id="mhFace" title="MetaHuman en vivo" allow="autoplay; microphone" referrerpolicy="no-referrer"></iframe></div>
   <textarea id="mhPrompt" maxlength="500" placeholder="Pregunta a tu agente Metahuman... (Ctrl/⌘+Enter envía)"></textarea>
   <div class="mh-actions">
     <button type="button" id="mhAskBtn" class="mh-primary">Preguntar</button>
@@ -17852,11 +17860,28 @@ function _mhPositionPanel(){
   els.panel.style.top=y+'px';
   els.panel.style.right=''; els.panel.style.bottom='';
 }
+// ── Cara viva del MetaHuman (Pixel Streaming UE5 vía Tailscale funnel del host de render) ──
+// Se carga sólo al abrir el panel (lazy) y se desconecta al cerrar. on/off por CLI.
+window.MH_FACE_URL = window.MH_FACE_URL || 'https://macbook-pro-16.tail48b61c.ts.net/?AutoConnect=true&AutoPlayVideo=true&StartVideoMuted=true&MatchViewportRes=true';
+window.MH_FACE_ENABLED = (window.MH_FACE_ENABLED !== false);
+function _mhFaceEl(){ return { wrap:document.getElementById('mhFaceWrap'), frame:document.getElementById('mhFace') }; }
+function mhFaceOn(){
+  const e=_mhFaceEl(); if(!e.wrap||!e.frame) return;
+  if(!window.MH_FACE_ENABLED || !window.MH_FACE_URL){ mhFaceOff(); return; }
+  if(e.frame.getAttribute('src')!==window.MH_FACE_URL) e.frame.setAttribute('src', window.MH_FACE_URL);
+  e.wrap.classList.remove('mh-face-off');
+}
+function mhFaceOff(){
+  const e=_mhFaceEl(); if(!e.wrap) return;
+  e.wrap.classList.add('mh-face-off');
+  if(e.frame) e.frame.removeAttribute('src'); // corta la conexión WebRTC al cerrar
+}
 function openMetahumanPanel(){
   const els=_mhEls(); if(!els.panel) return;
   els.panel.classList.add('show');
   els.panel.setAttribute('aria-hidden','false');
   _mhPositionPanel();
+  mhFaceOn();
   if(els.prompt){ try{ els.prompt.focus({preventScroll:true}); }catch(e){} }
   if(typeof showEv==='function') showEv('🤖 Metahuman activado · pregúntale algo','#78f3ff');
   try{
@@ -17871,6 +17896,7 @@ function closeMetahumanPanel(){
   const els=_mhEls(); if(!els.panel) return;
   els.panel.classList.remove('show');
   els.panel.setAttribute('aria-hidden','true');
+  mhFaceOff();
   MH.speaking=false;
 }
 // Contexto del EQUIPO + tienda para el Metahuman (la IA de la tienda): nombres
@@ -28343,7 +28369,18 @@ window.xtAPI = (function(){
       if(cmd==='grok'||cmd==='ask'||cmd==='pregunta') return await grokAsk(arg);
       if(cmd==='draw'||cmd==='dibuja'||cmd==='paint'||cmd==='pinta') return await grokDraw(arg);
       if(cmd==='metahuman'||cmd==='mh'){
-        if(!arg) return 'Uso: /metahuman <pregunta>';
+        // Toggle de la cara viva (Pixel Streaming): /metahuman face on|off|toggle
+        const fm=(arg||'').trim().match(/^cara|^face/i);
+        if(fm){
+          const sub=(arg||'').trim().replace(/^(cara|face)\s*/i,'').toLowerCase();
+          if(sub==='off'||sub==='no'||sub==='0') window.MH_FACE_ENABLED=false;
+          else if(sub==='on'||sub==='si'||sub==='sí'||sub==='1') window.MH_FACE_ENABLED=true;
+          else window.MH_FACE_ENABLED=!window.MH_FACE_ENABLED; // toggle
+          if(typeof openMetahumanPanel==='function') openMetahumanPanel();
+          if(typeof mhFaceOn==='function'){ window.MH_FACE_ENABLED?mhFaceOn():mhFaceOff(); }
+          return 'Cara del Metahuman '+(window.MH_FACE_ENABLED?'ON':'OFF')+'.';
+        }
+        if(!arg) return 'Uso: /metahuman <pregunta>  ·  /metahuman face on|off';
         if(typeof openMetahumanPanel==='function') openMetahumanPanel();
         if(typeof askMetahuman==='function'){
           await askMetahuman(arg);
