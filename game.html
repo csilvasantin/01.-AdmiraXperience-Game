@@ -11419,7 +11419,7 @@ function updateGame(){
         if(G.rush.active) addFloat(s.x+7,s.y-16,'x'+CFG.RUSH_MULT.toFixed(1),P.rushGlow);
         G.satisfaction=Math.min(100,G.satisfaction+0.3);
         // TPV: registro real por producto (para el calendario "qué compraron").
-        try{ const nm=(typeof prodName==='function')?prodName(pi):('Prod '+pi); G.dayProductSales=G.dayProductSales||{}; G.dayProductSales[nm]=(G.dayProductSales[nm]||0)+units; }catch(e){}
+        try{ const nm=(typeof prodName==='function')?prodName(pi):('Prod '+pi); G.dayProductSales=G.dayProductSales||{}; G.dayProductSales[nm]=(G.dayProductSales[nm]||0)+units; G.lastSold={name:nm,rev:rev,units:units,ts:tt}; }catch(e){}
         // Cross-selling en la pantalla de la pared larga (throttled ~6s).
         try{
           if((G._xsellCD|0)<=0 && typeof XSELL_RULES_ES!=='undefined'){
@@ -19041,9 +19041,26 @@ function drawTurnManager(){
   for(let gy=8;gy<vH;gy+=8){cx.beginPath();cx.moveTo(5,gy);cx.lineTo(vW-5,gy);cx.stroke();}
   cx.globalAlpha=1;
   cx.textAlign='center';
-  cx.fillStyle='#8defff';cx.font='bold 8px monospace';cx.fillText('TURNO',vW/2,13);
-  cx.fillStyle='#ffd86b';cx.font='bold 23px monospace';cx.fillText(num,vW/2,37);
-  cx.fillStyle='#8defff';cx.font='bold 7px monospace';cx.fillText('CAJA',vW/2,49);
+  // ── Mitad izquierda: TURNO ──
+  const cxL=24;
+  cx.fillStyle='#8defff';cx.font='bold 7px monospace';cx.fillText('TURNO',cxL,12);
+  cx.fillStyle='#ffd86b';cx.font='bold 20px monospace';cx.fillText(num,cxL,35);
+  cx.fillStyle='#8defff';cx.font='bold 6px monospace';cx.fillText('CAJA',cxL,48);
+  // ── Separador central ──
+  cx.strokeStyle='#1e6a72';cx.globalAlpha=0.6;cx.lineWidth=1;cx.beginPath();cx.moveTo(47,7);cx.lineTo(47,vH-5);cx.stroke();cx.globalAlpha=1;
+  // ── Mitad derecha: TPV en tiempo real (qué compran) ──
+  const cxR=70;
+  const trunc=(s,n)=>{ s=String(s||''); return s.length>n?s.slice(0,n-1)+'…':s; };
+  cx.fillStyle='#7dff9e';cx.font='bold 7px monospace';cx.fillText('TPV',cxR,12);
+  const last=(typeof G!=='undefined'&&G&&G.lastSold)?G.lastSold:null;
+  if(last){
+    cx.fillStyle='#ffffff';cx.font='bold 8px monospace';cx.fillText(trunc(last.name,10),cxR,26);
+    cx.fillStyle='#ffd86b';cx.font='bold 12px monospace';cx.fillText('+'+(last.rev|0)+'€',cxR,40);
+  } else {
+    cx.fillStyle='#557';cx.font='7px monospace';cx.fillText('en espera',cxR,30);
+  }
+  let topName='',best=-1; try{ const ps=(G&&G.dayProductSales)||{}; for(const k in ps){ if(ps[k]>best){best=ps[k];topName=k;} } }catch(e){}
+  if(topName){ cx.fillStyle='#8aa';cx.font='6px monospace';cx.fillText('TOP: '+trunc(topName,8),cxR,50); }
   cx.setTransform(1,0,0,1,0,0);
   cx.restore();
   cx.restore();
