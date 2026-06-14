@@ -893,11 +893,11 @@
     <div id="telegramLog"></div>
   </div>
 </div>
-<div id="videoMonitor" style="display:none;position:absolute;overflow:hidden;border:2px solid #333;border-radius:2px;background:#000;z-index:5;pointer-events:none">
+<div id="videoMonitor" style="display:none;position:absolute;overflow:hidden;border:2px solid #333;border-radius:2px;background:#000;z-index:0;pointer-events:none">
   <canvas id="dsCanvas1" width="160" height="90" style="display:block;width:100%;height:100%"></canvas>
   <iframe id="admiraTube1" title="AdmiraTube 1" allow="autoplay; encrypted-media; picture-in-picture" referrerpolicy="strict-origin-when-cross-origin" style="display:none;position:absolute;inset:0;width:100%;height:100%;border:0"></iframe>
 </div>
-<div id="videoMonitor2" style="display:none;position:absolute;overflow:hidden;border:2px solid #333;border-radius:2px;background:#000;z-index:5;pointer-events:none">
+<div id="videoMonitor2" style="display:none;position:absolute;overflow:hidden;border:2px solid #333;border-radius:2px;background:#000;z-index:0;pointer-events:none">
   <canvas id="dsCanvas2" width="160" height="90" style="display:block;width:100%;height:100%"></canvas>
   <iframe id="admiraTube2" title="AdmiraTube 2" allow="autoplay; encrypted-media; picture-in-picture" referrerpolicy="strict-origin-when-cross-origin" style="display:none;position:absolute;inset:0;width:100%;height:100%;border:0"></iframe>
 </div>
@@ -3236,6 +3236,30 @@ function positionDSOnLeftWall(el,rowT,rowB){
   // Wall goes from bottom-left to top-right; skewY tilts the right edge up
   const skew=Math.atan2(pT.y-pB.y,pT.x-pB.x)*180/Math.PI;
   el.style.transform='skewY('+skew+'deg)';
+}
+
+// Las pantallas DS de pared son divs DOM DETRÁS del canvas (z-index 0). Para que
+// los muebles del canvas queden POR DELANTE, perforamos un hueco transparente en
+// el canvas con la forma de cada pantalla (tras dibujar la pared); el div asoma
+// por el hueco y cualquier mueble dibujado después lo tapa. Mismo quad que
+// positionDSOnLeftWall (coords internas del canvas).
+function punchDsScreenHoles(){
+  if(typeof state!=='undefined'&&state!==S.GAME) return;
+  const mons=[videoEl,videoEl2];
+  const midWallFrac=0.12, screenH=ISO.wallH*0.75;
+  for(let i=0;i<mons.length;i++){
+    const el=mons[i]; if(!el||el.style.display==='none') continue;
+    const sc=DS_SCREENS[i]; if(!sc) continue;
+    const pT=toIso(0,sc.rowT), pB=toIso(0,sc.rowB);
+    const x1=pB.x, y1=pB.y-ISO.wallH+ISO.wallH*midWallFrac;
+    const x2=pT.x, y2=pT.y-ISO.wallH+ISO.wallH*midWallFrac;
+    cx.save();
+    cx.globalCompositeOperation='destination-out';
+    cx.beginPath();
+    cx.moveTo(x1,y1); cx.lineTo(x2,y2); cx.lineTo(x2,y2+screenH); cx.lineTo(x1,y1+screenH); cx.closePath();
+    cx.fill();
+    cx.restore();
+  }
 }
 
 function updateVideoPosition(){
@@ -16155,6 +16179,11 @@ function drawShop(){
       );
     }
   }
+
+  // Perfora el hueco de las pantallas DS de pared (divs detrás del canvas) ANTES
+  // de dibujar los muebles → los muebles del canvas las ocluyen (objetos siempre
+  // por delante de paredes y contenidos dinámicos).
+  try{ punchDsScreenHoles(); }catch(_){}
 
   // ── FURNITURE & ENTITIES (sorted by screen Y for correct occlusion) ──
   const entities=[];
