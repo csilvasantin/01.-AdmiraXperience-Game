@@ -17460,6 +17460,8 @@ let avatar3dWall=false;
 // Avatar RPM elegido (/avatar3d model <id|url de readyplayer.me>). Vacío = el de
 // best.html por defecto. Se pasa como &avatar= y se aplica en vivo por postMessage.
 let avatar3dModel='';
+// Marca de pregunta en curso → si no vuelve da-answer en X s, deshacemos el "Pensando".
+let avatar3dAskPending=0;
 // Enciende/apaga el avatar 3D en la pantalla VERTICAL del tótem: pone un pin
 // 'web' en la superficie metahuman → emitTotemNow lo empuja a screen 'totem' →
 // pantalla.html (la pantalla física) lo muestra en iframe.
@@ -17468,7 +17470,8 @@ function setAvatar3dTotem(on){
   if(on){
     const loc=avatar3dLoc();
     const lg=(typeof lang!=='undefined'&&lang==='en')?'en':'es';  // idioma de la plataforma
-    const url=AVATAR3D.totemUrl+(AVATAR3D.totemUrl.indexOf('?')>=0?'&':'?')+'loc='+encodeURIComponent(loc)+'&lang='+lg+(avatar3dMuted?'&audio=off':'')+(avatar3dModel?'&avatar='+encodeURIComponent(avatar3dModel):'');
+    const bust=(typeof window!=='undefined'&&window.XTANCO_APP&&window.XTANCO_APP.build)?('&v='+window.XTANCO_APP.build):'';
+    const url=AVATAR3D.totemUrl+(AVATAR3D.totemUrl.indexOf('?')>=0?'&':'?')+'loc='+encodeURIComponent(loc)+'&lang='+lg+(avatar3dMuted?'&audio=off':'')+(avatar3dModel?'&avatar='+encodeURIComponent(avatar3dModel):'')+bust;
     DS_PIN['metahuman']={kind:'web',name:'DigitalAvatar.ai',src:url};
   } else {
     try{ delete DS_PIN['metahuman']; }catch(_){ DS_PIN['metahuman']=null; }
@@ -17565,7 +17568,8 @@ function postTotemAvatar(msg, ensureOn){
 function wallAvatarUrl(){
   const loc=avatar3dLoc();
   const lg=(typeof lang!=='undefined'&&lang==='en')?'en':'es';
-  return AVATAR3D.totemUrl+(AVATAR3D.totemUrl.indexOf('?')>=0?'&':'?')+'embed=1&loc='+encodeURIComponent(loc)+'&lang='+lg+(avatar3dMuted?'&audio=off':'')+(avatar3dModel?'&avatar='+encodeURIComponent(avatar3dModel):'');
+  const bust=(typeof window!=='undefined'&&window.XTANCO_APP&&window.XTANCO_APP.build)?('&v='+window.XTANCO_APP.build):'';
+  return AVATAR3D.totemUrl+(AVATAR3D.totemUrl.indexOf('?')>=0?'&':'?')+'embed=1&loc='+encodeURIComponent(loc)+'&lang='+lg+(avatar3dMuted?'&audio=off':'')+(avatar3dModel?'&avatar='+encodeURIComponent(avatar3dModel):'')+bust;
 }
 function positionWallAvatar(){
   const el=document.getElementById('wallAvatar'); if(!el) return;
@@ -17667,6 +17671,7 @@ window.addEventListener('message',function(ev){
     try{ const els=(typeof _mhEls==='function')?_mhEls():null; if(els&&els.prompt) els.prompt.focus(); }catch(e){}
   } else if(d.type==='da-answer'){
     // La avatar (tótem/pared) devuelve su respuesta → la mostramos aquí, en el panel.
+    avatar3dAskPending=0;   // cancela el vigilante anti-cuelgue
     const en=(typeof lang!=='undefined'&&lang==='en');
     try{ if(typeof openMetahumanPanel==='function') openMetahumanPanel(); }catch(e){}
     const els=(typeof _mhEls==='function')?_mhEls():null;
@@ -17700,6 +17705,16 @@ function askTotemAvatar(question){
     if(els){ if(els.prompt) els.prompt.value=clean; if(els.status) els.status.textContent=en?'avatar thinking…':'avatar pensando…';
       if(els.answer){ els.answer.classList.add('is-thinking'); els.answer.classList.remove('is-error'); els.answer.textContent=en?'Thinking…':'Pensando…'; } }
   }catch(e){}
+  // Vigilante anti-cuelgue: si en 25s no llegó da-answer, avisamos en el panel.
+  avatar3dAskPending=Date.now(); const myAsk=avatar3dAskPending;
+  setTimeout(function(){
+    if(avatar3dAskPending!==myAsk) return;   // ya respondió
+    avatar3dAskPending=0;
+    try{ const els=(typeof _mhEls==='function')?_mhEls():null;
+      if(els&&els.status) els.status.textContent='timeout';
+      if(els&&els.answer){ els.answer.classList.remove('is-thinking'); els.answer.classList.add('is-error'); els.answer.textContent=en?'No reply from the avatar (network/cache). Reload the twin and try again.':'La avatar no respondió (red/caché). Recarga el gemelo y reinténtalo.'; }
+    }catch(e){}
+  },25000);
   postTotemAvatar({type:'da-ask',question:clean,lang:lg}, true);
   try{ if(typeof rememberMemory==='function') rememberMemory('dialog','Avatar3D Q: '+clean); }catch(e){}
   try{ if(typeof showEv==='function') showEv('🧑‍💻 Avatar3D · '+clean.slice(0,40),'#5fd0ff'); }catch(e){}
