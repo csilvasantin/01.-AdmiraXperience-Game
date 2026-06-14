@@ -17398,6 +17398,55 @@ async function askMetahuman(text){
     if(els.askBtn) els.askBtn.disabled=false;
   }
 }
+// ── /avatar3d — MetaHuman de DigitalAvatar.ai (cerebro Grok + voz ElevenLabs) ──
+// Usa el endpoint nuevo POST /metahuman/ask {loc, question} → {answer, audioBase64, mime}.
+// A diferencia del Grok-proxy (solo texto), ESTE además devuelve y reproduce la VOZ.
+const AVATAR3D_CFG=(typeof RUNTIME_CONFIG!=='undefined'&&RUNTIME_CONFIG.avatar3d&&typeof RUNTIME_CONFIG.avatar3d==='object')?RUNTIME_CONFIG.avatar3d:{};
+const AVATAR3D={
+  url:(typeof AVATAR3D_CFG.url==='string'&&AVATAR3D_CFG.url)?AVATAR3D_CFG.url.replace(/\/+$/,''):'https://omnipublicity-api.csilvasantin.workers.dev',
+  loc:(typeof AVATAR3D_CFG.loc==='string'&&AVATAR3D_CFG.loc)?AVATAR3D_CFG.loc:'',
+};
+function avatar3dLoc(){
+  const c=(typeof window!=='undefined'&&window.STORE_CFG)?window.STORE_CFG:{};
+  return AVATAR3D.loc||c.loc||c.locationId||c.client||c.id||'xtanco-generic';
+}
+function playAvatar3dVoice(b64,mime){
+  if(!b64) return;
+  try{ if(window.__avatar3dAudio){ window.__avatar3dAudio.pause(); } }catch(e){}
+  try{ const a=new Audio('data:'+(mime||'audio/mpeg')+';base64,'+b64); window.__avatar3dAudio=a; a.play().catch(function(){}); }catch(e){}
+}
+async function askAvatar3d(question){
+  const en=(typeof lang!=='undefined'&&lang==='en');
+  const clean=String(question||'').trim();
+  if(!clean) return {ok:false,message:en?'Usage: /avatar3d <question>':'Uso: /avatar3d <pregunta>'};
+  if(typeof openMetahumanPanel==='function') openMetahumanPanel();
+  const els=(typeof _mhEls==='function')?_mhEls():{};
+  if(els.prompt) els.prompt.value=clean;
+  if(els.status) els.status.textContent=en?'avatar thinking…':'avatar pensando…';
+  if(els.answer){ els.answer.classList.add('is-thinking'); els.answer.classList.remove('is-error'); els.answer.textContent=en?'Thinking…':'Pensando…'; }
+  if(typeof MH!=='undefined'){ MH.speaking=true; MH.speakUntil=Date.now()+30000; }
+  try{
+    const r=await fetch(AVATAR3D.url+'/metahuman/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({loc:avatar3dLoc(),question:clean})});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok||d.ok===false||!d.answer) throw new Error(d.error||d.message||('HTTP '+r.status));
+    const answer=String(d.answer||'').trim();
+    if(els.status) els.status.textContent=en?'live':'listo';
+    if(els.answer){ els.answer.classList.remove('is-thinking','is-error'); els.answer.textContent=answer; }
+    if(typeof MH!=='undefined'){ MH.lastAnswer=answer; MH.speakUntil=Date.now()+Math.min(9000,Math.max(2500,answer.length*45)); }
+    playAvatar3dVoice(d.audioBase64,d.mime);
+    try{ if(typeof rememberMemory==='function'){ rememberMemory('dialog','Avatar3D Q: '+clean); rememberMemory('dialog','Avatar3D A: '+answer); } }catch(e){}
+    try{ if(typeof showEv==='function') showEv('🧑‍💻 Avatar3D · DigitalAvatar.ai','#5fd0ff'); }catch(e){}
+    return {ok:true,message:answer,text:answer};
+  }catch(e){
+    const fail=(e&&e.message==='Failed to fetch');
+    const msg=fail?(en?'Could not reach DigitalAvatar.ai (worker/CORS/ES block).':'No se pudo conectar con DigitalAvatar.ai (worker/CORS/bloqueo ES).'):(e&&e.message||String(e));
+    if(typeof MH!=='undefined') MH.speakUntil=Date.now()+1500;
+    if(els.status) els.status.textContent='error';
+    if(els.answer){ els.answer.classList.remove('is-thinking'); els.answer.classList.add('is-error'); els.answer.textContent=msg; }
+    return {ok:false,message:'Avatar3D: '+msg,text:msg};
+  }
+}
+window.askAvatar3d=askAvatar3d;
 (function setupMetahumanPanel(){
   const wire=()=>{
     const els=_mhEls(); if(!els.panel) return;
@@ -26112,7 +26161,7 @@ window.xtAPI = (function(){
       {title:'Atmósfera',items:['/ambiente','/ambiente vol 50','/voces']},
       {title:'Operativa real',items:['/devolucion','/pedido']},
       {title:'Integración AdmiraNext',items:['/socios export']},
-      {title:'IA y contenido',items:['/grok pregunta','/draw dibujo','/metahuman pregunta','/log','/log thief','/log customer','/import','/import list','/import remove 1','/importTube https://youtu.be/...']},
+      {title:'IA y contenido',items:['/grok pregunta','/draw dibujo','/metahuman pregunta','/avatar3d pregunta','/log','/log thief','/log customer','/import','/import list','/import remove 1','/importTube https://youtu.be/...']},
       {title:'Ajustes rápidos',items:['/money 12000','/sat 90','/fame 80','/set week 12','/set year 2','/set revenue 5000','/set storeLevel 2','/set customers 30']},
       {title:'Musica y layout',items:['/song 1','/song bad bunny','/music','/next','/prev','/seoul2026','/seul','/seultrap','/seultecno','/equipo inicio ana 3 4','/equipo zona dj 12 2 2','/catalogo','/catalogo pared','/importar catalogo','/importar 1','/importar lista','/importar quitar 1','/mobiliario','/mobiliario inicio','/layout','/layout save','/layout factory','/layout xpacio','/layout xpacio load']},
       {title:'Estilo visual',items:['/16bits','/8bits','/render habbo','/render 16bit']},
@@ -27258,6 +27307,12 @@ window.xtAPI = (function(){
           return (typeof MH!=='undefined' && MH.lastAnswer) ? MH.lastAnswer : 'Metahuman pensando…';
         }
         return 'Metahuman no disponible (panel no inicializado)';
+      }
+      if(cmd==='avatar3d'||cmd==='avatar-3d'||cmd==='digitalavatar'||cmd==='avatarhd'){
+        const en=(typeof lang!=='undefined'&&lang==='en');
+        if(!arg) return en?'Usage: /avatar3d <question> — asks the DigitalAvatar.ai MetaHuman (Grok brain + ElevenLabs voice, with audio).':'Uso: /avatar3d <pregunta> — pregunta al MetaHuman de DigitalAvatar.ai (cerebro Grok + voz ElevenLabs, con audio).';
+        if(typeof askAvatar3d==='function') return await askAvatar3d(arg);
+        return en?'Avatar3D not available.':'Avatar3D no disponible.';
       }
       if(cmd==='log'||cmd==='registro'){
         if(typeof buildPeopleLogContext!=='function') return 'Registro no disponible.';

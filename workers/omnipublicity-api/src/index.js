@@ -18,6 +18,8 @@ const DEFAULT_ALLOWED_ORIGINS = [
   'https://www.carlossilva.info',
   'https://admira.app',
   'https://www.admira.app',
+  'https://xpaceos.com',
+  'https://www.xpaceos.com',
   'https://digitalavatar.pages.dev',
   'https://digitalavatar.ai',
   'https://www.digitalavatar.ai',
