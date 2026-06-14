@@ -10100,6 +10100,55 @@ function endWeek(){
   if(G.week===1&&Math.random()<0.3) showEv(T().events[6],P.neon3);
 }
 
+// ── CIERRE DEL DÍA ──────────────────────────────────────────
+// Al llegar la hora de cierre: echa a TODO el mundo del Xpacio, muestra los
+// resultados generales del día y espera a CONTINUAR para arrancar uno nuevo.
+function endDaySequence(){
+  try{ G.custs=[]; G.passersby=[]; }catch(_){}     // se va todo el mundo
+  try{ G.passersbyToday=G.passersbyToday; }catch(_){}
+  G.dayResultsOpen=true;
+  try{ showDayEndResults(); }catch(e){ G.dayResultsOpen=false; G.weekTimer=CFG.WEEK_TICKS; }
+}
+function showDayEndResults(){
+  const en=(typeof lang!=='undefined'&&lang==='en');
+  const clientes=Math.max(G.custIn|0, G.customersToday|0);
+  const pasaron=G.passersbyToday|0;
+  const ingresos=G.weekRevenue|0;
+  const beneficio=(G.weekRevenue|0)-(G.weekExpenses|0);
+  const sat=Math.round(G.satisfaction||0);
+  const fama=Math.round(G.fame||0);
+  const dia=(G.week|0)||1, anio=(G.year|0)||1;
+  let ov=document.getElementById('dayEndOverlay');
+  if(!ov){
+    ov=document.createElement('div'); ov.id='dayEndOverlay';
+    ov.style.cssText='position:fixed;inset:0;z-index:2147483000;display:none;align-items:center;justify-content:center;background:rgba(2,5,9,.92);font-family:"JetBrains Mono",ui-monospace,monospace';
+    document.body.appendChild(ov);
+  }
+  const big=(lbl,val,col)=>'<div style="flex:1;min-width:120px;background:#08151f;border:1px solid #1f4357;border-radius:10px;padding:10px 12px"><div style="font-size:10px;opacity:.6;text-transform:uppercase;letter-spacing:.06em">'+lbl+'</div><div style="font-size:22px;font-weight:bold;color:'+col+'">'+val+'</div></div>';
+  ov.innerHTML='<div style="width:min(620px,92vw);background:#04101a;border:2px solid #2f8d8d;border-radius:14px;box-shadow:0 0 40px rgba(47,141,141,.3);padding:20px 22px;color:#dbeaff">'+
+    '<div style="text-align:center;font-size:20px;font-weight:bold;color:#7dffd0;letter-spacing:.08em">'+(en?'END OF DAY':'FIN DEL DÍA')+'</div>'+
+    '<div style="text-align:center;font-size:11px;opacity:.6;margin:2px 0 14px">'+(en?'Day ':'Día ')+dia+' · '+(en?'Year ':'Año ')+anio+'</div>'+
+    '<div style="display:flex;flex-wrap:wrap;gap:9px">'+
+      big(en?'🏪 Customers':'🏪 Clientes',clientes,'#7dff9e')+big(en?'🚶 Passed by':'🚶 Pasaron',pasaron,'#9fd0ff')+big(en?'💶 Revenue':'💶 Ingresos',ingresos+'€','#ffd866')+
+    '</div>'+
+    '<div style="display:flex;flex-wrap:wrap;gap:9px;margin-top:9px">'+
+      big(en?'📈 Profit':'📈 Beneficio',beneficio+'€','#ffd866')+big(en?'😊 Satisf.':'😊 Satisf.',sat+'%','#7dff9e')+big(en?'⭐ Fame':'⭐ Fama',fama+'%','#c9a0ff')+
+    '</div>'+
+    '<div style="text-align:center;margin-top:18px"><button id="dayEndContinue" style="cursor:pointer;background:#0e2a22;border:1px solid #2f8d8d;color:#7dffd0;border-radius:9px;padding:9px 22px;font-family:inherit;font-size:14px;font-weight:bold;letter-spacing:.05em">'+(en?'NEW DAY →':'NUEVO DÍA →')+'</button></div>'+
+    '<div style="text-align:center;font-size:9px;opacity:.45;margin-top:8px">'+(en?'Everyone has left the Xpace. Start a fresh day.':'Todo el mundo ha salido del Xpacio. Empieza un día nuevo.')+'</div>'+
+  '</div>';
+  ov.style.display='flex';
+  const btn=ov.querySelector('#dayEndContinue'); if(btn) btn.onclick=startNewDayFromResults;
+  try{ if(typeof SFX!=='undefined'&&SFX.weekEnd) SFX.weekEnd(); }catch(_){}
+}
+function startNewDayFromResults(){
+  const ov=document.getElementById('dayEndOverlay'); if(ov) ov.style.display='none';
+  if(!G) return;
+  G.dayResultsOpen=false;
+  G.weekTimer=CFG.WEEK_TICKS;   // dispara el rollover (endWeek) → nuevo día (o fin de año si toca)
+}
+window.startNewDayFromResults=startNewDayFromResults;
+
 // ── RANDOM EVENTS ────────────────────────────────────────────
 function checkRandomEvents(){
   // Holiday event
@@ -11115,6 +11164,8 @@ window.XPACE_DISTRO={ snapshot:distroSnapshot, publish:distroPublish, list:distr
 
 function updateGame(){
   tt++;
+  // Pausa la simulación mientras se muestran los resultados del día (overlay).
+  if(G && G.dayResultsOpen) return;
   // ── PEOPLE LOG ── observation-based: every tick, see who is around and
   // diff against the previous snapshot to record entry/exit timestamps.
   try{ peopleLogTick(); }catch(e){}
@@ -11168,10 +11219,11 @@ function updateGame(){
   _clockH=Math.floor(G.gameTime)%12;
   _clockM=Math.floor((G.gameTime%1)*60);
   tickManagerActions();
-  // Day end = closing time
+  // Day end = closing time → echa a todos, muestra resultados y espera CONTINUAR.
   if(G.gameTime>=shopTimeSettings.closeHour&&!G.dayEnded){
     G.dayEnded=true;
-    G.weekTimer=CFG.WEEK_TICKS; // trigger endWeek
+    try{ endDaySequence(); }catch(e){ G.weekTimer=CFG.WEEK_TICKS; }
+    return;   // pausa este tick; el resto sigue al pulsar NUEVO DÍA
   }
 
   // ── PLAYER CONTROL: move manager with Q/A/O/P ──
