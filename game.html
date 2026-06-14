@@ -10051,7 +10051,7 @@ function endWeek(){
     }
   }
   updateBars();
-  G.weekRevenue=0;G.weekExpenses=0;G.customersToday=0;G.custIn=0;G.custOut=0;G.passersbyToday=0;G.passersby=[];scheduleNextPasserby();
+  G.weekRevenue=0;G.weekExpenses=0;G.customersToday=0;G.custIn=0;G.custOut=0;G.passersbyToday=0;G.passersby=[];G.dayProductSales={};scheduleNextPasserby();
   // Reset day for next week
   G.gameTime=shopTimeSettings.openHour;
   G.dayEnded=false;
@@ -10128,6 +10128,7 @@ function showDayEndResults(){
     const nd=new Date(); const dstr=''+nd.getFullYear()+String(nd.getMonth()+1).padStart(2,'0')+String(nd.getDate()).padStart(2,'0');
     const summary={entran:clientes,pasan:pasaron,ventas:ingresos,beneficio,sat,fama};
     if(hours) summary.hours=hours;
+    try{ const ps=G.dayProductSales||{}; const compras=Object.keys(ps).map(k=>({name:k,n:ps[k]})).sort((a,b)=>b.n-a.n).slice(0,8); if(compras.length) summary.compras=compras; }catch(e){}
     fetch('https://pixer-eleven.csilvasantin.workers.dev/day/save',{method:'POST',headers:{'Content-Type':'application/json'},keepalive:true,body:JSON.stringify({loc,date:dstr,summary})}).catch(()=>{});
   }catch(e){}
   let ov=document.getElementById('dayEndOverlay');
@@ -11252,6 +11253,9 @@ function updateGame(){
   _clockH=Math.floor(G.gameTime)%12;
   _clockM=Math.floor((G.gameTime%1)*60);
   tickManagerActions();
+  // TPV cross-selling: enfría el throttle y expira la tarjeta de la pared.
+  if(G._xsellCD>0) G._xsellCD--;
+  if(G.tftCrosssell&&G.tftCrosssell.timer>0) G.tftCrosssell.timer--;
   // Day end = closing time → echa a todos, muestra resultados y espera CONTINUAR.
   if(G.gameTime>=shopTimeSettings.closeHour&&!G.dayEnded){
     G.dayEnded=true;
@@ -11402,16 +11406,30 @@ function updateGame(){
     if(s.energy<25) s.energy=Math.min(100,s.energy+0.08);
     const moraleFactor=0.7+(s.morale/100)*0.3;
     if(Math.random()<CFG.SALE_PROB*moraleFactor*mult&&s.bTimer===0){
-      const p=G.prods[Math.floor(Math.random()*G.prods.length)];
+      const pi=Math.floor(Math.random()*G.prods.length);
+      const p=G.prods[pi];
       if(p.stock>0){
         s.bTimer=70;s.busy=50;
         const qty=Math.max(1,(s.level*CFG.SALE_BASE*(0.7+Math.random()*0.6)*p.factor*mult)|0);
         const rev=qty*p.price;
         G.money+=rev;G.weekRevenue+=rev;G.yearRevenue+=rev;G.totalRevenue+=rev;
-        p.stock=Math.max(0,p.stock-Math.max(1,(qty/p.price)|0));
+        const units=Math.max(1,(qty/p.price)|0);
+        p.stock=Math.max(0,p.stock-units);
         addFloat(s.x+7,s.y-28,'€'+rev,P.green);SFX.salePop();
         if(G.rush.active) addFloat(s.x+7,s.y-16,'x'+CFG.RUSH_MULT.toFixed(1),P.rushGlow);
         G.satisfaction=Math.min(100,G.satisfaction+0.3);
+        // TPV: registro real por producto (para el calendario "qué compraron").
+        try{ const nm=(typeof prodName==='function')?prodName(pi):('Prod '+pi); G.dayProductSales=G.dayProductSales||{}; G.dayProductSales[nm]=(G.dayProductSales[nm]||0)+units; }catch(e){}
+        // Cross-selling en la pantalla de la pared larga (throttled ~6s).
+        try{
+          if((G._xsellCD|0)<=0 && typeof XSELL_RULES_ES!=='undefined'){
+            const rule=XSELL_RULES_ES[pi]||{};
+            G.tftCrosssell={ base:prodName(pi),
+              up:(rule.upsell!=null?prodName(rule.upsell):''),
+              cross:(rule.cross!=null?prodName(rule.cross):''), timer:280 };
+            G._xsellCD=360;
+          }
+        }catch(e){}
       }
     }
   }
@@ -18547,6 +18565,21 @@ function drawSecurityCCTV(vW,vH){
 // Pinta en el espacio 160×90 de la pantalla de la pared larga el resumen de
 // audiencia para vender publi: ENTRAN (interior) · PASAN (exterior), barras
 // por franja con ⭐ prime, y total impactos + CPM + ingreso estimado.
+// Tarjeta de venta cruzada en la pantalla de la pared larga: al cerrar una venta,
+// el TPV sugiere productos complementarios (XSELL_RULES_ES) unos segundos.
+function drawTftCrosssell(xs,vW,vH){
+  const cX=vW/2; const en=(typeof lang!=='undefined'&&lang==='en');
+  cx.fillStyle='#0a1626';cx.fillRect(0,0,vW,vH);
+  cx.fillStyle='#ffcf33';cx.fillRect(0,0,vW,3);
+  cx.textAlign='center';
+  cx.fillStyle='#ffcf33';cx.font='bold 9px monospace'; cx.fillText('ADMIRA',cX,13);
+  cx.fillStyle='#ffffff';cx.font='bold 11px monospace';
+  cx.fillText(en?'YOU MIGHT ALSO LIKE':'¿TE LLEVAS TAMBIÉN?',cX,29);
+  if(xs.cross&&xs.cross!=='—'){ cx.fillStyle='#7dff9e';cx.font='bold 15px monospace'; cx.fillText('+ '+xs.cross,cX,51); }
+  if(xs.up&&xs.up!=='—'){ cx.fillStyle='#9fd0ff';cx.font='bold 12px monospace'; cx.fillText('★ '+xs.up,cX,69); }
+  if(xs.base){ cx.fillStyle='#8899bb';cx.font='8px monospace'; cx.fillText((en?'with your ':'con tu ')+xs.base,cX,84); }
+  cx.textAlign='left';
+}
 function drawTftCPM(vW,vH){
   cx.fillStyle='#0c0f08';cx.fillRect(0,0,vW,vH);
   for(let y=0;y<vH;y+=3){cx.fillStyle='rgba(0,0,0,0.18)';cx.fillRect(0,y,vW,1);}
@@ -18679,6 +18712,8 @@ function drawAltadisTFT(centerCol, yPx, colsWide){
     drawLiveCamScreen(vW,vH);
   } else if(G&&G.thief&&G.thief.phase!=='idle'){
     drawSecurityCCTV(vW,vH);
+  } else if(G&&G.tftCrosssell&&G.tftCrosssell.timer>0){
+    drawTftCrosssell(G.tftCrosssell,vW,vH);
   } else if(G&&G.tftCPM){
     drawTftCPM(vW,vH);
   } else if(G&&G.tftGrokArt){
