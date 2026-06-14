@@ -17657,6 +17657,16 @@ function saveAvatar3dPreset(rest){
   return {ok:true,message:en?('✅ Preset saved: '+name+' → '+val+'. Use: /avatar3d model '+name):('✅ Preset guardado: '+name+' → '+val+'. Úsalo: /avatar3d model '+name)};
 }
 window.listAvatar3dModels=listAvatar3dModels; window.saveAvatar3dPreset=saveAvatar3dPreset;
+// El avatar incrustado (tótem/pared) reenvía el toque aquí → abrimos el panel de
+// interacción del Metahuman para preguntarle (texto o micro). Restaura el clic que
+// antes abría el tótem y que ahora captura el iframe del avatar.
+window.addEventListener('message',function(ev){
+  const d=ev&&ev.data; if(!d||typeof d!=='object') return;
+  if(d.type==='da-tap'){
+    try{ if(typeof openMetahumanPanel==='function') openMetahumanPanel(); }catch(e){}
+    try{ const els=(typeof _mhEls==='function')?_mhEls():null; if(els&&els.prompt) els.prompt.focus(); }catch(e){}
+  }
+});
 function askTotemAvatar(question){
   const en=(typeof lang!=='undefined'&&lang==='en');
   const clean=String(question||'').trim();
@@ -24737,7 +24747,8 @@ window.xtAPI = (function(){
         }
         if(a==='off'||a==='stop'||a==='idle'){
           if(typeof setAvatar3dTotem==='function') setAvatar3dTotem(false);
-          return {ok:true,message:'Avatar 3D apagado en el tótem (vuelve la cara AI).'};
+          if(typeof setAvatar3dWall==='function') setAvatar3dWall(false);   // mata también la pared
+          return {ok:true,message:'Avatar 3D apagado (tótem y pared). Vuelve la cara AI.'};
         }
         if(a==='ds on'||a==='pared on'||a==='wall on'){
           if(typeof setAvatar3dWall==='function') return setAvatar3dWall(true);
@@ -25201,15 +25212,19 @@ window.xtAPI = (function(){
         status:isEs?'editor':'editor',
         customAction:'editor'
       },
-      {
-        // Avatar 3D en el tótem (= /avatar3d on|off). Sustituye al antiguo «Menu».
-        label:'🧑‍💻 Avatar3D',
-        status:((typeof DS_PIN!=='undefined'&&DS_PIN&&DS_PIN.metahuman&&DS_PIN.metahuman.kind==='web'))
-          ?(isEs?'en vivo':'live')
-          :(isEs?'tótem':'totem'),
-        command:((typeof DS_PIN!=='undefined'&&DS_PIN&&DS_PIN.metahuman&&DS_PIN.metahuman.kind==='web'))?'/avatar3d off':'/avatar3d on',
-        active:!!((typeof DS_PIN!=='undefined'&&DS_PIN&&DS_PIN.metahuman&&DS_PIN.metahuman.kind==='web'))
-      },
+      (function(){
+        // Avatar 3D (= /avatar3d on|off). El botón refleja tótem O pared, y al
+        // apagar mata AMBOS. Sustituye al antiguo «Menu».
+        const totemOn=(typeof DS_PIN!=='undefined'&&DS_PIN&&DS_PIN.metahuman&&DS_PIN.metahuman.kind==='web');
+        const wallOn=(typeof avatar3dWall!=='undefined'&&avatar3dWall);
+        const anyOn=totemOn||wallOn;
+        return {
+          label:'🧑‍💻 Avatar3D',
+          status:anyOn?(isEs?'en vivo':'live'):(isEs?'tótem':'totem'),
+          command:anyOn?'/avatar3d off':'/avatar3d on',
+          active:!!anyOn
+        };
+      })(),
       {
         // Debajo de DVR / a la derecha de Menu (8º slot, fila 2 col 4). Mismo que /impactos.
         label:'📊 Audiencia',
@@ -27636,7 +27651,8 @@ window.xtAPI = (function(){
         }
         if(a==='off'||a==='stop'||a==='idle'){
           if(typeof setAvatar3dTotem==='function') setAvatar3dTotem(false);
-          return en?'Avatar 3D off on the totem (back to the AI face).':'Avatar 3D apagado en el tótem (vuelve la cara AI).';
+          if(typeof setAvatar3dWall==='function') setAvatar3dWall(false);   // mata también la pared
+          return en?'Avatar 3D off (totem and wall). Back to the AI face.':'Avatar 3D apagado (tótem y pared). Vuelve la cara AI.';
         }
         if(a==='ds on'||a==='pared on'||a==='wall on'){
           if(typeof setAvatar3dWall==='function'){ const r=setAvatar3dWall(true); return r&&r.message?r.message:''; }
