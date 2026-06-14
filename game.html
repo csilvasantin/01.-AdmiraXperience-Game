@@ -5632,6 +5632,19 @@ function _h2r(h){return[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),pars
 function _r2h(r,g,b){return'#'+[r,g,b].map(v=>Math.max(0,Math.min(255,v|0)).toString(16).padStart(2,'0')).join('');}
 function cLight(h,a){const[r,g,b]=_h2r(h);return _r2h(r+a,g+a,b+a);}
 function cDark(h,a){return cLight(h,-a);}
+// Falda acampanada para marcar el género femenino de los NPCs (piernas a piel
+// bajo la falda + trapecio de cintura a rodilla). Coords compartidas por las 3
+// variantes de chibi (piernas en x+3/x+8, y+18).
+function chibiSkirt(x,y,col,skinCol){
+  try{
+    cx.fillStyle=skinCol; cx.fillRect(x+3,y+21,3,4); cx.fillRect(x+8,y+21,3,4);
+    cx.beginPath(); cx.moveTo(x+2.5,y+15); cx.lineTo(x+11.5,y+15); cx.lineTo(x+14,y+23); cx.lineTo(x,y+23); cx.closePath();
+    cx.fillStyle=col; cx.fill();
+    cx.globalAlpha=0.22; cx.fillStyle='#fff'; cx.fillRect(x+3,y+16,3,5); cx.globalAlpha=1;
+    cx.fillStyle=cDark(col,12); cx.fillRect(x,y+22,14,1.6);
+  }catch(e){}
+}
+function isFemaleLook(look){ return !!(look&&(look.gender==='f'||look.skirt)); }
 
 const P={
   bg:'#4a7a38',wall:'#e8dcc0',floor1:'#c8bb98',floor2:'#bfb28a',
@@ -12411,6 +12424,9 @@ function spawnCust(isVip,isSponsor,force){
   } else {
     cLook={shirt:1+Math.floor(Math.random()*5),hair:Math.floor(Math.random()*6),skin:Math.floor(Math.random()*6),pants:0,shoes:0,accessory:0};
   }
+  // Género marcado también en clientes (falda en ellas).
+  if(cLook.gender!=='m'&&cLook.gender!=='f') cLook.gender=Math.random()<0.5?'f':'m';
+  cLook.skirt=(cLook.gender==='f');
   const personaTicketBoost=persona==='impulsive'?1.35:persona==='loyal'?1.12:1;
   const stayBase=Math.round((60+Math.random()*240)*60);
   const stayTargetTicks=persona==='impatient'?Math.round(stayBase*0.58)
@@ -12494,18 +12510,24 @@ function getDoorOutsidePos(){
 }
 
 function makePasserbyLook(){
+  let lk;
   if(custTemplates.length>0&&Math.random()<0.55){
     const tpl=custTemplates[Math.floor(Math.random()*custTemplates.length)];
-    return JSON.parse(JSON.stringify(tpl.look));
+    lk=JSON.parse(JSON.stringify(tpl.look));
+  } else {
+    lk={
+      shirt:1+Math.floor(Math.random()*5),
+      hair:Math.floor(Math.random()*6),
+      skin:Math.floor(Math.random()*6),
+      pants:Math.floor(Math.random()*3),
+      shoes:0,
+      accessory:Math.random()<0.25?1:0,
+    };
   }
-  return {
-    shirt:1+Math.floor(Math.random()*5),
-    hair:Math.floor(Math.random()*6),
-    skin:Math.floor(Math.random()*6),
-    pants:Math.floor(Math.random()*3),
-    shoes:0,
-    accessory:Math.random()<0.25?1:0,
-  };
+  // Género marcado: ~50/50. Las mujeres llevan falda (la pinta chibiSkirt).
+  if(lk.gender!=='m'&&lk.gender!=='f') lk.gender=Math.random()<0.5?'f':'m';
+  lk.skirt=(lk.gender==='f');
+  return lk;
 }
 
 function scheduleNextPasserby(){
@@ -12605,7 +12627,11 @@ function updatePassersby(){
       if(fits){
         const d=Math.abs(p.x-scanX);
         if(p._camMinD==null || d<p._camMinD) p._camMinD=d;
-        else if(d>p._camMinD+5){ p._wantSnap=true; }   // superó el punto más cercano → marcar
+        else if(d>p._camMinD+5){ p._wantSnap=true;   // superó el punto más cercano → marcar
+          // PUBLI EXTERIOR SEGMENTADA: el escaparate muestra perfume del género del
+          // viandante que pasa por delante (hombre→perfume hombre, mujer→mujer).
+          try{ const g=(p.look&&p.look.gender)||'m'; G.exteriorAd={gender:(g==='f'?'f':'m'), until:tt+260}; }catch(_){}
+        }
       }
     }
   }
@@ -13227,6 +13253,7 @@ function chibi(x,y,dir,shirt,hair,frame,busy,tick,scale=1,isDJ=false,look=null){
   // Body (torso) — gold jersey for DJ
   const sCol8=isDJ?'#ddaa22':P.shirts[shirt%P.shirts.length];
   r(x+1,y+8,12,11,sCol8);
+  if(isFemaleLook(look)) chibiSkirt(x,y,sCol8,skinCol);   // falda (variante outline)
   // Shirt highlight
   r(x+4,y+10,5,3,'#ffffff18');
   // X logo on blue Altadis shirt — or "54" in black for DJ
@@ -13300,6 +13327,7 @@ function chibiHabbo(x,y,dir,shirt,hair,frame,busy,tick,scale=1,isDJ=false,look=n
   // Torso + banda inferior plana (en vez de gradiente)
   ro(x+1,y+8,12,11,sCol);
   r(x+1,y+15,12,4,cDark(sCol,12));
+  if(isFemaleLook(look)) chibiSkirt(x,y,sCol,skinCol);   // falda (variante 3)
   if(isDJ){ cx.font='bold 5px monospace';cx.textAlign='center';cx.fillStyle='#1a1a1a';cx.fillText('54',x+7,y+17); }
   else if(shirt===0){ cx.strokeStyle='#fff';cx.lineWidth=1.2;cx.beginPath();cx.moveTo(x+4,y+10);cx.lineTo(x+10,y+16);cx.moveTo(x+10,y+10);cx.lineTo(x+4,y+16);cx.stroke(); }
   // Cabeza
@@ -13364,6 +13392,7 @@ function chibi16(x,y,dir,shirt,hair,frame,busy,tick,scale=1,isDJ=false,look=null
   const bg=cx.createLinearGradient(x+1,y+8,x+13,y+19);
   bg.addColorStop(0,cLight(sCol16,28));bg.addColorStop(0.5,sCol16);bg.addColorStop(1,cDark(sCol16,22));
   cx.fillStyle=bg;cx.fillRect(x+1,y+8,12,11);
+  if(isFemaleLook(look)) chibiSkirt(x,y,sCol16,skinCol);   // falda: marca el género femenino
   // Shirt highlight crease
   cx.globalAlpha=0.22;cx.fillStyle='#fff';cx.fillRect(x+4,y+9,4,3);cx.globalAlpha=1;
   // Collar
@@ -16996,6 +17025,24 @@ function drawEscaparate(){
     return;
   }
 
+  // PUBLI EXTERIOR SEGMENTADA POR GÉNERO: si acaba de pasar un viandante por
+  // delante, el escaparate muestra perfume de su género unos segundos.
+  if(G && G.exteriorAd && tt < (G.exteriorAd.until||0)){
+    cx.save();
+    cx.beginPath();
+    cx.moveTo(iTL.x,iTL.y); cx.lineTo(iTR.x,iTR.y); cx.lineTo(iBR.x,iBR.y); cx.lineTo(iBL.x,iBL.y);
+    cx.closePath(); cx.clip();
+    cx.setTransform(ax,ay,bx,by,iTL.x,iTL.y);
+    drawExteriorAd(G.exteriorAd.gender, vW, vH);
+    cx.setTransform(1,0,0,1,0,0);
+    cx.restore();
+    cx.strokeStyle='#5a3a18'; cx.lineWidth=2;
+    cx.beginPath();
+    cx.moveTo(iTL.x,iTL.y); cx.lineTo(iTR.x,iTR.y); cx.lineTo(iBR.x,iBR.y); cx.lineTo(iBL.x,iBL.y);
+    cx.closePath(); cx.stroke();
+    return;
+  }
+
   // Marketplace campaign on the escaparate (takeover or escaparate slot).
   if(window.MarketplaceBridge){
     const camp=window.MarketplaceBridge.getCampaignFor('escaparate');
@@ -19027,6 +19074,24 @@ function prodImg(idx){
   let im=PROD_IMG[idx];
   if(!im){ im=new Image(); im.crossOrigin='anonymous'; im.src=PROD_IMG_URLS[idx]; PROD_IMG[idx]=im; return null; }
   return (im.complete&&im.naturalWidth>0)?im:null;
+}
+// ── Publi exterior segmentada por género (perfume hombre/mujer, PixerIA) ──
+const PERFUME_IMG_URLS={
+  m:'https://pixer-eleven.csilvasantin.workers.dev/stock/asset/1781457584646-kwjbkt',
+  f:'https://pixer-eleven.csilvasantin.workers.dev/stock/asset/1781457601753-gw2e8c',
+};
+const PERFUME_IMG={};
+function perfumeImg(g){ g=(g==='f')?'f':'m'; let im=PERFUME_IMG[g]; if(!im){ const u=PERFUME_IMG_URLS[g]; if(!u) return null; im=new Image(); im.crossOrigin='anonymous'; im.src=u; PERFUME_IMG[g]=im; return null; } return (im.complete&&im.naturalWidth>0)?im:null; }
+function drawExteriorAd(g,vW,vH){
+  const fem=(g==='f');
+  cx.fillStyle=fem?'#2a0f1e':'#0c1430'; cx.fillRect(0,0,vW,vH);
+  const im=perfumeImg(g);
+  if(im){ const s=Math.min(vW*0.62,vH*0.62); try{ cx.drawImage(im, vW/2-s/2, vH*0.14, s, s); }catch(_){} }
+  cx.textAlign='center';
+  cx.fillStyle=fem?'#ff9ecf':'#9ec3ff'; cx.font='bold 8px sans-serif'; cx.fillText('ADMIRA',vW/2,11);
+  cx.fillStyle='#ffffff'; cx.font='bold 12px sans-serif'; cx.fillText(fem?'PERFUME MUJER':'PERFUME HOMBRE',vW/2,vH-15);
+  cx.fillStyle='#ffd866'; cx.font='bold 9px sans-serif'; cx.fillText('· OFERTA ·',vW/2,vH-4);
+  cx.textAlign='left';
 }
 function drawTurnManager(){
   const left=toIso(3.25,0);
