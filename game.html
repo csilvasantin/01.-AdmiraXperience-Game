@@ -10146,7 +10146,10 @@ function showDayEndResults(){
     const summary={entran:clientes,pasan:pasaron,ventas:ingresos,beneficio,sat,fama};
     if(hours) summary.hours=hours;
     try{ const ps=G.dayProductSales||{}; const compras=Object.keys(ps).map(k=>({name:k,n:ps[k]})).sort((a,b)=>b.n-a.n).slice(0,8); if(compras.length) summary.compras=compras; }catch(e){}
-    try{ if(G.extAdImpacts&&Object.keys(G.extAdImpacts).length) summary.extAds=G.extAdImpacts; }catch(e){}
+    try{ if(G.extAdImpacts&&Object.keys(G.extAdImpacts).length){ summary.extAds=G.extAdImpacts;
+      const rev={}; let tot=0; for(const k in G.extAdImpacts){ const r=G.extAdImpacts[k]/1000*segCpm(k); rev[k]=+r.toFixed(2); tot+=r; }
+      summary.extAdsRev=rev; summary.extAdsRevTotal=+tot.toFixed(2);
+    } }catch(e){}
     fetch('https://pixer-eleven.csilvasantin.workers.dev/day/save',{method:'POST',headers:{'Content-Type':'application/json'},keepalive:true,body:JSON.stringify({loc,date:dstr,summary})}).catch(()=>{});
   }catch(e){}
   let ov=document.getElementById('dayEndOverlay');
@@ -10435,6 +10438,15 @@ const IMPACTS = window.XPACE_IMPACTS = {
   ],
 };
 function impactsEnsureDay(){ for(const s of IMPACTS.SCREENS){ if(!IMPACTS.day[s.id]) IMPACTS.day[s.id]={est:0,look:0,qual:0,measured:false,camFaces:0}; } }
+// CPM por SEGMENTO (RTB) de la publi exterior. La pauta/precio la fija admira.app
+// (parte programática) y puede sobreescribir esta tabla vía STORE_CFG.segCpm /
+// RUNTIME_CONFIG.segCpm. Defaults razonables (jóvenes/adultos valen más).
+const SEG_CPM_DEFAULT={ joven_m:9, joven_f:9, adulto_m:8, adulto_f:8.5, senior_m:5, senior_f:5, nino_m:3.5, nino_f:3.5 };
+function segCpm(segKey){
+  try{ const o=(typeof window!=='undefined'&&window.STORE_CFG&&window.STORE_CFG.segCpm)||(typeof RUNTIME_CONFIG!=='undefined'&&RUNTIME_CONFIG&&RUNTIME_CONFIG.segCpm)||null; if(o&&o[segKey]!=null&&isFinite(+o[segKey])) return +o[segKey]; }catch(e){}
+  return (SEG_CPM_DEFAULT[segKey]!=null)?SEG_CPM_DEFAULT[segKey]:((typeof IMPACTS!=='undefined'&&IMPACTS.cpm)||8);
+}
+window.segCpm=segCpm; window.SEG_CPM_DEFAULT=SEG_CPM_DEFAULT;
 function impactsReset(){ IMPACTS.day=Object.create(null); IMPACTS._pPrev=undefined; IMPACTS.aud={hours:Object.create(null),_gtPrev:undefined,_inPrev:undefined}; impactsEnsureDay(); }
 function impactsTick(){
   if(typeof G==='undefined'||!G) return;
@@ -25177,9 +25189,12 @@ window.xtAPI = (function(){
           let segHtml='';
           try{ const ea=(typeof G!=='undefined'&&G&&G.extAdImpacts)||{}; const ks=Object.keys(ea);
             if(ks.length){ const AGEL={nino:'Niño',joven:'Joven',adulto:'Adulto',senior:'Senior'};
-              const r2=ks.map(k=>{const p=k.split('_');return {lbl:(p[0]==='f'?'♀':'♂')+' '+(AGEL[p[1]]||p[1]),n:ea[k]};}).sort((a,b)=>b.n-a.n).slice(0,8);
-              segHtml='<div style="border-top:1px dashed #2f6a8a;margin-top:6px;padding-top:6px;font-size:9px;letter-spacing:.05em;color:#8ed2ff">📣 PUBLI EXTERIOR · impactos por segmento</div>'+
-                r2.map(r=>'<div style="display:flex;justify-content:space-between"><span>'+r.lbl+'</span><b>'+r.n+'</b></div>').join('');
+              const all=ks.map(k=>{const cpm=segCpm(k); return {k,n:ea[k],cpm,rev:ea[k]/1000*cpm};});
+              const extTot=all.reduce((s,r)=>s+r.rev,0);
+              const r2=all.map(r=>{const p=r.k.split('_'); return Object.assign({lbl:(p[0]==='f'?'♀':'♂')+' '+(AGEL[p[1]]||p[1])},r);}).sort((a,b)=>b.rev-a.rev).slice(0,8);
+              segHtml='<div style="border-top:1px dashed #2f6a8a;margin-top:6px;padding-top:6px;font-size:9px;letter-spacing:.05em;color:#8ed2ff">📣 PUBLI EXTERIOR · impactos × CPM por segmento (RTB · admira.app)</div>'+
+                r2.map(r=>'<div style="display:flex;justify-content:space-between"><span>'+r.lbl+' <span style="opacity:.5;font-size:8.5px">@'+r.cpm.toFixed(1)+'€</span></span><span><b>'+r.n+'</b> <span style="color:#9effa0">'+r.rev.toFixed(2)+'€</span></span></div>').join('')+
+                '<div style="display:flex;justify-content:space-between;color:#9effa0;margin-top:2px"><span>Ingreso publi exterior</span><b>'+extTot.toFixed(2)+'€</b></div>';
             }
           }catch(e){}
           body.innerHTML=marcador+franjas+rows+
