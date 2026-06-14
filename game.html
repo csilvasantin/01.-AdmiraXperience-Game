@@ -10463,6 +10463,18 @@ function loadSegCpm(){
   }catch(e){}
 }
 setTimeout(loadSegCpm,2500); setInterval(loadSegCpm,60000);
+// Lee las CAMPAÑAS activas (compradas en admira.app) y mapea su creatividad por
+// segmento → el escaparate la muestra a ese segmento (en vez de la base).
+function loadCampaigns(){
+  try{ const loc=(typeof avatar3dLoc==='function')?avatar3dLoc():((typeof window!=='undefined'&&window.STORE_CFG&&window.STORE_CFG.id)||'xtanco-generic');
+    fetch('https://pixer-eleven.csilvasantin.workers.dev/campaign/list?loc='+encodeURIComponent(loc),{cache:'no-store'})
+      .then(r=>r.json()).then(d=>{ const cs=(d&&d.campaigns)||[]; const map={};
+        for(const c of cs){ if(c&&c.active!==false&&c.seg&&c.creativeUrl&&/^https?:/.test(c.creativeUrl)&&!map[c.seg]) map[c.seg]={url:c.creativeUrl,label:(c.product||c.name||'')}; }
+        window.__campCreatives=map;
+      }).catch(()=>{});
+  }catch(e){}
+}
+setTimeout(loadCampaigns,3000); setInterval(loadCampaigns,45000);
 function impactsReset(){ IMPACTS.day=Object.create(null); IMPACTS._pPrev=undefined; IMPACTS.aud={hours:Object.create(null),_gtPrev:undefined,_inPrev:undefined}; impactsEnsureDay(); }
 function impactsTick(){
   if(typeof G==='undefined'||!G) return;
@@ -19147,6 +19159,9 @@ const AD_IMG_URLS={
 };
 const AD_IMG={};
 function adImg(id){ if(!id||!AD_IMG_URLS[id]) return null; let im=AD_IMG[id]; if(!im){ im=new Image(); im.crossOrigin='anonymous'; im.src=AD_IMG_URLS[id]; AD_IMG[id]=im; return null; } return (im.complete&&im.naturalWidth>0)?im:null; }
+// Cache genérico por URL (para las creatividades de CAMPAÑA compradas en admira.app).
+const URL_IMG={};
+function imgFromUrl(url){ if(!url||!/^https?:/.test(url)) return null; let im=URL_IMG[url]; if(!im){ im=new Image(); im.crossOrigin='anonymous'; im.src=url; URL_IMG[url]=im; return null; } return (im.complete&&im.naturalWidth>0)?im:null; }
 // Resuelve la creatividad según el segmento del viandante.
 function adCreative(g,age){
   const fem=(g==='f');
@@ -19157,13 +19172,16 @@ function adCreative(g,age){
 }
 function drawExteriorAd(g,age,vW,vH){
   const fem=(g==='f'); const cr=adCreative(g,age);
+  // ¿Hay una CAMPAÑA comprada en admira.app para este segmento? Su creatividad manda.
+  const camp=(typeof window!=='undefined'&&window.__campCreatives)?window.__campCreatives[g+'_'+age]:null;
   cx.fillStyle=fem?'#2a0f1e':'#0c1430'; cx.fillRect(0,0,vW,vH);
-  const im=adImg(cr.id);
+  const im=(camp&&camp.url)?imgFromUrl(camp.url):adImg(cr.id);
   if(im){ const s=Math.min(vW*0.62,vH*0.62); try{ cx.drawImage(im, vW/2-s/2, vH*0.14, s, s); }catch(_){} }
+  const label=(camp&&camp.label)?String(camp.label).toUpperCase():cr.label;
   cx.textAlign='center';
   cx.fillStyle=fem?'#ff9ecf':'#9ec3ff'; cx.font='bold 8px sans-serif'; cx.fillText('ADMIRA',vW/2,11);
-  cx.fillStyle='#ffffff'; cx.font='bold '+(cr.label.length>12?9:11)+'px sans-serif'; cx.fillText(cr.label,vW/2,vH-15);
-  cx.fillStyle='#ffd866'; cx.font='bold 9px sans-serif'; cx.fillText('· OFERTA ·',vW/2,vH-4);
+  cx.fillStyle='#ffffff'; cx.font='bold '+(label.length>12?9:11)+'px sans-serif'; cx.fillText(label.slice(0,24),vW/2,vH-15);
+  cx.fillStyle='#ffd866'; cx.font='bold 9px sans-serif'; cx.fillText(camp?'· CAMPAÑA ·':'· OFERTA ·',vW/2,vH-4);
   // Etiqueta de segmento (género + edad): la publi va dirigida.
   const AGE={nino:'NIÑO',joven:'JOVEN',adulto:'ADULTO',senior:'SENIOR'};
   cx.textAlign='right'; cx.fillStyle='rgba(255,255,255,.85)'; cx.font='bold 7px sans-serif';
