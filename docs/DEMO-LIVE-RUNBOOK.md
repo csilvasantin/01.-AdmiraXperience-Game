@@ -4,13 +4,27 @@ Guion para operar **las 3 capas en vivo** y grabar la pantalla. Todo contra el
 **mismo punto**: `loc = xtanco-bcn` (Xtanco Barcelona). Si los `loc` no coinciden,
 la campaña no aparece en el gemelo y el presupuesto no baja.
 
-## Setup (antes de grabar)
+## Setup (antes de grabar) — UNA CAPA POR MONITOR
 
-| Ventana | Capa | URL |
+Tenemos 3 monitores → **una ventana de Chrome por monitor**, así se ve el bucle
+agéntico **en directo y simultáneo** entre las 3 pantallas (sin cambiar de pestaña).
+Grabación: captura el escritorio extendido (o un plano de los 3 monitores).
+
+| Monitor | Capa | URL |
 |---|---|---|
-| **A · PixerIA** | Creación de contenido | `https://www.pixeria.com` |
-| **B · Gemelo** | El punto físico digital | `https://www.xpaceos.com/admira-xp/?loc=xtanco-bcn` |
-| **C · admira.app** | Programática (RTB) | `https://admira.app` (y `https://admira.app/help` en otra pestaña para el relato) |
+| **Izquierda · A · PixerIA** | Creación de contenido | `https://www.pixeria.com` |
+| **Centro · B · Gemelo** | El punto físico digital | `https://www.xpaceos.com/admira-xp/?loc=xtanco-bcn` |
+| **Derecha · C · admira.app** | Programática (RTB) | `https://admira.app` (+ pestaña `https://admira.app/help` para el relato) |
+
+> **Ventaja clave del 3-monitor:** cada ventana queda **siempre visible** en su
+> monitor, así el navegador **no congela** el gemelo (el throttle de rAF solo ocurre
+> con pestañas ocultas/minimizadas). El gemelo corre a tope aunque el foco del SO
+> esté en otra ventana. Y el espectador ve, a la vez: lanzar campaña (derecha) →
+> PixerIA crear (izquierda) → el gemelo mostrarla y medir (centro) → el presupuesto
+> bajar (derecha).
+>
+> Morfeo conduce las 3 por la extensión Chrome (acción por `tabId`, da igual en qué
+> monitor esté cada ventana, mientras sean del mismo Chrome conectado).
 
 Preparación del **Gemelo (B)**:
 - Recarga dura (Cmd+Shift+R) para coger la última build.
