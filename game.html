@@ -8341,7 +8341,11 @@ function initGame(){
     saca:{phase:'idle',cooldown:1800+Math.floor(Math.random()*600),x:820,y:0,dir:-1,aFrame:0,aTimer:0,unloadTimer:0,boxes:6},
     thief:{phase:'idle',cooldown:3600+Math.floor(Math.random()*1800),x:820,y:0,dir:-1,aFrame:0,aTimer:0,targetCol:5,targetRow:3,path:null,pathIdx:0,lootTimer:0,caught:false},
     mission:null,
-    metrics:{servedCustomers:0,revenueSales:0,vipSales:0,restockOps:0},
+    metrics:{servedCustomers:0,revenueSales:0,vipSales:0,restockOps:0,
+      visitsByAge:{nino:0,joven:0,adulto:0,senior:0},
+      boughtByAge:{nino:0,joven:0,adulto:0,senior:0},
+      browsedByAge:{nino:0,joven:0,adulto:0,senior:0},
+      visitsByPersona:{},browsedOnly:0},
     managerActions:Object.fromEntries(Object.entries(MANAGER_ACTION_DEFS).map(([id,def])=>[id,{cooldown:0,maxCooldown:def.cooldown,buffTimer:0}])),
   };
   // Staff from model — convert grid positions to isometric screen coords
@@ -10204,6 +10208,12 @@ function showDayEndResults(){
     const dstr=gameDateKey();
     const summary={entran:clientes,pasan:pasaron,ventas:ingresos,beneficio,sat,fama};
     if(hours) summary.hours=hours;
+    // Desglose por perfil (idea #12): visitas y compras por edad + mix por persona.
+    try{ if(G.metrics){
+      summary.edades=G.metrics.visitsByAge;
+      summary.comprasEdad=G.metrics.boughtByAge;
+      summary.personas=G.metrics.visitsByPersona;
+    } }catch(e){}
     try{ const ps=G.dayProductSales||{}; const compras=Object.keys(ps).map(k=>({name:k,n:ps[k]})).sort((a,b)=>b.n-a.n).slice(0,8); if(compras.length) summary.compras=compras; }catch(e){}
     try{ if(G.extAdImpacts&&Object.keys(G.extAdImpacts).length){ summary.extAds=G.extAdImpacts;
       const rev={}; let tot=0; for(const k in G.extAdImpacts){ const r=G.extAdImpacts[k]/1000*segCpm(k); rev[k]=+r.toFixed(2); tot+=r; }
@@ -12608,6 +12618,12 @@ function spawnCust(isVip,isSponsor,force){
   });
   const newCust=G.custs[G.custs.length-1];
   newCust.num=nextCustNum();
+  // KPIs por perfil (idea #12): cuenta la visita por franja de edad y por persona.
+  if(G.metrics){
+    const _a=cLook.age||'adulto';
+    if(G.metrics.visitsByAge) G.metrics.visitsByAge[_a]=(G.metrics.visitsByAge[_a]||0)+1;
+    if(G.metrics.visitsByPersona) G.metrics.visitsByPersona[persona]=(G.metrics.visitsByPersona[persona]||0)+1;
+  }
   // FAMILIA (idea #2): un niño que entra se engancha a un adulto/senior ya presente
   // sin acompañante → en su deambular tira hacia él (getCustomerRoamAnchor). Si el
   // adulto se va, el niño se suelta. roamCooldown corto para que reaccione rápido.
@@ -12906,7 +12922,29 @@ function startCustomerLeave(c){
   G.doorOpen=90;
 }
 
+// Probabilidad de COMPRA por perfil (idea #13): no todo el que entra y mira compra.
+// VIP/sponsor casi siempre; impulsivos/fieles más; curiosos/impacientes menos;
+// seniors algo más decididos, niños mucho menos (suelen acompañar). Fidelidad/sello
+// gratis → compra segura.
+function customerBuyChance(c){
+  if(!c) return 0.6;
+  if(c.loyaltyFree||c.fanFreePending) return 1;
+  let p = (c.vip||c.sponsor) ? 0.92 : 0.62;
+  const per=c.persona;
+  if(per==='impulsive') p+=0.18; else if(per==='loyal') p+=0.12; else if(per==='curious') p-=0.10; else if(per==='impatient') p-=0.05;
+  const a=c.look&&c.look.age;
+  if(a==='senior') p+=0.05; else if(a==='nino') p-=0.25; else if(a==='joven') p-=0.05;
+  return Math.max(0.05,Math.min(0.98,p));
+}
 function resolveCustomerCheckout(c){
+  // Conversión por perfil (idea #13): si "solo miraba", se va sin comprar.
+  if(c && !(c.loyaltyFree||c.fanFreePending) && Math.random()>customerBuyChance(c)){
+    const arr=(T().custBrowse&&T().custBrowse.length)?T().custBrowse:(T().custNoStock||['…']);
+    c.bMsg=arr[Math.floor(Math.random()*arr.length)];c.bTimer=170;
+    if(G.metrics){ const ag=(c.look&&c.look.age)||'adulto'; G.metrics.browsedOnly=(G.metrics.browsedOnly||0)+1; if(G.metrics.browsedByAge) G.metrics.browsedByAge[ag]=(G.metrics.browsedByAge[ag]||0)+1; }
+    startCustomerLeave(c);
+    return;
+  }
   const wp=c.wantsProdIdx>=0?G.prods[c.wantsProdIdx]:null;
   const inStock=wp&&wp.stock>0;
   const promoRevenueBoost=G.managerActions&&G.managerActions.flashPromo&&G.managerActions.flashPromo.buffTimer>0?1.15:1;
@@ -12964,6 +13002,7 @@ function resolveCustomerCheckout(c){
       G.metrics.servedCustomers=(G.metrics.servedCustomers||0)+1;
       G.metrics.revenueSales=(G.metrics.revenueSales||0)+rev;
       if(c.vip) G.metrics.vipSales=(G.metrics.vipSales||0)+1;
+      const _ag=(c.look&&c.look.age)||'adulto'; if(G.metrics.boughtByAge) G.metrics.boughtByAge[_ag]=(G.metrics.boughtByAge[_ag]||0)+1;
     }
     advanceMission('serveCustomers',1);
     advanceMission('earnRevenue',rev);
@@ -12991,6 +13030,7 @@ function resolveCustomerCheckout(c){
         if(G.metrics){
           G.metrics.servedCustomers=(G.metrics.servedCustomers||0)+1;
           G.metrics.revenueSales=(G.metrics.revenueSales||0)+rev;
+          const _ag=(c.look&&c.look.age)||'adulto'; if(G.metrics.boughtByAge) G.metrics.boughtByAge[_ag]=(G.metrics.boughtByAge[_ag]||0)+1;
         }
         advanceMission('serveCustomers',1);
         advanceMission('earnRevenue',rev);
@@ -13562,6 +13602,9 @@ function chibiHabbo(x,y,dir,shirt,hair,frame,busy,tick,scale=1,isDJ=false,look=n
 function chibi16(x,y,dir,shirt,hair,frame,busy,tick,scale=1,isDJ=false,look=null){
   cx.save();
   if(scale!==1){cx.translate(x,y);cx.scale(scale,scale);cx.translate(-x,-y);}
+  // Postura por edad (idea #9): el senior va encorvado (leve hundimiento vertical
+  // anclado en los pies); el niño ya va más bajo por su escala (ageScale).
+  if(look&&look.age==='senior'){ cx.translate(x+7,y+29); cx.scale(1,0.95); cx.translate(-(x+7),-(y+29)); }
   const flip=dir===-1;
   if(flip){cx.translate(x+14,0);cx.scale(-1,1);cx.translate(-x,0);}
   // Resolve look colors
@@ -13602,6 +13645,14 @@ function chibi16(x,y,dir,shirt,hair,frame,busy,tick,scale=1,isDJ=false,look=null
   cx.globalAlpha=0.22;cx.fillStyle='#fff';cx.fillRect(x+4,y+9,4,3);cx.globalAlpha=1;
   // Collar
   cx.fillStyle=cLight(sCol16,35);cx.fillRect(x+4,y+8,6,2);
+  // Acento de PERSONALIDAD (idea #11): franja fina en el bajo de la camiseta que
+  // insinúa el arquetipo (impaciente=naranja vivo, impulsivo=oro, curioso=cian,
+  // fiel=menta, vip/sponsor=dorado). Sutil, no rompe el degradado del cuerpo.
+  if(!isDJ&&look){
+    const PCOL={impatient:'#ff5a3c',impulsive:'#ffcc33',curious:'#46c2ff',loyal:'#7dffb5',sponsor:'#ffaa00'};
+    const pc=PCOL[look.persona];
+    if(pc){ cx.globalAlpha=0.9;cx.fillStyle=pc;cx.fillRect(x+1,y+16,12,1.4);cx.globalAlpha=1; }
+  }
   // X logo on Altadis shirt — or "54" in black for DJ
   if(isDJ){
     cx.font='bold 5px monospace';cx.textAlign='center';
@@ -13675,6 +13726,19 @@ function chibi16(x,y,dir,shirt,hair,frame,busy,tick,scale=1,isDJ=false,look=null
     const pG=cx.createLinearGradient(x+1,y+8,x+13,y+10);
     pG.addColorStop(0,'#dd4466');pG.addColorStop(1,'#cc3355');
     cx.fillStyle=pG;cx.fillRect(x+1,y+8,12,2);
+  }
+  // ── Accesorios contextuales (idea #10) ──
+  if(look&&!isDJ){
+    // Móvil en la mano (jóvenes/niños, flag estable por individuo)
+    if(look._phone){ cx.fillStyle='#10131a';cx.fillRect(x+12,y+12,3,5); cx.fillStyle='#5ad0ff';cx.fillRect(x+12,y+12,3,3); }
+    // Bolsa de compra al salir si compró
+    if(look._bag){ cx.fillStyle='#d8c9a8';cx.fillRect(x-3,y+13,5,6); cx.fillStyle=cDark('#d8c9a8',16);cx.fillRect(x-3,y+13,5,1); cx.strokeStyle='#9a8a66';cx.lineWidth=0.8;cx.beginPath();cx.arc(x-0.5,y+13,1.6,Math.PI,0);cx.stroke(); }
+    // Paraguas abierto si llueve y está fuera (viandante del MUPI)
+    if(look._outside&&G&&G.weather&&G.weather.type==='rain'){
+      cx.fillStyle='#cc3a4a';cx.beginPath();cx.moveTo(x-3,y-4);cx.lineTo(x+17,y-4);cx.lineTo(x+7,y-12);cx.closePath();cx.fill();
+      cx.fillStyle='#a82c3a';cx.fillRect(x+6,y-4,2,2);
+      cx.strokeStyle='#2a2026';cx.lineWidth=1;cx.beginPath();cx.moveTo(x+7,y-4);cx.lineTo(x+7,y+7);cx.stroke();
+    }
   }
   cx.restore();
 }
@@ -20797,6 +20861,14 @@ function drawIsoCust(c){
   }
   // Use look if available, otherwise fallback
   const cLook=c.look||null;
+  // Flags para el renderer (ideas #10/#11): persona, bolsa al salir si compró,
+  // si está fuera (viandante → paraguas), y móvil estable por individuo (jóvenes/niños).
+  if(cLook){
+    cLook.persona=c.persona;
+    cLook._bag=!!(c.bought && c.st==='leave');
+    cLook._outside=!!c.outside;
+    if(cLook._phone===undefined) cLook._phone=((cLook.age==='joven'||cLook.age==='nino')&&Math.random()<0.30);
+  }
   const shirtIdx=cLook?cLook.shirt:(1+(Math.abs(c.hair)%(P.shirts.length-1)));
   const hairIdx=cLook?cLook.hair:(c.hair%P.hair.length);
   // DJ effect: customers dance (bob up/down + alternate frame fast)
