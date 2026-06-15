@@ -29446,8 +29446,21 @@ window.xtAPI = (function(){
 (function(){
   const PIXER_WORKER='https://pixer-eleven.csilvasantin.workers.dev';
   const KEY='pixer-xtore-screen-id';
-  let screenId=localStorage.getItem(KEY);
-  if(!screenId){ screenId='xtore-'+Math.random().toString(36).slice(2,8); localStorage.setItem(KEY,screenId); }
+  // XTANCO INICIAL: el gemelo standalone (sin ?loc) es el demo público canónico
+  // y reporta SIEMPRE bajo el mismo screenId fijo 'xtore-inicial'. Así pixeria
+  // /crear puede "atacarlo" por defecto cuando no se pega ningún id. Con ?loc=<id>
+  // (gemelo de un punto concreto) se mantiene el id aleatorio por navegador.
+  let hasLoc=''; try{ hasLoc=(new URLSearchParams(window.location.search).get('loc')||'').trim(); }catch(_){}
+  let screenId;
+  if(!hasLoc){
+    screenId='xtore-inicial';
+    try{ localStorage.setItem(KEY,screenId); }catch(_){}
+  }else{
+    screenId=localStorage.getItem(KEY);
+    // Un id 'xtore-inicial' guardado pertenece al standalone: no lo reutilices
+    // para un punto con ?loc (contaminaría su Xpacio) → genera uno propio.
+    if(!screenId || screenId==='xtore-inicial'){ screenId='xtore-'+Math.random().toString(36).slice(2,8); try{ localStorage.setItem(KEY,screenId); }catch(_){} }
+  }
   function getVersion(){
     try{ const a=window.XTANCO_APP||{}; return (a.version||'')+(a.build?(' build '+a.build):''); }catch{ return 'unknown'; }
   }
