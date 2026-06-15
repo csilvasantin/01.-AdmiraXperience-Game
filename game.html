@@ -5654,6 +5654,16 @@ function chibiSkirt(x,y,col,skinCol){
 function isFemaleLook(look){ return !!(look&&(look.gender==='f'||look.skirt)); }
 // Edad de los NPCs: niño (más bajito), joven, adulto, senior (encogido + cano + bastón).
 function ageBucketRandom(){ const r=Math.random(); return r<0.12?'nino':r<0.45?'joven':r<0.80?'adulto':'senior'; }
+// Mix de edades según la HORA del juego (idea #7): mañana → más seniors (prensa,
+// lotería, café); tarde-punta y cierre → más jóvenes (vapeo, novedades). Mediodía
+// usa la distribución base. G.gameTime es la hora float del día.
+function ageBucketForHour(hour){
+  const h=Number.isFinite(hour)?hour:12; const r=Math.random();
+  if(h<13.5)  return r<0.16?'nino':r<0.36?'joven':r<0.66?'adulto':'senior';  // senior ~34%
+  if(h>=19.5) return r<0.08?'nino':r<0.55?'joven':r<0.85?'adulto':'senior';  // joven ~47%
+  if(h>=16.5) return r<0.12?'nino':r<0.45?'joven':r<0.80?'adulto':'senior';  // tarde
+  return ageBucketRandom();                                                  // mediodía: base
+}
 function ageScale(look){ const a=look&&look.age; return a==='nino'?0.72:a==='senior'?0.9:1; }
 function chibiCane(x,y){ try{ cx.strokeStyle='#7a5a2a'; cx.lineWidth=1.3; cx.beginPath(); cx.moveTo(x+13.5,y+12); cx.lineTo(x+15,y+27); cx.stroke(); cx.fillStyle='#caa05a'; cx.fillRect(x+12.5,y+10.5,3,2.2); }catch(e){} }
 
@@ -7553,8 +7563,39 @@ function actorPathSpeedScale(actor){
   }catch(e){}
   return ACTOR_PATH_SPEED_SCALE;
 }
-function customerMoveSpeed(speed){
-  return speed*CUSTOMER_MOVE_SPEED_SCALE;
+// Multiplicador de velocidad por EDAD (+ pequeño matiz de persona y variación
+// individual), cacheado por actor. Mayores andan más despacio, niños correteando.
+// Idea #1 (NPCs). Aplica a clientes y a viandantes del MUPI (ambos llevan look.age).
+function customerSpeedMult(c){
+  if(!c) return 1;
+  if(c.speedMult==null){
+    const a=c.look&&c.look.age;
+    let m = a==='senior'?0.70 : a==='nino'?1.18 : a==='joven'?1.06 : 1.0;
+    if(c.persona==='impatient') m*=1.08;
+    else if(c.persona==='curious') m*=0.95;
+    m *= 0.95+Math.random()*0.10;   // ±5% por individuo
+    c.speedMult=m;
+  }
+  return c.speedMult;
+}
+// Velocidad efectiva de un actor este tick: parte de la velocidad base del estado,
+// la escala por edad y suaviza con INERCIA (acelera/frena gradual, idea #4). Además
+// dispara MICRO-PAUSAS de hesitación (idea #3 seniors / #2 niños): paradas breves
+// solo al andar/deambular, nunca al hacer cola/comprar/salir (no congelar en caja
+// ni en la puerta).
+function customerMoveSpeed(speed,c){
+  const target=speed*CUSTOMER_MOVE_SPEED_SCALE*customerSpeedMult(c);
+  if(!c) return target;
+  if(c.pauseTimer>0){ c.pauseTimer--; c.curSpeed=(c.curSpeed||0)*0.6; return c.curSpeed<0.02?0:c.curSpeed; }
+  const a=c.look&&c.look.age;
+  if((c.st==='walk'||c.st==='browse') && Math.random()<(a==='senior'?0.010:a==='nino'?0.014:0.004)){
+    c.pauseTimer = a==='nino' ? 8+Math.floor(Math.random()*14) : 16+Math.floor(Math.random()*26);
+    c.curSpeed=(c.curSpeed||0)*0.5;
+    return c.curSpeed;
+  }
+  const prev=(c.curSpeed==null?target:c.curSpeed);
+  c.curSpeed=prev+(target-prev)*0.18;   // lerp → inercia
+  return c.curSpeed;
 }
 
 // ── LAYOUT PERSISTENCE ───────────────────────────────────────
@@ -11737,7 +11778,11 @@ function updateGame(){
   trimCustomersToHourCap();
   if(G.customerSpawnDelay>0) G.customerSpawnDelay--;
   const promoSpawnBoost=G.managerActions&&G.managerActions.flashPromo&&G.managerActions.flashPromo.buffTimer>0?1.35:1;
-  if(G.custs.length<currentCustomerCap&&Math.random()<0.006*Math.max(1,G.staff.filter(s=>s.hired).length)*(G.rush.active?2:1)*weatherMod*holidaySpawn*(1-compSteal)*repMod*escapMod*hourSpawnMod*promoSpawnBoost) spawnCust();
+  if(G.custs.length<currentCustomerCap&&Math.random()<0.006*Math.max(1,G.staff.filter(s=>s.hired).length)*(G.rush.active?2:1)*weatherMod*holidaySpawn*(1-compSteal)*repMod*escapMod*hourSpawnMod*promoSpawnBoost){
+    // 15% de las entradas son un GRUPO (pareja/familia) si queda aforo para ≥2 (idea #5).
+    if(Math.random()<0.15 && (currentCustomerCap-G.custs.length)>=2) spawnGroup(2+(Math.random()<0.35?1:0));
+    else spawnCust();
+  }
   updatePassersby();
   // ── Cliente "Quiero ser socio !!" — cada hora del juego entra alguien que quiere darse de alta ──
   if(typeof G.gameTime==='number'){
@@ -11924,7 +11969,7 @@ function updateGame(){
     const queueStress=(c.persona==='impatient'?1.8:1);
     if(c.st==='walk'){
       // Sun → customers walk 65% speed (too hot); Rain → normal speed (rushing in)
-      const wSpd=customerMoveSpeed(G.weather&&G.weather.type==='sun'?0.85:1.3);
+      const wSpd=customerMoveSpeed(G.weather&&G.weather.type==='sun'?0.85:1.3,c);
       // Rain → customers linger longer (took shelter); base browse timer scaled up
       const browseBase=G.weather&&G.weather.type==='rain'?1.7:1.0;
       if(isNearDoorSensor(c.x,c.y,140,96)) G.doorOpen=Math.max(G.doorOpen||0,85);
@@ -12007,7 +12052,7 @@ function updateGame(){
       const dx=qtx-c.x,dy=qty-c.y,d=Math.sqrt(dx*dx+dy*dy);
       if(d>3){
         if(canActorStepToTile(spot.col,spot.row,c)){
-          const qSpd=customerMoveSpeed(1.05);
+          const qSpd=customerMoveSpeed(1.05,c);
           c.x+=dx/d*qSpd;c.y+=dy/d*qSpd;c.dir=dx<0?-1:1;
         }
       }else if(idx===0&&G.turns&&(G.turns.servingId===null||G.turns.servingId===c.id)){
@@ -12026,7 +12071,7 @@ function updateGame(){
       const dx=btx-c.x,dy=bty-c.y,d=Math.sqrt(dx*dx+dy*dy);
       if(d>3){
         if(canActorStepToTile(spot.col,spot.row,c)){
-          const buySpd=customerMoveSpeed(1.1);
+          const buySpd=customerMoveSpeed(1.1,c);
           c.x+=dx/d*buySpd;c.y+=dy/d*buySpd;c.dir=dx<0?-1:1;
         }
       }else{
@@ -12045,7 +12090,7 @@ function updateGame(){
         if(!canActorStepToTile(rp.col,rp.row,c)){
           c.roamPath=null;
           c.roamIdx=0;
-          c.roamCooldown=45+Math.floor(Math.random()*80);
+          c.roamCooldown=Math.round((45+Math.floor(Math.random()*80))*(c.roamMult||1));
           continue;
         }
         const rpIso=toIso(rp.col,rp.row);
@@ -12056,10 +12101,16 @@ function updateGame(){
           if(c.roamIdx>=c.roamPath.length){
             c.roamPath=null;
             c.roamIdx=0;
-            c.roamCooldown=70+Math.floor(Math.random()*120);
+            c.roamCooldown=Math.round((70+Math.floor(Math.random()*120))*(c.roamMult||1));
+            // Indeciso (idea #8): aún no se decide → va pronto a OTRO producto con un 🤔.
+            if(c.indecisive&&(c.deliberations|0)<2){
+              c.deliberations=(c.deliberations|0)+1;
+              c.roamCooldown=Math.min(c.roamCooldown,18+Math.floor(Math.random()*18));
+              if((c.bTimer|0)<=0){ c.bMsg='🤔'; c.bTimer=85; }
+            }
           }
         }else{
-          const roamSpd=customerMoveSpeed(G.weather&&G.weather.type==='sun'?0.7:0.95);
+          const roamSpd=customerMoveSpeed(G.weather&&G.weather.type==='sun'?0.7:0.95,c);
           c.x+=dx/d*roamSpd;c.y+=dy/d*roamSpd;c.dir=dx<0?-1:1;
         }
       }else if((c.roamCooldown=(c.roamCooldown|0)-1)<=0){
@@ -12075,7 +12126,7 @@ function updateGame(){
           );
           c.roamIdx=0;
         }
-        c.roamCooldown=90+Math.floor(Math.random()*150);
+        c.roamCooldown=Math.round((90+Math.floor(Math.random()*150))*(c.roamMult||1));
       }
       c.timer--;if(c.timer<=0){
         const stayRemaining=(c.stayTargetTicks|0)-(c.dwellTicks|0);
@@ -12105,7 +12156,7 @@ function updateGame(){
         }
         const ltx=lpIso.x-7,lty=lpIso.y-20;
         const dx=ltx-c.x,dy=lty-c.y,d=Math.sqrt(dx*dx+dy*dy);
-        if(d<3){c.leaveIdx++;} else{const leaveSpd=customerMoveSpeed(1.6);c.x+=dx/d*leaveSpd;c.y+=dy/d*leaveSpd;c.dir=dx<0?-1:1;}
+        if(d<3){c.leaveIdx++;} else{const leaveSpd=customerMoveSpeed(1.6,c);c.x+=dx/d*leaveSpd;c.y+=dy/d*leaveSpd;c.dir=dx<0?-1:1;}
         if(d<42&&G.doorOpen<70) G.doorOpen=90;
       } else {
         const dx=c.tx-c.x,dy=c.ty-c.y,d=Math.sqrt(dx*dx+dy*dy);
@@ -12152,10 +12203,10 @@ function updateGame(){
           }
         }
         else{
-          const leaveSpd=customerMoveSpeed(1.6);
+          const leaveSpd=customerMoveSpeed(1.6,c);
           const nx=c.x+dx/d*leaveSpd,ny=c.y+dy/d*leaveSpd;
           if(canWalkTo(nx+5,ny+20,{ignore:c})){c.x=nx;c.y=ny;c.dir=dx<0?-1:1;}
-          else{const fallbackSpd=customerMoveSpeed(0.5);c.x+=dx/d*fallbackSpd;c.y+=dy/d*fallbackSpd;c.dir=dx<0?-1:1;}
+          else{const fallbackSpd=customerMoveSpeed(0.5,c);c.x+=dx/d*fallbackSpd;c.y+=dy/d*fallbackSpd;c.dir=dx<0?-1:1;}
         }
       }
     }
@@ -12495,14 +12546,8 @@ function spawnCust(isVip,isSponsor,force){
   } else if(Math.random()<0.4){
     const arr=T().custEnter;cBMsg=arr[Math.floor(Math.random()*arr.length)];cBTimer=210;
   }
-  // Pick wanted product — prefer stocked ones (70% chance), VIPs prefer high-price items
+  // Producto deseado: se elige más abajo, ya con la edad fijada (sesgo por edad, idea #6).
   let wantsProdIdx=-1;
-  if(G.prods&&G.prods.length){
-    const stocked=G.prods.map((p,i)=>({i,p})).filter(({p})=>p.stock>0);
-    const pool=stocked.length>0&&Math.random()<0.7?stocked:G.prods.map((p,i)=>({i,p}));
-    const pick=isV?pool.reduce((a,b)=>a.p.price>=b.p.price?a:b):pool[Math.floor(Math.random()*pool.length)];
-    wantsProdIdx=pick.i;
-  }
   // Use customer template if available, otherwise random
   let cLook=null;
   if(custTemplates.length>0){
@@ -12514,7 +12559,28 @@ function spawnCust(isVip,isSponsor,force){
   // Género marcado también en clientes (falda en ellas).
   if(cLook.gender!=='m'&&cLook.gender!=='f') cLook.gender=Math.random()<0.5?'f':'m';
   cLook.skirt=(cLook.gender==='f');
-  if(!cLook.age) cLook.age=ageBucketRandom();
+  if(!cLook.age) cLook.age=ageBucketForHour(G&&G.gameTime);
+  // PRODUCTO DESEADO con SESGO POR EDAD (idea #6): seniors→prensa/lotería/tabaco
+  // clásico; jóvenes→vapeo/novedades/bebidas; niños→chuches/refrescos. VIP sigue
+  // prefiriendo el más caro. Ponderación: +3 al peso si el nombre casa la edad.
+  if(G.prods&&G.prods.length){
+    const stocked=G.prods.map((p,i)=>({i,p})).filter(({p})=>p.stock>0);
+    const pool=stocked.length>0&&Math.random()<0.7?stocked:G.prods.map((p,i)=>({i,p}));
+    if(isV){
+      wantsProdIdx=pool.reduce((a,b)=>a.p.price>=b.p.price?a:b).i;
+    }else{
+      const PREF={ senior:['prensa','press','peri','loter','lott','tabaco','puro','cigar','rapé','rape'],
+                   joven:['vape','vapeo','liquid','energ','energy','nove','nuevo','new','bebida','refresco'],
+                   nino:['chuch','golos','candy','snack','choco','bebida','refresco'] };
+      const kw=PREF[cLook.age]||null;
+      const scored=pool.map(e=>{ let w=1; if(kw){ const nm=String((typeof prodName==='function'?prodName(e.i):'')||e.p.name||e.p.label||'').toLowerCase(); if(kw.some(k=>nm.includes(k))) w+=3; } return {e,w}; });
+      let r=Math.random()*scored.reduce((s,x)=>s+x.w,0);
+      for(const x of scored){ r-=x.w; if(r<=0){ wantsProdIdx=x.e.i; break; } }
+      if(wantsProdIdx<0&&pool.length) wantsProdIdx=pool[Math.floor(Math.random()*pool.length)].i;
+    }
+  }
+  // INDECISO (idea #8): mira varios productos antes de elegir (más típico en curiosos).
+  const indecisive = Math.random() < (persona==='curious'?0.40:persona==='impulsive'?0.05:0.18);
   const personaTicketBoost=persona==='impulsive'?1.35:persona==='loyal'?1.12:1;
   const stayBase=Math.round((60+Math.random()*240)*60);
   const stayTargetTicks=persona==='impatient'?Math.round(stayBase*0.58)
@@ -12531,6 +12597,8 @@ function spawnCust(isVip,isSponsor,force){
     fr:0,ft:0,dir:-1,
     path:entryPath,pathIdx:0,vip:isV,sponsor:isSp,
     roamPath:null,roamIdx:0,roamCooldown:45+Math.floor(Math.random()*60),
+    curSpeed:0,roamMult:(cLook.age==='nino'?0.5:1),followId:null,hasKid:false,
+    indecisive:indecisive,deliberations:0,
     wantsTurn:wantsTurn,queueNumber:0,serviceTimer:0,ticketPicked:false,
     bTimer:cBTimer,bMsg:cBMsg,bShown:false,
     wantsProdIdx:wantsProdIdx,bought:false,loyaltyFree:false,dwellTicks:0,
@@ -12540,6 +12608,17 @@ function spawnCust(isVip,isSponsor,force){
   });
   const newCust=G.custs[G.custs.length-1];
   newCust.num=nextCustNum();
+  // FAMILIA (idea #2): un niño que entra se engancha a un adulto/senior ya presente
+  // sin acompañante → en su deambular tira hacia él (getCustomerRoamAnchor). Si el
+  // adulto se va, el niño se suelta. roamCooldown corto para que reaccione rápido.
+  if(cLook.age==='nino'){
+    const guardian=G.custs.find(x=>x&&x.id!==newCust.id&&x.look&&(x.look.age==='adulto'||x.look.age==='senior')&&!x.hasKid&&x.st!=='leave');
+    if(guardian){ newCust.followId=guardian.id; guardian.hasKid=true; newCust.roamCooldown=20+Math.floor(Math.random()*25); }
+  } else if(cLook.age==='adulto'||cLook.age==='senior'){
+    // adopción inversa: si un niño entró antes y aún no tiene acompañante, lo adopta.
+    const orphan=G.custs.find(x=>x&&x.id!==newCust.id&&x.look&&x.look.age==='nino'&&x.followId==null&&x.st!=='leave');
+    if(orphan){ orphan.followId=newCust.id; newCust.hasKid=true; orphan.roamCooldown=20+Math.floor(Math.random()*25); }
+  }
   if(G.loyaltyCard&&G.loyaltyCard.pending){
     newCust.loyaltyFree=true;
     G.loyaltyCard.pending=false;
@@ -12587,6 +12666,27 @@ function spawnCust(isVip,isSponsor,force){
   return newCust;
 }
 
+// GRUPO que entra junto (idea #5): pareja/familia de 2-4 que spawnan a la vez.
+// El primero es el líder; los demás lo siguen (followId) → se mueven en clúster
+// (vía getCustomerRoamAnchor). La adopción niño↔adulto de spawnCust ya enlaza a
+// los niños; al resto se les ata al líder. Respeta los caps (spawnCust→null al tope).
+function spawnGroup(size){
+  if(!G||!Array.isArray(G.custs)) return 0;
+  size=Math.max(2,Math.min(4,size|0||2));
+  const leader=spawnCust(false,false,true);
+  if(!leader) return 0;
+  const members=[];
+  for(let k=1;k<size;k++){
+    const m=spawnCust(false,false,true);
+    if(!m) break;
+    members.push(m);
+  }
+  // Topología estrella: el líder no sigue a nadie, los demás lo siguen (clúster).
+  leader.isGroupLeader=true; leader.followId=null;
+  for(const m of members){ if(m.id!==leader.id){ m.followId=leader.id; m.roamCooldown=20+Math.floor(Math.random()*30); } }
+  return 1+members.length;
+}
+
 function getDoorThresholdPos(){
   const doorIso=rightWallFeatureIso(3);
   return {x:doorIso.x-7,y:doorIso.y-20};
@@ -12615,7 +12715,7 @@ function makePasserbyLook(){
   // Género marcado: ~50/50. Las mujeres llevan falda (la pinta chibiSkirt).
   if(lk.gender!=='m'&&lk.gender!=='f') lk.gender=Math.random()<0.5?'f':'m';
   lk.skirt=(lk.gender==='f');
-  if(!lk.age) lk.age=ageBucketRandom();
+  if(!lk.age) lk.age=ageBucketForHour(G&&G.gameTime);
   return lk;
 }
 
@@ -12701,7 +12801,7 @@ function updatePassersby(){
       if(!next){G.passersby.splice(i,1);continue;}
       p.tx=next.x;p.ty=next.y;
     }else{
-      const spd=customerMoveSpeed(0.92);
+      const spd=customerMoveSpeed(0.92,p);
       p.x+=dx/d*spd;
       p.y+=dy/d*spd;
       p.dir=dx<0?-1:1;
@@ -12731,6 +12831,15 @@ function updatePassersby(){
 }
 
 function getCustomerRoamAnchor(c){
+  // Niño que sigue a su acompañante (familia, idea #2): deambula hacia el adulto.
+  if(c&&c.followId&&G&&Array.isArray(G.custs)){
+    const adult=G.custs.find(x=>x&&x.id===c.followId);
+    if(adult&&adult.st!=='leave'&&adult.x!=null){
+      const t=screenToIso(adult.x+5,adult.y+20);
+      return { col:clampGridCol(Math.round(t.col)+(Math.random()<0.5?-1:1)), row:clampGridRow(Math.round(t.row)+(Math.random()<0.5?-1:1)) };
+    }
+    c.followId=null;   // el adulto se fue → el niño se suelta
+  }
   const roamables=(shopLayout||[]).filter(item=>['counter','shelves','wineRack','magazines','vending','lottery'].includes(item.type));
   if(roamables.length===0) return null;
   const weighted=roamables.map(item=>{
