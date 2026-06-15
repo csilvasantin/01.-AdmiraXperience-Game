@@ -8431,6 +8431,24 @@ function quickStartLoteriasGame(){
     G.eventColor='#44ddaa';
   }
 }
+// AUTOSTART (idea #3): arranque directo a la sala saltando splash/era/vertical.
+// Mismo camino probado que quickStartLoteriasGame, con cliente parametrizable
+// (0=xtanco por defecto) y opción de entrar al editor. Para kiosko/pantallas/QA.
+function quickStartXtanco(clientIdx,toEditor){
+  resetPreloadState();
+  lang=menuSel===0?'es':'en';
+  clientSel=(Number.isInteger(clientIdx)&&CLIENTS[clientIdx])?clientIdx:0;
+  modelSel=0;
+  initGame();
+  tutPage=0; uiOpen=false; demoMode=false; demoTimer=0;
+  menuEnteredAt=Date.now(); lastInput=Date.now();
+  guidedTut={active:false,step:0,timer:0};
+  tran={active:false,from:null,to:null,timer:0,dur:30};
+  state=toEditor?S.EDITOR:S.GAME;
+  if(toEditor){ edSelIdx=-1; edStaffSelIdx=-1; edMode='furniture'; }
+  try{ startVideo(); }catch(_){}
+  try{ startMusic(); }catch(_){}
+}
 if(mobileSkipBtn){
   ['keydown','keyup','keypress','mousedown','mouseup','click','touchstart','touchend','wheel'].forEach(ev=>{
     mobileSkipBtn.addEventListener(ev,e=>e.stopPropagation(),{passive:false});
@@ -30010,12 +30028,22 @@ window.xtAPI = (function(){
   // Sondea /layout/pending?screen=; si hay un puntero nuevo, baja la distribución
   // y la aplica sola (re-coloca toda la sala). Aviso flotante al hacerlo.
   let lastMudanzaTs=0;
-  function mudanzaToast(msg){
+  // Aviso de Mudanza con botón opcional "Deshacer" (idea #2): como varios Xtancos
+  // pueden compartir screenId (p.ej. 'xtore-inicial'), una Mudanza con id vacío
+  // recoloca la sala "sola"; el toast lo deja claro y permite revertir.
+  function mudanzaToast(msg, undoFn){
     let t=document.getElementById('mudanzaToast'); if(t) t.remove();
     t=document.createElement('div'); t.id='mudanzaToast';
-    t.style.cssText='position:fixed;top:18px;left:50%;transform:translateX(-50%);z-index:2147483647;background:#04140a;border:2px solid #2ee06a;border-radius:10px;padding:10px 16px;color:#9effa0;font:700 14px monospace;box-shadow:0 0 24px rgba(46,224,106,.5);';
-    t.textContent=msg; document.body.appendChild(t);
-    setTimeout(()=>{ try{t.remove();}catch(e){} },6000);
+    t.style.cssText='position:fixed;top:18px;left:50%;transform:translateX(-50%);z-index:2147483647;background:#04140a;border:2px solid #2ee06a;border-radius:10px;padding:10px 16px;color:#9effa0;font:700 13px monospace;box-shadow:0 0 24px rgba(46,224,106,.5);display:flex;align-items:center;gap:12px;';
+    const span=document.createElement('span'); span.textContent=msg; t.appendChild(span);
+    if(undoFn){
+      const b=document.createElement('button'); b.textContent='↶ Deshacer';
+      b.style.cssText='cursor:pointer;background:#0a2a18;border:1px solid #2ee06a;color:#9effa0;border-radius:7px;padding:5px 10px;font:700 12px monospace;';
+      b.onclick=()=>{ try{ undoFn(); }catch(_){ } try{ t.remove(); }catch(_){ } };
+      t.appendChild(b);
+    }
+    document.body.appendChild(t);
+    setTimeout(()=>{ try{t.remove();}catch(e){} }, undoFn?9000:6000);
   }
   async function pollMudanza(){
     try{
@@ -30025,9 +30053,11 @@ window.xtAPI = (function(){
       if(p&&p.id&&p.ts>lastMudanzaTs){
         lastMudanzaTs=p.ts;
         if(window.XPACE_DISTRO){
+          const prev=window.XPACE_DISTRO.snapshot();   // sala actual → para "Deshacer"
           const item=await window.XPACE_DISTRO.get(p.id);
           const n=window.XPACE_DISTRO.apply(item);
-          mudanzaToast('🚚 Mudanza aplicada · '+(p.name||item.name||'')+' · '+n+' muebles');
+          mudanzaToast('🚚 Mudanza en '+screenId+' · '+(p.name||item.name||'')+' · '+n+' muebles',
+            ()=>{ const m=window.XPACE_DISTRO.apply(prev); reportCurrentLayout(); mudanzaToast('↶ Mudanza deshecha · '+m+' muebles'); });
           reportCurrentLayout();   // el estado actual cambió → repórtalo a pixeria
         }
       }
@@ -30090,6 +30120,22 @@ window.xtAPI = (function(){
       }
     }catch{}
   }
+  // BADGE DE IDENTIDAD (idea #2): chip discreto con el screenId activo, visible solo
+  // en la sala. Deja claro en qué Xtanco estás (clave cuando varios comparten id).
+  function xtancoFriendlyName(id){ return id==='xtore-inicial'?'Xtanco inicial':('Xtanco '+id); }
+  function updateIdentityBadge(){
+    try{
+      let b=document.getElementById('xtancoIdBadge');
+      if(!b){
+        b=document.createElement('div'); b.id='xtancoIdBadge';
+        b.style.cssText='position:fixed;left:10px;bottom:10px;z-index:2147483600;background:rgba(4,16,26,.72);border:1px solid #1f6b78;border-radius:7px;padding:3px 8px;color:#8fd6e6;font:600 10px monospace;letter-spacing:.03em;pointer-events:none;opacity:0;transition:opacity .3s;';
+        document.body.appendChild(b);
+      }
+      b.textContent='🪪 '+xtancoFriendlyName(screenId)+' · '+screenId;
+      const inScene=(typeof state!=='undefined'&&typeof S!=='undefined'&&(state===S.GAME||state===S.EDITOR));
+      b.style.opacity=inScene?'0.7':'0';
+    }catch(_){}
+  }
   // Arranque: heartbeat inmediato + poll feed; despues feed a 5s y heartbeat a 5min.
   // Heartbeat a 5min (no 60s) para no agotar el límite KV diario de Workers Free
   // (1000 writes/día). 5min × 24h = 288 writes/día/pantalla, deja margen para
@@ -30102,6 +30148,7 @@ window.xtAPI = (function(){
     setTimeout(reportCurrentLayout,3500);   // reporta el estado actual al arrancar
     setInterval(pollFeed,5000);
     setInterval(pollMudanza,8000);
+    updateIdentityBadge(); setInterval(updateIdentityBadge,1500);   // badge identidad (idea #2)
     setInterval(pollLayoutLive,3000);       // sync EN VIVO bidireccional (solo en sala visible)
     setInterval(()=>sendHeartbeat(false),300000);
   },3000);
@@ -30492,6 +30539,19 @@ window.xtAPI = (function(){
 
   if(jugarBtn) jugarBtn.addEventListener('click', (e)=>{ e.stopPropagation(); chooseJugar(); });
   if(demoBtn)  demoBtn.addEventListener('click',  (e)=>{ e.stopPropagation(); chooseDemo();  });
+  // AUTOSTART (idea #3): ?autostart=xtanco[&editor=1] entra directo a la sala,
+  // saltando splash/era/vertical. Para pantallas/kiosko, embed y QA/screenshots.
+  try{
+    const _qs=new URLSearchParams(location.search);
+    const _as=(_qs.get('autostart')||'').toLowerCase();
+    if(_as){
+      const _cmap={xtanco:0,loterias:1,supermercado:2,shoptalk:3,creator:4};
+      const _ci=Object.prototype.hasOwnProperty.call(_cmap,_as)?_cmap[_as]:0;
+      const _ed=(_qs.get('editor')==='1'||_qs.get('editor')==='true');
+      chooseJugar();   // oculta el splash
+      setTimeout(()=>{ try{ quickStartXtanco(_ci,_ed); }catch(e){ console.warn('autostart failed',e); } }, 200);
+    }
+  }catch(e){}
   splash.addEventListener('click', (e)=>{
     if(e.target===jugarBtn||e.target===demoBtn) return;
     if(jugarBtn && jugarBtn.contains(e.target)) return;
