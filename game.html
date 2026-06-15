@@ -10232,6 +10232,11 @@ function showDayEndResults(){
       summary.comprasEdad=G.metrics.boughtByAge;
       summary.personas=G.metrics.visitsByPersona;
     } }catch(e){}
+    // PLV (idea #2): impresiones + ingresos CPM por superficie → al DVR.
+    try{ if(G.plvImpacts){ const C={escaparate:8,tft:5,led:4}; const plv={}; let tot=0;
+      for(const k in G.plvImpacts){ const imp=G.plvImpacts[k]|0, rev=+(imp/1000*(C[k]||4)).toFixed(2); plv[k]={imp,rev}; tot+=rev; }
+      summary.plv=plv; summary.plvRevTotal=+tot.toFixed(2);
+    } }catch(e){}
     try{ const ps=G.dayProductSales||{}; const compras=Object.keys(ps).map(k=>({name:k,n:ps[k]})).sort((a,b)=>b.n-a.n).slice(0,8); if(compras.length) summary.compras=compras; }catch(e){}
     try{ if(G.extAdImpacts&&Object.keys(G.extAdImpacts).length){ summary.extAds=G.extAdImpacts;
       const rev={}; let tot=0; for(const k in G.extAdImpacts){ const r=G.extAdImpacts[k]/1000*segCpm(k); rev[k]=+r.toFixed(2); tot+=r; }
@@ -10284,6 +10289,19 @@ function showDayEndResults(){
       '</div>';
     }
   }catch(e){}
+  // PLV (idea #2): rendimiento por superficie — impresiones + ingresos CPM.
+  let plvHtml='';
+  try{
+    if(G.plvImpacts){ const C={escaparate:8,tft:5,led:4}, LBL={escaparate:'🪟 Escaparate',tft:'📺 TFT',led:'💡 LED'};
+      const rows=Object.keys(G.plvImpacts).filter(k=>G.plvImpacts[k]>0).map(k=>{ const imp=G.plvImpacts[k]|0, rev=(imp/1000*(C[k]||4));
+        return '<div style="display:flex;justify-content:space-between;margin:3px 0;font-size:11px;"><span style="color:#bcd6ee">'+(LBL[k]||k)+'</span><span style="color:#9fd0ff">'+imp+(en?' impr · ':' impr · ')+'<span style="color:#ffd866">'+rev.toFixed(2)+'€</span></span></div>'; }).join('');
+      if(rows){ const tot=Object.keys(G.plvImpacts).reduce((a,k)=>a+(G.plvImpacts[k]/1000*(C[k]||4)),0);
+        plvHtml='<div style="margin-top:9px;background:#08151f;border:1px solid #1f4357;border-radius:10px;padding:10px 12px">'+
+          '<div style="font-size:10px;opacity:.6;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">'+(en?'📡 PLV · impressions & CPM revenue · total '+tot.toFixed(2)+'€':'📡 PLV · impresiones e ingresos CPM · total '+tot.toFixed(2)+'€')+'</div>'+
+          rows+'</div>';
+      }
+    }
+  }catch(e){}
   ov.innerHTML='<div style="width:min(620px,92vw);background:#04101a;border:2px solid #2f8d8d;border-radius:14px;box-shadow:0 0 40px rgba(47,141,141,.3);padding:20px 22px;color:#dbeaff">'+
     '<div style="text-align:center;font-size:20px;font-weight:bold;color:#7dffd0;letter-spacing:.08em">'+(en?'END OF DAY':'FIN DEL DÍA')+'</div>'+
     '<div style="text-align:center;font-size:13px;opacity:.8;margin:3px 0 14px;color:#9fd0ff">'+gameDateLong(null,en)+'</div>'+
@@ -10295,6 +10313,7 @@ function showDayEndResults(){
     '</div>'+
     perfilHtml+
     sparkHtml+
+    plvHtml+
     '<div style="text-align:center;margin-top:18px"><button id="dayEndContinue" style="cursor:pointer;background:#0e2a22;border:1px solid #2f8d8d;color:#7dffd0;border-radius:9px;padding:9px 22px;font-family:inherit;font-size:14px;font-weight:bold;letter-spacing:.05em">'+(en?'NEW DAY →':'NUEVO DÍA →')+'</button></div>'+
     '<div id="dayEndHint" style="text-align:center;font-size:10px;opacity:.65;margin-top:8px;color:#7dffd0">'+(en?'Auto-advance in 15s · or press NEW DAY':'Avanza solo en 15s · o pulsa NUEVO DÍA')+'</div>'+
   '</div>';
@@ -12309,6 +12328,19 @@ function updateGame(){
       else if(canWalkTo(a.x+mx+5,a.y+20,{ignore:a})){ a.x+=mx; }     // desliza en X
       else if(canWalkTo(a.x+5,a.y+my+20,{ignore:a})){ a.y+=my; }     // desliza en Y
     }
+  }
+
+  // ── MEDICIÓN PLV (idea #2): impresiones por superficie, muestreadas ─────
+  // Cada ~30 ticks suma audiencia que "ve" cada PLV: escaparate (viandantes +
+  // parte del aforo), TFT/LED (aforo dentro, si están en el layout). El cierre de
+  // día lo convierte en impactos + ingresos CPM por superficie.
+  if((tt%30)===0){
+    G.plvImpacts=G.plvImpacts||{escaparate:0,tft:0,led:0};
+    const inside=(G.custs||[]).length, pass=(G.passersby||[]).length;
+    G.plvImpacts.escaparate += pass + Math.round(inside*0.3);
+    const sl=(typeof shopLayout!=='undefined'&&Array.isArray(shopLayout))?shopLayout:[];
+    if(sl.some(i=>i&&i.type==='tft')) G.plvImpacts.tft += inside;
+    if(sl.some(i=>i&&i.type==='led')) G.plvImpacts.led += inside;
   }
 
   // ── GUARDIA CIVIL — personaje de seguridad por comando ───────
@@ -15689,6 +15721,20 @@ const HELP_PAGES={
     'VISITA GUARDIA CIVIL (negro)',
     '  Inspección: pasa o multa',
   ]},
+  { title:'PLV — PUBLICIDAD EN EL PUNTO', lines:[
+    '','Las pantallas son PLV inteligente:','',
+    '📡 REACTIVA AL AFORO: el escaparate muestra',
+    '  la creatividad que casa con la gente que',
+    '  hay DENTRO ahora (mayoría senior→prensa/',
+    '  lotería; noche jóvenes→vapeo). Si pasa un',
+    '  viandante, manda su segmento unos segundos.','',
+    '🖥️ PIN POR PANTALLA: en pixeria/crear puedes',
+    '  fijar qué muestra cada LED/TFT (chuches,',
+    '  vapeo, prensa, perfume) — manda sobre el auto.','',
+    '📊 RENDIMIENTO: el cierre de día mide las',
+    '  impresiones e ingresos CPM por superficie',
+    '  (escaparate/TFT/LED); queda en el DVR.',
+  ]},
   { title:'COMANDOS DE VOZ "ADMIRA"', lines:[
     '','Desde la CLI de Claude, pulsa espacio',
     'y di "Admira" + acción:','',
@@ -15807,6 +15853,20 @@ const HELP_PAGES={
     '  +500-1000 EUR subsidy, +8 fame','',
     'CIVIL GUARD VISIT (black)',
     '  Inspection: pass or pay fine',
+  ]},
+  { title:'POS ADVERTISING (PLV)', lines:[
+    '','Screens are smart in-store advertising:','',
+    '📡 AUDIENCE-REACTIVE: the window shows the',
+    '  creative matching who is INSIDE right now',
+    '  (mostly seniors→press/lottery; evening',
+    '  youth→vaping). A passer-by overrides it',
+    '  with their segment for a few seconds.','',
+    '🖥️ PER-SCREEN PIN: in pixeria/crear you can',
+    '  pin what each LED/TFT shows (candy, vaping,',
+    '  press, perfume) — overrides the auto target.','',
+    '📊 PERFORMANCE: end-of-day measures impressions',
+    '  and CPM revenue per surface (window/TFT/LED);',
+    '  stored in the DVR.',
   ]},
   { title:'VOICE COMMANDS "ADMIRA"', lines:[
     '','From the Claude CLI, press space',
@@ -17422,13 +17482,14 @@ function drawEscaparate(){
 
   // PUBLI EXTERIOR SEGMENTADA POR GÉNERO: si acaba de pasar un viandante por
   // delante, el escaparate muestra perfume de su género unos segundos.
-  if(G && G.exteriorAd && tt < (G.exteriorAd.until||0)){
+  const __plv = plvShowSeg();   // PLV reactivo/pin (ideas #1/#3): viandante, pin o aforo
+  if(__plv){
     cx.save();
     cx.beginPath();
     cx.moveTo(iTL.x,iTL.y); cx.lineTo(iTR.x,iTR.y); cx.lineTo(iBR.x,iBR.y); cx.lineTo(iBL.x,iBL.y);
     cx.closePath(); cx.clip();
     cx.setTransform(ax,ay,bx,by,iTL.x,iTL.y);
-    drawExteriorAd(G.exteriorAd.gender, G.exteriorAd.age, vW, vH);
+    drawExteriorAd(__plv.gender, __plv.age, vW, vH);
     cx.setTransform(1,0,0,1,0,0);
     cx.restore();
     cx.strokeStyle='#5a3a18'; cx.lineWidth=2;
@@ -19517,6 +19578,28 @@ function adImg(id){ if(!id||!AD_IMG_URLS[id]) return null; let im=AD_IMG[id]; if
 const URL_IMG={};
 function imgFromUrl(url){ if(!url||!/^https?:/.test(url)) return null; let im=URL_IMG[url]; if(!im){ im=new Image(); im.crossOrigin='anonymous'; im.src=url; URL_IMG[url]=im; return null; } return (im.complete&&im.naturalWidth>0)?im:null; }
 // Resuelve la creatividad según el segmento del viandante.
+// ── PLV: targeting reactivo a la audiencia + pin por pantalla ──────────
+// Pin (idea #3 PLV): una pantalla del layout con item.plv fija la creatividad.
+const PLV_PIN_SEG={ chuches:{age:'nino',gender:'m'}, vapeo:{age:'joven',gender:'m'},
+  prensa:{age:'senior',gender:'m'}, perfume_m:{age:'adulto',gender:'m'}, perfume_f:{age:'adulto',gender:'f'} };
+// Segmento (edad+género) mayoritario de los clientes DENTRO ahora mismo (idea #1).
+function dominantAudience(){
+  try{ const cs=(G&&G.custs)||[]; if(!cs.length) return null;
+    const ageC={}, gen={f:0,m:0};
+    for(const c of cs){ const a=(c.look&&c.look.age)||'adulto'; ageC[a]=(ageC[a]||0)+1; (c.look&&c.look.gender)==='f'?gen.f++:gen.m++; }
+    let age='adulto',mx=0; for(const k in ageC) if(ageC[k]>mx){mx=ageC[k];age=k;}
+    return { age, gender: gen.f>gen.m?'f':'m' };
+  }catch(_){ return null; }
+}
+// Qué debe mostrar el PLV AHORA: 1) pin por pantalla, 2) viandante puntual,
+// 3) reactivo al aforo presente. Null → render por defecto.
+function plvShowSeg(){
+  try{ const sl=(typeof shopLayout!=='undefined'&&Array.isArray(shopLayout))?shopLayout:[];
+    const pin=sl.find(i=>i&&(i.type==='tft'||i.type==='led')&&i.plv&&i.plv!=='auto');
+    if(pin&&PLV_PIN_SEG[pin.plv]) return PLV_PIN_SEG[pin.plv]; }catch(_){}
+  if(G && G.exteriorAd && tt < (G.exteriorAd.until||0)) return {gender:G.exteriorAd.gender, age:G.exteriorAd.age};
+  return dominantAudience();
+}
 function adCreative(g,age){
   const fem=(g==='f');
   if(age==='nino')   return {id:'nino', label:'CHUCHES'};
