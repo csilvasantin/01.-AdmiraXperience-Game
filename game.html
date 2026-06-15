@@ -12197,6 +12197,12 @@ function updateGame(){
         c.roamCooldown=Math.round((90+Math.floor(Math.random()*150))*(c.roamMult||1));
       }
       c.timer--;if(c.timer<=0){
+        // REGLA: un niño acompañado NO se va mientras su adulto siga en la tienda
+        // (no salir solo). Sigue deambulando hasta que el acompañante se vaya.
+        if(c.followId!=null && c.look && c.look.age==='nino'){
+          const g=G.custs.find(x=>x&&x.id===c.followId);
+          if(g && g.st!=='leave'){ c.timer=90+Math.floor(Math.random()*90); continue; }
+        }
         const stayRemaining=(c.stayTargetTicks|0)-(c.dwellTicks|0);
         if(stayRemaining>0){
           const browseChunk=Math.round((45+Math.random()*120)*(G.weather&&G.weather.type==='rain'?1.25:1)*(c.persona==='curious'?1.35:(c.persona==='impulsive'?0.72:1)));
@@ -12653,6 +12659,11 @@ function spawnCust(isVip,isSponsor,force){
   if(cLook.gender!=='m'&&cLook.gender!=='f') cLook.gender=Math.random()<0.5?'f':'m';
   cLook.skirt=(cLook.gender==='f');
   if(!cLook.age) cLook.age=ageBucketForHour(G&&G.gameTime);
+  // REGLA: ningún niño entra solo. Si saldría 'nino' pero NO hay un adulto/senior
+  // en la sala que pueda acompañarlo, se sube a 'adulto' (no lone kids).
+  if(cLook.age==='nino' && !(G.custs||[]).some(x=>x&&x.look&&(x.look.age==='adulto'||x.look.age==='senior')&&x.st!=='leave')){
+    cLook.age='adulto';
+  }
   // PRODUCTO DESEADO con SESGO POR EDAD (idea #6): seniors→prensa/lotería/tabaco
   // clásico; jóvenes→vapeo/novedades/bebidas; niños→chuches/refrescos. VIP sigue
   // prefiriendo el más caro. Ponderación: +3 al peso si el nombre casa la edad.
@@ -12711,7 +12722,10 @@ function spawnCust(isVip,isSponsor,force){
   // sin acompañante → en su deambular tira hacia él (getCustomerRoamAnchor). Si el
   // adulto se va, el niño se suelta. roamCooldown corto para que reaccione rápido.
   if(cLook.age==='nino'){
-    const guardian=G.custs.find(x=>x&&x.id!==newCust.id&&x.look&&(x.look.age==='adulto'||x.look.age==='senior')&&!x.hasKid&&x.st!=='leave');
+    // Acompañante: preferir un adulto/senior sin niño; si no, cualquiera presente
+    // (un padre puede llevar 2). El gate de arriba garantiza que SIEMPRE hay uno.
+    const guardian=G.custs.find(x=>x&&x.id!==newCust.id&&x.look&&(x.look.age==='adulto'||x.look.age==='senior')&&!x.hasKid&&x.st!=='leave')
+      || G.custs.find(x=>x&&x.id!==newCust.id&&x.look&&(x.look.age==='adulto'||x.look.age==='senior')&&x.st!=='leave');
     if(guardian){ newCust.followId=guardian.id; guardian.hasKid=true; newCust.roamCooldown=20+Math.floor(Math.random()*25); }
   } else if(cLook.age==='adulto'||cLook.age==='senior'){
     // adopción inversa: si un niño entró antes y aún no tiene acompañante, lo adopta.
@@ -12937,7 +12951,10 @@ function getCustomerRoamAnchor(c){
       const t=screenToIso(adult.x+5,adult.y+20);
       return { col:clampGridCol(Math.round(t.col)+(Math.random()<0.5?-1:1)), row:clampGridRow(Math.round(t.row)+(Math.random()<0.5?-1:1)) };
     }
-    c.followId=null;   // el adulto se fue → el niño se suelta
+    // El acompañante desapareció (caso raro: salió sin arrastrar al niño). REGLA:
+    // el niño no se queda solo en la tienda → se va él también.
+    c.followId=null;
+    if(c.look&&c.look.age==='nino'&&c.st!=='leave'){ try{ startCustomerLeave(c); }catch(_){} return null; }
   }
   const roamables=(shopLayout||[]).filter(item=>['counter','shelves','wineRack','magazines','vending','lottery'].includes(item.type));
   if(roamables.length===0) return null;
@@ -12989,6 +13006,13 @@ function getTurnKioskTarget(){
 }
 
 function startCustomerLeave(c){
+  // REGLA: un niño que entró acompañado no sale solo. Si su acompañante sigue en
+  // la tienda (no saliendo), aplaza la salida y sigue deambulando con él. (Cubre
+  // las vías de salida que no pasan por el browse: impaciente, cola, etc.)
+  if(c.followId!=null && c.look && c.look.age==='nino'){
+    const g=G&&Array.isArray(G.custs)?G.custs.find(x=>x&&x.id===c.followId):null;
+    if(g && g.st!=='leave'){ c.st='browse'; c.timer=90+Math.floor(Math.random()*90); c.roamPath=null; c.roamIdx=0; return; }
+  }
   const curTile=screenToIso(c.x+5,c.y+20);
   c.leavePath=astarPath(
     Math.max(0,Math.min(ISO.cols-1,Math.round(curTile.col))),
@@ -13003,6 +13027,15 @@ function startCustomerLeave(c){
   c.queueNumber=0;
   if(G&&G.turns&&G.turns.servingId===c.id) G.turns.servingId=null;
   G.doorOpen=90;
+  // REGLA: si se va un acompañante, sus niños se van CON él (no se quedan solos).
+  // Se les suelta el followId para que su propio gate no los retenga.
+  if(G&&Array.isArray(G.custs)){
+    for(const k of G.custs){
+      if(k&&k!==c&&k.followId===c.id&&k.look&&k.look.age==='nino'&&k.st!=='leave'){
+        k.followId=null; startCustomerLeave(k);
+      }
+    }
+  }
 }
 
 // Probabilidad de COMPRA por perfil (idea #13): no todo el que entra y mira compra.
