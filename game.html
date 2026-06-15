@@ -17122,15 +17122,25 @@ function drawShop(){
           cx.restore();
         }
       } else {
-        const footprint=FURNITURE_SIZE[e.type]||[1,1];
-        for(let dc=0;dc<footprint[0];dc++){
-          for(let dr=0;dr<footprint[1];dr++){
-            drawIsoTileOutline(e.col+dc,e.row+dr,'#9fe7ff',1.3);
-          }
-        }
+        // Huella REAL: custom usa e.fp (antes daba [1,1] y no cuadraba con
+        // muebles de 2×2); el resto, FURNITURE_SIZE. Con swap por rotación.
+        let footprint;
+        if(e.type==='custom'){
+          const fp=Array.isArray(e.fp)?e.fp:[1,1];
+          let bw=Math.max(1,Math.round(fp[0]*(e.sx||1))), bd=Math.max(1,Math.round(fp[1]*(e.sy||1)));
+          if((((e.rot||0)%2)+2)%2===1){ const t=bw; bw=bd; bd=t; }
+          footprint=[bw,bd];
+        } else footprint=FURNITURE_SIZE[e.type]||[1,1];
+        // Relleno translúcido del diamante de la huella → selección clara.
+        const q=toIso(e.col,e.row), hw=ISO.tileW/2, hh=ISO.tileH/2;
+        const W=footprint[0]*hw, D=footprint[1]*hw, WH=footprint[0]*hh, DH=footprint[1]*hh;
+        cx.save();cx.beginPath();
+        cx.moveTo(q.x,q.y);cx.lineTo(q.x+W,q.y+WH);cx.lineTo(q.x+W-D,q.y+WH+DH);cx.lineTo(q.x-D,q.y+DH);cx.closePath();
+        cx.fillStyle='rgba(120,243,255,0.14)';cx.fill();cx.restore();
+        for(let dc=0;dc<footprint[0];dc++) for(let dr=0;dr<footprint[1];dr++) drawIsoTileOutline(e.col+dc,e.row+dr,'#9fe7ff',1.3);
         const sp=toIso(e.col,e.row);
-        r(sp.x-18,sp.y-29,36,11,'#072232cc');
-        tx('GHOST',sp.x,sp.y-21,'#9fe7ff',6,'center');
+        r(sp.x-20,sp.y-29,40,11,'#072232cc');
+        tx('● SEL',sp.x,sp.y-21,'#9fe7ff',6,'center');
       }
     }
     if(isEditorFurniture) cx.restore();
@@ -20376,24 +20386,39 @@ function customFurniFootprint(e){
 }
 function drawCustomFurni(e){
   const [fw,fd]=customFurniFootprint(e);
-  // Ground-contact shadow (anchored to footprint) — same look as the rest.
+  // Sombra de contacto a la huella (igual que el resto del mobiliario).
   drawFurnitureContactShadow(e.col,e.row,fw,fd);
-  // Anchor: footprint centre on the floor; sprite bottom sits there.
+  // Ancla: centro de la huella en el suelo; la base del sprite se apoya ahí.
   const p=toIso(e.col+fw/2,e.row+fd/2);
   const rec=getCustomFurniImage(e.img);
-  const ph=Math.max(12,(e.ph||46));               // billboard height in px
+  let topY=p.y-Math.max(12,(e.ph||46));   // por defecto (placeholder)
   if(rec&&rec.loaded&&rec.img.naturalWidth>0){
     const ar=rec.img.naturalWidth/rec.img.naturalHeight;
-    const h=ph, w=Math.max(6,ph*ar);
+    // #1 ESCALA POR HUELLA: ancho ∝ √(área de la huella)·tile; alto por aspect.
+    // Un 2×2 se ve el doble que un 1×1. ph (si el asset lo trae) es multiplicador
+    // fino, no alto absoluto. Tope a 85% de la pared para que nada la atraviese.
+    const phMul=(e.ph&&isFinite(e.ph))?Math.max(0.4,Math.min(2.4,e.ph/46)):1;
+    let w=ISO.tileW*0.62*Math.sqrt(Math.max(0.36,fw*fd))*phMul;
+    let h=w/ar;
+    const maxH=ISO.wallH*0.85, minH=12;
+    if(h>maxH){ w*=maxH/h; h=maxH; }
+    else if(h<minH){ w*=minH/h; h=minH; }
+    // #2 PEANA: elipse de contacto ceñida bajo la base → se apoya, no "flota".
+    cx.save();
+    cx.fillStyle='rgba(0,0,0,0.30)';
+    cx.beginPath();cx.ellipse(p.x,p.y-1,Math.max(7,w*0.42),Math.max(3,w*0.15),0,0,Math.PI*2);cx.fill();
+    cx.restore();
+    // Sprite (billboard erguido), recortado a píxel.
     cx.save();
     cx.translate(p.x,p.y);
     if(e.flipX) cx.scale(-1,1);
-    cx.imageSmoothingEnabled=false;             // crisp pixel-art sprites
+    cx.imageSmoothingEnabled=false;
     cx.drawImage(rec.img,-w/2,-h,w,h);
     cx.restore();
+    topY=p.y-h;
   } else {
-    // Placeholder while loading (or on error): a labelled ghost box.
-    const w=22, h=ph;
+    // Placeholder mientras carga (o error): caja fantasma etiquetada.
+    const w=22, h=Math.max(12,(e.ph||46));
     cx.save();
     cx.globalAlpha=rec&&rec.error?0.5:0.8;
     r(p.x-w/2,p.y-h,w,h, rec&&rec.error?'#5a2230':'#1d3540');
@@ -20401,7 +20426,7 @@ function drawCustomFurni(e){
     tx(rec&&rec.error?'✕':'…',p.x,p.y-h/2,'#9fe7ff',8,'center');
     cx.restore();
   }
-  if(e.label){ tx(e.label,p.x,p.y-ph-4,'#bfe9f2',6,'center'); }
+  if(e.label){ tx(e.label,p.x,topY-4,'#bfe9f2',6,'center'); }
 }
 // Coloca un mueble 'custom' (imagen importada) en el Xpacio. Reusa la
 // búsqueda de hueco libre de addCreatorFurniture.
