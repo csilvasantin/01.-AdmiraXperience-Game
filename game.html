@@ -951,9 +951,30 @@
       return await r.json();
     } catch(e){ return null; }
   }
+  // Auto-recarga al detectar una BUILD nueva desplegada (fin del "recarga el gemelo
+  // a mano"): compara el build cargado (window.XTANCO_APP.build) con el de
+  // ./xtanco-version.js en red. Si cambió, avisa y recarga. Así cualquier deploy
+  // llega solo a las pestañas abiertas.
+  let __verReloading=false;
+  async function checkVersion(){
+    if(__verReloading) return;
+    const loaded=(window.XTANCO_APP&&window.XTANCO_APP.build)||''; if(!loaded) return;
+    try{
+      const r=await fetch('./xtanco-version.js?cb='+Date.now(),{cache:'no-store'}); if(!r.ok) return;
+      const m=(await r.text()).match(/build:\s*'([0-9]{8}-[0-9]{4})'/); if(!m) return;
+      if(m[1]!==loaded){
+        __verReloading=true;
+        try{ const t=document.createElement('div'); t.textContent='🔄 Nueva versión '+m[1]+' · recargando…';
+          t.style.cssText='position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:2147483646;background:#04140a;border:1px solid #2ee06a;border-radius:9px;padding:8px 16px;color:#9effa0;font:700 12px monospace;box-shadow:0 0 24px rgba(46,224,106,.5);';
+          document.body.appendChild(t); }catch(_){}
+        setTimeout(()=>{ try{ location.reload(); }catch(_){} }, 3500);
+      }
+    }catch(_){}
+  }
   async function check(){
     const data=await fetchKillSwitch();
     if(data) applyKillSwitch(data);
+    checkVersion();
   }
   // Primer check antes de pintar el juego — si el DOM aún no esta listo
   // (script en <head>), espera a DOMContentLoaded.
@@ -30480,7 +30501,7 @@ window.xtAPI = (function(){
       let b=document.getElementById('xtancoIdBadge');
       if(!b){
         b=document.createElement('div'); b.id='xtancoIdBadge';
-        b.style.cssText='position:fixed;left:10px;bottom:10px;z-index:2147483600;background:rgba(4,16,26,.72);border:1px solid #1f6b78;border-radius:7px;padding:3px 8px;color:#8fd6e6;font:600 10px monospace;letter-spacing:.03em;pointer-events:none;opacity:0;transition:opacity .3s;';
+        b.style.cssText='position:fixed;left:10px;top:46px;z-index:2147483600;background:rgba(4,16,26,.72);border:1px solid #1f6b78;border-radius:7px;padding:3px 8px;color:#8fd6e6;font:600 10px monospace;letter-spacing:.03em;pointer-events:none;opacity:0;transition:opacity .3s;';
         document.body.appendChild(b);
       }
       b.textContent='🪪 '+xtancoFriendlyName(screenId)+' · '+screenId;
