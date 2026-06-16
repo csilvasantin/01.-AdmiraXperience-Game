@@ -18817,6 +18817,21 @@ window.listAvatar3dModels=listAvatar3dModels; window.saveAvatar3dPreset=saveAvat
 // antes abría el tótem y que ahora captura el iframe del avatar.
 window.addEventListener('message',function(ev){
   const d=ev&&ev.data; if(!d||typeof d!=='object') return;
+  // ── CLI remoto del Xtanco (p.ej. el editor de Redistribución de pixeria, que
+  //    embebe este gemelo en un iframe): ejecuta un comando vía xtAPI.command y
+  //    DEVUELVE el resultado al emisor por postMessage. Origen restringido a hosts
+  //    de confianza (pixeria/xpaceos/carlossilva/admira.app + localhost). ──
+  if(d.type==='xtcmd' && typeof d.cmd==='string'){
+    const o=String(ev.origin||'');
+    const okOrigin=/^https?:\/\/([a-z0-9-]+\.)*(pixeria\.com|xpaceos\.com|carlossilva\.info|admira\.app)$/i.test(o)
+                || /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(o);
+    let out=null, err=null;
+    if(!okOrigin){ err='origen no permitido: '+o; }
+    else if(!(window.xtAPI&&typeof window.xtAPI.command==='function')){ err='xtAPI no disponible'; }
+    else { try{ out=window.xtAPI.command(String(d.cmd)); }catch(e){ err=String((e&&e.message)||e); } }
+    try{ if(ev.source&&ev.source.postMessage) ev.source.postMessage({type:'xtcmd-result', id:d.id, cmd:String(d.cmd), ok:!err, out:(out==null?'':String(out)), err:err}, o||'*'); }catch(_){}
+    return;
+  }
   if(d.type==='da-tap'){
     try{ if(typeof openMetahumanPanel==='function') openMetahumanPanel(); }catch(e){}
     try{ const els=(typeof _mhEls==='function')?_mhEls():null; if(els&&els.prompt) els.prompt.focus(); }catch(e){}
