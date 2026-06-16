@@ -18825,12 +18825,12 @@ window.addEventListener('message',function(ev){
     const o=String(ev.origin||'');
     const okOrigin=/^https?:\/\/([a-z0-9-]+\.)*(pixeria\.com|xpaceos\.com|carlossilva\.info|admira\.app)$/i.test(o)
                 || /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(o);
-    let out=null, err=null;
-    if(!okOrigin){ err='origen no permitido: '+o; }
-    else if(!(window.xtAPI&&typeof window.xtAPI.command==='function')){ err='xtAPI no disponible'; }
-    else { try{ out=window.xtAPI.command(String(d.cmd)); }catch(e){ err=String((e&&e.message)||e); } }
-    try{ if(ev.source&&ev.source.postMessage) ev.source.postMessage({type:'xtcmd-result', id:d.id, cmd:String(d.cmd), ok:!err, out:(out==null?'':String(out)), err:err}, o||'*'); }catch(_){}
-    return;
+    const reply=(out,err)=>{ try{ if(ev.source&&ev.source.postMessage) ev.source.postMessage({type:'xtcmd-result', id:d.id, cmd:String(d.cmd), ok:!err, out:(out==null?'':String(out)), err:err||null}, o||'*'); }catch(_){} };
+    if(!okOrigin){ reply(null,'origen no permitido: '+o); return; }
+    // Usa el ejecutor de la consola (STRING bonito); fallback a xtAPI.command (JSON).
+    if(typeof window.__xtExec==='function'){ Promise.resolve(window.__xtExec(String(d.cmd))).then(out=>reply(out==null?'ok':out,null)).catch(e=>reply(null,String((e&&e.message)||e))); return; }
+    if(window.xtAPI&&typeof window.xtAPI.command==='function'){ try{ const rr=window.xtAPI.command(String(d.cmd)); reply((rr&&typeof rr==='object')?(rr.message||rr.text||JSON.stringify(rr)):rr,null); }catch(e){ reply(null,String((e&&e.message)||e)); } return; }
+    reply(null,'sin ejecutor'); return;
   }
   if(d.type==='da-tap'){
     try{ if(typeof openMetahumanPanel==='function') openMetahumanPanel(); }catch(e){}
@@ -29201,6 +29201,10 @@ window.xtAPI = (function(){
       window.AdmiraXP_StreamDeck.attach(executeTelegramText);
     }
   } catch(_){}
+  // Exponer el ejecutor de comandos de la consola (devuelve STRING bonito) para que
+  // el CLI keyless (pollTwinCmd, en otra IIFE) lo use en vez del fallback xtAPI.command
+  // (que devuelve JSON {ok,data} → salía crudo en /status).
+  try{ window.__xtExec=executeTelegramText; }catch(_){}
 
   function getStreamDeckPage(){
     const SD=window.AdmiraXP_StreamDeck;
@@ -30431,8 +30435,10 @@ window.xtAPI = (function(){
         if(c.id<__twinLoadTs) continue;
         let out='';
         try{
-          // MISMO procesador que la consola @AdmiraXPBot del gemelo (devuelve string).
-          if(typeof executeTelegramText==='function'){ out=String(await executeTelegramText(String(c.text))||'ok'); }
+          // MISMO procesador que la consola @AdmiraXPBot del gemelo (devuelve STRING bonito).
+          // Expuesto como window.__xtExec porque executeTelegramText vive en otra IIFE.
+          const exec=(typeof window.__xtExec==='function')?window.__xtExec:(typeof executeTelegramText==='function'?executeTelegramText:null);
+          if(exec){ out=String(await exec(String(c.text))||'ok'); }
           else if(window.xtAPI&&typeof window.xtAPI.command==='function'){ const rr=window.xtAPI.command(String(c.text)); out=(rr&&typeof rr==='object')?String(rr.message||rr.text||JSON.stringify(rr)):String(rr); }
           else out='no executor';
         }catch(e){ out='error: '+((e&&e.message)||e); }
