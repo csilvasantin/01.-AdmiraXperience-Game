@@ -6072,7 +6072,12 @@ function setLanguage(nextLang){
 
 // ── STATE ─────────────────────────────────────────────────────
 const S={ERA_SEL:'eraSel',PRELOAD:'preload',MENU:'menu',CLIENT_SEL:'clientSel',MODEL_SEL:'modelSel',TUT:'tutorial',GAME:'game',PAUSE:'pause',YEAR_END:'yearEnd',GAME_END:'gameEnd',EDITOR:'editor',SETTINGS:'settings',HELP:'help',INTRO:'intro',NETWORK:'network'};
-let state=S.ERA_SEL, eraSel=0, menuSel=0, clientSel=0, renderMode='16bit', modelSel=0, tutPage=0, helpPage=0;
+// Tiers de render canonicos: '8bit' (NES limpio) - '16bit' (degradados) - 'habbo'
+// (plano con grout) - 'real' (realista, Fase A). renderMode PERSISTE en localStorage.
+const RENDER_TIERS=['8bit','16bit','habbo','real'];
+let renderMode=(function(){ try{ const v=localStorage.getItem('xtanco_render'); if(RENDER_TIERS.indexOf(v)>=0) return v; }catch(_){} return '16bit'; })();
+function setRenderMode(m){ if(RENDER_TIERS.indexOf(m)<0) return false; renderMode=m; try{ localStorage.setItem('xtanco_render',m); }catch(_){} return true; }
+let state=S.ERA_SEL, eraSel=0, menuSel=0, clientSel=0, modelSel=0, tutPage=0, helpPage=0;
 // Señal para el motor de ambiente (assets/js/ambient.js): rumor/lluvia/cafetera solo
 // deben sonar en partida activa, no en menús, pausa ni fin de partida.
 window.ambientActive=function(){return state===S.GAME;};
@@ -13348,8 +13353,101 @@ const RIGHT_WALL_FEATURE_ROW_OFFSET=0.35;
 function rightWallFeatureIso(row){
   return toIso(ISO.cols,row+RIGHT_WALL_FEATURE_ROW_OFFSET);
 }
+// -- 8-BIT TIER (NES limpio) -----------------------------------
+// Color plano CUANTIZADO + contorno duro 1px, SIN gradientes (mas barato que el
+// 16bit). quant8 posteriza cada canal a pasos de 0x33 -> look de paleta limitada.
+// Arte 100% original. El look ochentero no viene del sombreado sino de la
+// geometria chibi cabezona + rejilla iso dura; este tier abraza esa estetica
+// pero la deja NITIDA (sin el degradado sucio que la envejece).
+const _Q8=51;
+function quant8(h){ if(typeof h!=='string'||h[0]!=='#') return h; const a=_h2r(h); const q=v=>Math.min(255,Math.round(v/_Q8)*_Q8); return _r2h(q(a[0]),q(a[1]),q(a[2])); }
+function drawIsoTile8(col,row,color,strokeColor){
+  const p=toIso(col,row); const hw=ISO.tileW/2, hh=ISO.tileH/2;
+  const base=(typeof color==='string'&&color[0]==='#')?color:'#b8bcc0';
+  cx.beginPath();
+  cx.moveTo(p.x,p.y);cx.lineTo(p.x+hw,p.y+hh);cx.lineTo(p.x,p.y+ISO.tileH);cx.lineTo(p.x-hw,p.y+hh);cx.closePath();
+  cx.fillStyle=quant8(base);cx.fill();
+  cx.strokeStyle=cDark(base,40);cx.lineWidth=1;cx.stroke();
+}
+function drawIsoFloorTile8(col,row,color){
+  const p=toIso(col,row); const hw=ISO.tileW/2, hh=ISO.tileH/2;
+  const base=(typeof color==='string'&&color[0]==='#')?color:'#b8bcc0';
+  const odd=((col+row)%2+2)%2===1;
+  cx.beginPath();
+  cx.moveTo(p.x,p.y);cx.lineTo(p.x+hw,p.y+hh);cx.lineTo(p.x,p.y+ISO.tileH);cx.lineTo(p.x-hw,p.y+hh);cx.closePath();
+  cx.fillStyle=quant8(odd?cDark(base,14):base);cx.fill();
+  cx.strokeStyle=cDark(base,46);cx.lineWidth=1;cx.stroke();
+}
+function drawIsoBlock8(col,row,bw,bd,bh,topCol,leftCol,rightCol,neonCol){
+  const p=toIso(col,row); const hw=ISO.tileW/2, hh=ISO.tileH/2;
+  const w=bw*hw, d=bd*hw, wh=bw*hh, dh=bd*hh;
+  const topF=quant8(topCol), leftF=quant8(cDark(leftCol,10)), rightF=quant8(cDark(rightCol,24));
+  const OL=cDark(topCol,55);
+  cx.beginPath();
+  cx.moveTo(p.x,p.y-bh);cx.lineTo(p.x+w,p.y+wh-bh);cx.lineTo(p.x+w-d,p.y+wh+dh-bh);cx.lineTo(p.x-d,p.y+dh-bh);cx.closePath();
+  cx.fillStyle=topF;cx.fill();
+  cx.beginPath();
+  cx.moveTo(p.x-d,p.y+dh-bh);cx.lineTo(p.x+w-d,p.y+wh+dh-bh);cx.lineTo(p.x+w-d,p.y+wh+dh);cx.lineTo(p.x-d,p.y+dh);cx.closePath();
+  cx.fillStyle=leftF;cx.fill();
+  cx.beginPath();
+  cx.moveTo(p.x+w-d,p.y+wh+dh-bh);cx.lineTo(p.x+w,p.y+wh-bh);cx.lineTo(p.x+w,p.y+wh);cx.lineTo(p.x+w-d,p.y+wh+dh);cx.closePath();
+  cx.fillStyle=rightF;cx.fill();
+  cx.strokeStyle=OL;cx.lineWidth=1;cx.lineJoin='miter';
+  cx.beginPath();
+  cx.moveTo(p.x,p.y-bh);cx.lineTo(p.x+w,p.y+wh-bh);cx.lineTo(p.x+w,p.y+wh);
+  cx.lineTo(p.x+w-d,p.y+wh+dh);cx.lineTo(p.x-d,p.y+dh);cx.lineTo(p.x-d,p.y+dh-bh);cx.closePath();
+  cx.moveTo(p.x+w-d,p.y+wh+dh-bh);cx.lineTo(p.x+w-d,p.y+wh+dh);
+  cx.moveTo(p.x-d,p.y+dh-bh);cx.lineTo(p.x+w-d,p.y+wh+dh-bh);cx.lineTo(p.x+w,p.y+wh-bh);
+  cx.stroke();
+  if(neonCol){ cx.strokeStyle=neonCol;cx.lineWidth=1.5;cx.beginPath();cx.moveTo(p.x,p.y-bh);cx.lineTo(p.x+w,p.y+wh-bh);cx.moveTo(p.x,p.y-bh);cx.lineTo(p.x-d,p.y+dh-bh);cx.stroke(); }
+}
+function chibi8(x,y,dir,shirt,hair,frame,busy,tick,scale=1,isDJ=false,look=null){
+  cx.save();
+  if(scale!==1){cx.translate(x,y);cx.scale(scale,scale);cx.translate(-x,-y);}
+  const flip=dir===-1;
+  if(flip){cx.translate(x+12,0);cx.scale(-1,1);cx.translate(-x,0);}
+  const skinCol=quant8(look&&look.skin!=null?P.skins[look.skin%P.skins.length]:P.skin);
+  const pantsCol=quant8(look&&look.pants!=null?P.pantsArr[look.pants%P.pantsArr.length]:P.pants);
+  const shoesCol=quant8(look&&look.shoes!=null?P.shoesArr[look.shoes%P.shoesArr.length]:P.shoes);
+  const acc=look?look.accessory||0:0;
+  const OL='#16161e';
+  const ro=(rx,ry,rw,rh,col)=>{ r(rx-1,ry-1,rw+2,rh+2,OL); r(rx,ry,rw,rh,col); };
+  drawIsoShadow(x+7,y+27,8,3);
+  const lk=frame===0?0:2;
+  ro(x+3,y+18,3,7+lk,pantsCol); ro(x+8,y+18,3,7-lk,pantsCol);
+  ro(x+2,y+24+lk,4,3,shoesCol); ro(x+8,y+24-lk,4,3,shoesCol);
+  const ak=busy?(frame===0?-2:2):0;
+  const sCol=quant8(isDJ?'#ddaa22':P.shirts[shirt%P.shirts.length]);
+  ro(x-1,y+9+ak,3,8,sCol); ro(x+12,y+9-ak,3,8,sCol);
+  ro(x+1,y+8,12,11,sCol);
+  if(isFemaleLook(look)) chibiSkirt(x,y,sCol,skinCol);
+  if(look&&look.age==='senior') chibiCane(x,y);
+  if(isDJ){ cx.font='bold 5px monospace';cx.textAlign='center';cx.fillStyle='#1a1a1a';cx.fillText('54',x+7,y+17); }
+  else if(shirt===0){ cx.strokeStyle='#fff';cx.lineWidth=1.2;cx.beginPath();cx.moveTo(x+4,y+10);cx.lineTo(x+10,y+16);cx.moveTo(x+10,y+10);cx.lineTo(x+4,y+16);cx.stroke(); }
+  ro(x+1,y-1,12,12,skinCol);
+  const hairCol=quant8((look&&look.age==='senior')?'#cfcfcf':P.hair[hair%P.hair.length]);
+  if(isDJ){
+    r(x-1,y-6,16,6,OL); r(x+0,y-5,14,5,'#1a1a3a'); r(x+0,y-1,14,2,'#222244'); r(x+6,y-6,2,2,'#dd2233');
+  } else {
+    r(x-1,y-5,16,8,OL); r(x+0,y-4,14,7,hairCol); r(x-1,y-3,2,9,hairCol); r(x+13,y-3,2,9,hairCol);
+  }
+  const blink=Math.floor(tick/90)%9===0;
+  r(x+3,y+3,3,blink?1:3,OL); r(x+9,y+3,3,blink?1:3,OL);
+  if(!blink){ r(x+4,y+4,1,1,P.white); r(x+10,y+4,1,1,P.white); }
+  r(x+6,y+7,2,1,cDark(skinCol,16));
+  if(acc===1){ r(x+2,y+3,4,2,OL); r(x+8,y+3,4,2,OL); r(x+6,y+3,2,1,OL); }
+  if(acc===2&&!isDJ){ r(x-2,y-6,18,5,OL); r(x-1,y-5,16,4,'#cc3333'); r(x-3,y-2,5,2,'#aa2222'); }
+  if(acc===3){ r(x-1,y-2,2,5,'#222'); r(x+13,y-2,2,5,'#222'); r(x+0,y-3,14,2,'#222'); }
+  if(acc===4){ r(x+1,y+8,12,2,'#cc4466'); }
+  if(look&&!isDJ){
+    if(look._phone){ r(x+12,y+12,3,5,'#10131a'); r(x+12,y+12,3,3,'#5ad0ff'); }
+    if(look._bag){ r(x-3,y+13,5,6,'#d8c9a8'); r(x-3,y+13,5,1,cDark('#d8c9a8',16)); }
+  }
+  cx.restore();
+}
 // Draw a flat diamond tile
 function drawIsoTile(col,row,color,strokeColor){
+  if(renderMode==='8bit'){drawIsoTile8(col,row,color,strokeColor);return;}
   if(renderMode==='16bit'){drawIsoTile16(col,row,color,strokeColor);return;}
   const p=toIso(col,row);
   const hw=ISO.tileW/2, hh=ISO.tileH/2;
@@ -13402,6 +13500,7 @@ function drawIsoFloorTileHabbo(col,row,color){
   cx.beginPath();cx.moveTo(p.x-hw,p.y+hh);cx.lineTo(p.x,p.y);cx.lineTo(p.x+hw,p.y+hh);cx.stroke();
 }
 function drawIsoFloorTile(col,row,color,strokeColor='#aab4be44'){
+  if(renderMode==='8bit'){drawIsoFloorTile8(col,row,color);return;}
   if(renderMode==='habbo'){drawIsoFloorTileHabbo(col,row,color);return;}
   const p=toIso(col,row);
   const hw=ISO.tileW/2, hh=ISO.tileH/2;
@@ -13429,6 +13528,7 @@ function drawIsoFloorTile(col,row,color,strokeColor='#aab4be44'){
 }
 // Draw a 3D isometric block (box)
 function drawIsoBlock(col,row,bw,bd,bh,topCol,leftCol,rightCol,neonCol){
+  if(renderMode==='8bit'){drawIsoBlock8(col,row,bw,bd,bh,topCol,leftCol,rightCol,neonCol);return;}
   if(renderMode==='habbo'){drawIsoBlockHabbo(col,row,bw,bd,bh,topCol,leftCol,rightCol,neonCol);return;}
   if(renderMode==='16bit'){drawIsoBlock16(col,row,bw,bd,bh,topCol,leftCol,rightCol,neonCol);return;}
   // bw=width in tiles, bd=depth in tiles, bh=height in px
@@ -13624,6 +13724,7 @@ function fillQuad(c,col){
 
 // ── DRAW CHIBI (ISOMETRIC) ────────────────────────────────────
 function chibi(x,y,dir,shirt,hair,frame,busy,tick,scale=1,isDJ=false,look=null){
+  if(renderMode==='8bit'){chibi8(x,y,dir,shirt,hair,frame,busy,tick,scale,isDJ,look);return;}
   if(renderMode==='habbo'){chibiHabbo(x,y,dir,shirt,hair,frame,busy,tick,scale,isDJ,look);return;}
   if(renderMode==='16bit'){chibi16(x,y,dir,shirt,hair,frame,busy,tick,scale,isDJ,look);return;}
   cx.save();
@@ -27709,7 +27810,7 @@ window.xtAPI = (function(){
       {title:'IA y contenido',items:['/grok pregunta','/draw dibujo','/metahuman pregunta','/avatar3d on|off','/avatar3d ds on|off','/avatar3d audio on|off','/avatar3d models','/avatar3d preset <nombre> <url RPM>','/avatar3d model <nombre|id>','/avatar3d pregunta','/log','/log thief','/log customer','/import','/import list','/import remove 1','/importTube https://youtu.be/...']},
       {title:'Ajustes rápidos',items:['/money 12000','/sat 90','/fame 80','/set week 12','/set year 2','/set revenue 5000','/set storeLevel 2','/set customers 30']},
       {title:'Musica y layout',items:['/song 1','/song bad bunny','/music','/next','/prev','/seoul2026','/seul','/seultrap','/seultecno','/equipo inicio ana 3 4','/equipo zona dj 12 2 2','/catalogo','/catalogo pared','/importar catalogo','/importar 1','/importar lista','/importar quitar 1','/mobiliario','/mobiliario inicio','/layout','/layout save','/layout factory','/layout xpacio','/layout xpacio load']},
-      {title:'Estilo visual',items:['/16bits','/8bits','/render habbo','/render 16bit']},
+      {title:'Estilo visual',items:['/render 8bit','/render 16bit','/render habbo','/render real']},
       {title:'Mapa de navegacion',items:['/xpacio','/mapa','/map','/red','/sd list','/streamdeck','/help','/debug']},
     ];
   }
@@ -28336,13 +28437,14 @@ window.xtAPI = (function(){
       }
       if(cmd==='render'||cmd==='estilo'||cmd==='style'||cmd==='renderizado'){
         const m=(arg||'').trim().toLowerCase();
-        const map={habbo:'habbo','16bit':'16bit','16':'16bit','8bit':'8bit','8':'8bit',flat:'8bit',plano:'8bit'};
-        if(map[m]){ renderMode=map[m]; return 'Render: '+renderMode+(renderMode==='habbo'?' · estilo Habbo (piloto: sala)':''); }
-        return 'Render actual: '+renderMode+'. Uso: /render habbo | /render 16bit | /render 8bit';
+        const map={'8bit':'8bit','8':'8bit',flat:'8bit',plano:'8bit',nes:'8bit','16bit':'16bit','16':'16bit',habbo:'habbo',real:'real',realista:'real',realistic:'real'};
+        const TLBL={'8bit':'8-bit (NES limpio)','16bit':'16-bit (degradados)',habbo:'Habbo (plano + grout)',real:'Realista (Fase A)'};
+        if(map[m]){ setRenderMode(map[m]); return '🎨 Render: '+renderMode+' · '+TLBL[renderMode]; }
+        return 'Render actual: '+renderMode+' ('+(TLBL[renderMode]||'')+'). Uso: /render 8bit | 16bit | habbo | real';
       }
-      // Atajos de Carlos: "16 bits" = estilo Habbo nuevo, "8 bits" = el actual.
-      if(cmd==='16bits'||cmd==='16'){ renderMode='habbo'; return '🟦 Modo 16-bit (estilo Habbo) ACTIVADO · /8bits para volver al actual'; }
-      if(cmd==='8bits'||cmd==='8'){ renderMode='16bit'; return '◻️ Modo actual restaurado · /16bits para el estilo Habbo'; }
+      // Atajos de Carlos: cada tier por su nombre numerico.
+      if(cmd==='16bits'||cmd==='16'){ setRenderMode('16bit'); return '🟦 16-bit (degradados) ACTIVADO · /8bits /render habbo /render real'; }
+      if(cmd==='8bits'||cmd==='8'){ setRenderMode('8bit'); return '◻️ 8-bit (NES limpio) ACTIVADO · /16bits /render habbo /render real'; }
       if(cmd==='set'){
         const setParts=arg.split(/\s+/);
         const field=setParts.shift();
