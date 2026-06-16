@@ -13445,9 +13445,46 @@ function chibi8(x,y,dir,shirt,hair,frame,busy,tick,scale=1,isDJ=false,look=null)
   }
   cx.restore();
 }
+// -- REALISTA TIER (Fase A) ------------------------------------
+// Misma geometria que el 16bit, pero con ILUMINACION + OCLUSION DE CONTACTO:
+// sombras de apoyo bajo muebles y NPCs (grounding), rim-light en la arista a
+// favor de la luz (top-left) y suelo con profundidad. NO rediseña proporciones
+// (eso es Fase B, con sprites pre-rasterizados). Coste extra acotado: las sombras
+// de contacto son pocas (muebles+NPCs) y el suelo usa fills planos (sin gradient).
+function drawIsoTileReal(col,row,color,strokeColor){ drawIsoTile16(col,row,color,strokeColor); }
+function drawIsoFloorTileReal(col,row,color){
+  const p=toIso(col,row); const hw=ISO.tileW/2, hh=ISO.tileH/2;
+  const base=(typeof color==='string'&&color[0]==='#')?color:'#b8bcc0';
+  const depth=col+row;                                  // mas "al fondo" = mas oscuro
+  const shade=Math.max(-12, 5-depth*1.4)|0;
+  const odd=((col+row)%2+2)%2===1;
+  cx.beginPath();
+  cx.moveTo(p.x,p.y);cx.lineTo(p.x+hw,p.y+hh);cx.lineTo(p.x,p.y+ISO.tileH);cx.lineTo(p.x-hw,p.y+hh);cx.closePath();
+  cx.fillStyle=cLight(odd?cDark(base,5):base, shade);cx.fill();
+  cx.strokeStyle='rgba(0,0,0,0.07)';cx.lineWidth=0.6;cx.stroke();
+  cx.globalAlpha=0.06;cx.strokeStyle='#ffffff';cx.lineWidth=1;
+  cx.beginPath();cx.moveTo(p.x-hw,p.y+hh);cx.lineTo(p.x,p.y+ISO.tileH);cx.stroke();
+  cx.globalAlpha=1;
+}
+function drawIsoBlockReal(col,row,bw,bd,bh,topCol,leftCol,rightCol,neonCol){
+  drawFurnitureContactShadow(col,row,bw,bd);            // oclusion de contacto -> apoyado
+  drawIsoBlock16(col,row,bw,bd,bh,topCol,leftCol,rightCol,neonCol);
+  const p=toIso(col,row),hw=ISO.tileW/2,hh=ISO.tileH/2,w=bw*hw,d=bd*hw,wh=bw*hh,dh=bd*hh;
+  cx.globalAlpha=0.26;cx.strokeStyle='#fff';cx.lineWidth=1;   // rim-light arista superior (luz top-left)
+  cx.beginPath();cx.moveTo(p.x-d,p.y+dh-bh);cx.lineTo(p.x,p.y-bh);cx.lineTo(p.x+w,p.y+wh-bh);cx.stroke();
+  cx.globalAlpha=1;
+}
+function chibiReal(x,y,dir,shirt,hair,frame,busy,tick,scale=1,isDJ=false,look=null){
+  cx.save();                                            // sombra de apoyo direccional (luz top-left)
+  cx.globalAlpha=0.17;cx.fillStyle='#000';
+  cx.beginPath();cx.ellipse(x+9,y+28,10,3.2,0,0,Math.PI*2);cx.fill();
+  cx.restore();
+  chibi16(x,y,dir,shirt,hair,frame,busy,tick,scale,isDJ,look);
+}
 // Draw a flat diamond tile
 function drawIsoTile(col,row,color,strokeColor){
   if(renderMode==='8bit'){drawIsoTile8(col,row,color,strokeColor);return;}
+  if(renderMode==='real'){drawIsoTileReal(col,row,color,strokeColor);return;}
   if(renderMode==='16bit'){drawIsoTile16(col,row,color,strokeColor);return;}
   const p=toIso(col,row);
   const hw=ISO.tileW/2, hh=ISO.tileH/2;
@@ -13501,6 +13538,7 @@ function drawIsoFloorTileHabbo(col,row,color){
 }
 function drawIsoFloorTile(col,row,color,strokeColor='#aab4be44'){
   if(renderMode==='8bit'){drawIsoFloorTile8(col,row,color);return;}
+  if(renderMode==='real'){drawIsoFloorTileReal(col,row,color);return;}
   if(renderMode==='habbo'){drawIsoFloorTileHabbo(col,row,color);return;}
   const p=toIso(col,row);
   const hw=ISO.tileW/2, hh=ISO.tileH/2;
@@ -13529,6 +13567,7 @@ function drawIsoFloorTile(col,row,color,strokeColor='#aab4be44'){
 // Draw a 3D isometric block (box)
 function drawIsoBlock(col,row,bw,bd,bh,topCol,leftCol,rightCol,neonCol){
   if(renderMode==='8bit'){drawIsoBlock8(col,row,bw,bd,bh,topCol,leftCol,rightCol,neonCol);return;}
+  if(renderMode==='real'){drawIsoBlockReal(col,row,bw,bd,bh,topCol,leftCol,rightCol,neonCol);return;}
   if(renderMode==='habbo'){drawIsoBlockHabbo(col,row,bw,bd,bh,topCol,leftCol,rightCol,neonCol);return;}
   if(renderMode==='16bit'){drawIsoBlock16(col,row,bw,bd,bh,topCol,leftCol,rightCol,neonCol);return;}
   // bw=width in tiles, bd=depth in tiles, bh=height in px
@@ -13725,6 +13764,7 @@ function fillQuad(c,col){
 // ── DRAW CHIBI (ISOMETRIC) ────────────────────────────────────
 function chibi(x,y,dir,shirt,hair,frame,busy,tick,scale=1,isDJ=false,look=null){
   if(renderMode==='8bit'){chibi8(x,y,dir,shirt,hair,frame,busy,tick,scale,isDJ,look);return;}
+  if(renderMode==='real'){chibiReal(x,y,dir,shirt,hair,frame,busy,tick,scale,isDJ,look);return;}
   if(renderMode==='habbo'){chibiHabbo(x,y,dir,shirt,hair,frame,busy,tick,scale,isDJ,look);return;}
   if(renderMode==='16bit'){chibi16(x,y,dir,shirt,hair,frame,busy,tick,scale,isDJ,look);return;}
   cx.save();
