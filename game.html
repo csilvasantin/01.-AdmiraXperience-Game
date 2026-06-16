@@ -30414,6 +30414,30 @@ window.xtAPI = (function(){
       }
     }catch(e){}
   }
+  // ── CLI KEYLESS (EN VIVO): pixeria encola comandos por pantalla en el worker; este
+  //    gemelo los sondea para SU screenId, los ejecuta vía xtAPI y devuelve el resultado
+  //    a /twin/result (feedback). Sin clave: mismo canal keyless que el espejo/mudanza.
+  let __twinSeen=0, __twinInit=false;
+  async function pollTwinCmd(){
+    try{
+      const r=await fetch(PIXER_WORKER+'/twin/cmd?screen='+encodeURIComponent(screenId)+'&since='+__twinSeen+'&ts='+Date.now(),{cache:'no-store'});
+      if(!r.ok) return;
+      const d=await r.json(); const cmds=(d&&d.commands)||[];
+      if(!cmds.length) return;
+      const maxId=Math.max(__twinSeen,...cmds.map(c=>c.id||0));
+      // Primer sondeo tras (re)cargar: solo fija baseline, no re-ejecuta comandos viejos.
+      if(!__twinInit){ __twinInit=true; __twinSeen=maxId; return; }
+      for(const c of cmds){
+        if(!c||!c.id||c.id<=__twinSeen) continue;
+        __twinSeen=Math.max(__twinSeen,c.id);
+        let out='';
+        try{ out=(window.xtAPI&&typeof window.xtAPI.command==='function')?String(window.xtAPI.command(String(c.text))||'ok'):'xtAPI no disponible'; }
+        catch(e){ out='error: '+((e&&e.message)||e); }
+        try{ if(typeof showEv==='function') showEv('⌨ '+String(c.text).slice(0,40),'#7ee0a0'); }catch(_){}
+        try{ await fetch(PIXER_WORKER+'/twin/result',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({screen:screenId,id:c.id,text:out})}); }catch(_){}
+      }
+    }catch(e){}
+  }
   async function pollFeed(){
     try{
       const r=await fetch(PIXER_WORKER+'/signage/feed?limit=1&screen='+encodeURIComponent(screenId));
@@ -30469,6 +30493,7 @@ window.xtAPI = (function(){
     setInterval(pollMudanza,8000);
     updateIdentityBadge(); setInterval(updateIdentityBadge,1500);   // badge identidad (idea #2)
     setInterval(pollLayoutLive,3000);       // sync EN VIVO bidireccional (solo en sala visible)
+    pollTwinCmd(); setInterval(pollTwinCmd,2500);   // CLI keyless: ejecuta comandos de pixeria EN VIVO
     setInterval(()=>sendHeartbeat(false),300000);
   },3000);
 })();
