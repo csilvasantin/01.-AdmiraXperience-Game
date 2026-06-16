@@ -4,6 +4,8 @@ const DEFAULT_ALLOWED_ORIGINS = [
   'https://carlossilva.info',
   'https://www.xpaceos.com',
   'https://xpaceos.com',
+  'https://www.pixeria.com',
+  'https://pixeria.com',
   'http://localhost:4175',
   'http://127.0.0.1:4175',
   'http://localhost:8084',
@@ -128,6 +130,11 @@ async function sendMessage(request, env, replyMode) {
       parse_mode: body.parseMode || undefined,
       disable_web_page_preview: true,
     });
+    // Feedback del CLI remoto: si es una RESPUESTA a un comando (replyToMessageId),
+    // guardamos su texto en el store del DO para que /remote/result?id= lo recoja.
+    if (replyMode && body.replyToMessageId) {
+      try { await commandStore(env).fetch('https://command-store/result', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: body.replyToMessageId, text }) }); } catch (_) {}
+    }
     return jsonResponse(request, env, 200, {
       ok: true,
       messageId: result.message_id,
@@ -291,7 +298,34 @@ export class TelegramCommandStore {
     if (url.pathname === '/status' && request.method === 'GET') {
       return this.status();
     }
+    if (url.pathname === '/result' && request.method === 'POST') {
+      return this.putResult(request);
+    }
+    if (url.pathname === '/result' && request.method === 'GET') {
+      return this.getResult(url);
+    }
     return Response.json({ ok: false, error: 'not_found' }, { status: 404 });
+  }
+
+  // Resultado de un comando remoto (la respuesta que el gemelo devuelve via
+  // /telegram/reply, correlada por replyToMessageId === id del comando). Permite
+  // que el cliente (CLI de pixeria) recoja el feedback de "como escribir en el Xtanco".
+  async putResult(request) {
+    const b = await request.json().catch(() => ({}));
+    const id = Number(b.id || 0);
+    if (!id) return Response.json({ ok: false });
+    const results = await this.state.storage.get('results') || {};
+    results[id] = { text: String(b.text || '').slice(0, 3900), ts: Date.now() };
+    const ids = Object.keys(results).map(Number).sort((a, b2) => a - b2);
+    while (ids.length > 60) { delete results[ids.shift()]; }
+    await this.state.storage.put('results', results);
+    return Response.json({ ok: true });
+  }
+
+  async getResult(url) {
+    const id = Number(url.searchParams.get('id') || 0);
+    const results = await this.state.storage.get('results') || {};
+    return Response.json({ ok: true, result: results[id] || null });
   }
 
   async queue(request) {
@@ -443,6 +477,14 @@ export default {
       });
       const data = await storeResponse.json().catch(() => ({}));
       return jsonResponse(request, env, 200, { ok: true, queued: data.queued === true, commandId: data.commandId || null, text });
+    }
+
+    // Feedback del CLI remoto: el cliente (pixeria) sondea aquí con el commandId que
+    // devolvió /remote/cmd; cuando el gemelo responde (via /telegram/reply), aparece.
+    if (url.pathname === '/remote/result' && request.method === 'GET') {
+      const storeResponse = await commandStore(env).fetch('https://command-store/result?id=' + encodeURIComponent(url.searchParams.get('id') || ''));
+      const payload = await storeResponse.json().catch(() => ({ ok: false }));
+      return jsonResponse(request, env, 200, payload);
     }
 
     const webhookMatch = url.pathname.match(/^\/telegram\/webhook\/([^/]+)$/);
