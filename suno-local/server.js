@@ -516,10 +516,18 @@ async function dismissOverlays(pg) {
   try {
     for (let k = 0; k < 2; k++) { await pg.keyboard.press('Escape'); await sleep(120); }
     await pg.evaluate(() => {
+      const txt = el => (el.innerText || el.getAttribute('aria-label') || '').trim();
+      const all = [...document.querySelectorAll('button,[role="button"],a')].filter(el => el.offsetParent !== null);
+      // 1) Banner de CONSENTIMIENTO de cookies — preferimos rechazar lo no esencial
+      //    (privacidad). Si no hay botón de rechazo, aceptamos para que el banner no
+      //    tape el CTA Create (el click nativo respeta el z-order y chocaría con él).
+      const REJECT = /^(reject all|reject non.?essential|only necessary|necessary only|decline|rechazar(\s+todo)?|solo (las )?necesarias)$/i;
+      const ACCEPT = /^(accept all( cookies)?|aceptar(\s+(todo|todas))?)$/i;
+      const consent = all.find(el => REJECT.test(txt(el))) || all.find(el => ACCEPT.test(txt(el)));
+      if (consent) consent.click();
+      // 2) Otros overlays (Google Lens, hints, diálogos sueltos).
       const RE = /^(omitir|skip|dismiss|cerrar|close|no gracias|no, thanks|got it|entendido|x)$/i;
-      const b = [...document.querySelectorAll('button,[role="button"],a')]
-        .filter(el => el.offsetParent !== null)
-        .find(el => RE.test((el.innerText || el.getAttribute('aria-label') || '').trim()));
+      const b = all.find(el => RE.test(txt(el)));
       if (b) b.click();
     });
     await sleep(150);
@@ -532,18 +540,37 @@ async function dismissOverlays(pg) {
 // nav/aside/header y quedarse con el de mayor ancho (el CTA naranja). Devuelve
 // {ok, n, w, txt} para diagnóstico.
 async function clickCreate(pg) {
-  return pg.evaluate(() => {
+  // Marca el CTA Create real (más ancho, no-nav, habilitado; por texto o por
+  // aria-label "Create song") y lo pulsa con un click NATIVO de puppeteer
+  // (CDP → isTrusted=true). CLAVE: Suno emite el browser-token de /generate solo
+  // ante un gesto REAL; un .click() in-page (isTrusted=false) ya NO dispara la
+  // generación (endurecimiento anti-bot). El click CDP además funciona aunque la
+  // ventana del proxy esté en 2º plano (se inyecta a nivel navegador, no SO).
+  const sel = await pg.evaluate(() => {
     let cands = [...document.querySelectorAll('button')].filter(b => {
       const t = (b.innerText || '').trim().toLowerCase();
-      return (t === 'create' || t === 'crear') && !b.disabled && b.offsetParent !== null;
-    });
-    cands = cands.filter(b => !b.closest('nav,aside,header')); // fuera el menú lateral
-    if (!cands.length) return { ok: false, n: 0 };
+      const al = (b.getAttribute('aria-label') || '').trim().toLowerCase();
+      return (t === 'create' || t === 'crear' || al === 'create song' || al === 'crear canción') && !b.disabled && b.offsetParent !== null;
+    }).filter(b => !b.closest('nav,aside,header'));
+    if (!cands.length) return null;
     cands.sort((a, b) => b.getBoundingClientRect().width - a.getBoundingClientRect().width);
-    const b = cands[0], r = b.getBoundingClientRect();
-    b.click();
-    return { ok: true, n: cands.length, w: Math.round(r.width), txt: (b.innerText || '').trim().slice(0, 20) };
+    const b = cands[0];
+    if (!b.id) b.id = '__suno_create_cta';
+    try { b.scrollIntoView({ block: 'center' }); } catch (_) {}
+    return '#' + b.id;
   });
+  if (!sel) return { ok: false, n: 0 };
+  try {
+    const h = await pg.$(sel);
+    if (!h) return { ok: false, n: 0, why: 'handle null' };
+    const box = await h.boundingBox();
+    await h.click({ delay: 35 });                 // click nativo CDP → isTrusted=true
+    return { ok: true, n: 1, native: true, w: box ? Math.round(box.width) : 0 };
+  } catch (e) {
+    // Fallback in-page por si el nativo falla (fuera de viewport, etc.).
+    const ok = await pg.evaluate((s) => { const b = document.querySelector(s); if (!b) return false; b.click(); return true; }, sel);
+    return { ok: !!ok, n: 1, native: false, why: String(e.message || e).slice(0, 60) };
+  }
 }
 
 async function uiGenerate(pg, { prompt, lyrics, title, instrumental, model }) {
@@ -639,9 +666,21 @@ async function uiGenerate(pg, { prompt, lyrics, title, instrumental, model }) {
   if (model) { try { await selectSunoModel(pg, model); } catch(_) {} }
   await sleep(300);
 
-  // Espanta-overlays: cualquier popup (Google Lens, hints, dialog) que se cuele
-  // ENCIMA tapa el botón Create y rompe el click → 502. Lo cerramos antes.
+  // Espanta-overlays: cualquier popup (Google Lens, hints, dialog, banner de
+  // cookies) que se cuele ENCIMA tapa el botón Create y rompe el click → 502.
   await dismissOverlays(pg);
+
+  // Esperar a que Create quede ESTABLEMENTE habilitado antes de pulsar: clicar
+  // durante un re-render transitorio (el botón aún habilitándose tras rellenar)
+  // es una causa de "click que no envía". Hasta ~6s.
+  for (let s = 0; s < 12; s++) {
+    const ready = await pg.evaluate(() => [...document.querySelectorAll('button')].some(b => {
+      const t = (b.innerText || '').trim().toLowerCase(); const al = (b.getAttribute('aria-label') || '').toLowerCase();
+      return (t === 'create' || t === 'crear' || al === 'create song') && !b.disabled && b.offsetParent !== null && !b.closest('nav,aside,header');
+    }));
+    if (ready) break;
+    await sleep(500);
+  }
 
   const clk = await clickCreate(pg);
   if (!clk.ok) {
@@ -653,29 +692,39 @@ async function uiGenerate(pg, { prompt, lyrics, title, instrumental, model }) {
     throw new Error('Create no disponible · diag=' + JSON.stringify(diag));
   }
 
-  // Poll del feed (hasta ~90s). Si a los ~16s no hay clips, reintenta Create UNA
-  // vez con clickCreate (CTA correcto): si el 1er click hubiera enviado, los clips
-  // ya habrían aparecido, así que reintentar NO duplica (cubre el 1er click fallido).
-  let fresh = [], reclicked = false;
+  // Poll del feed (hasta ~90s). Reintenta Create a los ~16s y ~32s si AÚN no hay
+  // clips: un envío que SÍ prendió aparece en el feed en pocos segundos, así que a
+  // los 16s/32s sin nada el click anterior NO envió → reclicar cubre el fallo
+  // (click flaky) SIN duplicar generación. El click de clickCreate es nativo (CDP,
+  // isTrusted) y cada reintento espanta overlays primero.
+  let fresh = [];
   for (let i = 0; i < 45; i++) {
     await sleep(2000);
     const ids = await getFeedIds(pg);
     fresh = ids.filter(id => !before.has(id));
     if (fresh.length) break;
-    if (i === 8 && !reclicked) {
-      reclicked = true;
-      await dismissOverlays(pg);   // por si un overlay tapó el 1er click
+    if (i === 8 || i === 16) {
+      await dismissOverlays(pg);
       await clickCreate(pg);
     }
   }
   if (!fresh.length) {
-    const diag = await pg.evaluate(() => ({
-      turnstile: [...document.querySelectorAll('iframe')].some(f => /turnstile|challenges\.cloudflare/.test(f.src || '')),
-      logged: !!(window.Clerk && window.Clerk.session),
-      url: location.pathname,
-      createBtns: [...document.querySelectorAll('button')].filter(b => { const t = (b.innerText || '').trim().toLowerCase(); return t === 'create' || t === 'crear'; }).map(b => ({ w: Math.round(b.getBoundingClientRect().width), dis: b.disabled, nav: !!b.closest('nav,aside,header') })),
-      bodyHint: (document.body.innerText || '').replace(/\s+/g, ' ').slice(0, 140),
-    }));
+    const diag = await pg.evaluate(async () => {
+      let feedTop = [], feedErr = '';
+      try { const jwt = await window.Clerk.session.getToken(); const r = await fetch('https://studio-api-prod.suno.com/api/feed/v2?page=0', { headers: { Authorization: 'Bearer ' + jwt }, credentials: 'include' }); const d = await r.json(); const c = d.clips || d || []; feedTop = (Array.isArray(c) ? c : []).slice(0, 5).map(x => ({ id: (x.id || '').slice(0, 8), st: x.status, t: (x.title || '').slice(0, 18) })); } catch (e) { feedErr = String(e.message || e); }
+      return {
+        turnstile: [...document.querySelectorAll('iframe')].some(f => /turnstile|challenges\.cloudflare/.test(f.src || '')),
+        logged: !!(window.Clerk && window.Clerk.session),
+        url: location.pathname,
+        createBtns: [...document.querySelectorAll('button')].filter(b => { const t = (b.innerText || '').trim().toLowerCase(); const al = (b.getAttribute('aria-label') || '').toLowerCase(); return t === 'create' || t === 'crear' || al === 'create song'; }).map(b => ({ w: Math.round(b.getBoundingClientRect().width), dis: b.disabled, nav: !!b.closest('nav,aside,header') })),
+        // longitudes de los campos rellenos: si 0, el fill no prendió y Create no envía
+        fields: [...document.querySelectorAll('textarea')].filter(t => t.offsetParent !== null).map(t => ({ ph: (t.placeholder || '').slice(0, 22), len: (t.value || '').length })),
+        toasts: [...document.querySelectorAll('[role="alert"],[role="status"],[class*="toast"],[class*="Toast"],[class*="sonner"]')].filter(el => el.offsetParent !== null).map(el => (el.innerText || '').replace(/\s+/g, ' ').slice(0, 120)).filter(Boolean).slice(0, 6),
+        bodyHint: (document.body.innerText || '').replace(/\s+/g, ' ').slice(0, 140),
+        dialogs: [...document.querySelectorAll('[role="dialog"],[aria-modal="true"],.modal')].filter(el => el.offsetParent !== null).map(el => (el.innerText || '').replace(/\s+/g, ' ').slice(0, 120)),
+        feedTop, feedErr,
+      };
+    });
     throw new Error('no aparecieron clips nuevos tras Create · clic=' + JSON.stringify(clk) + ' · ' + JSON.stringify(diag));
   }
   return fresh.slice(0, 4);
@@ -807,6 +856,68 @@ async function handleStatus(req, res, query) {
   }
 }
 
+// DIAGNÓSTICO read-only del compositor (NO genera): vuelca botones, textareas,
+// modales y estado del feed para depurar por qué Create no envía. Temporal.
+async function handleDiag(req, res) {
+  const ip = req.socket.remoteAddress || '';
+  if (!/^(127\.0\.0\.1|::1|::ffff:127\.0\.0\.1)$/.test(ip)) { sendJson(res, 403, { error: 'loopback only', ip }); return; }
+  try {
+    const pg = await ensurePage();
+    if (!pg.url().includes('suno.com/create')) {
+      try { await pg.goto('https://suno.com/create', { waitUntil: 'networkidle2', timeout: 60000 }); } catch (_) {}
+    }
+    const info = await pg.evaluate(async () => {
+      const vis = el => el && el.offsetParent !== null;
+      const btns = [...document.querySelectorAll('button')].filter(vis).map(b => ({
+        t: (b.innerText || '').trim().replace(/\s+/g, ' ').slice(0, 28),
+        w: Math.round(b.getBoundingClientRect().width),
+        dis: b.disabled,
+        nav: !!b.closest('nav,aside,header'),
+        al: (b.getAttribute('aria-label') || '').slice(0, 28),
+      })).filter(b => b.t || b.al);
+      const tas = [...document.querySelectorAll('textarea')].map(t => ({
+        ph: (t.placeholder || '').slice(0, 44), vis: vis(t), len: (t.value || '').length, id: t.id || '',
+      }));
+      const dialogs = [...document.querySelectorAll('[role="dialog"],[aria-modal="true"],.modal')].filter(vis).map(d => (d.innerText || '').replace(/\s+/g, ' ').slice(0, 200));
+      let feedN = -1, feedErr = '';
+      try { const jwt = await window.Clerk.session.getToken(); const r = await fetch('https://studio-api-prod.suno.com/api/feed/v2?page=0', { headers: { Authorization: 'Bearer ' + jwt }, credentials: 'include' }); const d = await r.json(); const c = d.clips || d || []; feedN = Array.isArray(c) ? c.length : -2; } catch (e) { feedErr = String(e.message || e); }
+      return {
+        url: location.pathname,
+        turnstile: [...document.querySelectorAll('iframe')].some(f => /turnstile|challenges\.cloudflare/.test(f.src || '')),
+        createBtns: btns.filter(b => /^create$|^crear$/i.test(b.t)),
+        modelBtn: (([...document.querySelectorAll('button')].find(x => /^v\d/i.test((x.innerText || '').trim().split('\n')[0]) && (x.innerText || '').trim().length < 16) || {}).innerText || null),
+        dialogs,
+        textareas: tas,
+        feedN, feedErr,
+        allBtns: btns.slice(0, 60),
+      };
+    });
+    sendJson(res, 200, info);
+  } catch (e) {
+    sendJson(res, 200, { ok: false, error: String(e.message || e) });
+  }
+}
+
+// SELFTEST loopback-only (NO requiere token): dispara UNA generación real para
+// verificar el click nativo de Create. Solo acepta conexiones de 127.0.0.1. Temporal.
+async function handleSelftest(req, res, query) {
+  const ip = req.socket.remoteAddress || '';
+  if (!/^(127\.0\.0\.1|::1|::ffff:127\.0\.0\.1)$/.test(ip)) { sendJson(res, 403, { error: 'loopback only', ip }); return; }
+  let shot = '';
+  try {
+    const pg = await ensurePage();
+    const lyrics = query.lyrics != null ? String(query.lyrics) : '[Verse]\nHumo de prueba del proxy\n[Chorus]\nVuelve a cantar';
+    const prompt = query.prompt != null ? String(query.prompt) : 'blues, slow, warm, acoustic';
+    let result;
+    try { const ids = await uiGenerate(pg, { prompt, lyrics, title: 'Selftest', instrumental: false, model: '' }); result = { ok: true, ids }; }
+    catch (e) { result = { ok: false, error: String(e.message || e) }; }
+    try { await pg.screenshot({ path: '/tmp/suno-selftest.png' }); shot = '/tmp/suno-selftest.png'; } catch (_) {}
+    sendJson(res, 200, { ...result, shot });
+  } catch (e) {
+    sendJson(res, 200, { ok: false, error: String(e.message || e) });
+  }
+}
+
 // ─── Server ────────────────────────────────────────────────────────
 const server = http.createServer(async (req, res) => {
   const u = url.parse(req.url, true);
@@ -816,6 +927,8 @@ const server = http.createServer(async (req, res) => {
   if (u.pathname === '/healthz' && req.method === 'GET') return handleHealthz(req, res);
   if (u.pathname === '/generate' && req.method === 'POST') return handleGenerate(req, res);
   if (u.pathname === '/status' && req.method === 'GET') return handleStatus(req, res, u.query);
+  if (u.pathname === '/diag' && req.method === 'GET') return handleDiag(req, res);
+  if (u.pathname === '/selftest' && req.method === 'GET') return handleSelftest(req, res, u.query);
 
   sendJson(res, 404, { error: 'not found', allowed: ['GET /healthz', 'POST /generate', 'GET /status?ids=...'] });
 });
