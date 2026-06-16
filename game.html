@@ -7852,7 +7852,7 @@ function setFurnitureVisibility(value){
 
 function clampGridCol(col){return Math.max(0,Math.min(ISO.cols-1,Math.round(col)));}
 function clampGridRow(row){return Math.max(0,Math.min(ISO.rows-1,Math.round(row)));}
-function clampZoneRadius(radius){return Math.max(0,Math.min(6,Math.round(radius)));}
+function clampZoneRadius(radius){ if(radius>=99) return 99; /* 99 = TODA LA TIENDA (sin confinar) */ return Math.max(0,Math.min(6,Math.round(radius)));}
 function prodName(i){
   try{return getProductLabel(i);}catch(e){return 'Producto '+i;}
 }
@@ -10497,7 +10497,9 @@ function updateStaffNav(s){
   const zoneRadius=clampZoneRadius(s.zoneRadius===undefined?1:s.zoneRadius);
   tCol=Math.max(0,Math.min(ISO.cols-1,tCol));
   tRow=Math.max(0,Math.min(ISO.rows-1,tRow));
-  if(zoneRadius===0){
+  if(zoneRadius>=99){
+    // TODA LA TIENDA: no confinar (tCol/tRow ya están dentro del grid).
+  }else if(zoneRadius===0){
     tCol=zoneCol;
     tRow=zoneRow;
   }else{
