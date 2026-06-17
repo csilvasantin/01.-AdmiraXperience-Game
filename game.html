@@ -751,7 +751,7 @@
 </div>
 <audio id="bgMusic" loop preload="auto"><source src="music/titi.mp3" type="audio/mpeg"></audio>
 <video id="dsVideo" preload="auto" playsinline style="display:none"></video>
-<input type="file" id="dsImportInput" accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm" multiple style="display:none">
+<input type="file" id="dsImportInput" accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,audio/mpeg,audio/mp3,.mp3" multiple style="display:none">
 <div id="dsImportDrop" aria-hidden="true">
   <div class="ds-import-card">
     <div class="ds-import-icon">🖼</div>
@@ -12133,11 +12133,16 @@ function updateGame(){
       G.socioHeat.max=mx;
     }
   }
+  // EMOTES (idea #15): saludos al cruzarse dos clientes (1×/tick, throttle interno).
+  try{ tickCustomerGreetings(); }catch(e){}
   for(let i=G.custs.length-1;i>=0;i--){
     const c=G.custs[i];c.ft++;if(c.ft>10){c.fr=(c.fr+1)%2;c.ft=0;}
     c.dwellTicks=(c.dwellTicks|0)+1;
     if(!Number.isFinite(c.stayTargetTicks)) c.stayTargetTicks=Math.round((60+Math.random()*240)*60);
     if(c.bTimer>0) c.bTimer--;
+    // EMOTES (idea #15): cuenta atrás del emoji sobre la cabeza + disparo contextual.
+    if((c.emoteTimer|0)>0) c.emoteTimer--; else if((c.emoteCD|0)>0) c.emoteCD--;
+    try{ tickCustomerEmotes(c); }catch(e){}
     const queueStress=(c.persona==='impatient'?1.8:1);
     if(c.st==='walk'){
       // Sun → customers walk 65% speed (too hot); Rain → normal speed (rushing in)
@@ -12167,7 +12172,9 @@ function updateGame(){
         if(d<3){
           c.pathIdx++;
           if(c.pathIdx>=c.path.length){
-            if(c.wantsTurn&&!c.ticketPicked){
+            if(c.wantsTurn&&!c.ticketPicked&&customerBalks(c)){
+              customerBalk(c); // #14 balking: ve la cola larga y no se pone
+            }else if(c.wantsTurn&&!c.ticketPicked){
               assignCustomerTurn(c);
               c.ticketPicked=true;
               c.bMsg=(lang==='en'?'Turn ':'Turno ')+String(c.queueNumber).padStart(3,'0');c.bTimer=170;
@@ -12186,7 +12193,9 @@ function updateGame(){
       } else {
         const dx=c.tx-c.x,dy=c.ty-c.y,d=Math.sqrt(dx*dx+dy*dy);
         if(d<3){
-          if(c.wantsTurn&&!c.ticketPicked){
+          if(c.wantsTurn&&!c.ticketPicked&&customerBalks(c)){
+            customerBalk(c); // #14 balking: ve la cola larga y no se pone
+          }else if(c.wantsTurn&&!c.ticketPicked){
             assignCustomerTurn(c);
             c.ticketPicked=true;
             c.bMsg=(lang==='en'?'Turn ':'Turno ')+String(c.queueNumber).padStart(3,'0');c.bTimer=170;
@@ -12218,6 +12227,13 @@ function updateGame(){
         .filter(x=>x.st==='queue'||x.st==='buy')
         .sort((a,b)=>queueSortWeight(a)-queueSortWeight(b));
       const idx=Math.max(0,queueOrder.findIndex(x=>x.id===c.id));
+      // RENEGING (idea #14): si lleva demasiado esperando sin que le toque, se larga
+      // sin comprar (un niño acompañado no decide solo: lo gestiona su adulto).
+      if(!c._qEnter) c._qEnter=tt;
+      if(idx>0 && !(c.followId!=null&&c.look&&c.look.age==='nino') && (tt-(c._qEnter||tt))>customerQueuePatience(c)){
+        customerRenege(c);
+        continue;
+      }
       const spot=getQueueTarget(idx);
       const targetIso=toIso(spot.col,spot.row);
       const qtx=targetIso.x-7, qty=targetIso.y-20;
@@ -12230,7 +12246,7 @@ function updateGame(){
       }else if(idx===0&&G.turns&&(G.turns.servingId===null||G.turns.servingId===c.id)){
         G.turns.current=c.queueNumber||0;
         G.turns.servingId=c.id;
-        c.st='buy';
+        c.st='buy';c._qEnter=0;
         c.serviceTimer=Math.round((130+Math.floor(Math.random()*70))*(c.persona==='impatient'?0.8:(c.persona==='curious'?1.1:1)));
         c.bMsg=(lang==='en'?'Turn '+String(c.queueNumber).padStart(3,'0')+' at register':'Turno '+String(c.queueNumber).padStart(3,'0')+' en caja');c.bTimer=110;
       }else if((c.dwellTicks|0)%180===0){
@@ -12891,6 +12907,9 @@ function spawnCust(isVip,isSponsor,force){
       }
     }
   }catch(e){ console.warn('LoyaltyBridge spawn hook',e); }
+  // HABITUALES (idea #17): si no es VIP/sponsor/socio del Club, con baja probabilidad
+  // "es" un cliente recurrente con nombre → va directo a su producto y la IA le saluda.
+  try{ maybeAssignRegular(newCust); }catch(e){}
   G.doorOpen=60;SFX.doorBell(); // open door for customer entering
   G.customersToday++;G.totalCustomers++;G.custIn++; // count entry
   return newCust;
@@ -13073,6 +13092,15 @@ function getCustomerRoamAnchor(c){
     c.followId=null;
     if(c.look&&c.look.age==='nino'&&c.st!=='leave'){ try{ startCustomerLeave(c); }catch(_){} return null; }
   }
+  // PESTER POWER (idea #16): un adulto con un niño enganchado que quiere chuches/vapeo
+  // es "arrastrado" hacia ese producto — deambula hacia el mueble que lo vende.
+  try{
+    const pester=kidPesterInfo(c);
+    if(pester&&Math.random()<0.55){
+      const anchor=roamAnchorForProduct(pester.prodIdx);
+      if(anchor) return anchor;
+    }
+  }catch(e){}
   const roamables=(shopLayout||[]).filter(item=>['counter','shelves','wineRack','magazines','vending','lottery'].includes(item.type));
   if(roamables.length===0) return null;
   const weighted=roamables.map(item=>{
@@ -13101,6 +13129,182 @@ function getCustomerRoamAnchor(c){
     }
   }
   return null;
+}
+
+/* ── NPCs vivos #14-#17 ──────────────────────────────────────────────────────
+   #14 Reneging/balking: el impaciente abandona la cola (o ni se pone si es larga).
+   #15 Emotes: reacciones a DJ/cola/lluvia y saludos al cruzarse.
+   #16 Pester power: el niño arrastra al adulto hacia las chuches/vapeo (en roam).
+   #17 Habituales: clientes recurrentes con nombre, persistidos, saludados por la IA.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+// #14 — Paciencia de cola por persona (ticks @60fps). VIP/fieles aguantan mucho.
+function customerQueuePatience(c){
+  if(!c) return 3600;
+  if(c.vip||c.sponsor||c.persona==='loyal') return 3600;                      // ~60 s
+  if(c.persona==='impatient') return Math.round((11+Math.random()*6)*60);     // ~11-17 s
+  if(c.persona==='impulsive') return Math.round((17+Math.random()*8)*60);
+  if(c.persona==='curious')   return Math.round((28+Math.random()*12)*60);
+  return Math.round((22+Math.random()*10)*60);
+}
+// #14 — Personas ya en cola/caja ahora mismo.
+function currentQueueLen(){
+  return (G&&G.custs)?G.custs.filter(x=>x&&(x.st==='queue'||x.st==='buy')).length:0;
+}
+// #14 — ¿La cola es tan larga que este cliente decide NO ponerse? (balking)
+function customerBalks(c){
+  if(!c||c.vip||c.sponsor||c.persona==='loyal') return false;                 // los fieles aguantan
+  if(c.followId!=null&&c.look&&c.look.age==='nino') return false;             // un niño no decide solo
+  const thr=c.persona==='impatient'?4:(c.persona==='impulsive'?6:99);
+  if(currentQueueLen()<thr) return false;
+  return Math.random()<(c.persona==='impatient'?0.85:0.55);
+}
+// #14 — Aplica el balk: ve la cola, se cansa y se va a mirar (luego saldrá sin comprar).
+function customerBalk(c){
+  c.wantsTurn=false; c.ticketPicked=false;
+  c.bMsg=lang==='en'?'Too many people…':'¡Cuánta cola!…'; c.bTimer=150;
+  setEmote(c,'😤',95);
+  if(G) G.satisfaction=Math.max(0,G.satisfaction-0.6);
+  const browseBase=(G&&G.weather&&G.weather.type==='rain')?1.7:1.0;
+  c.st='browse'; c.timer=Math.round((30+Math.random()*40)*browseBase);
+}
+// #14 — Aplica el reneging: lleva demasiado esperando en la cola y se larga sin comprar.
+function customerRenege(c){
+  c._qEnter=0; c.wantsTurn=false;
+  if(c.queueNumber&&G&&G.turns){ if(G.turns.servingId===c.id) G.turns.servingId=null; }
+  c.queueNumber=0;
+  c.bMsg=lang==='en'?'I give up, too slow':'Me voy, qué lentitud'; c.bTimer=160;
+  setEmote(c,'😤',100);
+  if(G) G.satisfaction=Math.max(0,G.satisfaction-1.2);
+  try{ if(typeof startCustomerLeave==='function') startCustomerLeave(c); else c.st='leave'; }catch(e){ c.st='leave'; }
+}
+
+// #15 — Canal de emote (emoji efímero sobre la cabeza), independiente del bocadillo.
+function setEmote(c,emoji,ticks){
+  if(!c) return;
+  if((c.emoteTimer|0)>0||(c.emoteCD|0)>0) return;
+  c.emote=emoji; c.emoteTimer=ticks||90; c.emoteCD=(ticks||90)+120+Math.floor(Math.random()*150);
+}
+// #15 — Emotes contextuales por cliente (llamada 1×/tick desde updateGame).
+function tickCustomerEmotes(c){
+  if(!c||c.sponsor) return;
+  if((c.emoteTimer|0)>0||(c.emoteCD|0)>0) return;
+  const djOn=G&&G.staff&&G.staff.some(s=>s.hired&&s.role===4);
+  if(djOn&&(c.st==='browse'||c.st==='walk')&&Math.random()<0.012){ setEmote(c,Math.random()<0.5?'😄':'🎶',80); return; }
+  if(G&&G.rush&&G.rush.active&&c.st==='queue'&&Math.random()<0.02){ setEmote(c,'😖',85); return; }
+  if(G&&G.weather&&G.weather.type==='rain'&&c.st==='walk'&&(c.dwellTicks|0)<150&&Math.random()<0.03){ setEmote(c,'🥶',80); return; }
+  // #16 — el niño que arrastra al adulto enseña la chuche; el adulto resopla.
+  const pester=kidPesterInfo(c);
+  if(pester&&Math.random()<0.02){ setEmote(pester.kid,'🍬',90); setEmote(c,'😣',90); return; }
+}
+// #15 — Saludo al cruzarse dos clientes (throttle global; O(n²) barato con n pequeño).
+function tickCustomerGreetings(){
+  if(!G||!Array.isArray(G.custs)||(tt%24)!==0) return;
+  const arr=G.custs;
+  for(let i=0;i<arr.length;i++){
+    const a=arr[i];
+    if(!a||a.sponsor||(a.emoteTimer|0)>0||(a.emoteCD|0)>0) continue;
+    if(a.st==='queue'||a.st==='buy'||a.st==='leave'||a.x==null) continue;
+    for(let j=i+1;j<arr.length;j++){
+      const b=arr[j];
+      if(!b||b.sponsor||b.st==='queue'||b.st==='buy'||b.st==='leave'||b.x==null) continue;
+      if(a.followId===b.id||b.followId===a.id) continue;                       // familia: no se "saludan"
+      const dx=a.x-b.x, dy=a.y-b.y;
+      if(dx*dx+dy*dy<20*20&&Math.random()<0.5){
+        setEmote(a,'👋',70);
+        if(!((b.emoteTimer|0)>0||(b.emoteCD|0)>0)) setEmote(b,'🙂',70);
+        break;
+      }
+    }
+  }
+}
+
+// #16 — ¿Tiene este adulto un niño enganchado que quiere chuches/golosinas? → {kid,prodIdx}.
+const PESTER_KW=['chuch','golos','candy','sweet','snack','choco','helado','ice'];
+function kidPesterInfo(c){
+  if(!c||!c.hasKid||!G||!Array.isArray(G.custs)) return null;
+  if(!(c.look&&(c.look.age==='adulto'||c.look.age==='senior'))) return null;
+  for(const k of G.custs){
+    if(!k||k.followId!==c.id||!k.look||k.look.age!=='nino'||k.st==='leave') continue;
+    if(!(k.wantsProdIdx>=0)) continue;
+    const nm=String((typeof prodName==='function'?prodName(k.wantsProdIdx):'')||'').toLowerCase();
+    if(PESTER_KW.some(w=>nm.includes(w))) return {kid:k,prodIdx:k.wantsProdIdx};
+  }
+  return null;
+}
+// #16 — Tile de deambular hacia el mueble que vende el producto dado.
+function roamAnchorForProduct(prodIdx){
+  const wanted=String((typeof prodName==='function'?prodName(prodIdx):'')||'').toLowerCase();
+  const roamables=(shopLayout||[]).filter(item=>['counter','shelves','wineRack','magazines','vending','lottery'].includes(item.type));
+  if(!roamables.length) return null;
+  // Chuches/snacks suelen ir en estantería o mostrador → prioriza esos muebles.
+  let best=roamables.find(it=>it.type==='shelves')||roamables.find(it=>it.type==='counter')||roamables[0];
+  if(wanted.includes('vape')||wanted.includes('vapeo')) best=roamables.find(it=>it.type==='shelves')||best;
+  const baseCol=best.col+(best.type==='counter'||best.type==='shelves'?1:0);
+  const baseRow=best.row+(best.type==='counter'||best.type==='shelves'?1:0);
+  return { col:clampGridCol(baseCol+(Math.random()<0.5?0:(Math.random()<0.5?-1:1))),
+           row:clampGridRow(baseRow+(Math.random()<0.5?0:(Math.random()<0.5?-1:1))) };
+}
+
+// #17 — Clientes habituales: roster fijo = fuente de verdad. En localStorage SOLO se
+// guarda el nº de visitas por id, así afinar el roster no rompe lo persistido. Los
+// keywords de cada favorito casan el catálogo en ES y EN (Tabaco/Tobacco, Vapeo/Vapes,
+// Lotería/Lottery, Prensa/Press, Chuches/Candy, Recarga/Top-Up).
+const REGULARS={
+  KEY:'xtRegularsV2', _visits:null,
+  _list:[
+    {id:'manolo',  name:'Manolo',  emoji:'🧔',    fav:['tabac','tob','prensa','press','peri','puro']},
+    {id:'pepa',    name:'Pepa',    emoji:'👩',    fav:['loter','lott']},
+    {id:'paco',    name:'Don Paco',emoji:'👴',    fav:['prensa','press','peri','tabac','tob']},
+    {id:'rocio',   name:'Rocío',   emoji:'💃',    fav:['vape','vapeo','liquid']},
+    {id:'quique',  name:'Quique',  emoji:'🧑',    fav:['recarg','top-up','topup','top up','saldo']},
+    {id:'carmen',  name:'Carmen',  emoji:'👵',    fav:['loter','lott']},
+    {id:'bruno',   name:'Bruno',   emoji:'🧑‍🦱',  fav:['chuch','candy','golos','choco','dulce']},
+    {id:'lola',    name:'Lola',    emoji:'👩‍🦰',  fav:['vape','vapeo','liquid']},
+  ],
+  loadVisits(){
+    if(this._visits) return this._visits;
+    this._visits={};
+    try{ const raw=localStorage.getItem(this.KEY); if(raw){ const p=JSON.parse(raw); if(p&&typeof p==='object') this._visits=p; } }catch(e){}
+    return this._visits;
+  },
+  save(){ try{ localStorage.setItem(this.KEY,JSON.stringify(this.loadVisits())); }catch(e){} },
+  list(){ const v=this.loadVisits(); return this._list.map(r=>Object.assign({visits:v[r.id]||0},r)); },
+  bumpVisit(id){ const v=this.loadVisits(); v[id]=(v[id]||0)+1; this.save(); return v[id]; },
+};
+// #17 — Con baja probabilidad, "convierte" a un cliente normal en un habitual reconocido.
+function maybeAssignRegular(c){
+  if(!c||c.vip||c.sponsor||c.fanCustomerId||c.loyaltyFree) return;
+  if(c.look&&c.look.age==='nino') return;                                     // los habituales son adultos
+  if(Math.random()>=0.14) return;                                             // ~14% de entradas normales
+  const present=new Set((G.custs||[]).filter(x=>x&&x.regularId).map(x=>x.regularId));
+  const cand=REGULARS.list().filter(r=>!present.has(r.id));
+  if(!cand.length) return;
+  const r=cand[Math.floor(Math.random()*cand.length)];
+  c.regularId=r.id; c.regularName=r.name; c.regularEmoji=r.emoji;
+  c.persona='loyal'; c.col='#b6f078';
+  // Va directo a su producto de siempre (si está en catálogo).
+  try{
+    if(G.prods&&G.prods.length){
+      const matches=G.prods.map((p,i)=>({i,p})).filter(({i,p})=>{
+        const nm=String((typeof prodName==='function'?prodName(i):'')||p.name||'').toLowerCase();
+        return r.fav.some(k=>nm.includes(k));
+      });
+      const inStock=matches.filter(m=>m.p.stock>0);
+      const pickList=inStock.length?inStock:matches;
+      if(pickList.length) c.wantsProdIdx=pickList[Math.floor(Math.random()*pickList.length)].i;
+    }
+  }catch(e){}
+  const nth=REGULARS.bumpVisit(r.id);
+  c.bMsg=(r.emoji||'🙂')+' '+r.name; c.bTimer=Math.max(c.bTimer||0,260);
+  try{
+    if(typeof setManagerSayBubble==='function'){
+      setManagerSayBubble(lang==='en'
+        ? 'AdmiraNext AI: '+r.name+' is back — regular (visit '+nth+'). The usual, right?'
+        : 'AdmiraNext AI: vuelve '+r.name+' — habitual (visita '+nth+'). ¡Lo de siempre!');
+    }
+    if(typeof showEv==='function') showEv((lang==='en'?'🟢 Regular is back: ':'🟢 Vuelve un habitual: ')+r.name,'#b6f078');
+  }catch(e){}
 }
 
 function getQueueTarget(index=0){
@@ -21421,6 +21625,23 @@ function drawIsoCust(c){
     cx.font='10px serif';cx.textAlign='center';
     cx.fillText(faces2[c.voteFace],c.x+7,c.y-32);
     cx.globalAlpha=1;cx.textAlign='left';
+  }
+  // ── Emote (idea #15): emoji efímero sobre la cabeza, canal aparte del bocadillo ──
+  if((c.emoteTimer|0)>0&&c.emote){
+    cx.save();
+    cx.globalAlpha=Math.min(1,c.emoteTimer/12);
+    cx.font='13px serif';cx.textAlign='center';
+    cx.fillText(c.emote,c.x+7,c.y-36);
+    cx.restore();cx.textAlign='left';
+  }
+  // ── Habitual (idea #17): estrellita verde para reconocer al cliente recurrente ──
+  if(c.regularId){
+    cx.save();
+    cx.font='bold 9px serif';cx.textAlign='center';cx.textBaseline='middle';
+    cx.lineWidth=2.4;cx.strokeStyle='rgba(2,8,14,0.9)';
+    cx.strokeText('★',c.x+15,c.y-15);
+    cx.fillStyle='#b6f078';cx.fillText('★',c.x+15,c.y-15);
+    cx.restore();cx.textAlign='left';cx.textBaseline='alphabetic';
   }
   // Customer dialogue bubble
   if(c.bTimer>0&&c.bMsg){
