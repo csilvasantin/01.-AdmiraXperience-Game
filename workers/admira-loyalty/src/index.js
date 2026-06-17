@@ -9,9 +9,13 @@
 
 const DEFAULT_ALLOWED_ORIGINS = [
   'https://csilvasantin.github.io',
+  'https://www.xpaceos.com',
+  'https://xpaceos.com',
   'http://localhost:9124',
   'http://127.0.0.1:9124',
   'http://localhost:5173',
+  'http://localhost:8788',
+  'http://127.0.0.1:8788',
 ];
 
 function getAllowedOrigins(env) {
@@ -23,7 +27,8 @@ function getAllowedOrigins(env) {
 function corsHeaders(request, env) {
   const origin = request.headers.get('Origin') || '';
   const allowed = getAllowedOrigins(env);
-  const allowOrigin = allowed.includes(origin) ? origin : allowed[0];
+  const isLocal = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+  const allowOrigin = (allowed.includes(origin) || isLocal) ? origin : allowed[0];
   return {
     'Access-Control-Allow-Origin': allowOrigin,
     'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
@@ -157,10 +162,11 @@ async function handleMe(request, env) {
   const visits = await env.DB.prepare(
     'SELECT ts, product, revenue, was_free FROM visits WHERE customer_id = ? ORDER BY ts DESC LIMIT 20'
   ).bind(c.id).all();
+  const rules = await getRules(env);
   return json(request, env, 200, {
     customer: await publicCustomer({ ...c, last_seen_at: now() }),
     recentVisits: visits.results || [],
-    stampsForFree: Number(env.STAMPS_FOR_FREE || 5),
+    stampsForFree: rules.stampsForFree,
   });
 }
 
@@ -175,7 +181,8 @@ async function handleCheckin(request, env) {
 }
 
 async function applyVisit(env, customer, product, revenue) {
-  const STAMPS_FOR_FREE = Math.max(2, Number(env.STAMPS_FOR_FREE || 5));
+  const rules = await getRules(env);
+  const STAMPS_FOR_FREE = rules.stampsForFree;
   const ts = now();
   let wasFree = 0;
   let newStamps = customer.stamps;
@@ -257,12 +264,376 @@ async function handleActive(request, env) {
      ORDER BY last_checkin DESC
   `).bind(cutoff).all();
   const customers = await Promise.all((rows.results || []).map(publicCustomer));
+  const rules = await getRules(env);
   return json(request, env, 200, {
     customers,
     windowSeconds: windowSec,
-    stampsForFree: Number(env.STAMPS_FOR_FREE || 5),
+    stampsForFree: rules.stampsForFree,
     serverTime: now(),
   });
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Backoffice / admin layer — the Club command center at xpaceos.com/backoffice
+// All /admin/* routes require Bearer ADMIN_TOKEN. Read endpoints are pure
+// aggregation over the same D1; write endpoints are audited in admin_log.
+// ─────────────────────────────────────────────────────────────────────
+
+const DEFAULT_TIERS = [
+  { key: 'bronze',   name: 'Bronce',  emoji: '🥉', color: '#cd7f32', minSpend: 0,   minVisits: 0,  perk: 'Tarjeta de sellos · café gratis cada N' },
+  { key: 'silver',   name: 'Plata',   emoji: '🥈', color: '#c0c8d0', minSpend: 50,  minVisits: 5,  perk: 'Sorpresa mensual + cola prioritaria' },
+  { key: 'gold',     name: 'Oro',     emoji: '🥇', color: '#ffd866', minSpend: 150, minVisits: 15, perk: '1 sello extra por visita + regalo de cumpleaños' },
+  { key: 'platinum', name: 'Platino', emoji: '💎', color: '#78f3ff', minSpend: 400, minVisits: 40, perk: 'Recompensas dobles + acceso a ediciones limitadas' },
+];
+
+function safeJsonParse(s, fb) { try { return JSON.parse(s); } catch { return fb; } }
+
+async function getRules(env) {
+  let row = null;
+  try { row = await env.DB.prepare("SELECT value FROM config WHERE key = 'rules' LIMIT 1").first(); } catch {}
+  const cfg = row && row.value ? safeJsonParse(row.value, {}) : {};
+  const stampsForFree = Math.max(2, Math.min(50, Number(cfg.stampsForFree || env.STAMPS_FOR_FREE || 5)));
+  const tiers = Array.isArray(cfg.tiers) && cfg.tiers.length ? cfg.tiers : DEFAULT_TIERS;
+  return {
+    stampsForFree,
+    tiers,
+    clubName: cfg.clubName || 'Xtanco Club',
+    currency: cfg.currency || 'EUR',
+    rewardLabel: cfg.rewardLabel || 'Café gratis',
+    joinCode: String(env.JOIN_CODE || 'XTANCO26'),
+  };
+}
+
+async function setRules(env, patch) {
+  const cur = await getRules(env);
+  const next = {
+    stampsForFree: patch.stampsForFree != null ? Math.max(2, Math.min(50, Number(patch.stampsForFree) || cur.stampsForFree)) : cur.stampsForFree,
+    tiers: Array.isArray(patch.tiers) && patch.tiers.length ? patch.tiers.map(sanitizeTier).filter(Boolean) : cur.tiers,
+    clubName: patch.clubName != null ? String(patch.clubName).slice(0, 40) : cur.clubName,
+    currency: patch.currency != null ? String(patch.currency).slice(0, 4) : cur.currency,
+    rewardLabel: patch.rewardLabel != null ? String(patch.rewardLabel).slice(0, 40) : cur.rewardLabel,
+  };
+  if (!next.tiers.length) next.tiers = DEFAULT_TIERS;
+  await env.DB.prepare("INSERT INTO config (key, value) VALUES ('rules', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
+    .bind(JSON.stringify(next)).run();
+  return next;
+}
+
+function sanitizeTier(t) {
+  if (!t || typeof t !== 'object') return null;
+  const key = String(t.key || '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 16);
+  const name = String(t.name || '').trim().slice(0, 24);
+  if (!key || !name) return null;
+  return {
+    key, name,
+    emoji: String(t.emoji || '').trim().slice(0, 4),
+    color: /^#[0-9a-fA-F]{3,8}$/.test(String(t.color || '')) ? t.color : '#78f3ff',
+    minSpend: Math.max(0, Math.floor(Number(t.minSpend) || 0)),
+    minVisits: Math.max(0, Math.floor(Number(t.minVisits) || 0)),
+    perk: String(t.perk || '').slice(0, 120),
+  };
+}
+
+function tierFor(customer, tiers) {
+  const spend = Number(customer.total_spend || 0);
+  const visits = Number(customer.total_visits || 0);
+  let best = tiers[0];
+  for (const t of tiers) {
+    if (spend >= Number(t.minSpend || 0) && visits >= Number(t.minVisits || 0)) best = t;
+  }
+  const idx = tiers.indexOf(best);
+  const next = idx >= 0 && idx < tiers.length - 1 ? tiers[idx + 1] : null;
+  return {
+    key: best.key, name: best.name, emoji: best.emoji || '', color: best.color || '#78f3ff', perk: best.perk || '',
+    next: next ? { key: next.key, name: next.name, minSpend: next.minSpend, minVisits: next.minVisits } : null,
+  };
+}
+
+function upcomingMMDD(days) {
+  const set = new Set();
+  const base = Date.now();
+  for (let i = 0; i <= days; i++) {
+    const d = new Date(base + i * 86400000);
+    set.add(String(d.getUTCMonth() + 1).padStart(2, '0') + '-' + String(d.getUTCDate()).padStart(2, '0'));
+  }
+  return set;
+}
+
+function adminCustomer(c, rules) {
+  const t = now();
+  const lastSeen = Number(c.last_seen_at || 0);
+  return {
+    id: c.id,
+    name: c.name,
+    avatarEmoji: c.avatar_emoji,
+    stamps: c.stamps,
+    totalVisits: c.total_visits,
+    totalSpend: c.total_spend,
+    freePending: !!c.free_pending,
+    createdAt: c.created_at,
+    lastSeenAt: c.last_seen_at,
+    lastCheckin: c.last_checkin,
+    birthday: c.birthday || null,
+    isBirthday: !!(c.birthday && c.birthday === todayMMDD()),
+    note: c.note || null,
+    archived: !!c.archived,
+    tier: tierFor(c, rules.tiers),
+    daysSinceVisit: lastSeen ? Math.floor((t - lastSeen) / 86400) : null,
+    almostFree: (rules.stampsForFree - Number(c.stamps || 0)) === 1 && !c.free_pending,
+  };
+}
+
+async function logAdmin(env, action, targetId, detail) {
+  try {
+    await env.DB.prepare('INSERT INTO admin_log (ts, action, target_id, detail) VALUES (?, ?, ?, ?)')
+      .bind(now(), String(action).slice(0, 40), targetId != null ? Number(targetId) : null, detail ? String(detail).slice(0, 400) : null).run();
+  } catch {}
+}
+
+function adminTokenOf(request) {
+  const auth = request.headers.get('Authorization') || '';
+  const m = auth.match(/^Bearer\s+(.+)$/i);
+  if (m) return m[1].trim();
+  return new URL(request.url).searchParams.get('admin_token') || '';
+}
+function timingSafeEq(a, b) {
+  a = String(a); b = String(b);
+  if (a.length !== b.length) return false;
+  let out = 0;
+  for (let i = 0; i < a.length; i++) out |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return out === 0;
+}
+function requireAdmin(request, env) {
+  const expected = String(env.ADMIN_TOKEN || '').trim();
+  if (!expected) return { ok: false, status: 503, error: 'admin_not_configured' };
+  const provided = adminTokenOf(request);
+  if (!provided || !timingSafeEq(provided, expected)) return { ok: false, status: 401, error: 'unauthorized' };
+  return { ok: true };
+}
+
+async function handleAdminStats(request, env) {
+  const rules = await getRules(env);
+  const t = now();
+  const d1 = t - 86400, d7 = t - 7 * 86400, d30 = t - 30 * 86400;
+  const win = Math.max(30, Number(env.ACTIVE_WINDOW_SECONDS || 120));
+
+  const members = (await env.DB.prepare(
+    'SELECT id,name,avatar_emoji,stamps,total_visits,total_spend,free_pending,created_at,last_seen_at,last_checkin,birthday FROM customers WHERE archived = 0'
+  ).all()).results || [];
+
+  const v = await env.DB.prepare(`
+    SELECT
+      COUNT(*) AS total,
+      SUM(CASE WHEN ts >= ? THEN 1 ELSE 0 END) AS d1,
+      SUM(CASE WHEN ts >= ? THEN 1 ELSE 0 END) AS d7,
+      SUM(CASE WHEN ts >= ? THEN 1 ELSE 0 END) AS d30,
+      SUM(revenue) AS revTotal,
+      SUM(CASE WHEN ts >= ? THEN revenue ELSE 0 END) AS rev7,
+      SUM(CASE WHEN ts >= ? THEN revenue ELSE 0 END) AS rev30,
+      SUM(was_free) AS freeTotal,
+      SUM(CASE WHEN was_free = 1 AND ts >= ? THEN 1 ELSE 0 END) AS free30
+    FROM visits
+  `).bind(d1, d7, d30, d7, d30, d30).first();
+
+  const today = todayMMDD();
+  const weekSet = upcomingMMDD(7);
+  let bdToday = 0, bdWeek = 0;
+  const upcoming = [];
+  const tierDist = {}; rules.tiers.forEach(tt => tierDist[tt.key] = 0);
+  let pendingFree = 0, almostFree = 0, lapsed = 0, newMembers7 = 0, newMembers30 = 0, activeNow = 0, spendSum = 0, visitSum = 0;
+
+  for (const m of members) {
+    if (m.birthday) {
+      if (m.birthday === today) bdToday++;
+      if (weekSet.has(m.birthday)) { bdWeek++; upcoming.push({ id: m.id, name: m.name, avatarEmoji: m.avatar_emoji, birthday: m.birthday }); }
+    }
+    const tk = tierFor(m, rules.tiers).key; tierDist[tk] = (tierDist[tk] || 0) + 1;
+    if (m.free_pending) pendingFree++;
+    if ((rules.stampsForFree - Number(m.stamps || 0)) === 1 && !m.free_pending) almostFree++;
+    if (m.total_visits > 0 && m.last_seen_at && (t - m.last_seen_at) > 30 * 86400) lapsed++;
+    if (m.created_at >= d7) newMembers7++;
+    if (m.created_at >= d30) newMembers30++;
+    if (m.last_checkin && (t - m.last_checkin) <= win) activeNow++;
+    spendSum += Number(m.total_spend || 0);
+    visitSum += Number(m.total_visits || 0);
+  }
+
+  return json(request, env, 200, {
+    members: members.length,
+    activeNow,
+    newMembers7, newMembers30,
+    visits: { total: Number(v?.total || 0), d1: Number(v?.d1 || 0), d7: Number(v?.d7 || 0), d30: Number(v?.d30 || 0) },
+    revenue: { total: Number(v?.revTotal || 0), d7: Number(v?.rev7 || 0), d30: Number(v?.rev30 || 0) },
+    redemptions: { total: Number(v?.freeTotal || 0), d30: Number(v?.free30 || 0) },
+    redemptionRate: v && v.total ? Number(v.freeTotal || 0) / Number(v.total) : 0,
+    pendingFree, almostFree, lapsed,
+    birthdaysToday: bdToday, birthdaysWeek: bdWeek,
+    upcomingBirthdays: upcoming.sort((a, b) => a.birthday.localeCompare(b.birthday)).slice(0, 12),
+    avgSpend: members.length ? spendSum / members.length : 0,
+    avgVisits: members.length ? visitSum / members.length : 0,
+    tierDistribution: tierDist,
+    rules,
+    serverTime: t,
+  });
+}
+
+async function handleAdminMembers(request, env) {
+  const rules = await getRules(env);
+  const url = new URL(request.url);
+  const q = (url.searchParams.get('q') || '').trim().toLowerCase();
+  const tier = (url.searchParams.get('tier') || '').trim();
+  const segment = (url.searchParams.get('segment') || '').trim();
+  const sort = (url.searchParams.get('sort') || 'last_seen_at').trim();
+  const dir = (url.searchParams.get('dir') || 'desc').trim() === 'asc' ? 1 : -1;
+  const limit = Math.min(200, Math.max(1, Number(url.searchParams.get('limit') || 50)));
+  const offset = Math.max(0, Number(url.searchParams.get('offset') || 0));
+  const includeArchived = url.searchParams.get('archived') === '1';
+
+  const rows = (await env.DB.prepare(
+    `SELECT * FROM customers ${includeArchived ? '' : 'WHERE archived = 0'} LIMIT 5000`
+  ).all()).results || [];
+
+  const t = now();
+  const win = Math.max(30, Number(env.ACTIVE_WINDOW_SECONDS || 120));
+  let list = rows.map(c => adminCustomer(c, rules));
+
+  if (q) list = list.filter(m => (m.name || '').toLowerCase().includes(q) || String(m.id) === q);
+  if (tier) list = list.filter(m => m.tier.key === tier);
+  if (segment === 'birthday') list = list.filter(m => m.isBirthday);
+  else if (segment === 'birthday_week') { const wk = upcomingMMDD(7); list = list.filter(m => m.birthday && wk.has(m.birthday)); }
+  else if (segment === 'lapsed') list = list.filter(m => m.totalVisits > 0 && m.daysSinceVisit != null && m.daysSinceVisit > 30);
+  else if (segment === 'champions') list = list.filter(m => m.totalSpend > 0).sort((a, b) => b.totalSpend - a.totalSpend).slice(0, 50);
+  else if (segment === 'almost_free') list = list.filter(m => m.almostFree);
+  else if (segment === 'pending_free') list = list.filter(m => m.freePending);
+  else if (segment === 'new') list = list.filter(m => m.createdAt >= t - 7 * 86400);
+  else if (segment === 'active') list = list.filter(m => m.lastCheckin && (t - m.lastCheckin) <= win);
+
+  const total = list.length;
+  if (segment !== 'champions') {
+    const key = ({ last_seen_at: 'lastSeenAt', created_at: 'createdAt', total_spend: 'totalSpend', total_visits: 'totalVisits', stamps: 'stamps', name: 'name' })[sort] || 'lastSeenAt';
+    list.sort((a, b) => {
+      if (key === 'name') return dir * String(a.name || '').localeCompare(String(b.name || ''));
+      return dir * (Number(a[key] || 0) - Number(b[key] || 0));
+    });
+  }
+  return json(request, env, 200, { members: list.slice(offset, offset + limit), total, limit, offset, rules });
+}
+
+async function handleAdminMember(request, env) {
+  const rules = await getRules(env);
+  const id = Number(new URL(request.url).searchParams.get('id'));
+  if (!Number.isFinite(id) || id <= 0) return json(request, env, 400, { error: 'invalid_id' });
+  const c = await env.DB.prepare('SELECT * FROM customers WHERE id = ? LIMIT 1').bind(id).first();
+  if (!c) return json(request, env, 404, { error: 'not_found' });
+  const visits = (await env.DB.prepare('SELECT ts, product, revenue, was_free FROM visits WHERE customer_id = ? ORDER BY ts DESC LIMIT 200').bind(id).all()).results || [];
+  return json(request, env, 200, { member: adminCustomer(c, rules), visits, rules });
+}
+
+async function handleAdminSeries(request, env) {
+  const days = Math.min(120, Math.max(7, Number(new URL(request.url).searchParams.get('days') || 30)));
+  const t = now();
+  const from = t - days * 86400;
+  const visits = (await env.DB.prepare('SELECT ts, revenue, was_free FROM visits WHERE ts >= ?').bind(from).all()).results || [];
+  const signups = (await env.DB.prepare('SELECT created_at FROM customers WHERE created_at >= ?').bind(from).all()).results || [];
+  const buckets = {}; const labels = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const key = new Date((t - i * 86400) * 1000).toISOString().slice(0, 10);
+    labels.push(key); buckets[key] = { date: key, visits: 0, revenue: 0, redemptions: 0, signups: 0 };
+  }
+  const dk = (ts) => new Date(ts * 1000).toISOString().slice(0, 10);
+  for (const x of visits) { const k = dk(x.ts); if (buckets[k]) { buckets[k].visits++; buckets[k].revenue += Number(x.revenue || 0); if (x.was_free) buckets[k].redemptions++; } }
+  for (const s of signups) { const k = dk(s.created_at); if (buckets[k]) buckets[k].signups++; }
+  return json(request, env, 200, { days, series: labels.map(k => buckets[k]) });
+}
+
+async function handleAdminLog(request, env) {
+  const limit = Math.min(200, Math.max(1, Number(new URL(request.url).searchParams.get('limit') || 50)));
+  const rows = (await env.DB.prepare('SELECT ts, action, target_id, detail FROM admin_log ORDER BY ts DESC LIMIT ?').bind(limit).all()).results || [];
+  return json(request, env, 200, { log: rows });
+}
+
+async function handleAdminExport(request, env) {
+  const rules = await getRules(env);
+  const rows = (await env.DB.prepare('SELECT * FROM customers ORDER BY id ASC LIMIT 10000').all()).results || [];
+  const head = ['id', 'name', 'tier', 'stamps', 'total_visits', 'total_spend', 'free_pending', 'birthday', 'created_at', 'last_seen_at', 'archived', 'note'];
+  const esc = (val) => { const s = String(val == null ? '' : val); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const lines = [head.join(',')];
+  for (const c of rows) {
+    lines.push([c.id, c.name, tierFor(c, rules.tiers).key, c.stamps, c.total_visits, c.total_spend, c.free_pending, c.birthday || '', c.created_at, c.last_seen_at, c.archived || 0, c.note || ''].map(esc).join(','));
+  }
+  return new Response(lines.join('\n'), {
+    status: 200,
+    headers: { ...corsHeaders(request, env), 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': 'attachment; filename="club-members.csv"', 'Cache-Control': 'no-store' },
+  });
+}
+
+async function handleAdminAdjust(request, env) {
+  const rules = await getRules(env);
+  const body = await readBody(request);
+  const id = Number(body.id);
+  if (!Number.isFinite(id) || id <= 0) return json(request, env, 400, { error: 'invalid_id' });
+  const c = await env.DB.prepare('SELECT * FROM customers WHERE id = ? LIMIT 1').bind(id).first();
+  if (!c) return json(request, env, 404, { error: 'not_found' });
+  const sets = []; const vals = []; const changes = [];
+  if (body.name !== undefined) { const n = sanitizeName(body.name); if (!n) return json(request, env, 400, { error: 'invalid_name' }); sets.push('name = ?'); vals.push(n); changes.push('name'); }
+  if (body.avatarEmoji !== undefined) { sets.push('avatar_emoji = ?'); vals.push(sanitizeEmoji(body.avatarEmoji)); changes.push('emoji'); }
+  if (body.birthday !== undefined) { sets.push('birthday = ?'); vals.push(sanitizeBirthday(body.birthday)); changes.push('birthday'); }
+  if (body.note !== undefined) { sets.push('note = ?'); vals.push(body.note == null ? null : String(body.note).slice(0, 400)); changes.push('note'); }
+  if (body.archived !== undefined) { sets.push('archived = ?'); vals.push(body.archived ? 1 : 0); changes.push(body.archived ? 'archive' : 'unarchive'); }
+  let stamps = Number(c.stamps || 0); let stampTouched = false;
+  if (body.setStamps !== undefined) { stamps = Math.max(0, Math.min(rules.stampsForFree, Number(body.setStamps) || 0)); stampTouched = true; changes.push('setStamps=' + stamps); }
+  if (body.addStamps !== undefined) { stamps = Math.max(0, Math.min(rules.stampsForFree, stamps + (Number(body.addStamps) || 0))); stampTouched = true; changes.push('addStamps=' + body.addStamps); }
+  if (stampTouched) { sets.push('stamps = ?'); vals.push(stamps); }
+  if (body.grantFree) { sets.push('free_pending = ?'); vals.push(1); changes.push('grantFree'); }
+  if (!sets.length) return json(request, env, 400, { error: 'nothing_to_update' });
+  vals.push(id);
+  await env.DB.prepare('UPDATE customers SET ' + sets.join(', ') + ' WHERE id = ?').bind(...vals).run();
+  await logAdmin(env, 'adjust', id, changes.join(', '));
+  const fresh = await env.DB.prepare('SELECT * FROM customers WHERE id = ? LIMIT 1').bind(id).first();
+  return json(request, env, 200, { member: adminCustomer(fresh, rules) });
+}
+
+async function handleAdminRedeem(request, env) {
+  const rules = await getRules(env);
+  const body = await readBody(request);
+  const id = Number(body.id);
+  if (!Number.isFinite(id) || id <= 0) return json(request, env, 400, { error: 'invalid_id' });
+  const c = await env.DB.prepare('SELECT * FROM customers WHERE id = ? LIMIT 1').bind(id).first();
+  if (!c) return json(request, env, 404, { error: 'not_found' });
+  if (!c.free_pending) return json(request, env, 409, { error: 'no_free_pending' });
+  const ts = now();
+  await env.DB.prepare('UPDATE customers SET free_pending = 0, stamps = 0, total_visits = total_visits + 1, last_seen_at = ? WHERE id = ?').bind(ts, id).run();
+  await env.DB.prepare('INSERT INTO visits (customer_id, ts, product, revenue, was_free) VALUES (?, ?, ?, 0, 1)').bind(id, ts, String(body.product || rules.rewardLabel || 'Recompensa').slice(0, 64)).run();
+  await logAdmin(env, 'redeem', id, body.product || rules.rewardLabel);
+  const fresh = await env.DB.prepare('SELECT * FROM customers WHERE id = ? LIMIT 1').bind(id).first();
+  return json(request, env, 200, { member: adminCustomer(fresh, rules), redeemed: true });
+}
+
+async function handleAdminConfigGet(request, env) {
+  return json(request, env, 200, { rules: await getRules(env) });
+}
+async function handleAdminConfigSet(request, env) {
+  const body = await readBody(request);
+  const next = await setRules(env, body);
+  await logAdmin(env, 'config', null, JSON.stringify({ stampsForFree: next.stampsForFree, tiers: next.tiers.length, clubName: next.clubName }));
+  return json(request, env, 200, { rules: next });
+}
+
+async function routeAdmin(request, env, path) {
+  const gate = requireAdmin(request, env);
+  if (!gate.ok) return json(request, env, gate.status, { error: gate.error });
+  if (request.method === 'GET'  && path === '/admin/ping')          return json(request, env, 200, { ok: true, ts: now() });
+  if (request.method === 'GET'  && path === '/admin/stats')         return await handleAdminStats(request, env);
+  if (request.method === 'GET'  && path === '/admin/members')       return await handleAdminMembers(request, env);
+  if (request.method === 'GET'  && path === '/admin/member')        return await handleAdminMember(request, env);
+  if (request.method === 'GET'  && path === '/admin/series')        return await handleAdminSeries(request, env);
+  if (request.method === 'GET'  && path === '/admin/log')           return await handleAdminLog(request, env);
+  if (request.method === 'GET'  && path === '/admin/export')        return await handleAdminExport(request, env);
+  if (request.method === 'GET'  && path === '/admin/config')        return await handleAdminConfigGet(request, env);
+  if (request.method === 'POST' && path === '/admin/config')        return await handleAdminConfigSet(request, env);
+  if (request.method === 'POST' && path === '/admin/member/adjust') return await handleAdminAdjust(request, env);
+  if (request.method === 'POST' && path === '/admin/member/redeem') return await handleAdminRedeem(request, env);
+  return json(request, env, 404, { error: 'not_found', path });
 }
 
 export default {
@@ -273,6 +644,7 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname.replace(/\/+$/, '') || '/';
     try {
+      if (path.startsWith('/admin/')) return await routeAdmin(request, env, path);
       if (request.method === 'GET'  && path === '/health')   return json(request, env, 200, { ok: true, ts: now() });
       if (request.method === 'POST' && path === '/register') return await handleRegister(request, env);
       if (request.method === 'POST' && path === '/update')   return await handleUpdate(request, env);
