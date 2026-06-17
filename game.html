@@ -19812,6 +19812,10 @@ function drawExteriorAd(g,age,vW,vH){
   cx.textAlign='right'; cx.fillStyle='rgba(255,255,255,.85)'; cx.font='bold 7px sans-serif';
   cx.fillText((fem?'♀':'♂')+' '+(AGE[age]||'ADULTO'),vW-3,11); cx.textAlign='left';
 }
+// ¿Se muestra el NÚMERO de turno en la pantalla secundaria de la pared larga?
+// /turno on|off lo controla. false = la pantalla deja solo la publi (producto/TPV).
+let turnScreenOn=true;
+try{ if(localStorage.getItem('xtanco_turn_screen')==='0') turnScreenOn=false; }catch(_){}
 function drawTurnManager(){
   const left=toIso(3.25,0);
   const right=toIso(4.95,0);
@@ -19853,22 +19857,31 @@ function drawTurnManager(){
   cx.globalAlpha=1;
   cx.textAlign='center'; const cX=vW/2;
   const trunc=(s,n)=>{ s=String(s||''); return s.length>n?s.slice(0,n-1)+'…':s; };
-  // ── ARRIBA: imagen de lo que se compra (TPV en tiempo real) ──
+  // /turno off → no se pinta el número; la publi (producto/TPV) se centra y
+  // ocupa toda la pantalla. /turno on → publi arriba, turno abajo.
+  const showTurn=(typeof turnScreenOn==='undefined')?true:turnScreenOn;
+  const imgY  = showTurn ? 1  : 9;
+  const nameY = showTurn ? 33 : 42;
+  const idleY = showTurn ? 22 : 30;
+  // ── ARRIBA: imagen de lo que se compra (TPV en tiempo real / publi) ──
   const EMO=['🚬','💨','🎟️','📰','🍬','🔋','🍷','🧰'];
   const last=(typeof G!=='undefined'&&G&&G.lastSold)?G.lastSold:null;
   if(last){
     const im=prodImg(last.idx);
-    if(im){ try{ cx.drawImage(im, cX-12, 1, 24, 24); }catch(_){ cx.font='16px monospace'; cx.fillText(EMO[last.idx|0]||'🛍️',cX,19); } }
-    else { cx.font='16px monospace'; cx.fillText(EMO[last.idx|0]||'🛍️',cX,19); }
-    cx.fillStyle='#ffffff';cx.font='bold 7px monospace'; cx.fillText(trunc(last.name,12)+'  +'+(last.rev|0)+'€',cX,33);
+    const isz=showTurn?24:30;
+    if(im){ try{ cx.drawImage(im, cX-isz/2, imgY, isz, isz); }catch(_){ cx.font=(showTurn?16:20)+'px monospace'; cx.fillText(EMO[last.idx|0]||'🛍️',cX,imgY+18); } }
+    else { cx.font=(showTurn?16:20)+'px monospace'; cx.fillText(EMO[last.idx|0]||'🛍️',cX,imgY+18); }
+    cx.fillStyle='#ffffff';cx.font='bold '+(showTurn?7:8)+'px monospace'; cx.fillText(trunc(last.name,12)+'  +'+(last.rev|0)+'€',cX,nameY);
   } else {
-    cx.fillStyle='#557';cx.font='7px monospace'; cx.fillText(lang==='en'?'waiting sale':'en espera',cX,22);
+    cx.fillStyle='#557';cx.font='7px monospace'; cx.fillText(lang==='en'?'waiting sale':'en espera',cX,idleY);
   }
-  // ── Separador horizontal ──
-  cx.strokeStyle='#1e6a72';cx.globalAlpha=0.6;cx.lineWidth=1;cx.beginPath();cx.moveTo(6,38);cx.lineTo(vW-6,38);cx.stroke();cx.globalAlpha=1;
-  // ── ABAJO: gestor de turnos ──
-  cx.fillStyle='#8defff';cx.font='bold 6px monospace';cx.fillText('TURNO · CAJA',cX,46);
-  cx.fillStyle='#ffd86b';cx.font='bold 13px monospace';cx.fillText(num,cX,vH-2);
+  if(showTurn){
+    // ── Separador horizontal ──
+    cx.strokeStyle='#1e6a72';cx.globalAlpha=0.6;cx.lineWidth=1;cx.beginPath();cx.moveTo(6,38);cx.lineTo(vW-6,38);cx.stroke();cx.globalAlpha=1;
+    // ── ABAJO: gestor de turnos ──
+    cx.fillStyle='#8defff';cx.font='bold 6px monospace';cx.fillText('TURNO · CAJA',cX,46);
+    cx.fillStyle='#ffd86b';cx.font='bold 13px monospace';cx.fillText(num,cX,vH-2);
+  }
   cx.setTransform(1,0,0,1,0,0);
   cx.restore();
   cx.restore();
@@ -22469,6 +22482,7 @@ function syncDockLanguage(){
 
 function currentTurnNumber(){
   if(!G) return 0;
+  if(G.turns&&G.turns.manual!=null) return G.turns.manual;   // override manual: /turno next|previous|<nº>
   if(G.turns&&G.turns.current) return G.turns.current;
   if(!G.custs) return 0;
   const active=G.custs.find(c=>c.queueNumber)||G.custs.find(c=>c.st==='browse');
@@ -22542,6 +22556,65 @@ function callTurnNumber(value){
   retargetCustomerToQueue(target,0);
   showEv('Turno '+formatTurnNumber(target.queueNumber)+' a caja','#55ccff');
   return 'Llamando turno '+formatTurnNumber(target.queueNumber)+'.';
+}
+
+// /turno — controla la pantalla de turnos de la pared larga:
+//   on|off          → enciende/apaga el NÚMERO (off deja solo la publi)
+//   next|previous   → avanza/retrocede el número mostrado (override manual)
+//   <nº>            → fija un turno concreto (y llama a ese cliente si está en cola)
+//   auto            → vuelve al modo automático (sigue la caja)
+//   (sin arg)       → estado actual
+function turnControl(arg){
+  const raw=String(arg||'').trim();
+  const a=raw.toLowerCase();
+  const isEs=(lang!=='en');
+  // ── on / off: visibilidad del número (independiente del estado de partida) ──
+  if(['on','encender','encendido','si','sí','1','show','mostrar'].includes(a)){
+    turnScreenOn=true; try{localStorage.setItem('xtanco_turn_screen','1');}catch(_){}
+    return isEs?'🔢 Pantalla de turnos ENCENDIDA (número visible).':'🔢 Turn screen ON (number visible).';
+  }
+  if(['off','apagar','apagado','no','0','hide','ocultar','oculta'].includes(a)){
+    turnScreenOn=false; try{localStorage.setItem('xtanco_turn_screen','0');}catch(_){}
+    return isEs?'🔕 Número de turno APAGADO — la pantalla deja solo la publi.':'🔕 Turn number OFF — screen shows only the ad.';
+  }
+  if(typeof G==='undefined'||!G) return isEs?'No hay partida en curso. Entra en una partida y vuelve a mandar el comando.':'No game in progress. Enter a game and resend the command.';
+  if(!G.turns) G.turns={next:1,current:0,servingId:null,issued:0,manual:null};
+  const cur=()=> (G.turns.manual!=null?G.turns.manual:currentTurnNumber());
+  // ── automático ──
+  if(['auto','automatico','automático','reset','seguir','sim'].includes(a)){
+    G.turns.manual=null;
+    return (isEs?'🔄 Turnos en automático (sigue la caja). Turno ':'🔄 Turns back to automatic. Current ')+formatTurnNumber(currentTurnNumber())+'.';
+  }
+  // ── siguiente ──
+  if(['next','siguiente','sig','adelante','+'].includes(a)){
+    const n=Math.min(999,(cur()||0)+1); G.turns.manual=n;
+    try{ if(getWaitingTurnCustomers().some(c=>(c.queueNumber||0)===n)) callTurnNumber(n); }catch(_){}
+    showEv((isEs?'🎟️ Turno ':'🎟️ Turn ')+formatTurnNumber(n),'#55ccff');
+    return (isEs?'▶ Turno → ':'▶ Turn → ')+formatTurnNumber(n);
+  }
+  // ── anterior ──
+  if(['previous','prev','anterior','ant','atras','atrás','back','-'].includes(a)){
+    const n=Math.max(1,(cur()||1)-1); G.turns.manual=n;
+    showEv((isEs?'🎟️ Turno ':'🎟️ Turn ')+formatTurnNumber(n),'#55ccff');
+    return (isEs?'◀ Turno → ':'◀ Turn → ')+formatTurnNumber(n);
+  }
+  // ── número concreto ──
+  if(/^\d+$/.test(a)){
+    const n=Math.max(0,Math.min(999,parseInt(a,10))); G.turns.manual=n;
+    let routed='';
+    try{ if(getWaitingTurnCustomers().some(c=>(c.queueNumber||0)===n)){ routed=' · '+callTurnNumber(n); } }catch(_){}
+    showEv((isEs?'🎟️ Turno ':'🎟️ Turn ')+formatTurnNumber(n),'#55ccff');
+    return (isEs?'🎯 Turno fijado en ':'🎯 Turn set to ')+formatTurnNumber(n)+routed;
+  }
+  // ── sin arg → estado ──
+  if(!raw){
+    return (isEs?'🎟️ Turnos — pantalla: ':'🎟️ Turns — screen: ')+(turnScreenOn?'ON':'OFF')
+      +(isEs?' · turno: ':' · current: ')+formatTurnNumber(currentTurnNumber())
+      +(G.turns.manual!=null?' (manual)':' (auto)')
+      +(isEs?'\nUso: /turno on · off · next · previous · <nº> · auto':'\nUsage: /turno on · off · next · previous · <n> · auto');
+  }
+  return isEs?('No entiendo "/turno '+raw+'". Usa: on, off, next, previous, <nº> o auto.')
+             :('Unknown "/turno '+raw+'". Use: on, off, next, previous, <n> or auto.');
 }
 
 function assignCustomerTurn(c){
@@ -27875,7 +27948,8 @@ window.xtAPI = (function(){
   function helpSections(){
     // Orden actual = orden alfabético/legado. Pendiente: reordenar por uso real.
     return [
-      {title:'Consulta',items:['/status','/staff','/stock','/turno','/turno 12']},
+      {title:'Consulta',items:['/status','/staff','/stock','/turno']},
+      {title:'Turnos (pantalla pared larga)',items:['/turno on','/turno off','/turno next','/turno previous','/turno 15','/turno auto']},
       {title:'Equipo y stock',items:['/hire 1','/hire dj','/hire all','/train 1','/train all','/restock 2','/restock all','/restock prensa']},
       {title:'Equipo del punto (gemelo)',items:['/nuevoMiembro Laura azafata','/nuevoMiembro Pedro cajero','/echarMiembro Laura','/report Marta']},
       {title:'DVR del Xpacio (grabar/velocidad/replay)',items:['/velocidad 1','/velocidad 2','/velocidad 4','/velocidad 8','/dvr','/envivo','/calendario']},
@@ -27891,7 +27965,7 @@ window.xtAPI = (function(){
       {title:'Integración AdmiraNext',items:['/socios export']},
       {title:'IA y contenido',items:['/grok pregunta','/draw dibujo','/metahuman pregunta','/avatar3d on|off','/avatar3d ds on|off','/avatar3d audio on|off','/avatar3d models','/avatar3d preset <nombre> <url RPM>','/avatar3d model <nombre|id>','/avatar3d pregunta','/log','/log thief','/log customer','/import','/import list','/import remove 1','/importTube https://youtu.be/...']},
       {title:'Ajustes rápidos',items:['/money 12000','/sat 90','/fame 80','/set week 12','/set year 2','/set revenue 5000','/set storeLevel 2','/set customers 30']},
-      {title:'Musica y layout',items:['/song 1','/song bad bunny','/music','/next','/prev','/seoul2026','/seul','/seultrap','/seultecno','/equipo inicio ana 3 4','/equipo zona dj 12 2 2','/catalogo','/catalogo pared','/importar catalogo','/importar 1','/importar lista','/importar quitar 1','/mobiliario','/mobiliario inicio','/layout','/layout save','/layout factory','/layout xpacio','/layout xpacio load']},
+      {title:'Musica y layout',items:['/music on','/music off','/music next','/music previous','/music 3','/song 1','/song bad bunny','/next','/prev','/seoul2026','/seul','/seultrap','/seultecno','/equipo inicio ana 3 4','/equipo zona dj 12 2 2','/catalogo','/catalogo pared','/importar catalogo','/importar 1','/importar lista','/importar quitar 1','/mobiliario','/mobiliario inicio','/layout','/layout save','/layout factory','/layout xpacio','/layout xpacio load']},
       {title:'Estilo visual',items:['/render 8bit','/render 16bit','/render habbo','/render real']},
       {title:'Mapa de navegacion',items:['/xpacio','/mapa','/map','/red','/sd list','/streamdeck','/help','/debug']},
     ];
@@ -28591,7 +28665,7 @@ window.xtAPI = (function(){
         return setLiveMocapEnabled(req.value)?'Mocap Novah activado':'Mocap Novah desactivado';
       }
       if(cmd==='reloj'||cmd==='clock') return setClockTime(arg);
-      if(cmd==='turno'||cmd==='turn'||cmd==='ticket') return callTurnNumber(arg);
+      if(cmd==='turno'||cmd==='turn'||cmd==='ticket') return turnControl(arg);
       if(cmd==='ladron'||cmd==='ladrón'||cmd==='thief') return setThiefCommand(arg);
       if(cmd==='guardiacivil'||cmd==='guardia-civil'||cmd==='gc') return setGuardiaCivilCommand(arg);
       if(cmd==='guardia') return setGuardiaCivilCommand(arg.replace(/^civil\s+/i,''));
@@ -29019,7 +29093,12 @@ window.xtAPI = (function(){
       }
       if(cmd==='door'||cmd==='puerta') return setDoorMode(arg);
       if(cmd==='lamp'||cmd==='luz') return api.command('/luz'+(arg?' '+arg:'')).message;
-      if(cmd==='music'||cmd==='musica') return api.command('/music'+(arg?' '+arg:'')).message;
+      if(cmd==='music'||cmd==='musica'||cmd==='música'){
+        const mh=(arg||'').trim().toLowerCase();
+        if(/^\d+$/.test(mh)) return setSong(mh);   // /music 3 → canción nº 3 del SONG_LIST
+        // on·off·next·previous los resuelve el bridge xtAPI (incluye 'previous')
+        return api.command('/music'+(arg?' '+arg:'')).message;
+      }
       if(cmd==='audio'||cmd==='dsaudio'||cmd==='monitoraudio') return api.command('/audio'+(arg?' '+arg:'')).message;
       if(cmd==='next') return api.nextTrack().message;
       if(cmd==='prev') return api.prevTrack().message;
