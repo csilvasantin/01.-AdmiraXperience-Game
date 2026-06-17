@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="dtbg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0c1119"/>
+      <stop offset="1" stop-color="#05080e"/>
+    </linearGradient>
+    <linearGradient id="dttop" x1="0" y1="0" x2="0.35" y2="1">
+      <stop offset="0" stop-color="#a6f8ff"/>
+      <stop offset="1" stop-color="#62e3da"/>
+    </linearGradient>
+    <linearGradient id="dtleft" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2f93a8"/>
+      <stop offset="1" stop-color="#1d6a82"/>
+    </linearGradient>
+    <linearGradient id="dtright" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1d6f85"/>
+      <stop offset="1" stop-color="#11475a"/>
+    </linearGradient>
+    <radialGradient id="dtglow" cx="0.5" cy="0.46" r="0.5">
+      <stop offset="0" stop-color="#5fe0e6" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#5fe0e6" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect x="0" y="0" width="256" height="256" rx="58" fill="url(#dtbg)"/>
+  <rect x="6" y="6" width="244" height="244" rx="52" fill="none" stroke="#2bb6cf" stroke-opacity="0.55" stroke-width="4"/>
+  <ellipse cx="128" cy="124" rx="92" ry="86" fill="url(#dtglow)"/>
+  <g stroke="#bdf6ff" stroke-opacity="0.35" stroke-width="2" stroke-linejoin="round">
+    <path d="M68,98 L128,132 L128,196 L68,162 Z" fill="url(#dtleft)"/>
+    <path d="M188,98 L128,132 L128,196 L188,162 Z" fill="url(#dtright)"/>
+    <path d="M128,64 L188,98 L128,132 L68,98 Z" fill="url(#dttop)"/>
+  </g>
+</svg>

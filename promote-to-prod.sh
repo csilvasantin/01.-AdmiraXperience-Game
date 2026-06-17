@@ -21,14 +21,19 @@ set -euo pipefail
 ROOT="${ROOT:-$HOME/Documents/Admirito/github-csilvasantin}"
 SRC="$ROOT/xpaceos/admira-xp"      # preprod (origen validado)
 DST="$ROOT/admira-store"           # producción (destino)
-PROD_URL="https://www.admira.store/"
+PROD_URL="https://admira.store/"
 PREPROD_URL="https://www.xpaceos.com/admira-xp/"
 
 [ -d "$SRC" ]      || { echo "✗ no encuentro preprod $SRC"; exit 1; }
 [ -d "$DST/.git" ] || { echo "✗ no encuentro el clon de prod $DST (haz: git clone https://github.com/csilvasantin/admira-store.git \"$DST\")"; exit 1; }
 
-# Reescribe canonical/og del index al dominio de producción.
-rewrite_urls(){ perl -0pi -e 's{\Q'"$PREPROD_URL"'\E}{'"$PROD_URL"'}g' "$1" 2>/dev/null || true; }
+# Branding de PRODUCCIÓN en el index: canonical/og al dominio prod + título "Admira
+# Digital Twin" (preprod conserva su título de dev "Admira XP // The Xpace OS — Xtanco").
+PROD_TITLE="Admira Digital Twin"
+rewrite_urls(){
+  perl -0pi -e 's{\Q'"$PREPROD_URL"'\E}{'"$PROD_URL"'}g' "$1" 2>/dev/null || true
+  perl -0pi -e 's{<title>.*?</title>}{<title>'"$PROD_TITLE"'</title>}s' "$1" 2>/dev/null || true
+}
 
 # rsync preprod → prod: replica TODO el gemelo. Conserva CNAME y .git de prod; no
 # copia el backup .orig. --delete limpia restos del site anterior (robots).
