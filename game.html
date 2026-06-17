@@ -3982,6 +3982,37 @@ const bbEl=document.getElementById('topBar');
 document.getElementById('btnSave').onclick=()=>{if(G)doAction('save');};
 document.getElementById('btnQuit').onclick=()=>{doAction('quit');};
 (function(){var v=document.getElementById('dockSiteVer');if(v){var raw=(window.XTANCO_APP&&window.XTANCO_APP.version)||'';var m=raw.match(/v[\d.]+/i);v.textContent=m?m[0]:(raw||'v—');}})();
+// ── Badge de ENTORNO (PROD/PRE-PROD/DEV) — distingue de un vistazo qué despliegue ves.
+// admira.store = PRODUCCIÓN; xpaceos.com/admira-xp y carlossilva.info = PREPRODUCCIÓN;
+// localhost = DEV. Dominio desconocido → no se muestra. Click = ocultar (para demos).
+(function(){
+  try{
+    var h=(location.hostname||'').toLowerCase();
+    var col,label;
+    if(h==='admira.store'||h==='www.admira.store'){ col='#2ee06a'; label='PROD'; }
+    else if(h.indexOf('xpaceos.com')>=0||h.indexOf('carlossilva.info')>=0){ col='#ffb020'; label='PRE-PROD'; }
+    else if(h==='localhost'||h==='127.0.0.1'||h==='0.0.0.0'||h===''){ col='#7aa0c8'; label='DEV · local'; }
+    else { return; }
+    var build=(window.XTANCO_APP&&window.XTANCO_APP.build)||'';
+    var en=(typeof lang!=='undefined'&&lang==='en');
+    var el=document.createElement('div');
+    el.id='envBadge';
+    var pre=(label==='PRE-PROD');
+    el.title=(pre?(en?'PRE-PRODUCTION — the real production is admira.store. ':'PREPRODUCCIÓN — la producción real es admira.store. ')
+                 :((en?'Environment: ':'Entorno: ')+label+'. '))
+            +(build?('build '+build+' · '):'')+h+(en?'  (click to hide)':'  (click para ocultar)');
+    el.innerHTML='<span class="eb-dot"></span>'+label;
+    el.style.cssText='position:fixed;left:8px;bottom:8px;z-index:2147483645;display:flex;align-items:center;gap:5px;'
+      +'font:700 9px/1 ui-monospace,Menlo,Consolas,monospace;letter-spacing:.09em;color:'+col+';'
+      +'background:rgba(3,8,18,.66);border:1px solid '+col+';border-radius:999px;padding:3px 9px;'
+      +'-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);cursor:pointer;opacity:.92;user-select:none;';
+    var dot=el.querySelector('.eb-dot');
+    if(dot) dot.style.cssText='width:6px;height:6px;border-radius:50%;background:'+col+';box-shadow:0 0 7px '+col+';';
+    el.addEventListener('click',function(){ el.style.display='none'; });
+    function mount(){ (document.body||document.documentElement).appendChild(el); }
+    if(document.body) mount(); else document.addEventListener('DOMContentLoaded',mount,{once:true});
+  }catch(e){}
+})();
 updateLiveCamButtonUi();
 
 // ── Position topBarSub always anchored below the rightmost topBar button (Quit) ──
@@ -9628,7 +9659,7 @@ function doAction(id){
   // Visit actions
   if(id==='visitCom'){
     G.fame=Math.min(100,G.fame+12);G.satisfaction=Math.min(100,G.satisfaction+5);
-    showEv('🧑‍💼 Comercial: +12 fama, nuevos productos!','#44aa44');
+    showEv(lang==='en'?'🧑‍💼 Sales rep: +12 fame, new products!':'🧑‍💼 Comercial: +12 fama, nuevos productos!','#44aa44');
     addFloat(W/2,H/2-40,'+FAMA','#44aa44');
     monitorAlert={active:true,timer:300,msg:'VISITA COMERCIAL',color:'#22aa44'};
     uiOpen=false;return;
@@ -9636,7 +9667,7 @@ function doAction(id){
   if(id==='visitTec'){
     G.satisfaction=Math.min(100,G.satisfaction+15);
     for(const p of G.prods) p.stock=Math.min(p.max,p.stock+Math.floor(p.max*0.3));
-    showEv('🔧 Técnico: equipos revisados, +15 satisfacción','#4488aa');
+    showEv(lang==='en'?'🔧 Technician: equipment serviced, +15 satisfaction':'🔧 Técnico: equipos revisados, +15 satisfacción','#4488aa');
     addFloat(W/2,H/2-40,'+SERVICIO','#4488cc');
     monitorAlert={active:true,timer:300,msg:'VISITA TÉCNICO',color:'#2266cc'};
     uiOpen=false;return;
@@ -9644,7 +9675,7 @@ function doAction(id){
   if(id==='visitDel'){
     const bonus=500+Math.floor(Math.random()*500);
     G.money+=bonus;G.fame=Math.min(100,G.fame+8);
-    showEv('🏛 Delegación: subvención '+bonus+'€, +8 fama','#cc66aa');
+    showEv((lang==='en'?'🏛 Council: grant €'+bonus+', +8 fame':'🏛 Delegación: subvención '+bonus+'€, +8 fama'),'#cc66aa');
     addFloat(W/2,H/2-40,'+'+bonus+'€','#cc66aa');
     monitorAlert={active:true,timer:300,msg:'VISITA DELEGACIÓN',color:'#cc44aa'};
     G.tftOgre=300; // show ogre on TFT for 5 seconds
@@ -9656,12 +9687,12 @@ function doAction(id){
     monitorAlert={active:true,timer:300,msg:'GUARDIA CIVIL',color:'#111111'};
     if(hiCnt>=1&&avgStk>0.3){
       G.satisfaction=Math.min(100,G.satisfaction+10);
-      showEv('👮 Guardia Civil: inspección superada! +10 sat','#448844');
+      showEv(lang==='en'?'👮 Civil Guard: inspection passed! +10 sat':'👮 Guardia Civil: inspección superada! +10 sat','#448844');
       addFloat(W/2,H/2-40,'✓ OK','#44aa44');
     } else {
       const fine=400+Math.floor(Math.random()*600);
       G.money-=fine;G.satisfaction=Math.max(10,G.satisfaction-10);
-      showEv('👮 Guardia Civil: multa -€'+fine,'#aa4444');
+      showEv((lang==='en'?'👮 Civil Guard: fine -€'+fine:'👮 Guardia Civil: multa -€'+fine),'#aa4444');
       addFloat(W/2,H/2-40,'-€'+fine,'#cc4444');
     }
     uiOpen=false;return;
@@ -9897,7 +9928,7 @@ function doAction(id){
   if(id==='musicPrev'||id==='musicNext'){
     // Block song change while DJ is active
     const djActive=G&&G.staff&&G.staff.some(s=>s.hired&&s.role===4);
-    if(djActive){addFloat(W/2,40,'🎧 DJ controla la música','#cc44aa');return;}
+    if(djActive){addFloat(W/2,40,lang==='en'?'🎧 DJ controls the music':'🎧 DJ controla la música','#cc44aa');return;}
     const songs=SONG_LIST;
     const ci=songs.indexOf(G.nowPlaying);
     const ni=id==='musicNext'?(ci+1)%songs.length:(ci-1+songs.length)%songs.length;
@@ -10450,8 +10481,8 @@ function checkRandomEvents(){
     const fpd=shopTimeSettings.dayDurationSec*60;
     const twoHourFrames=Math.floor(fpd/dayH*2); // ~3000 frames at default settings
     G.weather={type:wt,timer:twoHourFrames};
-    if(wt==='rain'){showEv('🌧 ¡Lluvia! Se refugian dentro','#6688aa');SFX.thunder();thunderFlash=8;thunderCooldown=300;}
-    else{showEv('☀ Sol radiante: más clientes!','#ddaa33');acOn=true;} // AC auto-on when sunny
+    if(wt==='rain'){showEv(lang==='en'?'🌧 Rain! They take shelter inside':'🌧 ¡Lluvia! Se refugian dentro','#6688aa');SFX.thunder();thunderFlash=8;thunderCooldown=300;}
+    else{showEv(lang==='en'?'☀ Bright sun: more customers!':'☀ Sol radiante: más clientes!','#ddaa33');acOn=true;} // AC auto-on when sunny
   }
   // VIP customer
   if(Math.random()<0.0005){
@@ -13762,6 +13793,37 @@ function chibiReal(x,y,dir,shirt,hair,frame,busy,tick,scale=1,isDJ=false,look=nu
   cx.beginPath();cx.ellipse(x+9,y+28,10,3.2,0,0,Math.PI*2);cx.fill();
   cx.restore();
   chibi16(x,y,dir,shirt,hair,frame,busy,tick,scale,isDJ,look);
+}
+// Fase A del tier 'real': capa de ILUMINACIÓN GLOBAL sobre el mundo (solo renderMode
+// 'real'). Tinte de color por hora del día (frío-neutro a mediodía → cálido al atardecer/
+// noche), key-light suave desde top-left (la dirección de luz de las sombras) y viñeta de
+// oclusión ambiental para dar profundidad. Se dibuja dentro del clip del Xpacio, tras el
+// overlay día/noche compartido y antes del HUD, así que solo afecta a la escena, no a la UI.
+function drawRealLighting(){
+  if(renderMode!=='real'||editorSceneActive||!G) return;
+  const y0=(typeof SHOP!=='undefined'&&SHOP.y)?SHOP.y:0, w=W, h=H-y0;
+  if(h<=0) return;
+  const hour=Number.isFinite(G.gameTime)?G.gameTime:12;
+  // warmth: 0 = mediodía (luz fría/neutra), 1 = noche (cálida). Transición suave 10→19h.
+  let warmth; if(hour<=10) warmth=0.15; else if(hour>=19) warmth=0.85; else warmth=0.15+((hour-10)/9)*0.70;
+  cx.save();
+  // 1) Color grade por hora (soft-light, muy sutil).
+  const tintA=0.05+warmth*0.10;
+  const tint=cx.createLinearGradient(0,y0,0,y0+h);
+  if(warmth>0.5){ tint.addColorStop(0,`rgba(255,170,90,${tintA*0.5})`); tint.addColorStop(1,`rgba(255,140,60,${tintA})`); }
+  else{ tint.addColorStop(0,`rgba(150,180,230,${tintA*0.6})`); tint.addColorStop(1,`rgba(120,150,210,${tintA*0.4})`); }
+  cx.globalCompositeOperation='soft-light';
+  cx.fillStyle=tint; cx.fillRect(0,y0,w,h);
+  // 2) Key-light suave desde top-left → realza volumen.
+  const key=cx.createRadialGradient(w*0.30,y0+h*0.18,40, w*0.30,y0+h*0.18,w*0.85);
+  key.addColorStop(0,`rgba(255,250,235,${0.10-warmth*0.04})`); key.addColorStop(1,'rgba(255,250,235,0)');
+  cx.fillStyle=key; cx.fillRect(0,y0,w,h);
+  cx.globalCompositeOperation='source-over';
+  // 3) Viñeta de oclusión ambiental → oscurece esquinas/bordes (profundidad).
+  const vig=cx.createRadialGradient(w*0.5,y0+h*0.55,h*0.35, w*0.5,y0+h*0.55,h*1.05);
+  vig.addColorStop(0,'rgba(0,0,0,0)'); vig.addColorStop(1,`rgba(5,6,14,${0.18+warmth*0.10})`);
+  cx.fillStyle=vig; cx.fillRect(0,y0,w,h);
+  cx.restore();
 }
 // Draw a flat diamond tile
 function drawIsoTile(col,row,color,strokeColor){
@@ -17793,6 +17855,8 @@ function drawShop(){
     }
   }
 
+  // Fase A (tier 'real'): post-proceso de iluminación global sobre la escena.
+  try{ drawRealLighting(); }catch(e){}
   cx.restore(); // end clip
 }
 
