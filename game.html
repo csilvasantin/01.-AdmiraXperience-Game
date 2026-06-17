@@ -9942,9 +9942,18 @@ function doAction(id){
   // Furniture mode actions
   if(id.startsWith('edsel')){edSelIdx=parseInt(id.slice(5));return;}
   if(id==='edLayout1'){
-    if(saveLayoutSlot1()){
-      edSaveNotify=90;playSaveBeep();
-      showEv(lang==='es'?'💾 Layout1 guardado como arranque':'💾 Layout1 saved as startup','#55ccff');
+    // "Guardar y salir": graba la posición actual (muebles + staff) como
+    // arranque del Xpacio y, acto seguido, sale del editor. Sustituye a los
+    // antiguos botones Save y Salir (ya eliminados del panel del editor).
+    saveLayoutSlot1();   // initial+slot1+current+backup (+ staff slot1)
+    saveLayout();        // current + staffPos + plantilla Creator + report EN VIVO
+    edSaveNotify=90;playSaveBeep();
+    showEv(lang==='es'?'💾 Guardado y saliendo…':'💾 Saved, exiting…','#55ccff');
+    if(isXpaceCreator()){
+      exitXpaceCreator();
+      startTransition(S.MENU);
+    } else {
+      state=S.GAME;
     }
     return;
   }
@@ -24133,23 +24142,22 @@ function drawEditor(){
       tx('('+shopLayout[i].col+','+shopLayout[i].row+')',ix+itemW/2,listY+20,sel?'#ffdd88':'#7a6a50',5,'center');
       BTNS['edsel'+i]={x:ix,y:listY,w:itemW,h:22};
     }
-    // Action buttons
-    r(4,btnY,60,24,'#2a5a2a');rx(4,btnY,60,24,'#44aa44',1);
-    tx('💾 Save',34,btnY+16,'#88ee88',7,'center');BTNS['edSave']={x:4,y:btnY,w:60,h:24};
-    r(68,btnY,70,24,'#18344c');rx(68,btnY,70,24,'#55ccff',1);
-    tx('Layout1',103,btnY+16,'#aeeeff',7,'center');BTNS['edLayout1']={x:68,y:btnY,w:70,h:24};
+    // Action buttons — un solo botón "Guardar y salir" (antes Layout1): graba
+    // la posición de los muebles como arranque del Xpacio Y sale del editor.
+    // Por eso ya NO hay botón Save aparte ni botón Salir.
+    const _esED=(lang==='es');
+    r(4,btnY,134,24,'#18344c');rx(4,btnY,134,24,'#55ccff',1);
+    tx(_esED?'💾 Guardar y salir':'💾 Save & exit',71,btnY+16,'#aeeeff',7,'center');BTNS['edLayout1']={x:4,y:btnY,w:134,h:24};
     r(142,btnY,60,24,'#5a2a2a');rx(142,btnY,60,24,'#aa4444',1);
     tx('↺ Reset',172,btnY+16,'#ee8888',7,'center');BTNS['edReset']={x:142,y:btnY,w:60,h:24};
-    r(206,btnY,46,24,'#3a3a18');rx(206,btnY,46,24,'#aaaa44',1);
-    tx('✕ Salir',229,btnY+16,'#dddd88',7,'center');BTNS['edExit']={x:206,y:btnY,w:46,h:24};
     if(edSelIdx>=0){
-      r(256,btnY,50,24,'#5a1a1a');rx(256,btnY,50,24,'#ee3333',1);
-      tx('🗑 Del',281,btnY+16,'#ff6666',7,'center');BTNS['edDelete']={x:256,y:btnY,w:50,h:24};
+      r(206,btnY,50,24,'#5a1a1a');rx(206,btnY,50,24,'#ee3333',1);
+      tx('🗑 Del',231,btnY+16,'#ff6666',7,'center');BTNS['edDelete']={x:206,y:btnY,w:50,h:24};
       // Flip button
       const it0=shopLayout[edSelIdx];
       const flipped=it0.flipX||false;
-      r(310,btnY,46,24,flipped?'#304050':'#2a3a3a');rx(310,btnY,46,24,flipped?'#44aaff':'#5a8888',1);
-      tx('⟳ Flip',333,btnY+16,flipped?'#88ddff':'#88bbcc',7,'center');BTNS['edFlip']={x:310,y:btnY,w:46,h:24};
+      r(260,btnY,46,24,flipped?'#304050':'#2a3a3a');rx(260,btnY,46,24,flipped?'#44aaff':'#5a8888',1);
+      tx('⟳ Flip',283,btnY+16,flipped?'#88ddff':'#88bbcc',7,'center');BTNS['edFlip']={x:260,y:btnY,w:46,h:24};
     }
     // Selected item fine controls (right side)
     if(edSelIdx>=0){
@@ -24203,15 +24211,13 @@ function drawEditor(){
       tx('('+sp2.col+','+sp2.row+')',ix+slotW/2+3,listY+20,sel2?'#88ddff':'#4a7a8a',5,'center');
       BTNS['edsst'+i]={x:ix,y:listY,w:slotW,h:22};
     }
-    // Staff mode buttons
-    r(4,btnY,68,24,'#2a5a2a');rx(4,btnY,68,24,'#44aa44',1);
-    tx('💾 Guardar',38,btnY+16,'#88ee88',8,'center');BTNS['edSave']={x:4,y:btnY,w:68,h:24};
-    r(76,btnY,70,24,'#18344c');rx(76,btnY,70,24,'#55ccff',1);
-    tx('Layout1',111,btnY+16,'#aeeeff',8,'center');BTNS['edLayout1']={x:76,y:btnY,w:70,h:24};
-    r(150,btnY,80,24,'#3a2a10');rx(150,btnY,80,24,'#aa7744',1);
-    tx('↺ Pos defecto',190,btnY+16,'#ffbb66',8,'center');BTNS['edStReset']={x:150,y:btnY,w:80,h:24};
-    r(234,btnY,54,24,'#3a3a18');rx(234,btnY,54,24,'#aaaa44',1);
-    tx('✕ Salir',261,btnY+16,'#dddd88',8,'center');BTNS['edExit']={x:234,y:btnY,w:54,h:24};
+    // Staff mode buttons — "Guardar y salir" graba posiciones de personal como
+    // arranque Y sale del editor (sin botón Save/Salir aparte).
+    const _esST=(lang==='es');
+    r(4,btnY,134,24,'#18344c');rx(4,btnY,134,24,'#55ccff',1);
+    tx(_esST?'💾 Guardar y salir':'💾 Save & exit',71,btnY+16,'#aeeeff',8,'center');BTNS['edLayout1']={x:4,y:btnY,w:134,h:24};
+    r(142,btnY,80,24,'#3a2a10');rx(142,btnY,80,24,'#aa7744',1);
+    tx('↺ Pos defecto',182,btnY+16,'#ffbb66',8,'center');BTNS['edStReset']={x:142,y:btnY,w:80,h:24};
     // Selected staff fine controls
     if(edStaffSelIdx>=0){
       const ax=W-238;
