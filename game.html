@@ -2768,6 +2768,54 @@ function switchDSVideo(idx){
 function nextDSVideo(){ switchDSVideo(dsVideoIdx+1); }
 function prevDSVideo(){ switchDSVideo(dsVideoIdx-1); }
 
+// /ds — Digital Signage (pantallas de vídeo). Equivale al icono 📺 ◀ ▶ 🔊 del HUD:
+//   on|off         → reanuda / pausa las pantallas (como pulsar 📺)
+//   next|previous  → cambia de vídeo (◀ ▶)
+//   audio on|off   → sonido de las pantallas (icono 🔇/🔊); sin sub = toggle
+//   (sin arg)      → toggle play/pausa + estado
+function dsControl(arg){
+  const isEs=(lang!=='en');
+  const parts=String(arg||'').trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const a=parts[0]||'';
+  if(typeof G==='undefined'||!G) return isEs?'No hay partida en curso. Entra en una partida y vuelve a mandar el comando.':'No game in progress. Enter a game and resend the command.';
+  // ── audio on / off / toggle ──
+  if(a==='audio'){
+    const b=parts[1]||'';
+    if(['on','sonido','unmute','sound','sonar','si','sí'].includes(b)){ dsAudioMuted=false; try{applyDSAudioRouting();}catch(_){}
+      addFloat(W/2,40,'🔊 DS Audio ON','#44ddaa'); return isEs?'🔊 Audio de las pantallas ENCENDIDO.':'🔊 Screen audio ON.'; }
+    if(['off','mute','silencio','silenciar','no'].includes(b)){ dsAudioMuted=true; try{applyDSAudioRouting();}catch(_){}
+      addFloat(W/2,40,'🔇 DS Audio OFF','#44ddaa'); return isEs?'🔇 Audio de las pantallas APAGADO.':'🔇 Screen audio OFF.'; }
+    toggleDSAudio();
+    addFloat(W/2,40,dsAudioMuted?'🔇 DS Audio OFF':'🔊 DS Audio ON','#44ddaa');
+    return dsAudioMuted?(isEs?'🔇 Audio de pantallas APAGADO.':'🔇 Screen audio OFF.'):(isEs?'🔊 Audio de pantallas ENCENDIDO.':'🔊 Screen audio ON.');
+  }
+  // ── next / previous ──
+  if(['next','siguiente','sig','+','adelante'].includes(a)){ nextDSVideo(); addFloat(W/2,40,'📺 '+VIDEO_LIST[dsVideoIdx],'#44ccff'); return (isEs?'📺 Siguiente vídeo: ':'📺 Next video: ')+VIDEO_LIST[dsVideoIdx]; }
+  if(['previous','prev','anterior','ant','-','atras','atrás','back'].includes(a)){ prevDSVideo(); addFloat(W/2,40,'📺 '+VIDEO_LIST[dsVideoIdx],'#44ccff'); return (isEs?'📺 Vídeo anterior: ':'📺 Previous video: ')+VIDEO_LIST[dsVideoIdx]; }
+  // ── on / off (reanudar / pausar las pantallas, como el icono 📺) ──
+  if(['on','play','reanudar','encender','encendido'].includes(a)){
+    if(!videoPlaying){ try{startVideo();}catch(_){} }
+    try{ DS_DISPLAYS.forEach((_,i)=>setDigitalSignagePaused(i,false)); }catch(_){}
+    addFloat(W/2,40,'📺 ON','#44ccff');
+    return (isEs?'📺 Digital Signage ENCENDIDO · ':'📺 Digital Signage ON · ')+(VIDEO_LIST[dsVideoIdx]||'');
+  }
+  if(['off','pause','pausa','pausar','apagar','apagado','stop'].includes(a)){
+    try{ DS_DISPLAYS.forEach((_,i)=>setDigitalSignagePaused(i,true)); }catch(_){}
+    addFloat(W/2,40,'📺 OFF','#44ccff');
+    return isEs?'📺 Digital Signage EN PAUSA (pantallas detenidas).':'📺 Digital Signage paused (screens stopped).';
+  }
+  // ── sin arg / toggle → estado ──
+  if(!a||['toggle','flip'].includes(a)){
+    toggleVideoPause();
+    const on=videoPlaying&&!videoPaused;
+    addFloat(W/2,40,on?'📺 ON':'📺 OFF','#44ccff');
+    return (isEs?'📺 Pantallas: ':'📺 Screens: ')+(on?'ON':'OFF')+' · '+(VIDEO_LIST[dsVideoIdx]||'')
+      +(isEs?'\nUso: /ds on · off · next · previous · audio on · audio off':'\nUsage: /ds on · off · next · previous · audio on · audio off');
+  }
+  return isEs?('No entiendo "/ds '+arg+'". Usa: on, off, next, previous, audio on, audio off.')
+             :('Unknown "/ds '+arg+'". Use: on, off, next, previous, audio on, audio off.');
+}
+
 // ── Espejo de pantalla externa (escaparate → /signage/now) ───────────────
 // Emite a un canal del worker "qué reproduce el escaparate ahora mismo" para
 // que una pantalla física (pantalla.html?screen=escaparate, mismo origen)
@@ -27958,6 +28006,7 @@ window.xtAPI = (function(){
       {title:'Look & feel',items:['/camiseta on','/camiseta off','/camiseta']},
       {title:'Tiempo y ambiente',items:['/reloj 14:30','/reloj 14 30','/time am','/time pm','/time night','/weather normal','/weather rain','/weather sun','/lamp','/lamp auto','/hue','/hue auto']},
       {title:'Pantalla y directo',items:['/livecam','/mocap','/pixeria','/AdmiraLive texto','/comunicar texto','/comunicar texto --grok','/comunicar texto --elevenlabs','/AdmiraTube URL 2 audio','/say texto','/targetPublicity aforo','/targetPublicity genero','/targetPublicity off','/generovideo','/generovideo off','/impactos','/impactos cpm 12','/impactos tft','/impactos reset','/impactos off','/audienciaIN 8','/audienciaOUT 4']},
+      {title:'Digital Signage (vídeos)',items:['/ds on','/ds off','/ds next','/ds previous','/ds audio on','/ds audio off']},
       {title:'Escena en vivo',items:['/dj','/ladron','/guardiacivil','/opinador','/robot','/sponsor','/socio','/door open','/door close','/door auto','/subasta','/subasta off']},
       {title:'Notificaciones al personal',items:['/personal socio','/personal dashboard','/socios listado','/heatmap','/heatmap reset','/sponsor recurrente 120 10']},
       {title:'Atmósfera',items:['/ambiente','/ambiente vol 50','/voces']},
@@ -29100,6 +29149,7 @@ window.xtAPI = (function(){
         return api.command('/music'+(arg?' '+arg:'')).message;
       }
       if(cmd==='audio'||cmd==='dsaudio'||cmd==='monitoraudio') return api.command('/audio'+(arg?' '+arg:'')).message;
+      if(cmd==='ds'||cmd==='signage'||cmd==='digitalsignage'||cmd==='pantallas') return dsControl(arg);
       if(cmd==='next') return api.nextTrack().message;
       if(cmd==='prev') return api.prevTrack().message;
       if(cmd==='save') return api.save().message;
