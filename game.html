@@ -14110,6 +14110,24 @@ function fillQuad(c,col){
   cx.closePath();cx.fill();
 }
 
+// ── NPC enviado desde el Anonimizador: dibuja su sprite (8-bit) en vez del chibi ──
+function drawCustomNpcSprite(x,y,dir,img,scale){
+  if(!img||!img.complete||!img.naturalWidth) return;
+  const s=scale||1;
+  const H=52*s;                                   // alto similar a un chibi
+  const W=H*(img.naturalWidth/img.naturalHeight);
+  const cxp=x+7;                                   // centro horizontal del personaje
+  const footY=y+24*s;                             // pies
+  const dx=Math.round(cxp-W/2), dy=Math.round(footY-H);
+  cx.save();
+  cx.fillStyle='rgba(0,0,0,0.18)';                // sombra de contacto (anclaje al suelo)
+  cx.beginPath(); cx.ellipse(cxp, footY-1, W*0.32, 3*s, 0, 0, Math.PI*2); cx.fill();
+  cx.imageSmoothingEnabled=false;                 // pixel-art nítido
+  if(dir===-1){ cx.translate(cxp,0); cx.scale(-1,1); cx.translate(-cxp,0); }
+  cx.drawImage(img, dx, dy, Math.round(W), Math.round(H));
+  cx.restore();
+}
+
 // ── DRAW CHIBI (ISOMETRIC) ────────────────────────────────────
 function chibi(x,y,dir,shirt,hair,frame,busy,tick,scale=1,isDJ=false,look=null){
   if(renderMode==='8bit'){chibi8(x,y,dir,shirt,hair,frame,busy,tick,scale,isDJ,look);return;}
@@ -21630,6 +21648,9 @@ function drawIsoCust(c){
       cx.fillStyle=['#ff44cc','#44ffcc','#ffcc44','#44ccff'][Math.floor(Math.random()*4)];
       cx.font='8px monospace';cx.fillText('♪',noteX,c.y-20-Math.random()*10);
     }
+  } else if(c.customSpriteReady && c.customSpriteImg){
+    // NPC enviado desde el Anonimizador: su sprite 8-bit en vez del chibi procedural.
+    drawCustomNpcSprite(c.x,c.y,c.dir||1,c.customSpriteImg,ageScale(cLook));
   } else {
     chibi(c.x,c.y,c.dir||1,shirtIdx,hairIdx,c.fr,false,tt,ageScale(cLook),false,cLook);
   }
@@ -30893,6 +30914,36 @@ window.xtAPI = (function(){
       }
     }catch(e){}
   }
+  // ── NPCs enviados desde el Anonimizador de Pixeria: el worker mantiene una cola
+  //    (/twin/spawn) y aquí la sondeamos para meter ese NPC paseando por la tienda.
+  let __npcSeen=Date.now()-5*60*1000;   // recoge los enviados en los últimos 5 min
+  function spawnCustomNpc(entry){
+    try{
+      if(typeof spawnCust!=='function'||typeof G==='undefined'||!G) return;
+      const c=spawnCust(false,false,true);   // force: salta el cap del spawner
+      if(!c) return;
+      c.customSpriteUrl=entry.img; c.customSpriteReady=false;
+      const im=new Image();
+      im.onload=()=>{ c.customSpriteReady=true; };
+      im.onerror=()=>{ c.customSpriteReady=false; };
+      im.src=entry.img;                       // dataURL → sin problema de CORS
+      c.customSpriteImg=im;
+      c.fanName=entry.name||'Anónimo';
+      if(typeof showEv==='function') showEv('🏪 NPC recibido del Anonimizador','#7ee0a0');
+    }catch(_){}
+  }
+  async function pollNpcQueue(){
+    try{
+      // Solo dentro de la tienda: si llega un NPC mientras estás en el menú, NO se
+      // consume el cursor → aparecerá en cuanto entres (no se pierde).
+      if(typeof state==='undefined' || (typeof S!=='undefined' && state!==S.GAME)) return;
+      const r=await fetch(PIXER_WORKER+'/twin/spawn/pending?since='+__npcSeen+'&screen='+encodeURIComponent(screenId)+'&ts='+Date.now(),{cache:'no-store'});
+      if(!r.ok) return;
+      const d=await r.json(); const list=(d&&d.pending)||[];
+      if(d&&d.now) __npcSeen=d.now;           // avanza el cursor con el reloj del server
+      for(const e of list){ if(e&&e.img) spawnCustomNpc(e); }
+    }catch(_){}
+  }
   async function pollFeed(){
     try{
       const r=await fetch(PIXER_WORKER+'/signage/feed?limit=1&screen='+encodeURIComponent(screenId));
@@ -30949,6 +31000,7 @@ window.xtAPI = (function(){
     updateIdentityBadge(); setInterval(updateIdentityBadge,1500);   // badge identidad (idea #2)
     setInterval(pollLayoutLive,3000);       // sync EN VIVO bidireccional (solo en sala visible)
     pollTwinCmd(); setInterval(pollTwinCmd,2500);   // CLI keyless: ejecuta comandos de pixeria EN VIVO
+    pollNpcQueue(); setInterval(pollNpcQueue,6000);  // NPCs enviados desde el Anonimizador → paseando por la tienda
     setInterval(()=>sendHeartbeat(false),300000);
   },3000);
 })();
