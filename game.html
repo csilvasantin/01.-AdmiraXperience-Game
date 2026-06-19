@@ -4655,7 +4655,7 @@ function getOpsSnapshot(){
   const avgStockPct=Math.round(avgStock*100);
   const lowStockCount=G.prods.filter(p=>p&&p.max&&p.stock/p.max<=0.25).length;
   const weekProgress=((Math.max(1,G.week)-1)+Math.max(0,Math.min(1,(G.weekTimer||0)/Math.max(1,CFG.WEEK_TICKS))))/Math.max(1,CFG.WEEKS_PER_YEAR);
-  const target=CFG.YEAR_TARGETS[Math.max(0,(G.year||1)-1)]||1;
+  const target=yearTarget(G.year);
   const expectedRevenue=Math.max(1,target*Math.max(weekProgress,0.08));
   const pacePct=Math.round((G.yearRevenue||0)/expectedRevenue*100);
   const focusList=[];
@@ -5725,7 +5725,7 @@ function hueSyncWithGame(){
 
 // ── CONFIG ────────────────────────────────────────────────────
 const CFG={
-  WEEK_TICKS:480, WEEKS_PER_YEAR:8, TOTAL_YEARS:5,
+  WEEK_TICKS:480, WEEKS_PER_YEAR:8, TOTAL_YEARS:10,
   YEAR_TARGETS:[2200,5800,12000,23000,40000],
   SALE_PROB:0.055, SALE_BASE:3.5, PRODUCT_AVG_PRICE:1.6,
   RUSH_CHANCE:0.0025, RUSH_DURATION:160, RUSH_MULT:2.4,
@@ -6058,7 +6058,7 @@ const LANGS={
     reviewNeg:'👎 Mala reseña — sin stock',
     reviewBadge:['Sin reseñas','★☆☆☆☆','★★☆☆☆','★★★☆☆','★★★★☆','★★★★★'],
     pauseTitle:'PAUSA — RESUMEN SEMANAL',pauseCont:'ESC / CLICK PARA CONTINUAR',
-    yearEndTitle:'FIN DE AÑO',yearOf:'AÑO',yearRev:'INGRESOS DEL AÑO',
+    yearEndTitle:'FIN DE AÑO',yearOf:'AÑO',yearRev:'INGRESOS DEL AÑO',yearsCompare:'AÑOS',
     yearTarget:'OBJETIVO',yearBonus:'BONUS',yearCont:'CONTINUAR →',
     yearGameOver:'FIN DE PARTIDA — OBJETIVO NO ALCANZADO',
     ratings:{S:'¡LEGENDARIO!',A:'¡EXCELENTE!',B:'¡BIEN HECHO!',C:'MEJORABLE',D:'INSUFICIENTE'},
@@ -6142,7 +6142,7 @@ const LANGS={
     reviewNeg:'👎 Bad review — out of stock',
     reviewBadge:['No reviews','★☆☆☆☆','★★☆☆☆','★★★☆☆','★★★★☆','★★★★★'],
     pauseTitle:'PAUSE — WEEKLY SUMMARY',pauseCont:'ESC / CLICK TO CONTINUE',
-    yearEndTitle:'YEAR END',yearOf:'YEAR',yearRev:'YEAR REVENUE',
+    yearEndTitle:'YEAR END',yearOf:'YEAR',yearRev:'YEAR REVENUE',yearsCompare:'YEARS',
     yearTarget:'TARGET',yearBonus:'BONUS',yearCont:'CONTINUE →',
     yearGameOver:'GAME OVER — TARGET NOT REACHED',
     ratings:{S:'LEGENDARY!',A:'EXCELLENT!',B:'WELL DONE!',C:'NEEDS WORK',D:'INSUFFICIENT'},
@@ -8407,7 +8407,7 @@ function initGame(){
     satisfaction:65, fame:25, customersToday:0, custIn:0, custOut:0, totalCustomers:0,
     passersbyToday:0, passersbyTotal:0, passerbySpawnCooldown:PASSERBY_MIN_COOLDOWN,
     nowPlaying:shopTimeSettings.nowPlaying||'Titi Me Preguntó - Bad Bunny',
-    totalRevenue:0, totalScore:0, yearsCompleted:0,
+    totalRevenue:0, totalScore:0, yearsCompleted:0, yearHistory:[],
     loyaltyCard:{pending:false,targetId:null,nextId:1},
     turns:{next:1,current:0,servingId:null,issued:0},
     rush:{active:false,timer:0}, inspect:{active:false,timer:0,warned:false},
@@ -10220,6 +10220,16 @@ function getRating(rev,target){
   if(r>=1.5) return'S'; if(r>=1.2) return'A'; if(r>=1.0) return'B';
   if(r>=0.8) return'C'; return'D';
 }
+// Objetivo de ingresos del año `y`. Más allá de YEAR_TARGETS (5 niveles base) extrapola
+// siguiendo la curva de crecimiento, para soportar hasta 10 años (TOTAL_YEARS).
+function yearTarget(y){
+  const t=CFG.YEAR_TARGETS||[]; if(!t.length) return 1;
+  if(y>=1&&y<=t.length) return t[y-1];
+  const growth=t.length>=2?(t[t.length-1]/t[t.length-2]):1.7;
+  let v=t[t.length-1];
+  for(let i=t.length+1;i<=y;i++) v=Math.round(v*growth/100)*100;
+  return v;
+}
 
 function advanceYear(){
   if(G.year>=CFG.TOTAL_YEARS){
@@ -10294,11 +10304,15 @@ function endWeek(){
   G.week++;
   if(G.week>CFG.WEEKS_PER_YEAR){
     // Year end
-    const target=CFG.YEAR_TARGETS[G.year-1];
+    const target=yearTarget(G.year);
     const rating=getRating(G.yearRevenue,target);
     const bonus=T().ratingBonus[rating];
     G.money+=bonus;G.totalRevenue+=G.yearRevenue;
     G.yearRating=rating;G.yearBonus=bonus;G.yearEndAnim=0;
+    // Historial para la comparativa entre años (máx 10). Se registra ANTES del
+    // check de game-over para que el último año (aunque falle) también aparezca.
+    (G.yearHistory||(G.yearHistory=[])).push({year:G.year,rev:G.yearRevenue,target,rating,bonus});
+    if(G.yearHistory.length>10) G.yearHistory=G.yearHistory.slice(-10);
     if(G.yearRevenue<target*CFG.GAMEOVER_THRESHOLD){
       G.gameOverReason='target';
       G.totalScore=(G.totalRevenue/100)|0;
@@ -22242,7 +22256,7 @@ function drawHUD(){
   tx('Ing.',moneyEnd+105,8,'#a09880',6);
   tx(dayInc.toLocaleString()+'€',moneyEnd+125,8,dayInc>0?'#66ee88':'#888866',6);
   // Facturación + progress bar
-  const target=CFG.YEAR_TARGETS[G.year-1];
+  const target=yearTarget(G.year);
   const prog=Math.min(1,G.yearRevenue/target);
   const bc=prog>=1?P.green:prog>=0.7?'#ccaa44':'#88aa55';
   r(580,10,80,6,'#1a1208');r(580,10,(80*prog)|0,6,bc);rx(580,10,80,6,'#4a3820',1);
@@ -23449,7 +23463,7 @@ function tabSales(py){
   glow(net>=0?P.green:P.red,4);tx((net>=0?'+':'')+'€'+(net|0),UI.x+5,py+80,net>=0?P.green:P.red,13);nog();
   nl(UI.x+4,py+92,UI.x+UI.w-4,py+92,P.gray,1);
   // Year revenue vs target
-  const target=CFG.YEAR_TARGETS[G.year-1],prog=Math.min(1,G.yearRevenue/target);
+  const target=yearTarget(G.year),prog=Math.min(1,G.yearRevenue/target);
   tx(T().objective,UI.x+5,py+102,P.uiT3,7);
   tx('€'+G.yearRevenue.toLocaleString()+' / €'+target.toLocaleString(),UI.x+5,py+113,P.uiT2,7);
   r(UI.x+5,py+116,UI.w-10,7,P.uiB);
@@ -23773,7 +23787,7 @@ function drawPause(){
     [T().customers+' HOY',d.cust||0,P.neonB],
     [T().satisfaction,(d.sat|0)+'%',d.sat>70?P.green:P.yellow],
     [T().fame,(d.fame|0)+'%',P.neon2],
-    [T().objective,((G.yearRevenue/CFG.YEAR_TARGETS[G.year-1]*100)|0)+'%',P.neon3],
+    [T().objective,((G.yearRevenue/yearTarget(G.year)*100)|0)+'%',P.neon3],
   ];
   rows.forEach(([lbl,val,col],i)=>{
     tx(lbl,px2+22,py2+54+i*26,P.uiT3,8);
@@ -23844,7 +23858,7 @@ function drawYearEnd(){
   G.yearEndAnim++;
   cx.globalAlpha=Math.min(0.88,G.yearEndAnim/30);r(0,0,W,H,'#000');cx.globalAlpha=1;
   if(G.yearEndAnim<15) return;
-  const pw=500,ph=340,px2=W/2-pw/2,py2=H/2-ph/2;
+  const pw=500,ph=440,px2=W/2-pw/2,py2=H/2-ph/2;
   r(px2,py2,pw,ph,'#050510');
   const rating=G.yearRating||'C';
   const rc=RATING_COLS[rating];
@@ -23852,7 +23866,7 @@ function drawYearEnd(){
   nt(T().yearEndTitle+' '+G.year,W/2,py2+28,rc,16);
   nl(px2+20,py2+38,px2+pw-20,py2+38,rc,1);
   // Revenue bar animation
-  const target=CFG.YEAR_TARGETS[G.year-1];
+  const target=yearTarget(G.year);
   const maxBar=pw-80;
   const barProg=Math.min(1,(G.yearEndAnim-20)/60);
   const revProg=Math.min(G.yearRevenue,target*Math.min(1,barProg));
@@ -23877,6 +23891,26 @@ function drawYearEnd(){
     nl(px2+20,py2+195,px2+pw-20,py2+195,P.gray,1);
     tx(T().yearBonus+':',px2+22,py2+215,P.uiT3,9);
     glow(bc,6);tx((bonus>=0?'+':'')+'€'+bonus,px2+22,py2+230,bc,16);nog();
+    // ── Comparativa entre años: una barra por año jugado, color por nota (S→D) ──
+    const hist=G.yearHistory||[];
+    if(hist.length>=1){
+      const baseY=py2+ph-44, chartH=72, x0=px2+24, areaW=pw-48;
+      const n=hist.length, gap=5, bw=Math.min(40,(areaW-(n-1)*gap)/n);
+      const maxRev=hist.reduce((m,h)=>Math.max(m,h.rev||0),1);
+      tx(T().yearsCompare,x0,baseY-chartH-8,P.uiT3,8);
+      nl(x0,baseY+1,x0+areaW,baseY+1,P.gray,1);
+      const initial=(T().yearOf||'A').charAt(0);
+      hist.forEach((h,i)=>{
+        const bx=x0+i*(bw+gap);
+        const bh=Math.max(3,Math.round(chartH*((h.rev||0)/maxRev)));
+        const col=RATING_COLS[h.rating]||P.gray, cur=(h.year===G.year);
+        if(cur) glow(col,8);
+        r(bx,baseY-bh,bw,bh,col);
+        if(cur){ nog(); rx(bx,baseY-bh,bw,bh,P.white,1); }
+        tx(h.rating,bx+bw/2,baseY-bh-3,col,6,'center');
+        tx(initial+h.year,bx+bw/2,baseY+11,cur?P.white:P.uiT3,6,'center');
+      });
+    }
     if(G.year<CFG.TOTAL_YEARS){
       cx.globalAlpha=.5+.5*Math.abs(Math.sin(tt*.05));
       nt(T().yearCont,W/2,py2+ph-18,P.neon1,10);cx.globalAlpha=1;
@@ -25497,7 +25531,7 @@ window.xtAPI = (function(){
         week: G.week,
         year: G.year,
         totalYears: CFG.TOTAL_YEARS,
-        yearTarget: CFG.YEAR_TARGETS[G.year-1],
+        yearTarget: yearTarget(G.year),
         yearRevenue: G.yearRevenue,
         satisfaction: G.satisfaction,
         fame: G.fame,
