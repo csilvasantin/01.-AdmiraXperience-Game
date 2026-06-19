@@ -31081,11 +31081,16 @@ window.xtAPI = (function(){
   // ── NPCs enviados desde el Anonimizador de Pixeria: el worker mantiene una cola
   //    (/twin/spawn) y aquí la sondeamos para meter ese NPC paseando por la tienda.
   let __npcSeen=Date.now()-5*60*1000;   // recoge los enviados en los últimos 5 min
+  // IDs de NPC de Pixeria YA spawneados → NUNCA duplicar (entre polls solapados,
+  // re-entradas a la tienda y recargas). Persistido y acotado a los últimos 80.
+  let __npcDone=(()=>{ try{ return new Set(JSON.parse(localStorage.getItem('xt_npcDone')||'[]')); }catch(_){ return new Set(); } })();
+  function __npcMarkDone(id){ if(!id) return; __npcDone.add(id); try{ const a=[...__npcDone].slice(-80); __npcDone=new Set(a); localStorage.setItem('xt_npcDone',JSON.stringify(a)); }catch(_){} }
+  // Devuelve true si el NPC ENTRÓ de verdad; false si no (p.ej. tienda al límite) → se reintenta.
   function spawnCustomNpc(entry){
     try{
-      if(typeof spawnCust!=='function'||typeof G==='undefined'||!G) return;
-      const c=spawnCust(false,false,true);   // force: salta el cap del spawner
-      if(!c) return;
+      if(typeof spawnCust!=='function'||typeof G==='undefined'||!G) return false;
+      const c=spawnCust(false,false,true);   // force: salta el cap del spawner pasivo
+      if(!c) return false;
       c.customSpriteUrl=entry.img; c.customSpriteReady=false;
       const im=new Image();
       // CORS: si el worker manda una URL (no dataURL), pedimos crossOrigin para
@@ -31109,7 +31114,8 @@ window.xtAPI = (function(){
       c.arriveFx=260;                         // ~4s de entrada llamativa (halo + rebote ¡!)
       if(typeof showEv==='function') showEv('🏪 ¡'+nm+' acaba de entrar en la tienda!','#ffd23f');
       twinArrivalBanner(nm);
-    }catch(_){}
+      return true;
+    }catch(_){ return false; }
   }
   // Banner centrado y bien visible cuando un NPC del Anonimizador llega de verdad.
   function twinArrivalBanner(name){
@@ -31130,8 +31136,10 @@ window.xtAPI = (function(){
       const r=await fetch(PIXER_WORKER+'/twin/spawn/pending?since='+__npcSeen+'&screen='+encodeURIComponent(screenId)+'&ts='+Date.now(),{cache:'no-store'});
       if(!r.ok) return;
       const d=await r.json(); const list=(d&&d.pending)||[];
-      if(d&&d.now) __npcSeen=d.now;           // avanza el cursor con el reloj del server
-      for(const e of list){ if(e&&e.img) spawnCustomNpc(e); }
+      // Ventana de 60s con SOLAPE (no avanzar a d.now seco): así no se salta ningún
+      // envío entre polls y, si la tienda estaba llena, se reintenta hasta que entre.
+      if(d&&d.now) __npcSeen=Math.max(0,d.now-60000);
+      for(const e of list){ if(e&&e.img&&e.id&&!__npcDone.has(e.id)){ if(spawnCustomNpc(e)) __npcMarkDone(e.id); } }
     }catch(_){}
   }
   async function pollFeed(){
