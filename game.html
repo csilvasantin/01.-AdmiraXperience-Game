@@ -24005,6 +24005,7 @@ function openCustomerEditor(custIdx){
         ];
       })(),
     };
+    showCustCardDOM(npcEdDraft);
     return;
   }
   npcEdDraft={
@@ -24019,6 +24020,7 @@ function openCustomerEditor(custIdx){
       'Dentro: '+(G.custs.length||0),
     ],
   };
+  showCustCardDOM(npcEdDraft);
 }
 function openSpecialEditor(kind,label,lines){
   npcEdOpen=true;npcEdIdx=-1;npcEdTab='look';npcEdNameEdit=false;npcEdKind='special';npcPlacementDirty=false;
@@ -24026,6 +24028,77 @@ function openSpecialEditor(kind,label,lines){
   npcEdDraft={title:label,name:label,lines:lines||[],kind};
   syncRobotGrokPanel();
 }
+// ── Ficha de cliente como VENTANA FLOTANTE (DOM) ──────────────────────────────
+// Antes se dibujaba en el canvas y quedaba atrapada en el isométrico. Ahora es
+// una ventana DOM arrastrable por TODA la pantalla, como cualquier flotante.
+let _custCardPos=(()=>{ try{ const p=JSON.parse(localStorage.getItem('xt_custCardPos')||'null'); return (p&&typeof p.x==='number'&&typeof p.y==='number')?p:null; }catch(e){ return null; } })();
+let _custCardEl=null, _custCardDrag=null;
+function custCardEl(){
+  if(_custCardEl) return _custCardEl;
+  const w=document.createElement('div');
+  w.id='custCardWin';
+  w.style.cssText='position:fixed;z-index:99999;width:340px;max-width:92vw;display:none;background:#f0e8d4;border:2px solid #8a7a60;border-radius:8px;box-shadow:0 14px 44px rgba(0,0,0,.55);font-family:ui-monospace,Menlo,Consolas,monospace;color:#26201a;-webkit-user-select:none;user-select:none;';
+  w.innerHTML=
+    '<div class="cc-bar" style="display:flex;align-items:center;gap:8px;background:#e0d4b8;border-bottom:1px solid #8a7a60;border-radius:6px 6px 0 0;padding:6px 10px;cursor:grab;touch-action:none;">'
+    +'<span style="color:#9a8a6a">✥</span>'
+    +'<span class="cc-title" style="flex:1;font-weight:700;font-size:12px;color:#3a2a1a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">CLIENTE</span>'
+    +'<button class="cc-close" title="Cerrar" style="border:0;background:#cc4444;color:#fff;width:18px;height:18px;border-radius:3px;cursor:pointer;font-weight:700;line-height:1;padding:0">✕</button>'
+    +'</div>'
+    +'<div class="cc-name" style="font-weight:700;font-size:15px;color:#1a3a4a;padding:12px 14px 4px"></div>'
+    +'<div class="cc-lines" style="padding:0 14px 6px;font-size:12px;line-height:1.7;color:#26201a"></div>'
+    +'<div class="cc-sub" style="padding:0 14px 10px;font-size:10px;color:#7a7060">Ficha de cliente</div>'
+    +'<div style="padding:0 14px 14px"><button class="cc-tg" style="width:100%;border:1.5px solid #3a8ab0;background:#0e3550;color:#cfeaff;border-radius:6px;padding:9px;font-size:12px;font-weight:700;cursor:pointer">📤 Enviar ficha a Telegram</button></div>';
+  document.body.appendChild(w);
+  w.querySelector('.cc-close').addEventListener('click',()=>{ try{ if(typeof closeNPCEditor==='function') closeNPCEditor(); }catch(e){} hideCustCardDOM(); });
+  w.querySelector('.cc-tg').addEventListener('click',()=>{ try{ sendNpcCardToTelegram(); }catch(e){} });
+  const bar=w.querySelector('.cc-bar');
+  const clamp=(x,y)=>({x:Math.max(0,Math.min(innerWidth-w.offsetWidth,x)),y:Math.max(0,Math.min(innerHeight-w.offsetHeight,y))});
+  const moveTo=(x,y)=>{ const p=clamp(x,y); w.style.left=p.x+'px'; w.style.top=p.y+'px'; w.style.right='auto'; w.style.bottom='auto'; };
+  const persist=()=>{ _custCardPos={x:parseInt(w.style.left)||0,y:parseInt(w.style.top)||0}; try{ localStorage.setItem('xt_custCardPos',JSON.stringify(_custCardPos)); }catch(e){} };
+  bar.addEventListener('mousedown',(e)=>{ if(e.target.classList.contains('cc-close'))return; const r=w.getBoundingClientRect(); _custCardDrag={offX:e.clientX-r.left,offY:e.clientY-r.top}; bar.style.cursor='grabbing'; e.preventDefault(); });
+  window.addEventListener('mousemove',(e)=>{ if(!_custCardDrag)return; moveTo(e.clientX-_custCardDrag.offX,e.clientY-_custCardDrag.offY); });
+  window.addEventListener('mouseup',()=>{ if(!_custCardDrag)return; _custCardDrag=null; bar.style.cursor='grab'; persist(); });
+  bar.addEventListener('touchstart',(e)=>{ const t=e.touches[0]; const r=w.getBoundingClientRect(); _custCardDrag={offX:t.clientX-r.left,offY:t.clientY-r.top}; },{passive:true});
+  window.addEventListener('touchmove',(e)=>{ if(!_custCardDrag)return; const t=e.touches[0]; moveTo(t.clientX-_custCardDrag.offX,t.clientY-_custCardDrag.offY); },{passive:true});
+  window.addEventListener('touchend',()=>{ if(_custCardDrag){ persist(); _custCardDrag=null; } });
+  _custCardEl=w; return w;
+}
+function showCustCardDOM(d){
+  const w=custCardEl();
+  const esc=(s)=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  w.querySelector('.cc-title').textContent=(d.title||'CLIENTE');
+  w.querySelector('.cc-name').textContent=(d.name||'');
+  w.querySelector('.cc-sub').textContent=/SOCIO/i.test(d.title||'')?'Ficha de socio · Xtanco Club':'Ficha de cliente';
+  w.querySelector('.cc-lines').innerHTML=(d.lines||[]).map(l=>'<div>'+esc(l)+'</div>').join('');
+  if(_custCardPos){ w.style.left=_custCardPos.x+'px'; w.style.top=_custCardPos.y+'px'; }
+  else { w.style.left='24px'; w.style.top='84px'; }
+  w.style.right='auto'; w.style.bottom='auto'; w.style.display='block';
+  // si quedó fuera de pantalla (cambió el viewport), reencájala
+  requestAnimationFrame(()=>{ const r=w.getBoundingClientRect(); if(r.right>innerWidth||r.bottom>innerHeight||r.left<0||r.top<0){ w.style.left=Math.max(0,Math.min(innerWidth-w.offsetWidth,parseInt(w.style.left)||24))+'px'; w.style.top=Math.max(0,Math.min(innerHeight-w.offsetHeight,parseInt(w.style.top)||84))+'px'; } });
+}
+function hideCustCardDOM(){ if(_custCardEl) _custCardEl.style.display='none'; }
+// Envío de la ficha (cliente/NPC) a Telegram — extraído para reusarlo desde el
+// botón DOM y desde el botón del canvas (staff).
+async function sendNpcCardToTelegram(){
+  const d=npcEdDraft||{};
+  const subjectName=String(d.name||'').replace(/\s*🎂.*$/,'').trim()||'cliente';
+  const header=(d.title||'Ficha')+' — '+(d.name||'');
+  const text=header+'\n'+((d.lines||[]).join('\n'));
+  let sent=false, copied=false;
+  try{
+    if(window.xtAPI&&typeof window.xtAPI.telegramSend==='function'){
+      const r=await window.xtAPI.telegramSend(text); sent=!!(r&&r.ok);
+    }
+  }catch(e){}
+  if(!sent){ try{ if(navigator.clipboard&&navigator.clipboard.writeText){ await navigator.clipboard.writeText(text); copied=true; } }catch(e){} try{console.log('[Ficha → Telegram fallback]\n'+text);}catch(e){} }
+  const bubbleMsg=sent?'📤 Mensaje recibido por Telegram: '+subjectName
+    :copied?'📋 Telegram offline · ficha de '+subjectName+' copiada al portapapeles'
+    :'⚠️ Telegram offline · sin destino disponible';
+  try{ if(typeof setManagerSayBubble==='function') setManagerSayBubble(bubbleMsg); }catch(e){}
+  try{ if(typeof SFX!=='undefined' && SFX.eventChime) SFX.eventChime(); }catch(e){}
+  try{ if(typeof showEv==='function') showEv(bubbleMsg, sent?'#78f3ff':copied?'#88ccff':'#ff8866'); }catch(e){}
+}
+
 function getNPCEditorBounds(){
   const pw=420,ph=280,dockScale=0.85;
   const dockW=pw*dockScale,dockH=ph*dockScale;
@@ -24040,6 +24113,7 @@ function getNPCEditorBounds(){
 // (excluye la zona del botón de cerrar, arriba a la derecha).
 function npcEdTitleBarHit(mx,my){
   if(!npcEdOpen||!npcEdDraft) return false;
+  if(npcEdKind==='customer') return false;   // la ficha de cliente es DOM (se arrastra ella sola)
   const b=getNPCEditorBounds(), s=0.85;
   return mx>=b.x && mx<=b.x+b.w-24*s && my>=b.y && my<=b.y+22*s;
 }
@@ -24053,6 +24127,7 @@ function persistSelectedStaffPlacement(){
 }
 function closeNPCEditor(){
   const wasUnitree=isUnitreeDetailOpen();
+  try{ hideCustCardDOM(); }catch(e){}   // oculta la ficha de cliente DOM si estaba abierta
   npcEdOpen=false;npcEdIdx=-1;npcEdDraft=null;npcEdNameEdit=false;npcEdKind='staff';npcPlacementDirty=false;
   if(wasUnitree) stopRobotVoiceSession();
   syncRobotGrokPanel();
@@ -24089,6 +24164,7 @@ function loadNPCCustoms(){
 
 function drawNPCEditor(){
   if(!npcEdOpen||!npcEdDraft)return;
+  if(npcEdKind==='customer') return;   // la ficha de cliente se pinta como ventana DOM flotante
   const d=npcEdDraft;
   syncRobotGrokPanel();
   const pw=420,ph=280;
@@ -24344,43 +24420,7 @@ function handleNPCEditorClick(id){
   if(!npcEdOpen||!npcEdDraft)return false;
   if(id==='npcEdClose'){closeNPCEditor();return true;}
   if(id==='npcEdSendTg'){
-    (async()=>{
-      const d=npcEdDraft||{};
-      const subjectName=String(d.name||'').replace(/\s*🎂.*$/,'').trim()||'cliente';
-      const header=(d.title||'Ficha')+' — '+(d.name||'');
-      const body=(d.lines||[]).join('\n');
-      const text=header+'\n'+body;
-      let sent=false, errMsg='';
-      try{
-        if(window.xtAPI&&typeof window.xtAPI.telegramSend==='function'){
-          const r=await window.xtAPI.telegramSend(text);
-          sent=!!(r&&r.ok);
-          if(!sent) errMsg=(r&&r.message)||'sin respuesta';
-        } else {
-          errMsg='xtAPI.telegramSend no disponible';
-        }
-      }catch(e){errMsg=e&&e.message?e.message:String(e);}
-      let copied=false;
-      if(!sent){
-        try{
-          if(navigator.clipboard&&navigator.clipboard.writeText){
-            await navigator.clipboard.writeText(text);copied=true;
-          }
-        }catch(e){}
-        try{console.log('[Ficha → Telegram fallback]\n'+text);}catch(e){}
-      }
-      // Feedback unificado: bocadillo del Store Manager + campana + banner.
-      // Asi Carlos ve y oye que la informacion ha llegado al equipo, da igual
-      // si fue por el bot, por portapapeles o solo por consola.
-      const bubbleMsg=sent
-        ? '📤 Mensaje recibido por Telegram: '+subjectName
-        : copied
-          ? '📋 Telegram offline · ficha de '+subjectName+' copiada al portapapeles'
-          : '⚠️ Telegram offline · sin destino disponible';
-      try{ if(typeof setManagerSayBubble==='function') setManagerSayBubble(bubbleMsg); }catch(e){}
-      try{ if(typeof SFX!=='undefined' && SFX.eventChime) SFX.eventChime(); }catch(e){}
-      try{ if(typeof showEv==='function') showEv(bubbleMsg, sent?'#78f3ff':copied?'#88ccff':'#ff8866'); }catch(e){}
-    })();
+    sendNpcCardToTelegram();   // misma lógica que el botón DOM de la ficha de cliente
     return true;
   }
   if(npcEdKind!=='staff') return false;
