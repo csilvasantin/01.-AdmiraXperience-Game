@@ -31072,6 +31072,8 @@ window.xtAPI = (function(){
       c.arriveFx=260;                         // ~4s de entrada llamativa (halo + rebote ¡!)
       if(typeof showEv==='function') showEv('🏪 ¡'+nm+' acaba de entrar en la tienda!','#ffd23f');
       twinArrivalBanner(nm);
+      // Ack de vuelta al worker: el Anonimizador sabrá que el NPC YA está en la tienda.
+      if(entry&&entry.id){ try{ fetch(PIXER_WORKER+'/twin/spawn/ack',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:entry.id,screen:screenId})}); }catch(_){} }
     }catch(_){}
   }
   // Banner centrado y bien visible cuando un NPC del Anonimizador llega de verdad.
