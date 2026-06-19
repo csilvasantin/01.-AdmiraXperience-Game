@@ -968,6 +968,13 @@
       const r=await fetch('./xtanco-version.js?cb='+Date.now(),{cache:'no-store'}); if(!r.ok) return;
       const m=(await r.text()).match(/build:\s*'([0-9]{8}-[0-9]{4})'/); if(!m) return;
       if(m[1]!==loaded){
+        // ANTI-BUCLE: solo recargamos UNA vez por build destino. Si tras recargar
+        // el <script src="xtanco-version.js"> sigue sirviéndose de la caché HTTP
+        // (build viejo), no volvemos a recargar — se cortaba el "no para de
+        // recargar". La versión entrará al expirar la caché o con refresco manual.
+        let tried=''; try{ tried=sessionStorage.getItem('__xtVerReloadTarget')||''; }catch(_){}
+        if(tried===m[1]){ __verReloading=true; return; }   // ya intentado: no repetir
+        try{ sessionStorage.setItem('__xtVerReloadTarget', m[1]); }catch(_){}
         __verReloading=true;
         try{ const t=document.createElement('div'); t.textContent='🔄 Nueva versión '+m[1]+' · recargando…';
           t.style.cssText='position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:2147483646;background:#04140a;border:1px solid #2ee06a;border-radius:9px;padding:8px 16px;color:#9effa0;font:700 12px monospace;box-shadow:0 0 24px rgba(46,224,106,.5);';
@@ -25051,7 +25058,11 @@ try {
     try{ document.body.classList.add('entering-twin'); }catch(e){}
   }
   if(distroParam && (_sp.get('preview')==='1'||_sp.has('preview'))){ try{ document.body.classList.add('distro-preview'); }catch(e){} }
-  if(viewParam==='red'||viewParam==='network'||viewParam==='tiendas'||_sp.has('red')){
+  if(_sp.has('arcade')){
+    // ?arcade=1 (xpaceos.com/arcade) → solo el XPACE INVADERS jugable: oculta el
+    // splash y deja el estado inicial ERA_SEL. Sin auto-entrar al gemelo.
+    setTimeout(()=>{ try{ if(window.hideSplash) window.hideSplash(); }catch(e){} }, 60);
+  } else if(viewParam==='red'||viewParam==='network'||viewParam==='tiendas'||_sp.has('red')){
     // ?view=red → abre la RED DE TIENDAS (vista mapa/red de todos los puntos).
     setTimeout(()=>{ _dismissSplash(); try{ openNetworkView(); }catch(e){ console.warn('openNetworkView failed:',e); } }, 60);
   } else if(playParam){
@@ -31491,7 +31502,16 @@ window.xtAPI = (function(){
     // a mostrarlo desde Quit. setTimeout solo limpia la clase de transición.
     setTimeout(()=>{ document.body.classList.remove('splash-hiding'); }, 600);
   }
-  function chooseJugar(){ hideSplash(); }
+  function chooseJugar(){
+    // Play entra DIRECTO al gemelo (Xtanco), saltando la pantalla XPACE INVADERS
+    // (ERA_SEL). El arcade queda solo en xpaceos.com/arcade (sin enlace directo).
+    try{ document.body.classList.add('entering-twin'); }catch(e){}
+    hideSplash();
+    setTimeout(()=>{
+      try{ if(typeof autoEnterVertical==='function') autoEnterVertical('xtanco'); }catch(e){ console.warn('chooseJugar autoEnter failed:',e); }
+      try{ document.body.classList.remove('entering-twin'); }catch(e){}
+    }, 80);
+  }
   function chooseDemo(){
     hideSplash();
     setTimeout(()=>{
