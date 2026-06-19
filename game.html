@@ -31103,11 +31103,12 @@ window.xtAPI = (function(){
       if(sep>=0){ nm=raw.slice(0,sep)||'Anónimo'; try{ segData=JSON.parse(raw.slice(sep+2)); }catch(_){ segData=null; } }
       c.fanName=nm;
       c.npcSegment=segData;                   // {sex, age, desc} → ficha de cliente
+      // Ack al worker EN CUANTO se crea el NPC (antes de los FX, para que un error
+      // visual no impida confirmar a Pixeria que el NPC YA está en la tienda).
+      if(entry&&entry.id){ try{ fetch(PIXER_WORKER+'/twin/spawn/ack',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:entry.id,screen:screenId})}); }catch(_){} }
       c.arriveFx=260;                         // ~4s de entrada llamativa (halo + rebote ¡!)
       if(typeof showEv==='function') showEv('🏪 ¡'+nm+' acaba de entrar en la tienda!','#ffd23f');
       twinArrivalBanner(nm);
-      // Ack de vuelta al worker: el Anonimizador sabrá que el NPC YA está en la tienda.
-      if(entry&&entry.id){ try{ fetch(PIXER_WORKER+'/twin/spawn/ack',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:entry.id,screen:screenId})}); }catch(_){} }
     }catch(_){}
   }
   // Banner centrado y bien visible cuando un NPC del Anonimizador llega de verdad.
