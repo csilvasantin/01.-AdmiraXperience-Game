@@ -14111,20 +14111,41 @@ function fillQuad(c,col){
 }
 
 // ── NPC enviado desde el Anonimizador: dibuja su sprite (8-bit) en vez del chibi ──
+// Caja delimitadora de la figura (píxeles no transparentes) del sprite IA, que
+// suele traer mucho margen vacío. Cacheada en el propio img. Si el canvas se
+// "ensucia" (CORS), devuelve null y se dibuja la imagen entera.
+function spriteAlphaBBox(img){
+  if(img.__bbox!==undefined) return img.__bbox;
+  try{
+    const iw=img.naturalWidth, ih=img.naturalHeight;
+    const cv=document.createElement('canvas'); cv.width=iw; cv.height=ih;
+    const g=cv.getContext('2d'); g.drawImage(img,0,0);
+    const d=g.getImageData(0,0,iw,ih).data;
+    let minX=iw,minY=ih,maxX=0,maxY=0,found=false;
+    for(let yy=0;yy<ih;yy++)for(let xx=0;xx<iw;xx++){ if(d[(yy*iw+xx)*4+3]>16){ found=true; if(xx<minX)minX=xx; if(xx>maxX)maxX=xx; if(yy<minY)minY=yy; if(yy>maxY)maxY=yy; } }
+    img.__bbox = found ? {x:minX,y:minY,w:maxX-minX+1,h:maxY-minY+1} : null;
+  }catch(_){ img.__bbox=null; }
+  return img.__bbox;
+}
 function drawCustomNpcSprite(x,y,dir,img,scale){
   if(!img||!img.complete||!img.naturalWidth) return;
   const s=scale||1;
-  const H=52*s;                                   // alto similar a un chibi
-  const W=H*(img.naturalWidth/img.naturalHeight);
-  const cxp=x+7;                                   // centro horizontal del personaje
-  const footY=y+24*s;                             // pies
+  // Recorta el margen transparente del sprite y escala SOLO la figura a la misma
+  // altura que un chibi nativo (~31px de pelo a pies), anclada por los pies. Así
+  // el NPC creado no sale desproporcionado frente al resto.
+  const bb=spriteAlphaBBox(img);
+  const srcX=bb?bb.x:0, srcY=bb?bb.y:0, srcW=bb?bb.w:img.naturalWidth, srcH=bb?bb.h:img.naturalHeight;
+  const H=31*s;                                   // alto del chibi nativo
+  const W=H*(srcW/srcH);
+  const cxp=x+7;                                   // centro horizontal (como el chibi)
+  const footY=y+27*s;                             // pies (igual que el chibi nativo)
   const dx=Math.round(cxp-W/2), dy=Math.round(footY-H);
   cx.save();
   cx.fillStyle='rgba(0,0,0,0.18)';                // sombra de contacto (anclaje al suelo)
-  cx.beginPath(); cx.ellipse(cxp, footY-1, W*0.32, 3*s, 0, 0, Math.PI*2); cx.fill();
+  cx.beginPath(); cx.ellipse(cxp, footY-1, Math.max(7,W*0.36), 3*s, 0, 0, Math.PI*2); cx.fill();
   cx.imageSmoothingEnabled=false;                 // pixel-art nítido
   if(dir===-1){ cx.translate(cxp,0); cx.scale(-1,1); cx.translate(-cxp,0); }
-  cx.drawImage(img, dx, dy, Math.round(W), Math.round(H));
+  cx.drawImage(img, srcX,srcY,srcW,srcH, dx, dy, Math.round(W), Math.round(H));
   cx.restore();
 }
 
@@ -21657,7 +21678,20 @@ function drawIsoCust(c){
   // Número identificador en la camiseta — coincide con la lista CLIENTES y con
   // la ficha al pulsar el cliente. Asignación perezosa para los ya en sala.
   if(c.num==null) c.num=nextCustNum();
-  if(typeof LOOK==='undefined'||LOOK.shirtNum){
+  if(c.customSpriteImg){
+    // NPC del Anonimizador: "¡!" sobre la cabeza para identificarlo (en vez del
+    // número de camiseta), porque su sprite no lleva la numeración del chibi.
+    const sA=ageScale(c.look||null);
+    const mX=c.x+7, mY=renderY-(31*sA)-6;          // justo encima de la cabeza
+    cx.save();
+    cx.font='bold 13px monospace';
+    cx.textAlign='center'; cx.textBaseline='middle';
+    cx.lineWidth=3; cx.strokeStyle='rgba(2,8,14,0.92)';
+    cx.strokeText('¡!',mX,mY);
+    cx.fillStyle='#ffd23f';                        // amarillo Admira para destacar
+    cx.fillText('¡!',mX,mY);
+    cx.restore();
+  } else if(typeof LOOK==='undefined'||LOOK.shirtNum){
     const nStr=String(c.num);
     const nX=c.x+7, nY=renderY+(c.fanCustomerId?16:13);
     cx.save();
@@ -30924,9 +30958,12 @@ window.xtAPI = (function(){
       if(!c) return;
       c.customSpriteUrl=entry.img; c.customSpriteReady=false;
       const im=new Image();
+      // CORS: si el worker manda una URL (no dataURL), pedimos crossOrigin para
+      // poder leer sus píxeles (recorte por alpha). En dataURL es inocuo.
+      if(/^https?:\/\//i.test(entry.img) && entry.img.indexOf(location.origin)!==0){ try{ im.crossOrigin='anonymous'; }catch(_){} }
       im.onload=()=>{ c.customSpriteReady=true; };
       im.onerror=()=>{ c.customSpriteReady=false; };
-      im.src=entry.img;                       // dataURL → sin problema de CORS
+      im.src=entry.img;
       c.customSpriteImg=im;
       c.fanName=entry.name||'Anónimo';
       if(typeof showEv==='function') showEv('🏪 NPC recibido del Anonimizador','#7ee0a0');
