@@ -12449,7 +12449,9 @@ function updateGame(){
   // en cola/caja se quedan en su sitio (ya tienen su hueco asignado). O(n²) pero
   // n es pequeño (cap ~7-30). (idea: evitación local NPCs)
   {
-    const list=G.custs, n=list.length, R=15, R2=R*R, STR=0.55;
+    // R = distancia mínima entre centros (≈ ancho visual del sprite) para que NO
+    // se solapen; antes 15 era menor que el sprite y se pisaban. STR = empuje/frame.
+    const list=G.custs, n=list.length, R=24, R2=R*R, STR=0.62;
     for(let i=0;i<n;i++){
       const a=list[i];
       if(!a||a.st==='queue'||a.st==='buy') continue;
@@ -14151,20 +14153,22 @@ function drawCustomNpcSprite(x,y,dir,img,scale){
 
 // Halo de "acaba de llegar" bajo el NPC del Anonimizador: peana dorada pulsante
 // + anillo expansivo, unos ~4s, para que se vea de inmediato cuál acaba de entrar.
-function drawArrivalHalo(x,y,scale,fx){
+function drawArrivalHalo(x,y,scale,fx,tt){
   const s=scale||1, cxp=x+7, footY=y+27*s;
-  const pulse=0.5+0.5*Math.sin(fx*0.2);
+  const pulse=0.5+0.5*Math.sin((tt||0)*0.12);   // pulso continuo (no depende de fx)
   cx.save();
-  // peana dorada pulsante
-  cx.globalAlpha=0.28+0.30*pulse;
+  // PEANA dorada PERMANENTE: identifica al NPC creado en todo momento (no se apaga).
+  cx.globalAlpha=0.30+0.22*pulse;
   cx.fillStyle='#ffd23f';
-  cx.beginPath(); cx.ellipse(cxp, footY-1, (13+3*pulse)*s, (5.5+1.5*pulse)*s, 0,0,Math.PI*2); cx.fill();
-  // anillo expansivo (se repite cada ~1s mientras dura el fx)
-  const tphase=((260-fx)%60)/60;            // 0→1
-  cx.globalAlpha=Math.max(0,0.55*(1-tphase));
-  cx.strokeStyle='#ffe98a'; cx.lineWidth=2;
-  const rr=(7+tphase*24)*s;
-  cx.beginPath(); cx.ellipse(cxp, footY-1, rr, rr*0.42, 0,0,Math.PI*2); cx.stroke();
+  cx.beginPath(); cx.ellipse(cxp, footY-1, (12+2*pulse)*s, (5+1*pulse)*s, 0,0,Math.PI*2); cx.fill();
+  // Anillo expansivo SOLO durante la entrada (primeros ~4s).
+  if(fx>0){
+    const tphase=((260-fx)%50)/50;            // 0→1, se repite
+    cx.globalAlpha=Math.max(0,0.5*(1-tphase));
+    cx.strokeStyle='#ffe98a'; cx.lineWidth=2;
+    const rr=(8+tphase*26)*s;
+    cx.beginPath(); cx.ellipse(cxp, footY-1, rr, rr*0.42, 0,0,Math.PI*2); cx.stroke();
+  }
   cx.restore();
 }
 
@@ -21690,7 +21694,7 @@ function drawIsoCust(c){
     }
   } else if(c.customSpriteReady && c.customSpriteImg){
     // NPC enviado desde el Anonimizador: su sprite 8-bit en vez del chibi procedural.
-    if(c.arriveFx>0) drawArrivalHalo(c.x,c.y,ageScale(cLook),c.arriveFx);  // entrada llamativa al llegar
+    drawArrivalHalo(c.x,c.y,ageScale(cLook),c.arriveFx||0,tt);  // peana permanente + anillo en la entrada
     drawCustomNpcSprite(c.x,c.y,c.dir||1,c.customSpriteImg,ageScale(cLook));
   } else {
     chibi(c.x,c.y,c.dir||1,shirtIdx,hairIdx,c.fr,false,tt,ageScale(cLook),false,cLook);
