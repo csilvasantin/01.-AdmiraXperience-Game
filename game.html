@@ -14149,6 +14149,25 @@ function drawCustomNpcSprite(x,y,dir,img,scale){
   cx.restore();
 }
 
+// Halo de "acaba de llegar" bajo el NPC del Anonimizador: peana dorada pulsante
+// + anillo expansivo, unos ~4s, para que se vea de inmediato cuál acaba de entrar.
+function drawArrivalHalo(x,y,scale,fx){
+  const s=scale||1, cxp=x+7, footY=y+27*s;
+  const pulse=0.5+0.5*Math.sin(fx*0.2);
+  cx.save();
+  // peana dorada pulsante
+  cx.globalAlpha=0.28+0.30*pulse;
+  cx.fillStyle='#ffd23f';
+  cx.beginPath(); cx.ellipse(cxp, footY-1, (13+3*pulse)*s, (5.5+1.5*pulse)*s, 0,0,Math.PI*2); cx.fill();
+  // anillo expansivo (se repite cada ~1s mientras dura el fx)
+  const tphase=((260-fx)%60)/60;            // 0→1
+  cx.globalAlpha=Math.max(0,0.55*(1-tphase));
+  cx.strokeStyle='#ffe98a'; cx.lineWidth=2;
+  const rr=(7+tphase*24)*s;
+  cx.beginPath(); cx.ellipse(cxp, footY-1, rr, rr*0.42, 0,0,Math.PI*2); cx.stroke();
+  cx.restore();
+}
+
 // ── DRAW CHIBI (ISOMETRIC) ────────────────────────────────────
 function chibi(x,y,dir,shirt,hair,frame,busy,tick,scale=1,isDJ=false,look=null){
   if(renderMode==='8bit'){chibi8(x,y,dir,shirt,hair,frame,busy,tick,scale,isDJ,look);return;}
@@ -21671,6 +21690,7 @@ function drawIsoCust(c){
     }
   } else if(c.customSpriteReady && c.customSpriteImg){
     // NPC enviado desde el Anonimizador: su sprite 8-bit en vez del chibi procedural.
+    if(c.arriveFx>0) drawArrivalHalo(c.x,c.y,ageScale(cLook),c.arriveFx);  // entrada llamativa al llegar
     drawCustomNpcSprite(c.x,c.y,c.dir||1,c.customSpriteImg,ageScale(cLook));
   } else {
     chibi(c.x,c.y,c.dir||1,shirtIdx,hairIdx,c.fr,false,tt,ageScale(cLook),false,cLook);
@@ -21682,9 +21702,11 @@ function drawIsoCust(c){
     // NPC del Anonimizador: "¡!" sobre la cabeza para identificarlo (en vez del
     // número de camiseta), porque su sprite no lleva la numeración del chibi.
     const sA=ageScale(c.look||null);
-    const mX=c.x+7, mY=renderY-(31*sA)-6;          // justo encima de la cabeza
+    let mY=renderY-(31*sA)-6;                       // justo encima de la cabeza
+    if(c.arriveFx>0){ mY-=3+4*Math.abs(Math.sin(c.arriveFx*0.22)); c.arriveFx--; }  // rebote al llegar
+    const mX=c.x+7;
     cx.save();
-    cx.font='bold 13px monospace';
+    cx.font=(c.arriveFx>0?'bold 16px':'bold 13px')+' monospace';
     cx.textAlign='center'; cx.textBaseline='middle';
     cx.lineWidth=3; cx.strokeStyle='rgba(2,8,14,0.92)';
     cx.strokeText('¡!',mX,mY);
@@ -30965,8 +30987,22 @@ window.xtAPI = (function(){
       im.onerror=()=>{ c.customSpriteReady=false; };
       im.src=entry.img;
       c.customSpriteImg=im;
-      c.fanName=entry.name||'Anónimo';
-      if(typeof showEv==='function') showEv('🏪 NPC recibido del Anonimizador','#7ee0a0');
+      const nm=entry.name||'Anónimo';
+      c.fanName=nm;
+      c.arriveFx=260;                         // ~4s de entrada llamativa (halo + rebote ¡!)
+      if(typeof showEv==='function') showEv('🏪 ¡'+nm+' acaba de entrar en la tienda!','#ffd23f');
+      twinArrivalBanner(nm);
+    }catch(_){}
+  }
+  // Banner centrado y bien visible cuando un NPC del Anonimizador llega de verdad.
+  function twinArrivalBanner(name){
+    try{
+      const t=document.createElement('div');
+      t.textContent='🏪 ¡'+name+' ya está en la tienda!';
+      t.style.cssText='position:fixed;top:18px;left:50%;transform:translateX(-50%) translateY(-8px);z-index:2147483646;background:rgba(4,20,10,.96);border:2px solid #ffd23f;border-radius:12px;padding:11px 22px;color:#ffe98a;font:800 16px monospace;letter-spacing:.04em;box-shadow:0 0 30px rgba(255,210,63,.55);opacity:0;transition:opacity .35s,transform .35s;';
+      document.body.appendChild(t);
+      requestAnimationFrame(()=>{ t.style.opacity='1'; t.style.transform='translateX(-50%) translateY(0)'; });
+      setTimeout(()=>{ t.style.opacity='0'; t.style.transform='translateX(-50%) translateY(-8px)'; setTimeout(()=>t.remove(),450); }, 3800);
     }catch(_){}
   }
   async function pollNpcQueue(){
