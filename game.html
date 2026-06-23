@@ -1180,7 +1180,7 @@ const APP_VERSION_LABEL=APP_VERSION;
 const APP_FORMULA_LABEL='build '+APP_BUILD;
 // Versión publicada del XpaceOS (se muestra en el splash · página 0).
 // IMPORTANTE: bumpear en cada release junto al tag DigitalTwin-v.YYYY.MM.DD.rN
-const XPACE_OS_VERSION='v.2026.06.05.r4';
+const XPACE_OS_VERSION='v.2026.06.23.r1';
 try{var _sv=document.getElementById('splashVersion');if(_sv)_sv.textContent='XpaceOS '+XPACE_OS_VERSION;}catch(e){}
 const AMIGA_PAGE0_TODO=['BUY SHIP','FIND BIGWHOOP','DEFEAT LECHUCK','MARRY ELAINE!'];
 let amigaPage0Todo=AMIGA_PAGE0_TODO.slice();
@@ -10674,7 +10674,7 @@ function updateStaffNav(s){
     const wIso=toIso(wp.col,wp.row);
     const dx=(wIso.x-7)-s.x, dy=(wIso.y-20)-s.y;
     const d=Math.sqrt(dx*dx+dy*dy);
-    if(d<3){ s.navPathIdx++; }
+    if(!(d>=3)){ s.navPathIdx++; }   // !(d>=3) en vez de d<3: si d es NaN (destino corrupto) NO dividimos por NaN
     else{
       s.x+=dx/d*1.0; s.y+=dy/d*1.0;
       s.dir=dx<0?-1:1; s.isWalking=true;
@@ -14195,6 +14195,7 @@ function drawArrivalHalo(x,y,scale,fx,tt){
 
 // ── DRAW CHIBI (ISOMETRIC) ────────────────────────────────────
 function chibi(x,y,dir,shirt,hair,frame,busy,tick,scale=1,isDJ=false,look=null){
+  if(!isFinite(x)||!isFinite(y)) return; // guard: coords NaN reventaban createRadialGradient → drawShop abortaba y la tienda "desaparecía"
   if(renderMode==='8bit'){chibi8(x,y,dir,shirt,hair,frame,busy,tick,scale,isDJ,look);return;}
   if(renderMode==='real'){chibiReal(x,y,dir,shirt,hair,frame,busy,tick,scale,isDJ,look);return;}
   if(renderMode==='habbo'){chibiHabbo(x,y,dir,shirt,hair,frame,busy,tick,scale,isDJ,look);return;}
@@ -21383,6 +21384,10 @@ function drawNovahMocap(s){
 }
 
 function drawIsoStaff(s){
+  // Auto-curación: si la posición se corrompió a NaN (p.ej. un destino indefinido en la
+  // navegación), recolócala en su tile de casa. Sin esto el NaN es permanente y tumba
+  // todo el render de la tienda (chibi→createRadialGradient lanza → drawShop aborta).
+  if(!isFinite(s.x)||!isFinite(s.y)){ const _h=toIso(Number.isFinite(s.homeCol)?s.homeCol:2,Number.isFinite(s.homeRow)?s.homeRow:1); s.x=_h.x-7; s.y=_h.y-20; s.navPath=null; s.navTarget=null; s.navPathIdx=0; s.isWalking=false; }
   const dir=s.dir||1;
   const isPlayer=G.staff&&s===G.staff[0];
   const isDJRole=!isPlayer&&s.role===4;
@@ -21662,6 +21667,9 @@ function drawSponsorScrooge(x,y,dir,frame,tick){
 }
 
 function drawIsoCust(c){
+  // Auto-curación: una posición NaN en un cliente también rompe el dibujado; lo mandamos
+  // a la puerta a salir limpio en vez de tumbar la escena.
+  if(c&&(!isFinite(c.x)||!isFinite(c.y))){ try{ const _d=toIso(ISO.cols-1,3); c.x=_d.x-7; c.y=_d.y-20; }catch(_){ c.x=0; c.y=0; } c.path=null; c.pathIdx=0; c.st='leave'; }
   // Sponsor (Scrooge McDuck-style patron) — special render path
   if(c&&c.sponsor){
     const djHired=G&&G.staff&&G.staff.some(s=>s.hired&&s.role===4);
@@ -22252,7 +22260,7 @@ function drawHUD(){
   tx(dsAudioMuted?'🔇':'🔊',dsMuteX,19,dsMuteCol,9);
   BTNS['dsMute']={x:dsMuteX-3,y:2,w:16,h:24};
   // Ingresos Día
-  const dayInc=G.sales.reduce((s,v)=>s+v,0);
+  const dayInc=(Array.isArray(G.sales)?G.sales:[]).reduce((s,v)=>s+v,0);
   tx('Ing.',moneyEnd+105,8,'#a09880',6);
   tx(dayInc.toLocaleString()+'€',moneyEnd+125,8,dayInc>0?'#66ee88':'#888866',6);
   // Facturación + progress bar
@@ -25016,9 +25024,9 @@ function loop(){
   if(state===S.PAUSE){
     r(0,0,W,H,P.bg);
     cx.save();try{drawCityBg();}catch(e){}cx.restore();
-    cx.save();try{drawShop();}catch(e){}cx.restore();
+    cx.save();try{drawShop();}catch(e){if(tt%180===0)console.warn('[twin] drawShop render error (escena degradada):',e&&e.message);}cx.restore();
     cx.save();try{drawShopChars();}catch(e){}cx.restore();
-    cx.save();try{drawHUD();}catch(e){}cx.restore();
+    cx.save();try{drawHUD();}catch(e){if(tt%180===0)console.warn('[twin] drawHUD render error:',e&&e.message);}cx.restore();
     cx.save();try{drawUI();}catch(e){}cx.restore();
     drawPause();
     cx.save();try{if(codexMapOpen)drawCodexMapOverlay();}catch(e){}cx.restore();
@@ -25038,11 +25046,11 @@ function loop(){
   r(0,0,W,H,P.bg);
   // Each render wrapped in save/restore to prevent clip leaks on crash
   cx.save();try{drawCityBg();}catch(e){}cx.restore();
-  cx.save();try{drawShop();}catch(e){}cx.restore();
+  cx.save();try{drawShop();}catch(e){if(tt%180===0)console.warn('[twin] drawShop render error (escena degradada):',e&&e.message);}cx.restore();
   cx.save();try{drawShopChars();}catch(e){}cx.restore();
   cx.save();try{drawFloats();}catch(e){}cx.restore();
   cx.save();try{drawEvent();}catch(e){}cx.restore();
-  cx.save();try{drawHUD();}catch(e){}cx.restore();
+  cx.save();try{drawHUD();}catch(e){if(tt%180===0)console.warn('[twin] drawHUD render error:',e&&e.message);}cx.restore();
   cx.save();try{drawCharacterGroupsPanel();}catch(e){}cx.restore();
   cx.save();try{drawElgatoNotify();}catch(e){}cx.restore();
   cx.save();try{drawDemoBadge();}catch(e){}cx.restore();
