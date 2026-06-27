@@ -316,7 +316,7 @@ async function grokImage(request, env) {
     try { const ir = await fetch(imgUrl); b64 = bytesToBase64(new Uint8Array(await ir.arrayBuffer())); } catch { /* keep url */ }
   }
   if (!b64 && !imgUrl) return jsonResponse(request, env, 502, { ok: false, error: 'no_image', message: 'xAI no devolvió imagen.' });
-  return jsonResponse(request, env, 200, { ok: true, b64, url: imgUrl, model, revised_prompt: item.revised_prompt || null });
+  return jsonResponse(request, env, 200, { ok: true, b64, url: imgUrl, model, revised_prompt: item.revised_prompt || null, usage: d.usage || null });
 }
 
 // ── Generación de VÍDEO con Grok (xAI grok-imagine-video) ─────────
@@ -376,9 +376,27 @@ async function grokVideoStatus(request, env, url) {
     return jsonResponse(request, env, r.ok ? 200 : r.status, {
       ok: r.ok, status, done: status === 'done',
       url: v.url || d.url || null, duration: v.duration || null, progress: (d.progress != null ? d.progress : null),
+      usage: d.usage || null,
       message: r.ok ? undefined : ((d.error && (d.error.message || d.error)) || `xAI HTTP ${r.status}`),
       detail: (status === 'failed' || !r.ok) ? JSON.stringify(d).slice(0, 500) : undefined,
     });
+  } catch (e) { return jsonResponse(request, env, 502, { ok: false, error: String(e.message || e) }); }
+}
+
+// Saldo prepago del equipo (Management API). Necesita XAI_MANAGEMENT_KEY (distinta de XAI_API_KEY).
+// GET /grok/balance → { ok, usd, raw }
+async function grokBalance(request, env) {
+  const key = env.XAI_MANAGEMENT_KEY;
+  const team = env.XAI_TEAM_ID || 'f9c1868d-4f9c-4669-b1ac-068123f1b99e';
+  if (!key) return jsonResponse(request, env, 200, { ok: false, error: 'missing_management_key', message: 'Falta XAI_MANAGEMENT_KEY. Crea una Management API key (permiso billing) en console.x.ai y añádela como secret del worker.' });
+  try {
+    const r = await fetch(`https://management-api.x.ai/v1/billing/teams/${team}/prepaid/balance`, { headers: { 'Authorization': `Bearer ${key}` } });
+    const raw = await r.text(); let d = {}; try { d = JSON.parse(raw); } catch {}
+    if (!r.ok) return jsonResponse(request, env, r.status, { ok: false, error: 'mgmt_error', message: `HTTP ${r.status}: ${String(raw).slice(0, 300)}` });
+    // xAI suele devolver el saldo en "ticks" (1 USD = 1e10 ticks); exponemos también USD.
+    const ticks = (d && (d.balance != null ? d.balance : (d.prepaid_balance != null ? d.prepaid_balance : (d.amount != null ? d.amount : null))));
+    const usd = (ticks != null && isFinite(ticks)) ? (Number(ticks) / 1e10) : null;
+    return jsonResponse(request, env, 200, { ok: true, usd, balance: d });
   } catch (e) { return jsonResponse(request, env, 502, { ok: false, error: String(e.message || e) }); }
 }
 
@@ -431,6 +449,10 @@ export default {
 
     if (url.pathname === '/grok/models' && request.method === 'GET') {
       return grokModels(request, env);
+    }
+
+    if (url.pathname === '/grok/balance' && request.method === 'GET') {
+      return grokBalance(request, env);
     }
 
     return jsonResponse(request, env, 404, {
