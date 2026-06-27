@@ -326,10 +326,17 @@ async function grokVideo(request, env) {
   const body = await readJson(request);
   const prompt = String(body.prompt || body.message || body.text || '').trim();
   if (!prompt && !body.image) return jsonResponse(request, env, 400, { ok: false, error: 'empty_prompt', message: 'Falta prompt o imagen.' });
-  const model = String(body.model || env.XAI_VIDEO_MODEL || 'grok-imagine-video');
+  const hasImage = !!body.image;
+  // image-to-video usa grok-imagine-video-1.5 (soporta imagen + 1080p)
+  const model = String(body.model || (hasImage ? (env.XAI_VIDEO_I2V_MODEL || 'grok-imagine-video-1.5') : (env.XAI_VIDEO_MODEL || 'grok-imagine-video')));
   const baseUrl = String(env.XAI_BASE_URL || 'https://api.x.ai/v1').replace(/\/+$/, '');
-  const payload = { model, prompt, n: 1 };
-  if (body.image) payload.image_url = body.image;   // image-to-video (data-URL o http)
+  const payload = { model, prompt };
+  if (body.duration) payload.duration = Math.min(Math.max(parseInt(body.duration, 10) || 6, 1), 15);
+  if (hasImage) {
+    // xAI: image-to-video → image:{ url:<URL pública o data-URL> }
+    const imgUrl = (typeof body.image === 'object') ? (body.image.url || body.image) : body.image;
+    payload.image = { url: imgUrl };
+  }
   let r, raw, d = {};
   try {
     r = await fetch(`${baseUrl}/videos/generations`, {
@@ -370,6 +377,7 @@ async function grokVideoStatus(request, env, url) {
       ok: r.ok, status, done: status === 'done',
       url: v.url || d.url || null, duration: v.duration || null, progress: (d.progress != null ? d.progress : null),
       message: r.ok ? undefined : ((d.error && (d.error.message || d.error)) || `xAI HTTP ${r.status}`),
+      detail: (status === 'failed' || !r.ok) ? JSON.stringify(d).slice(0, 500) : undefined,
     });
   } catch (e) { return jsonResponse(request, env, 502, { ok: false, error: String(e.message || e) }); }
 }
