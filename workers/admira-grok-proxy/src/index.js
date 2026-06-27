@@ -279,6 +279,112 @@ async function askLLM(request, env) {
   return askXai(request, env, body, prompt, images);
 }
 
+// ── Generación de IMAGEN con Grok (xAI grok-2-image) ──────────────
+// POST /grok/image  { prompt, n?, model? }  →  { ok, b64, url, model, revised_prompt }
+async function grokImage(request, env) {
+  if (!env.XAI_API_KEY) {
+    return jsonResponse(request, env, 500, { ok: false, error: 'missing_secret', message: 'Falta XAI_API_KEY en el worker.' });
+  }
+  const body = await readJson(request);
+  const prompt = String(body.prompt || body.message || body.text || '').trim();
+  if (!prompt) return jsonResponse(request, env, 400, { ok: false, error: 'empty_prompt', message: 'Falta prompt.' });
+  const model = String(body.model || env.XAI_IMAGE_MODEL || 'grok-2-image-1212');
+  const baseUrl = String(env.XAI_BASE_URL || 'https://api.x.ai/v1').replace(/\/+$/, '');
+  const n = Math.min(Math.max(parseInt(body.n, 10) || 1, 1), 4);
+  let r, raw, d = {};
+  try {
+    r = await fetch(`${baseUrl}/images/generations`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${env.XAI_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model, prompt, n, response_format: 'b64_json' }),
+    });
+    raw = await r.text();
+    try { d = JSON.parse(raw); } catch { /* no-json */ }
+  } catch (e) {
+    return jsonResponse(request, env, 502, { ok: false, error: 'fetch_error', message: String(e.message || e) });
+  }
+  if (!r.ok) {
+    return jsonResponse(request, env, r.status, {
+      ok: false, error: (d.error && d.error.code) || 'xai_image_error',
+      message: (d.error && (d.error.message || d.error)) || `xAI HTTP ${r.status}: ${String(raw).slice(0, 400)}`,
+    });
+  }
+  const item = (d.data && d.data[0]) || {};
+  let b64 = item.b64_json || null;
+  let imgUrl = item.url || null;
+  if (!b64 && imgUrl) {
+    try { const ir = await fetch(imgUrl); b64 = bytesToBase64(new Uint8Array(await ir.arrayBuffer())); } catch { /* keep url */ }
+  }
+  if (!b64 && !imgUrl) return jsonResponse(request, env, 502, { ok: false, error: 'no_image', message: 'xAI no devolvió imagen.' });
+  return jsonResponse(request, env, 200, { ok: true, b64, url: imgUrl, model, revised_prompt: item.revised_prompt || null });
+}
+
+// ── Generación de VÍDEO con Grok (xAI grok-imagine-video) ─────────
+// POST /grok/video  { prompt, image?, model? }  →  { ok, url|b64, id?, raw? }
+async function grokVideo(request, env) {
+  if (!env.XAI_API_KEY) return jsonResponse(request, env, 500, { ok: false, error: 'missing_secret', message: 'Falta XAI_API_KEY en el worker.' });
+  const body = await readJson(request);
+  const prompt = String(body.prompt || body.message || body.text || '').trim();
+  if (!prompt && !body.image) return jsonResponse(request, env, 400, { ok: false, error: 'empty_prompt', message: 'Falta prompt o imagen.' });
+  const model = String(body.model || env.XAI_VIDEO_MODEL || 'grok-imagine-video');
+  const baseUrl = String(env.XAI_BASE_URL || 'https://api.x.ai/v1').replace(/\/+$/, '');
+  const payload = { model, prompt, n: 1 };
+  if (body.image) payload.image_url = body.image;   // image-to-video (data-URL o http)
+  let r, raw, d = {};
+  try {
+    r = await fetch(`${baseUrl}/videos/generations`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${env.XAI_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    raw = await r.text();
+    try { d = JSON.parse(raw); } catch { /* no-json */ }
+  } catch (e) {
+    return jsonResponse(request, env, 502, { ok: false, error: 'fetch_error', message: String(e.message || e) });
+  }
+  if (!r.ok) {
+    return jsonResponse(request, env, r.status, {
+      ok: false, error: (d.error && d.error.code) || 'xai_video_error',
+      message: (d.error && (d.error.message || d.error)) || `xAI HTTP ${r.status}: ${String(raw).slice(0, 400)}`,
+      raw: String(raw).slice(0, 600),
+    });
+  }
+  // El create es asíncrono: devuelve un request_id; el cliente sondea GET /grok/video?id=...
+  const id = d.request_id || d.id || (d.data && d.data[0] && d.data[0].id) || null;
+  if (!id) return jsonResponse(request, env, 502, { ok: false, error: 'no_id', message: 'xAI no devolvió request_id.', raw: JSON.stringify(d).slice(0, 400) });
+  return jsonResponse(request, env, 200, { ok: true, id, model });
+}
+
+// Estado de un trabajo de vídeo (polling)  GET /grok/video?id=...
+// xAI: GET /videos/{id} → { status:"pending"|"done", progress, video:{url,duration} }
+async function grokVideoStatus(request, env, url) {
+  if (!env.XAI_API_KEY) return jsonResponse(request, env, 500, { ok: false, error: 'missing_secret' });
+  const id = url.searchParams.get('id'); if (!id) return jsonResponse(request, env, 400, { ok: false, error: 'no_id' });
+  const baseUrl = String(env.XAI_BASE_URL || 'https://api.x.ai/v1').replace(/\/+$/, '');
+  try {
+    const r = await fetch(`${baseUrl}/videos/${encodeURIComponent(id)}`, { headers: { 'Authorization': `Bearer ${env.XAI_API_KEY}` } });
+    const raw = await r.text(); let d = {}; try { d = JSON.parse(raw); } catch {}
+    const v = d.video || {};
+    const status = d.status || null;
+    return jsonResponse(request, env, r.ok ? 200 : r.status, {
+      ok: r.ok, status, done: status === 'done',
+      url: v.url || d.url || null, duration: v.duration || null, progress: (d.progress != null ? d.progress : null),
+      message: r.ok ? undefined : ((d.error && (d.error.message || d.error)) || `xAI HTTP ${r.status}`),
+    });
+  } catch (e) { return jsonResponse(request, env, 502, { ok: false, error: String(e.message || e) }); }
+}
+
+// Lista de modelos xAI (para ver qué hay disponible: imagen/vídeo)
+async function grokModels(request, env) {
+  if (!env.XAI_API_KEY) return jsonResponse(request, env, 500, { ok: false, error: 'missing_secret' });
+  const baseUrl = String(env.XAI_BASE_URL || 'https://api.x.ai/v1').replace(/\/+$/, '');
+  try {
+    const r = await fetch(`${baseUrl}/models`, { headers: { 'Authorization': `Bearer ${env.XAI_API_KEY}` } });
+    const d = await r.json().catch(() => ({}));
+    return jsonResponse(request, env, r.status, { ok: r.ok, models: d.data || d.models || d });
+  } catch (e) { return jsonResponse(request, env, 502, { ok: false, error: String(e.message || e) }); }
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -301,6 +407,22 @@ export default {
 
     if (url.pathname === '/grok/ask' && request.method === 'POST') {
       return askLLM(request, env);
+    }
+
+    if (url.pathname === '/grok/image' && request.method === 'POST') {
+      return grokImage(request, env);
+    }
+
+    if (url.pathname === '/grok/video' && request.method === 'POST') {
+      return grokVideo(request, env);
+    }
+
+    if (url.pathname === '/grok/video' && request.method === 'GET') {
+      return grokVideoStatus(request, env, url);
+    }
+
+    if (url.pathname === '/grok/models' && request.method === 'GET') {
+      return grokModels(request, env);
     }
 
     return jsonResponse(request, env, 404, {
