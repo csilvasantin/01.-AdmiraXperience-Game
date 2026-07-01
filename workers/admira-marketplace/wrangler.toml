@@ -3,7 +3,7 @@ main = "src/index.js"
 compatibility_date = "2025-12-01"
 
 [vars]
-ALLOWED_ORIGINS = "https://csilvasantin.github.io,http://localhost:9124,http://127.0.0.1:9124,http://localhost:5173"
+ALLOWED_ORIGINS = "https://csilvasantin.github.io,https://www.xpaceos.com,https://xpaceos.com,https://admira.store,https://xpl.admira.store,http://localhost:9124,http://127.0.0.1:9124,http://localhost:5173"
 ADMIN_TOKEN = "XTANCO-MARKET-26"
 DEFAULT_AUCTION_HOURS = "24"
 DEFAULT_CAMPAIGN_HOURS = "24"
