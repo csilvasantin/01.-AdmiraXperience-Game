@@ -896,6 +896,26 @@ function grokChat(prompt, context = '') {
 // la mata por inactividad → el navegador ve "Failed to fetch". El audio termina
 // antes y por eso sí funciona. Solución: trocear en peticiones cortas.
 const TUBE_JOBS = new Map();
+
+// ─── Vídeo a 1080p (Carlos, 13-oct-2026) ───────────────────────────────────
+// Con player_client=android,ios,web YouTube solo dejaba el formato 18 (360p): android
+// e ios salen sin URL (SABR) y web pide un PO Token con Visitor Data que no tiene. mweb
+// sí lista 137 (avc1 1080p) + 140 (m4a), con el PO Token de bgutil (~/yt-dlp-plugins;
+// sin ese plugin mweb también se queda en 360p). Los otros clientes siguen detrás: si
+// mweb falla, yt-dlp no aborta y queda el 360p de antes en vez de un error.
+// El tope va por el LADO LARGO (≤1920): 1920×1080 en horizontal y 1080×1920 en vertical.
+// El de antes (height<=720) dejaba un Short en ~406×720. avc1 delante porque los players
+// de cartelería no siempre decodifican VP9/AV1; el resto, el mismo orden de siempre.
+const TUBE_YT_CLIENTS = 'youtube:player_client=mweb,android,ios,web';
+const TUBE_VIDEO_FORMAT = [
+  'bv[vcodec^=avc1][height<=?1920][width<=?1920]+ba[ext=m4a]',
+  'bv*[ext=mp4][height<=?1920][width<=?1920]+ba[ext=m4a]',
+  'b[ext=mp4][height<=?1920][width<=?1920]',
+  'b[ext=mp4]',
+  'b[height<=?1920][width<=?1920]',
+  'b',
+].join('/');
+
 const SD_QUEUE = [];
 const SD_RESULTS = new Map();
 const SD_MAX_QUEUE = 80;
@@ -1201,14 +1221,15 @@ function tubeStartJob(url, fmt) {
 
   const outTpl = path.join(os.tmpdir(), `admira-tube-${id}.%(ext)s`);
   const baseArgs = [
-    '--no-playlist', '--max-filesize', '300M', '--no-mtime', '--no-warnings', '--quiet',
+    '--no-playlist', '--max-filesize', '300M', '--no-mtime',
+    '--extractor-args', TUBE_YT_CLIENTS,
     '--print-to-file', 'after_move:filepath', path.join(os.tmpdir(), `admira-tube-${id}.path`),
     '--print-to-file', 'before_dl:%(title)s', path.join(os.tmpdir(), `admira-tube-${id}.title`),
     '-o', outTpl,
   ];
   const formatArgs = (fmt === 'audio')
     ? ['-f', 'bestaudio/best', '-x', '--audio-format', 'mp3', '--audio-quality', '0']
-    : ['-f', 'bv*[height<=720][ext=mp4]+ba[ext=m4a]/b[height<=720][ext=mp4]/b[ext=mp4]/b[height<=720]/b', '--remux-video', 'mp4'];
+    : ['-f', TUBE_VIDEO_FORMAT, '--remux-video', 'mp4'];
   const args = [...formatArgs, ...baseArgs, url];
 
   const yt = spawn(YT_DLP_BIN, args, { stdio: ['ignore', 'pipe', 'pipe'] });
@@ -1265,6 +1286,55 @@ function tubeYtThumb(u) {
   const m = String(u).match(/(?:youtube\.com\/.*[?&]v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/)([A-Za-z0-9_-]{11})/);
   return m ? `https://img.youtube.com/vi/${m[1]}/hqdefault.jpg` : null;
 }
+
+// ─── Subida por partes al Stock (13-oct-2026) ──────────────────────────────
+// A 1080p un vídeo de 2 min ya pesa ~26 MB: en base64 son ~35 MB de JSON y el Worker
+// responde 503 «exceeded resource limits» desde ~40 MB (el borde corta en 100). Por
+// encima de STOCK_PARTES_DESDE el fichero viaja crudo en trozos por /stock/upload/*
+// (init → part → complete del Worker, el mismo carril que scripts/stock-subir.py y la
+// web) y se publica con r2Staged. Devuelve la clave de uploads/; si falla, aborta y lanza.
+const STOCK_API_BASE = STOCK_PUBLISH_URL.replace(/\/stock\/publish$/, '');
+const STOCK_PARTES_DESDE = 8 * 1024 * 1024;  // = PARTS_THRESHOLD del cliente web
+async function stockSubirPorPartes(file, size, mime) {
+  const post = async (accion, body) => {
+    const r = await fetch(`${STOCK_API_BASE}/stock/upload/${accion}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !d.ok) throw new Error(`stock/upload/${accion} ${r.status}: ${d.error || d.detail || ''}`.trim());
+    return d;
+  };
+  const { key, uploadId, partSize } = await post('init', { mime, size });
+  const trozo = partSize > 0 ? partSize : 25 * 1024 * 1024;
+  const fh = await fs.promises.open(file, 'r');
+  try {
+    const parts = [];
+    for (let n = 1, pos = 0; pos < size; n++, pos += trozo) {
+      const buf = Buffer.alloc(Math.min(trozo, size - pos));
+      await fh.read(buf, 0, buf.length, pos);
+      let hecho = null, fallo = '';
+      // 3 intentos ante red caída, 408, 429 o 5xx; lo demás no se arregla reintentando.
+      for (let intento = 1; intento <= 3 && !hecho; intento++) {
+        try {
+          const r = await fetch(`${STOCK_API_BASE}/stock/upload/part?` + new URLSearchParams({ key, uploadId, n: String(n) }), { method: 'PUT', headers: { 'Content-Type': 'application/octet-stream' }, body: buf });
+          const d = await r.json().catch(() => ({}));
+          if (r.ok && d.etag) { hecho = { partNumber: d.partNumber || n, etag: d.etag }; break; }
+          fallo = `trozo ${n}: HTTP ${r.status} ${d.error || ''}`.trim();
+          if (r.status < 500 && r.status !== 408 && r.status !== 429) break;
+        } catch (e) { fallo = `trozo ${n}: ${(e && e.message) || e}`; }
+        if (intento < 3) await new Promise(r => setTimeout(r, 800 * intento));
+      }
+      if (!hecho) throw new Error(fallo);
+      parts.push(hecho);
+    }
+    await post('complete', { key, uploadId, parts });
+    return key;
+  } catch (e) {
+    fetch(`${STOCK_API_BASE}/stock/upload/abort`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key, uploadId }) }).catch(() => {});
+    throw e;
+  } finally {
+    await fh.close().catch(() => {});
+  }
+}
+
 async function tubePublishToStockWhenReady(jobId, url, fmt, comment, tags) {
   const MAX_MS = 8 * 60 * 1000;
   const t0 = Date.now();
@@ -1279,7 +1349,8 @@ async function tubePublishToStockWhenReady(jobId, url, fmt, comment, tags) {
     }
     const job = TUBE_JOBS.get(jobId);
     if (!job || !job.file || !fs.existsSync(job.file)) throw new Error('fichero no disponible');
-    const buf = fs.readFileSync(job.file);
+    const size = fs.statSync(job.file).size;
+    const mime = fmt === 'audio' ? 'audio/mpeg' : 'video/mp4';
     let importHost = '';
     try { importHost = new URL(url).hostname.toLowerCase(); } catch (e) {}
     const isSunoImport = importHost === 'suno.com' || importHost.endsWith('.suno.com');
@@ -1290,11 +1361,16 @@ async function tubePublishToStockWhenReady(jobId, url, fmt, comment, tags) {
       title: job.title || null,
       comment: comment || null,
       tags: Array.isArray(tags) && tags.length ? tags : null,
-      costEst: `gratis · ${(buf.length / 1024 / 1024).toFixed(2)}MB · Telegram`,
+      costEst: `gratis · ${(size / 1024 / 1024).toFixed(2)}MB · Telegram`,
       thumbnail: tubeYtThumb(url),
-      mime: fmt === 'audio' ? 'audio/mpeg' : 'video/mp4',
-      base64: buf.toString('base64'),
+      mime,
     };
+    if (size > STOCK_PARTES_DESDE) {
+      payload.r2Staged = await stockSubirPorPartes(job.file, size, mime);
+      console.log(`[import-to-stock] ${jobId} → ${(size / 1048576).toFixed(1)} MB subidos por partes (${payload.r2Staged})`);
+    } else {
+      payload.base64 = fs.readFileSync(job.file).toString('base64');
+    }
     const r = await fetch(STOCK_PUBLISH_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     const txt = await r.text().catch(() => '');
     console.log(`[import-to-stock] ${jobId} → publish ${r.status} ${txt.slice(0, 160)}`);
@@ -1584,17 +1660,16 @@ const server = http.createServer((req, res) => {
         '--no-playlist',
         '--max-filesize', '300M',
         '--no-mtime',
-        '--no-warnings',
-        '--quiet',
+        '--extractor-args', TUBE_YT_CLIENTS,
         '--print-to-file', 'after_move:filepath', path.join(os.tmpdir(), `admira-tube-${id}.path`),
         '--print-to-file', 'before_dl:%(title)s', path.join(os.tmpdir(), `admira-tube-${id}.title`),
         '-o', outTpl,
       ];
-      // Selector de formato: video mp4 720p preferente con fallback robusto para hosts que no tienen mp4 directo.
+      // Selector de formato: video mp4 hasta 1080p (TUBE_VIDEO_FORMAT) con fallback robusto para hosts que no tienen mp4 directo.
       // Audio: bestaudio extraido a mp3 (requiere ffmpeg en PATH).
       const formatArgs = (fmt === 'audio')
         ? ['-f', 'bestaudio/best', '-x', '--audio-format', 'mp3', '--audio-quality', '0']
-        : ['-f', 'bv*[height<=720][ext=mp4]+ba[ext=m4a]/b[height<=720][ext=mp4]/b[ext=mp4]/b[height<=720]/b', '--remux-video', 'mp4'];
+        : ['-f', TUBE_VIDEO_FORMAT, '--remux-video', 'mp4'];
       const args = [...formatArgs, ...baseArgs, url];
       const yt = spawn(YT_DLP_BIN, args, { stdio: ['ignore', 'pipe', 'pipe'] });
       let stderrBuf = '';
