@@ -3,7 +3,7 @@ main = "src/index.js"
 compatibility_date = "2025-12-01"
 
 [vars]
-ALLOWED_ORIGINS = "https://csilvasantin.github.io,http://localhost:9124,http://127.0.0.1:9124,http://localhost:5173"
+ALLOWED_ORIGINS = "https://csilvasantin.github.io,https://www.carlossilva.info,https://carlossilva.info,http://localhost:9124,http://127.0.0.1:9124,http://localhost:5173"
 JOIN_CODE = "XTANCO26"
 ACTIVE_WINDOW_SECONDS = "120"
 STAMPS_FOR_FREE = "5"

@@ -8,7 +8,7 @@ GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 GEMINI_MODEL = "gemini-2.5-flash"
 # xAI Grok (paid — used as fallback when GEMINI_API_KEY is absent)
 XAI_BASE_URL = "https://api.x.ai/v1"
-XAI_MODEL = "grok-4-latest"
+XAI_MODEL = "grok-4.5"
 XAI_IMAGE_MODEL = "grok-imagine-image-quality"
 XAI_VIDEO_MODEL = "grok-imagine-video"
 ALLOWED_ORIGINS = "https://www.admiranext.com,https://admiranext.com,https://csilvasantin.github.io,https://www.carlossilva.info,https://carlossilva.info,http://localhost:9124,http://127.0.0.1:9124,http://localhost:9126,http://127.0.0.1:9126,http://localhost:8085,http://127.0.0.1:8085,http://localhost:8788,http://127.0.0.1:8788"

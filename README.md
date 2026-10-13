@@ -123,7 +123,7 @@ Para activar Grok añade tambien:
 "grok": {
   "apiKey": "XAI_API_KEY",
   "baseUrl": "https://api.x.ai/v1",
-  "model": "grok-4-latest",
+  "model": "grok-4.5",
   "proxyUrl": "https://admira-grok-proxy.csilvasantin.workers.dev"
 }
 ```

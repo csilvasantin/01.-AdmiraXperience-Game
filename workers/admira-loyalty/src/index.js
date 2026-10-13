@@ -9,6 +9,8 @@
 
 const DEFAULT_ALLOWED_ORIGINS = [
   'https://csilvasantin.github.io',
+  'https://www.carlossilva.info',
+  'https://carlossilva.info',
   'http://localhost:9124',
   'http://127.0.0.1:9124',
   'http://localhost:5173',

@@ -4902,7 +4902,7 @@ const GROK={
   proxyUrl:typeof GROK_CONFIG.proxyUrl==='string'?GROK_CONFIG.proxyUrl.replace(/\/+$/,''):'',
   enabled:!!GROK_CONFIG.enabled||!!GROK_CONFIG.proxyUrl,
   proxyPort:Number(GROK_CONFIG.proxyPort)||9124,
-  model:typeof GROK_CONFIG.model==='string'?GROK_CONFIG.model:'grok-4-latest',
+  model:typeof GROK_CONFIG.model==='string'?GROK_CONFIG.model:'grok-4.5',
   lastPrompt:'',
   lastAnswer:'',
   lastLatencyMs:0,

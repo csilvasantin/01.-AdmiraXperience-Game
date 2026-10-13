@@ -145,7 +145,7 @@ function pickProvider(env, body) {
 
 function defaultModel(env, provider) {
   if (provider === 'gemini') return env.GEMINI_MODEL || 'gemini-2.5-flash';
-  if (provider === 'xai') return env.XAI_MODEL || 'grok-4-latest';
+  if (provider === 'xai') return env.XAI_MODEL || 'grok-4.5';
   return '';
 }
 
@@ -200,9 +200,9 @@ async function askGemini(request, env, body, prompt, images) {
 
 async function askXai(request, env, body, prompt, images) {
   // Si llega imagen y el modelo configurado no es de visión, usa uno que sí lo sea.
-  let model = String(body.model || env.XAI_MODEL || 'grok-4-latest');
+  let model = String(body.model || env.XAI_MODEL || 'grok-4.5');
   if ((images && images.length) && /grok-3|grok-2(?!-vision)|grok-beta/i.test(model)) {
-    model = env.XAI_VISION_MODEL || 'grok-4-latest';
+    model = env.XAI_VISION_MODEL || 'grok-4.5';
   }
   const baseUrl = String(env.XAI_BASE_URL || 'https://api.x.ai/v1').replace(/\/+$/, '');
   const userContent = (images && images.length)
