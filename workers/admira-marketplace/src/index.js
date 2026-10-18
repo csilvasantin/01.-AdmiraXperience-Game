@@ -18,6 +18,8 @@ const DEFAULT_ALLOWED_ORIGINS = [
   'https://www.xpaceos.com',
   'https://xpaceos.com',
   'https://admira.store',
+  // El sitio responde en www.admira.store (admira.store redirige ahí): 18-oct-2026.
+  'https://www.admira.store',
   'https://xpl.admira.store',
   'http://localhost:9124',
   'http://127.0.0.1:9124',
