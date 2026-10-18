@@ -21,6 +21,9 @@ const DEFAULT_ALLOWED_ORIGINS = [
   'https://csilvasantin.github.io',
   'https://www.xpaceos.com',
   'https://xpaceos.com',
+  // admira.store es el gemelo de xpaceos.com (18-oct-2026): sin él, el gemelo de www.admira.store no leía /active.
+  'https://admira.store',
+  'https://www.admira.store',
   'http://localhost:9124',
   'http://127.0.0.1:9124',
   'http://localhost:5173',
